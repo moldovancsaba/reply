@@ -6,9 +6,10 @@ Current job, where we left off, and open decisions. Update this at the end of ea
 
 ## Current status
 
-- **App:** SwiftUI "Reply Machine" with `ReplyEngine` (keyword rules) and `ContentView` (input + Generate Reply button). Runs on macOS.
-- **Exploration:** GraphQL JSON files in repo root target GitHub Project V2 (project 1): `project_id_query.json`, `fields_query.json`, `text_fields_query.json`, `add_item_mutation.json`, `set_agent.json`, `set_product.json`, `set_fields.json`, `update_agent_field.json`. Not yet integrated into the app.
-- **Docs:** ROADMAP, TASKLIST, RELEASE_NOTES, and this brain dump exist. Board is source of truth for next work.
+- **POC chat:** Localhost chat UI in `chat/` (Node, no deps). Run `cd chat && npm start`, open http://localhost:3000. Type/paste message, click "Suggest reply"; keyword-based suggestions shown in chat (#154 delivered).
+- **App:** SwiftUI "Reply Machine" with `ReplyEngine` (keyword rules) and `ContentView`. Runs on macOS.
+- **Exploration:** GraphQL JSON files in repo root for GitHub Project V2; not yet integrated.
+- **Docs:** ROADMAP, TASKLIST, RELEASE_NOTES, POC_FIRST_FUNCTIONS, brain dump. Board is source of truth.
 
 ## Where we left off
 

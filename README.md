@@ -18,6 +18,16 @@ Agent rules and cold-start instructions for Reply are in the **mvp-factory-contr
 
 ## How to run
 
+### POC: Localhost chat (reply suggestions in the browser)
+
+1. From the repo root: `cd chat && npm start`
+2. Open in a browser: **http://localhost:3000**
+3. Type or paste a message and click **Suggest reply** to see a suggested reply in the chat.
+
+No install needed (Node built-ins only). Node 18+.
+
+### SwiftUI app (macOS)
+
 1. Open the project in Xcode (e.g. open `Reply.xcodeproj` or the workspace from the repo root).
 2. Select the **Reply** scheme and a run destination (e.g. My Mac or a simulator).
 3. Run (⌘R). The Reply Machine window shows an input field and a "Generate Reply" button; enter text and tap to see the generated reply.

@@ -4,6 +4,10 @@ Completed work only. Board "Done" column is the source of truth for delivered it
 
 ---
 
+## 2026-02-16 — POC: Localhost chat UI (#154)
+
+- **Chat on localhost:** Browser UI at http://localhost:3000. User can type or paste a message and click "Suggest reply"; suggested reply is shown in the chat. Implemented in `chat/` (Node, no extra deps). Same keyword-based logic as ReplyEngine for POC.
+
 ## 2026-02-16 — Initial app and docs
 
 - **SwiftUI Reply Machine:** Simple app with keyword-based reply generation (ReplyEngine + ContentView).
