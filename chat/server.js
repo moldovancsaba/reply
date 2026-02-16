@@ -7,6 +7,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { generateReply } = require("./reply-engine.js");
+const { getSnippets } = require("./knowledge.js");
 
 const PORT = process.env.PORT || 3000;
 const HTML_PATH = path.join(__dirname, "index.html");
@@ -41,8 +42,9 @@ function serveSuggestReply(req, res) {
       message = body;
     }
     const suggestion = generateReply(message);
+    const snippets = getSnippets(message, 5);
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ suggestion }));
+    res.end(JSON.stringify({ suggestion, snippets: snippets.map((s) => ({ source: s.source, path: s.path, text: s.text.slice(0, 200) + (s.text.length > 200 ? "…" : "") })) }));
   });
 }
 
