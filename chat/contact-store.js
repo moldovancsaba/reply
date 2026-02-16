@@ -303,6 +303,26 @@ class ContactStore {
 
         return context;
     }
+    /**
+     * Get aggregate statistics about the contact database.
+     */
+    getStats() {
+        this.load();
+        const stats = {
+            total: this.contacts.length,
+            draft: 0,
+            active: 0,
+            resolved: 0
+        };
+
+        this.contacts.forEach(c => {
+            if (c.status === 'draft') stats.draft++;
+            else if (c.status === 'closed') stats.resolved++;
+            else stats.active++;
+        });
+
+        return stats;
+    }
 }
 
 module.exports = new ContactStore();
