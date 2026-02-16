@@ -442,6 +442,33 @@ const server = http.createServer((req, res) => {
     }
     return;
   }
+  /**
+   * API Endpoint: /api/system-health
+   * Returns metadata about the server uptime, sync status, and contact database health.
+   */
+  if (url.pathname === "/api/system-health") {
+    const syncStatePath = path.join(__dirname, "data", "sync_state.json");
+    let syncState = {};
+    if (fs.existsSync(syncStatePath)) {
+      try {
+        syncState = JSON.parse(fs.readFileSync(syncStatePath, "utf8"));
+      } catch (e) {
+        console.error("Error reading sync state:", e);
+      }
+    }
+
+    const health = {
+      uptime: Math.floor(process.uptime()),
+      status: "online",
+      sync: syncState,
+      stats: contactStore.getStats(),
+      lastCheck: new Date().toISOString()
+    };
+
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(health));
+    return;
+  }
   if (url.pathname === "/api/update-status") {
     let body = "";
     req.on("data", (chunk) => { body += chunk; });

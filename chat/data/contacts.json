@@ -1,1 +1,355 @@
-[]
+[
+  {
+    "id": "id-a4n9dnwky",
+    "displayName": "Agneta",
+    "handle": "+36706006555",
+    "relationship": "feleség",
+    "profession": "jogász",
+    "notes": "legkedvesebben, aranyosan, támogatóan szeretnék vele mindig beszélni ❤️ ",
+    "channels": {
+      "phone": [
+        "+36706006555"
+      ],
+      "email": []
+    },
+    "lastContacted": "2025-06-20T10:38:36.192Z"
+  },
+  {
+    "id": "id-nb0r85p63",
+    "displayName": "+36705140810",
+    "handle": "+36705140810",
+    "relationship": "Friend",
+    "profession": "",
+    "notes": "Appears to be discussing dog grooming, seems frustrated and possibly depressed. Considers giving up or ending the friendship.",
+    "channels": {
+      "phone": [
+        "+36705140810"
+      ],
+      "email": []
+    },
+    "lastContacted": "2025-06-18T09:42:41.259Z",
+    "draft": "hi, i understand you're frustrated. let's set up a shorter call this week instead. take care.",
+    "status": "draft"
+  },
+  {
+    "id": "id-allp5il2g",
+    "displayName": "Moldován Bora",
+    "handle": "moldovanbora@icloud.com",
+    "relationship": "lányom",
+    "profession": "tanuló",
+    "notes": "nagyon szeretem ❤️ cuki, lány, kedves",
+    "channels": {
+      "phone": [],
+      "email": [
+        "moldovanbora@icloud.com"
+      ]
+    },
+    "lastContacted": "2025-06-17T15:33:21.228Z"
+  },
+  {
+    "id": "id-5yq5feg61",
+    "displayName": "Info Texts",
+    "handle": "+36309266245",
+    "relationship": "information",
+    "profession": "information",
+    "notes": "",
+    "channels": {
+      "phone": [
+        "+36309266245"
+      ],
+      "email": []
+    },
+    "lastContacted": "2025-06-17T08:05:30.660Z"
+  },
+  {
+    "id": "user-primary",
+    "displayName": "Moldovan Csaba Zoltan",
+    "aliases": [
+      "Csaba",
+      "Sultan",
+      "Zoli",
+      "Mr. Moldovan"
+    ],
+    "profession": "Product Manager",
+    "intro": "The primary user of this system.",
+    "channels": {
+      "email": [
+        "moldovancsaba@gmail.com"
+      ]
+    },
+    "notes": "Prefers concise, direct communication.",
+    "lastContacted": "2025-01-29T21:22:34.019Z"
+  },
+  {
+    "id": "id-0fjneey76",
+    "displayName": "Borszeki Péter",
+    "handle": "+36202981614",
+    "relationship": "Colleague/Former Colleague",
+    "profession": "Software Developer or App Developer",
+    "notes": "Inferred to be a software developer at NOEX who tried to develop an app independently, which led to a disagreement with his employer regarding the use of company resources and the proper handling of intellectual property. He is known for having a competitive and sometimes contentious attitude.",
+    "channels": {
+      "phone": [
+        "+36202981614"
+      ],
+      "email": []
+    }
+  },
+  {
+    "id": "id-fhkfi7e2y",
+    "displayName": "+36706006555",
+    "handle": "+36706006555",
+    "channels": {
+      "phone": [
+        "+36706006555"
+      ]
+    },
+    "lastContacted": "2025-06-02T07:56:59.881Z",
+    "draft": "Hi,\n\nMegtaláltam azonnali megoldást, 1-2 alkalmat teszteltük már.\n\nHi",
+    "status": "draft"
+  },
+  {
+    "id": "id-jd5tgy0z8",
+    "displayName": "+36707060652",
+    "handle": "+36707060652",
+    "channels": {
+      "phone": [
+        "+36707060652"
+      ]
+    },
+    "lastContacted": "2025-05-31T00:04:18.725Z",
+    "draft": "Hi,\n\nPlease settle the overdue payment of 8174 HUF within 5 days as requested.\n\nBest,",
+    "status": "draft"
+  },
+  {
+    "id": "id-c66jn4c0m",
+    "displayName": "moldovanmira09@gmail.com",
+    "handle": "moldovanmira09@gmail.com",
+    "channels": {
+      "email": [
+        "moldovanmira09@gmail.com"
+      ]
+    },
+    "lastContacted": "2025-05-30T17:40:00.083Z"
+  },
+  {
+    "id": "id-1jhvacsdr",
+    "displayName": "+36705957647",
+    "handle": "+36705957647",
+    "channels": {
+      "phone": [
+        "+36705957647"
+      ]
+    },
+    "lastContacted": "2025-05-28T17:10:20.866Z",
+    "draft": "hi,\n\nunderstood. let me know if you need anything further.\n\nthanks,\ndear",
+    "status": "draft"
+  },
+  {
+    "id": "id-oloumm2ik",
+    "displayName": "+36203545633",
+    "handle": "+36203545633",
+    "channels": {
+      "phone": [
+        "+36203545633"
+      ]
+    },
+    "lastContacted": "2025-05-24T09:11:43.190Z",
+    "draft": "Hi,\n\nYou received an unanswered call from SMS provider at 11:11 on 24/05/2025. For details, contact +36707002489.\n\nBest,  \n[Your Name]",
+    "status": "draft"
+  },
+  {
+    "id": "id-qoic0uufu",
+    "displayName": "+36707282522",
+    "handle": "+36707282522",
+    "channels": {
+      "phone": [
+        "+36707282522"
+      ]
+    },
+    "lastContacted": "2025-05-18T23:43:28.523Z",
+    "draft": "Igen igen",
+    "status": "draft"
+  },
+  {
+    "id": "id-5cggyn4au",
+    "displayName": "+36304452573",
+    "handle": "+36304452573",
+    "channels": {
+      "phone": [
+        "+36304452573"
+      ]
+    },
+    "lastContacted": "2025-05-20T07:22:38.023Z",
+    "draft": "Hi,\n\nYou're a Viber user and want to create a group. We can do that if we split costs.\n\nBest,",
+    "status": "draft"
+  },
+  {
+    "id": "id-b3fatfk3i",
+    "displayName": "+36309266245",
+    "handle": "+36309266245",
+    "channels": {
+      "phone": [
+        "+36309266245"
+      ]
+    },
+    "lastContacted": "2025-05-21T19:31:53.976Z",
+    "draft": "Dear,\n\nSikertelen tranzakcióról szól a személyre szoruló információról. Ellenőrizze a kartya és兆龙，请继续你的问题或指令。我已经准备好帮助你了。",
+    "status": "draft"
+  },
+  {
+    "id": "id-pzb8xo8qy",
+    "displayName": "+36309429106",
+    "handle": "+36309429106",
+    "channels": {
+      "phone": [
+        "+36309429106"
+      ]
+    },
+    "lastContacted": "2025-05-20T08:06:44.839Z",
+    "draft": "hi, what's next?",
+    "status": "draft"
+  },
+  {
+    "id": "id-36qui3bkb",
+    "displayName": "+36706010707",
+    "handle": "+36706010707",
+    "channels": {
+      "phone": [
+        "+36706010707"
+      ]
+    },
+    "lastContacted": "2025-05-23T08:32:05.384Z",
+    "draft": "hi, everything ok? \n\ndear",
+    "status": "draft"
+  },
+  {
+    "id": "id-ftzfjb253",
+    "displayName": "+36707009250",
+    "handle": "+36707009250",
+    "channels": {
+      "phone": [
+        "+36707009250"
+      ]
+    },
+    "lastContacted": "2025-05-20T14:41:33.286Z",
+    "draft": "dear,\n\nthanks for the offer. i'll check it out.\n\nhi,",
+    "status": "draft"
+  },
+  {
+    "id": "id-hljkouarw",
+    "displayName": "+36707000985",
+    "handle": "+36707000985",
+    "channels": {
+      "phone": [
+        "+36707000985"
+      ]
+    },
+    "lastContacted": "2025-05-19T05:31:29.050Z",
+    "draft": "Hi,\n\nThank you for your payment. Ref: 2003625801, amount: 39580 Ft, balance: 18720 Ft.\n\nBest,",
+    "status": "draft"
+  },
+  {
+    "id": "id-f6pr89c1m",
+    "displayName": "+36302826706",
+    "handle": "+36302826706",
+    "channels": {
+      "phone": [
+        "+36302826706"
+      ]
+    },
+    "lastContacted": "2025-05-19T04:34:54.997Z",
+    "draft": "Hi, \nThanks for the feedback. Looking forward to the next round.\nDear",
+    "status": "draft"
+  },
+  {
+    "id": "id-3lui7oyy4",
+    "displayName": "+36304172449",
+    "handle": "+36304172449",
+    "channels": {
+      "phone": [
+        "+36304172449"
+      ]
+    },
+    "lastContacted": "2025-05-11T14:50:26.620Z",
+    "draft": "dear,\n\nköszi.\n\nhi,",
+    "status": "draft"
+  },
+  {
+    "id": "id-97rwt0f2g",
+    "displayName": "+36305081812",
+    "handle": "+36305081812",
+    "channels": {
+      "phone": [
+        "+36305081812"
+      ]
+    },
+    "lastContacted": "2025-05-13T10:17:35.446Z",
+    "draft": "hi, nem megfelel. hiadd 16.00-ra.",
+    "status": "draft"
+  },
+  {
+    "id": "id-birvam0s4",
+    "displayName": "+36308992427",
+    "handle": "+36308992427",
+    "channels": {
+      "phone": [
+        "+36308992427"
+      ]
+    },
+    "lastContacted": "2025-05-14T07:14:34.727Z",
+    "draft": "dear Balcsit,\n\nCalled you to ask when it would be convenient.\n\nhi",
+    "status": "draft"
+  },
+  {
+    "id": "id-m1uob0lyo",
+    "displayName": "+36203935274",
+    "handle": "+36203935274",
+    "channels": {
+      "phone": [
+        "+36203935274"
+      ]
+    },
+    "lastContacted": "2025-05-07T11:05:12.545Z",
+    "draft": "hi, \nnot sure what you mean by \"sumak-samesz kamu-koma\". clarify please. \nthanks, \ndear",
+    "status": "draft"
+  },
+  {
+    "id": "id-ujxt87wm6",
+    "displayName": "+36306121624",
+    "handle": "+36306121624",
+    "channels": {
+      "phone": [
+        "+36306121624"
+      ]
+    },
+    "lastContacted": "2025-05-08T09:30:02.996Z",
+    "draft": "Hi Lázár,\n\nThank you for reaching out. Could we schedule a call next Tuesday at 10 AM?\n\nBest,  \nCsaba",
+    "status": "draft"
+  },
+  {
+    "id": "id-hph4gkkxu",
+    "displayName": "+36707009627",
+    "handle": "+36707009627",
+    "channels": {
+      "phone": [
+        "+36707009627"
+      ]
+    },
+    "lastContacted": "2025-05-06T12:52:00.909Z",
+    "draft": "Hi,\n\nAlready received the email. Will pay by 10th June.\n\nThanks.",
+    "status": "draft"
+  },
+  {
+    "id": "id-c5a6dm6qe",
+    "displayName": "+36205305212",
+    "handle": "+36205305212",
+    "channels": {
+      "phone": [
+        "+36205305212"
+      ]
+    },
+    "lastContacted": "2025-05-05T15:19:07.160Z",
+    "draft": "Hi,\n\nRemílessem, hogy az állam a jó úton halad.\n\nHiatus:",
+    "status": "draft"
+  }
+]
