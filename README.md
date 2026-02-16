@@ -20,9 +20,10 @@ Agent rules and cold-start instructions for Reply are in the **mvp-factory-contr
 
 ### POC: Localhost chat (reply suggestions in the browser)
 
-1. From the repo root: `cd chat && npm start`
-2. Open in a browser: **http://localhost:3000**
-3. Type or paste a message and click **Suggest reply** to see a suggested reply in the chat.
+1. **(Optional)** Ingest your notes so Reply can use "how I act": put `.txt` or `.md` in `knowledge/documents/`, then run `node chat/ingest.js` from the repo root. See [docs/INGESTION.md](docs/INGESTION.md).
+2. From the repo root: `cd chat && npm start`
+3. Open in a browser: **http://localhost:3000**
+4. Type or paste a message and click **Suggest reply** to see a suggested reply (and matching snippets from your notes when available).
 
 No install needed (Node built-ins only). Node 18+.
 

@@ -21,6 +21,8 @@ Reply should be able to ingest and use your existing data so it can mirror **wha
 
 **POC goal:** Design a small “knowledge” model (what we store, how we index it) and implement ingestion for **at least one source** (e.g. local text/markdown files or one API like Gmail) so the system can be annotated with “how I act” and used when generating reply suggestions.
 
+**Done:** Knowledge model and local-file ingestion implemented. See [INGESTION.md](INGESTION.md). Run `node chat/ingest.js`; chat API returns `snippets` from ingested notes when the message matches (#162).
+
 ---
 
 ## 2. Simple chat window on localhost — “ask for replies in the chat”
@@ -44,7 +46,7 @@ A minimal way to use Reply during the POC:
 
 | # | Function | POC deliverable |
 |---|----------|-----------------|
-| 1 | **Knowledge injection** | Design + at least one pipeline (e.g. Gmail or local files) to ingest and annotate “how I act”; data available for the reply engine. |
-| 2 | **Localhost chat** | Browser UI on localhost: user can paste/type a message and ask for reply suggestions; suggestions shown in the chat. |
+| 1 | **Knowledge injection** (done) | Design + at least one pipeline (e.g. Gmail or local files) to ingest and annotate “how I act”; data available for the reply engine. |
+| 2 | **Localhost chat** (done) | Browser UI on localhost: user can paste/type a message and ask for reply suggestions; suggestions shown in the chat. |
 
 Together these allow testing the project end-to-end: inject some knowledge, open the chat, ask for a reply, and verify that the system can use the injected context (once wired) and deliver a usable suggestion.

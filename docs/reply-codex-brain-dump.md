@@ -6,7 +6,8 @@ Current job, where we left off, and open decisions. Update this at the end of ea
 
 ## Current status
 
-- **POC chat:** Localhost chat UI in `chat/` (Node, no deps). Run `cd chat && npm start`, open http://localhost:3000. Type/paste message, click "Suggest reply"; keyword-based suggestions shown in chat (#154 delivered).
+- **POC chat:** Localhost chat UI in `chat/` (Node, no deps). Run `cd chat && npm start`, open http://localhost:3000. Type/paste message, click "Suggest reply"; keyword-based suggestions + optional "From your notes" snippets (#154).
+- **POC knowledge:** Local-file ingestion in `chat/ingest.js` and `chat/knowledge.js`; store in `knowledge/store.json`. Run `node chat/ingest.js`; suggest-reply API returns `snippets` when message matches ingested text (#162 delivered).
 - **App:** SwiftUI "Reply Machine" with `ReplyEngine` (keyword rules) and `ContentView`. Runs on macOS.
 - **Exploration:** GraphQL JSON files in repo root for GitHub Project V2; not yet integrated.
 - **Docs:** ROADMAP, TASKLIST, RELEASE_NOTES, POC_FIRST_FUNCTIONS, brain dump. Board is source of truth.

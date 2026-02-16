@@ -4,6 +4,13 @@ Completed work only. Board "Done" column is the source of truth for delivered it
 
 ---
 
+## 2026-02-16 — POC: Knowledge ingestion (#162)
+
+- **Knowledge model:** Documented in [INGESTION.md](INGESTION.md). Schema: snippets with `source`, `path`, `text`; stored in `knowledge/store.json` (configurable).
+- **First source — local files:** Scan folder (default `knowledge/documents/`) for `.txt`/`.md`; run `node chat/ingest.js` or `cd chat && npm run ingest`. Env: `REPLY_KNOWLEDGE_PATH`, `REPLY_KNOWLEDGE_STORE`.
+- **Query:** `getSnippets(query)` returns snippets containing the message words; chat API returns `suggestion` + `snippets` so the UI can show "From your notes".
+- **Chat wired:** Suggest-reply response includes matching ingested snippets when available.
+
 ## 2026-02-16 — POC: Localhost chat UI (#154)
 
 - **Chat on localhost:** Browser UI at http://localhost:3000. User can type or paste a message and click "Suggest reply"; suggested reply is shown in the chat. Implemented in `chat/` (Node, no extra deps). Same keyword-based logic as ReplyEngine for POC.

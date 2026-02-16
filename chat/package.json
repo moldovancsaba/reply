@@ -4,7 +4,8 @@
   "description": "Reply POC — localhost chat to ask for reply suggestions",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "ingest": "node ingest.js"
   },
   "engines": {
     "node": ">=18"

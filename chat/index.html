@@ -26,6 +26,7 @@
     .message { margin-bottom: 0.75rem; }
     .message.user { color: #333; }
     .message.reply { color: #056; background: #e8f4f4; padding: 0.5rem 0.75rem; border-radius: 6px; }
+    .message.snippets { font-size: 0.85rem; color: #555; margin-top: 0.25rem; }
     .message .label { font-size: 0.7rem; text-transform: uppercase; color: #888; margin-bottom: 0.25rem; }
     textarea {
       width: 100%;
@@ -93,6 +94,10 @@
         const data = await res.json();
         const suggestion = data.suggestion || "No suggestion returned.";
         addMessage("Suggested reply", suggestion, "reply");
+        if (data.snippets && data.snippets.length > 0) {
+          const from = data.snippets.map(function(s) { return s.text; }).join(" ");
+          addMessage("From your notes", from, "snippets");
+        }
       } catch (e) {
         addMessage("Error", e.message || "Request failed", "reply");
       }
