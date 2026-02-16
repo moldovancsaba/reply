@@ -12,7 +12,7 @@ Current job, where we left off, and open decisions. Update this at the end of ea
 
 ## Where we left off
 
-- Reply is onboarded to the MVP Factory Board (agent doc in mvp-factory-control, Product = reply on relevant issues). Next actionable work comes from the board (Product = reply, Status = Ready).
+- Reply onboarding completed (issues #158–#161): agent operating document and README row in mvp-factory-control; ROADMAP, TASKLIST, RELEASE_NOTES, brain dump in reply repo; README expanded; #153 and #154 set to Product = reply, Status = Backlog. Next actionable work comes from the board (Product = reply, Status = Ready).
 
 ## Next
 
