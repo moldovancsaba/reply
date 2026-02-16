@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reply — suggest a reply</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 1rem;
+      background: #f5f5f5;
+    }
+    h1 { font-size: 1.25rem; margin: 0 0 0.5rem; }
+    .subtitle { color: #666; font-size: 0.875rem; margin-bottom: 1rem; }
+    .chat {
+      background: #fff;
+      border-radius: 8px;
+      padding: 1rem;
+      min-height: 200px;
+      margin-bottom: 1rem;
+      border: 1px solid #e0e0e0;
+    }
+    .message { margin-bottom: 0.75rem; }
+    .message.user { color: #333; }
+    .message.reply { color: #056; background: #e8f4f4; padding: 0.5rem 0.75rem; border-radius: 6px; }
+    .message .label { font-size: 0.7rem; text-transform: uppercase; color: #888; margin-bottom: 0.25rem; }
+    textarea {
+      width: 100%;
+      min-height: 80px;
+      padding: 0.5rem;
+      font: inherit;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      resize: vertical;
+    }
+    button {
+      margin-top: 0.5rem;
+      padding: 0.5rem 1rem;
+      font: inherit;
+      background: #056;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:hover { background: #045; }
+    button:disabled { background: #999; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <h1>Reply</h1>
+  <p class="subtitle">Paste or type a message, then ask for a suggested reply.</p>
+
+  <div class="chat" id="chat"></div>
+
+  <label for="input">Message to reply to</label>
+  <textarea id="input" placeholder="e.g. Hi, can we meet tomorrow?"></textarea>
+  <button id="btn" type="button">Suggest reply</button>
+
+  <script>
+    const chat = document.getElementById("chat");
+    const input = document.getElementById("input");
+    const btn = document.getElementById("btn");
+
+    function addMessage(label, text, className) {
+      const el = document.createElement("div");
+      el.className = "message " + (className || "");
+      el.innerHTML = "<div class=\"label\">" + label + "</div>" + escapeHtml(text);
+      chat.appendChild(el);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement("div");
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    btn.addEventListener("click", async () => {
+      const message = (input.value || "").trim();
+      if (!message) return;
+      addMessage("You (message)", message, "user");
+      btn.disabled = true;
+      try {
+        const res = await fetch("/api/suggest-reply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
+        });
+        const data = await res.json();
+        const suggestion = data.suggestion || "No suggestion returned.";
+        addMessage("Suggested reply", suggestion, "reply");
+      } catch (e) {
+        addMessage("Error", e.message || "Request failed", "reply");
+      }
+      btn.disabled = false;
+      input.value = "";
+    });
+  </script>
+</body>
+</html>

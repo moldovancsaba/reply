@@ -36,6 +36,8 @@ A minimal way to use Reply during the POC:
 
 **POC goal:** Implement a simple chat UI on localhost where the user can ask for reply suggestions and see answers in the chat. No login or messaging integrations required for the first POC.
 
+**Done:** Chat POC implemented in `chat/`. Run: `cd chat && npm start`, then open http://localhost:3000 (see README).
+
 ---
 
 ## Summary — POC first functions
