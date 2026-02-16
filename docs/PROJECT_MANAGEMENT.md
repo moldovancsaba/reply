@@ -1,0 +1,41 @@
+# Project Management & SSOT Guidelines
+
+**Purpose:** This document defines how we work. It is the rulebook for maintaining the Single Source of Truth (SSOT).
+**Audience:** All Agents (Agnes, Tribeca, etc.) and Developers.
+
+## 1. The Single Source of Truth (SSOT)
+The **[GitHub Project Board](https://github.com/users/moldovancsaba/projects/1)** is the ONLY source of truth for what is being worked on.
+
+*   **Rule:** If it's not on the board, it doesn't exist.
+*   **Rule:** The **Status Column** defines the state (Backlog, Ready, In Progress, Done). Do NOT put status in titles (e.g., `[Backlog] Issue Title` is ILLEGAL).
+*   **Rule:** Documentation (`HANDOVER.md`) must be updated *immediately* after a task is completed to match the board.
+
+## 2. Issue Structure (What good looks like)
+Every issue on the board must follow this structure to be "Ready":
+
+1.  **Objective:** One specific, deliverable goal.
+2.  **Context:** Why are we doing this? Link to parent issues or roadmap items.
+3.  **Scope:** What is IN and what is OUT.
+4.  **Dependencies:** What specific issue numbers must be Done first?
+5.  **Acceptance Criteria (DoD):** A checklist of verifiable results. "It works" is not enough; "UAT Passed" is required.
+
+## 3. Board Fields & How to Fill Them
+Accurate metadata is critical for filtering and finding work.
+
+| Field | Description | Rules |
+| :--- | :--- | :--- |
+| **Status** | The current workflow stage. | **Backlog**: Unsorted ideas. **Ready**: Fully defined & unblocked. **In Progress**: Active now. **Done**: Verified & Merged. |
+| **Agent** | Who is responsible? | Assign to **Agnes** (or relevant agent) when moving to "Ready". |
+| **Product** | Which app is this for? | Select `reply`, `amanoba`, etc. Strict separation. |
+| **Type** | The nature of work. | `Feature` (New value), `Bug` (Fix), `Refactor` (Cleanup), `Docs` (Knowledge). |
+| **Priority** | Urgency. | `P0` (Critical/Blocker), `P1` (High), `P2` (Normal). |
+| **Release** | version/milestone. | Text field. Use semantic versioning (e.g., `v0.2.0`). |
+| **DoD** | Definition of Done status. | `Passed` is required to close an issue. |
+
+## 4. The "Agnes" Workflow
+1.  **Pick Up:** Find the top `P0` item in **Ready**.
+2.  **Assign:** Ensure **Agent** is set to `Agnes`.
+3.  **Execute:** Work on the task.
+4.  **Verify:** Run tests and UAT.
+5.  **Close:** Move to **Done**, set **DoD** to `Passed`.
+6.  **Document:** Update `HANDOVER.md` and `RELEASE_NOTES.md`.

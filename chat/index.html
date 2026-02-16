@@ -1,109 +1,949 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reply — suggest a reply</title>
+  <title>Reply Hub v2</title>
   <style>
-    * { box-sizing: border-box; }
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      max-width: 560px;
-      margin: 0 auto;
+    :root {
+      --primary: #007aff;
+      --bg-sidebar: #1e1e1e;
+      --bg-chat: #f5f5f7;
+      --bg-kyc: #ffffff;
+      --text-main: #1d1d1f;
+      --text-dim: #86868b;
+      --border: #e5e5e5;
+      --status-draft: 🟠;
+      --status-open: 🟢;
+      --status-closed: 🔵;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body,
+    html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    .app-container {
+      display: grid;
+      grid-template-columns: 280px 1fr 320px;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      background: var(--bg-sidebar);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid #333;
+      height: 100vh;
+      max-height: 100vh;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 1.5rem;
+      border-bottom: 1px solid #333;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .contact-list {
+      flex: 1;
+      overflow-y: auto;
+      min-height: 0;
+    }
+
+    .contact-item {
       padding: 1rem;
-      background: #f5f5f5;
-    }
-    h1 { font-size: 1.25rem; margin: 0 0 0.5rem; }
-    .subtitle { color: #666; font-size: 0.875rem; margin-bottom: 1rem; }
-    .chat {
-      background: #fff;
-      border-radius: 8px;
-      padding: 1rem;
-      min-height: 200px;
-      margin-bottom: 1rem;
-      border: 1px solid #e0e0e0;
-    }
-    .message { margin-bottom: 0.75rem; }
-    .message.user { color: #333; }
-    .message.reply { color: #056; background: #e8f4f4; padding: 0.5rem 0.75rem; border-radius: 6px; }
-    .message.snippets { font-size: 0.85rem; color: #555; margin-top: 0.25rem; }
-    .message .label { font-size: 0.7rem; text-transform: uppercase; color: #888; margin-bottom: 0.25rem; }
-    textarea {
-      width: 100%;
-      min-height: 80px;
-      padding: 0.5rem;
-      font: inherit;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      resize: vertical;
-    }
-    button {
-      margin-top: 0.5rem;
-      padding: 0.5rem 1rem;
-      font: inherit;
-      background: #056;
-      color: #fff;
-      border: none;
-      border-radius: 6px;
+      border-bottom: 1px solid #333;
       cursor: pointer;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
-    button:hover { background: #045; }
-    button:disabled { background: #999; cursor: not-allowed; }
+
+    .contact-item:hover {
+      background: #2c2c2e;
+    }
+
+    .contact-item.active {
+      background: #3a3a3c;
+    }
+
+    .status-dot {
+      font-size: 0.8rem;
+    }
+
+    .channel-icon {
+      font-size: 1rem;
+    }
+
+    .contact-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .contact-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .contact-preview {
+      font-size: 0.8rem;
+      color: #aaa;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Chat Area */
+    .chat-area {
+      background: var(--bg-chat);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      min-width: 0;
+      height: 100vh;
+      max-height: 100vh;
+      overflow: hidden;
+    }
+
+    .chat-header {
+      padding: 1rem 1.5rem;
+      background: white;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .messages-container {
+      flex: 1;
+      padding: 1.5rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      min-height: 0;
+      /* Important for flex-grow with overflow */
+    }
+
+    .message-bubble {
+      max-width: 85%;
+      padding: 0.75rem 1rem;
+      border-radius: 18px;
+      font-size: 0.95rem;
+      line-height: 1.4;
+      overflow-wrap: break-word;
+      position: relative;
+    }
+
+    .message-info {
+      font-size: 0.7rem;
+      color: rgba(0, 0, 0, 0.4);
+      margin-top: 4px;
+      display: block;
+    }
+
+    .message-bubble.me .message-info {
+      color: rgba(255, 255, 255, 0.7);
+      text-align: right;
+    }
+
+    .message-bubble.me {
+      align-self: flex-end;
+      background: var(--primary);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message-bubble.contact {
+      align-self: flex-start;
+      background: white;
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+
+    .input-area {
+      padding: 1.5rem;
+      background: white;
+      border-top: 1px solid var(--border);
+    }
+
+    .input-wrapper {
+      display: flex;
+      gap: 10px;
+      background: #f0f0f2;
+      padding: 8px;
+      border-radius: 24px;
+    }
+
+    textarea#chat-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      padding: 8px 12px;
+      resize: none;
+      font-size: 0.95rem;
+      max-height: 150px;
+    }
+
+    /* KYC Pane */
+    .kyc-pane {
+      background: var(--bg-kyc);
+      padding: 1.5rem;
+      border-left: 1px solid var(--border);
+      overflow-y: auto;
+      height: 100vh;
+      max-height: 100vh;
+    }
+
+    .kyc-card {
+      background: #f9f9fb;
+      border-radius: 12px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      border: 1px solid var(--border);
+    }
+
+    .kyc-label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .kyc-value {
+      font-size: 0.95rem;
+      color: var(--text-main);
+      margin-bottom: 1rem;
+    }
+
+    .kyc-notes {
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+    }
+
+    /* Modals */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-content {
+      background: white;
+      width: 400px;
+      padding: 2rem;
+      border-radius: 18px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Buttons */
+    .btn {
+      border: none;
+      border-radius: 8px;
+      padding: 0.6rem 1.2rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--primary);
+    }
+
+    .btn-icon {
+      background: transparent;
+      padding: 4px;
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+    }
+
+    .btn-icon:hover {
+      background: #eee;
+    }
+
+    /* Statuses */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .status-badge.orange {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .status-badge.green {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
   </style>
 </head>
+
 <body>
-  <h1>Reply</h1>
-  <p class="subtitle">Paste or type a message, then ask for a suggested reply.</p>
+  <div class="app-container">
+    <!-- PANE A: SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div>
+          <h2 style="margin:0; font-size: 1.1rem;">Reply Hub</h2>
+          <div id="sync-status" style="font-size: 0.7rem; color: #888; margin-top: 4px;">Ready</div>
+        </div>
+        <div style="display: flex; gap: 5px;">
+          <button id="sync-imessage-btn" class="btn-icon" title="Sync iMessage">💬</button>
+          <button id="sync-mail-btn" class="btn-icon" title="Sync Mail">📧</button>
+          <button id="sync-contacts-btn" class="btn-icon" title="Sync Contacts">👤</button>
+        </div>
+      </div>
+      <div id="contact-list" class="contact-list">
+        <!-- Contact Items will be injected here -->
+        <div class="contact-item active">
+          <span class="status-dot">🟠</span>
+          <div class="contact-info">
+            <div class="contact-name">Agneta</div>
+            <div class="contact-preview">Draft ready: "Let's meet tomorrow..."</div>
+          </div>
+          <span class="channel-icon">💬</span>
+        </div>
+      </div>
+    </aside>
 
-  <div class="chat" id="chat"></div>
+    <!-- PANE B: MAIN CHAT -->
+    <main class="chat-area">
+      <header class="chat-header">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div id="active-contact-name-chat" style="font-weight: 700; font-size: 1.1rem;">Select a contact</div>
+          <select id="status-select" onchange="updateManualStatus()"
+            style="font-size:0.8rem; border-radius:12px; border:1px solid #ddd; padding:2px 8px; cursor:pointer; display:none;">
+            <option value="open">🟢 Active</option>
+            <option value="draft">🟠 Draft Ready</option>
+            <option value="closed">🔵 Resolved</option>
+          </select>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-ghost">Refine</button>
+          <button class="btn btn-primary" id="btn-suggest">Suggest Draft</button>
+        </div>
+      </header>
 
-  <label for="input">Message to reply to</label>
-  <textarea id="input" placeholder="e.g. Hi, can we meet tomorrow?"></textarea>
-  <button id="btn" type="button">Suggest reply</button>
+      <div class="input-area" style="border-top:none; border-bottom:1px solid var(--border);">
+        <div class="input-wrapper">
+          <textarea id="chat-input" placeholder="Type a message or let me suggest..."></textarea>
+          <button class="btn-icon">✨</button>
+          <button id="btn-send" class="btn btn-primary">Send iMessage</button>
+        </div>
+      </div>
+
+      <div id="messages" class="messages-container">
+        <!-- Messages will be injected here -->
+        <div class="message-bubble contact">Hi Csaba, are we still on for lunch?</div>
+      </div>
+    </main>
+
+    <!-- PANE C: KYC DATA -->
+    <section class="kyc-pane">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;">
+        <h3 style="margin-top:0;">Profile</h3>
+        <button class="btn btn-primary" style="font-size:0.75rem; padding: 4px 8px;" onclick="saveInlineProfile()">Save
+          Changes</button>
+      </div>
+
+      <div class="kyc-card">
+        <div id="suggested-kyc-alert"
+          style="display:none; background: #fff8e1; border: 1px solid #ffe082; border-radius: 6px; padding: 10px; margin-bottom: 1rem;">
+          <div
+            style="font-size: 0.75rem; font-weight: 700; color: #795548; margin-bottom: 5px; display: flex; justify-content: space-between;">
+            <span>🤖 AI SUGGESTED UPDATE</span>
+            <span onclick="dismissKYC()" style="cursor:pointer;" title="Dismiss">✕</span>
+          </div>
+          <div id="suggested-kyc-content" style="font-size: 0.85rem; color: #5d4037; font-style: italic;">
+            <!-- Content injected via JS -->
+          </div>
+          <div style="margin-top: 8px; display: flex; gap: 8px;">
+            <button class="btn btn-primary" style="font-size: 0.7rem; padding: 3px 8px;" onclick="acceptKYC()">✅
+              Accept</button>
+            <button class="btn-ghost" style="font-size: 0.7rem; padding: 3px 8px;" onclick="editKYC()">📝 Edit</button>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 0.8rem;">
+          <label style="font-size: 0.7rem; color: #888; text-transform: uppercase;">Display Name</label>
+          <input id="kyc-name-input"
+            style="width:100%; border:none; border-bottom:1px solid transparent; font-weight:700; font-size:1rem; padding: 2px 0;"
+            onfocus="this.style.borderBottom='1px solid var(--primary)'"
+            onblur="this.style.borderBottom='1px solid transparent'">
+        </div>
+
+        <div style="margin-bottom: 0.8rem;">
+          <label style="font-size: 0.7rem; color: #888; text-transform: uppercase;">Profession</label>
+          <input id="kyc-role-input"
+            style="width:100%; border:none; border-bottom:1px solid transparent; font-size:0.9rem; padding: 2px 0;"
+            onfocus="this.style.borderBottom='1px solid var(--primary)'"
+            onblur="this.style.borderBottom='1px solid transparent'">
+        </div>
+
+        <div style="margin-bottom: 0.8rem;">
+          <label style="font-size: 0.7rem; color: #888; text-transform: uppercase;">Relationship</label>
+          <input id="kyc-rel-input"
+            style="width:100%; border:none; border-bottom:1px solid transparent; font-size:0.9rem; padding: 2px 0;"
+            onfocus="this.style.borderBottom='1px solid var(--primary)'"
+            onblur="this.style.borderBottom='1px solid transparent'">
+        </div>
+
+        <div style="margin-bottom: 0.8rem;">
+          <label style="font-size: 0.7rem; color: #888; text-transform: uppercase;">Handle</label>
+          <input id="kyc-handle-input" readonly
+            style="width:100%; border:none; font-size:0.8rem; color:#666; background:transparent;">
+        </div>
+
+        <div style="margin-top: 1.5rem;">
+          <label style="font-size: 0.7rem; color: #888; text-transform: uppercase; font-weight:700;">Local Intelligence
+            (Notes Log)</label>
+          <div id="notes-log"
+            style="margin-top:0.5rem; max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 5px; background: #fff;">
+            <!-- Notes injected here -->
+          </div>
+          <div style="margin-top: 0.8rem; display: flex; gap: 8px;">
+            <input id="new-note-input" placeholder="Add a new observation..."
+              style="flex:1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 20px; font-size: 0.85rem;">
+            <button class="btn-icon" onclick="addNote()"
+              style="background: var(--primary); color: white; border: none; width: 30px; height: 30px;">+</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Profile Edit Modal -->
+  <div id="profile-modal" class="modal-overlay">
+    <div class="modal-content">
+      <h3 style="margin-top:0;">Edit Contact Profile</h3>
+      <div style="margin-bottom: 0.5rem;">
+        <label style="font-size:0.8rem; color:#666;">Name:</label>
+        <input id="prof-name" style="width:100%; padding:0.4rem; border:1px solid #ccc; border-radius:4px;">
+      </div>
+      <div style="margin-bottom: 0.5rem;">
+        <label style="font-size:0.8rem; color:#666;">Profession:</label>
+        <input id="prof-role" style="width:100%; padding:0.4rem; border:1px solid #ccc; border-radius:4px;">
+      </div>
+      <div style="margin-bottom: 0.5rem;">
+        <label style="font-size:0.8rem; color:#666;">Relationship:</label>
+        <input id="prof-rel" style="width:100%; padding:0.4rem; border:1px solid #ccc; border-radius:4px;">
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <label style="font-size:0.8rem; color:#666;">Notes:</label>
+        <textarea id="prof-notes"
+          style="width:100%; height:60px; padding:0.4rem; border:1px solid #ccc; border-radius:4px;"></textarea>
+      </div>
+      <input type="hidden" id="prof-handle">
+      <div style="display:flex; justify-content:flex-end; gap:0.5rem;">
+        <button onclick="closeProfileModal()"
+          style="background:#eee; color:#333; border:1px solid #ccc; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">Cancel</button>
+        <button onclick="saveProfile()"
+          style="background:#056; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">Save
+          Profile</button>
+      </div>
+    </div>
+  </div>
 
   <script>
-    const chat = document.getElementById("chat");
-    const input = document.getElementById("input");
-    const btn = document.getElementById("btn");
+    const contactListEl = document.getElementById("contact-list");
+    const messagesEl = document.getElementById("messages");
+    const chatInput = document.getElementById("chat-input");
+    const activeNameEl = document.getElementById("active-contact-name");
 
-    function addMessage(label, text, className) {
-      const el = document.createElement("div");
-      el.className = "message " + (className || "");
-      el.innerHTML = "<div class=\"label\">" + label + "</div>" + escapeHtml(text);
-      chat.appendChild(el);
-      chat.scrollTop = chat.scrollHeight;
+    // KYC Elements
+    // KYC Elements (Inline Editor)
+    const kycNameInput = document.getElementById("kyc-name-input");
+    const kycRoleInput = document.getElementById("kyc-role-input");
+    const kycRelInput = document.getElementById("kyc-rel-input");
+    const kycHandleInput = document.getElementById("kyc-handle-input");
+    const kycNotesInput = document.getElementById("kyc-notes-input");
+
+    let currentHandle = null;
+
+    /**
+     * Fetch all conversations and render sidebar.
+     */
+    async function loadConversations() {
+      try {
+        const res = await fetch("/api/conversations");
+        const contacts = await res.json();
+        contactListEl.innerHTML = "";
+
+        contacts.forEach(c => {
+          const item = document.createElement("div");
+          item.className = "contact-item" + (currentHandle === c.handle ? " active" : "");
+
+          const status = c.status === "draft" ? "🟠" : (c.status === "open" ? "🟢" : "🔵");
+          const channel = c.channel === "email" ? "📧" : "💬";
+
+          item.innerHTML = `
+                    <span class="status-dot">${status}</span>
+                    <div class="contact-info">
+                        <div class="contact-name">${c.displayName}</div>
+                        <div class="contact-preview">${c.lastMessage}</div>
+                    </div>
+                    <span class="channel-icon">${channel}</span>
+                `;
+
+          item.onclick = () => selectContact(c);
+          contactListEl.appendChild(item);
+        });
+
+        // If a contact is selected, refresh their messages too
+        if (currentHandle) {
+          const res = await fetch(`/api/thread?handle=${encodeURIComponent(currentHandle)}`);
+          const data = await res.json();
+          renderMessages(data.messages);
+        }
+      } catch (e) {
+        console.error("Failed to load conversations:", e);
+      }
     }
 
-    function escapeHtml(s) {
-      const div = document.createElement("div");
-      div.textContent = s;
-      return div.innerHTML;
+    /**
+     * Switch the active contact and load their thread + KYC.
+     */
+    async function selectContact(contact) {
+      currentHandle = contact.handle;
+      activeNameEl.textContent = contact.displayName;
+
+      // Pre-fill draft if exists
+      if (contact.draft) {
+        chatInput.value = contact.draft;
+        document.getElementById("active-contact-status").innerHTML = "🟠 Draft Ready";
+        document.getElementById("active-contact-status").className = "status-badge orange";
+      } else {
+        chatInput.value = "";
+        document.getElementById("active-contact-status").innerHTML = "🟢 Active";
+        document.getElementById("active-contact-status").className = "status-badge green";
+      }
+
+      // Update Send Button text
+      const isEmail = contact.handle && contact.handle.includes("@");
+      document.getElementById("btn-send").textContent = isEmail ? "Send Email" : "Send iMessage";
+
+      // Highlight in sidebar
+      document.querySelectorAll(".contact-item").forEach(el => el.classList.remove("active"));
+
+      // Update Name in Chat Header
+      document.getElementById("active-contact-name-chat").textContent = contact.displayName;
+
+      // Update Status Select
+      const statusSelect = document.getElementById("status-select");
+      statusSelect.value = contact.status || "open";
+      statusSelect.style.display = "block";
+
+      // Update KYC Pane (Inline Editor)
+      document.getElementById("kyc-name-input").value = contact.displayName;
+      document.getElementById("kyc-handle-input").value = contact.handle;
+      document.getElementById("kyc-role-input").value = contact.profession || "";
+      document.getElementById("kyc-rel-input").value = contact.relationship || "";
+
+      // Render Notes Log
+      renderNotes(contact.notes || []);
+
+      // Show/Hide AI Recommendations
+      const alertEl = document.getElementById("suggested-kyc-alert");
+      const contentEl = document.getElementById("suggested-kyc-content");
+      if (contact.pendingKYC) {
+        let summary = [];
+        if (contact.pendingKYC.profession) summary.push(`Profession: ${contact.pendingKYC.profession}`);
+        if (contact.pendingKYC.relationship) summary.push(`Relationship: ${contact.pendingKYC.relationship}`);
+        if (contact.pendingKYC.notes) summary.push(`Note: ${contact.pendingKYC.notes}`);
+
+        contentEl.innerHTML = summary.join('<br>');
+        alertEl.style.display = "block";
+      } else {
+        alertEl.style.display = "none";
+      }
+
+      // Load Messages
+      try {
+        const res = await fetch(`/api/thread?handle=${encodeURIComponent(contact.handle)}`);
+        const data = await res.json();
+        renderMessages(data.messages);
+      } catch (e) {
+        console.error("Failed to load thread:", e);
+      }
+
+      // Re-trigger sidebar refresh for active state
+      loadConversations();
     }
 
-    btn.addEventListener("click", async () => {
-      const message = (input.value || "").trim();
-      if (!message) return;
-      addMessage("You (message)", message, "user");
+    function renderMessages(msgs) {
+      messagesEl.innerHTML = "";
+      // Sort newest first
+      const sorted = [...msgs].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      sorted.forEach(m => {
+        const bubble = document.createElement("div");
+        bubble.className = "message-bubble " + (m.role === "me" ? "me" : "contact");
+
+        const textContent = document.createElement("div");
+        textContent.textContent = m.text;
+        bubble.appendChild(textContent);
+
+        if (m.date && m.date !== "Unknown") {
+          const dateObj = new Date(m.date);
+          const formatted = dateObj.toLocaleDateString() === new Date().toLocaleDateString()
+            ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : dateObj.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+          const info = document.createElement("span");
+          info.className = "message-info";
+          info.textContent = formatted;
+          bubble.appendChild(info);
+        }
+
+        messagesEl.appendChild(bubble);
+      });
+      messagesEl.scrollTop = 0; // Start at top for newest
+    }
+
+    // Polling for new messages/state (Live Feel)
+    setInterval(loadConversations, 10000);
+
+    // Initial Load + Auto Sync
+    async function init() {
+      await loadConversations();
+      // Trigger a background sync on startup
+      fetch("/api/sync-imessage", { method: "POST" });
+      fetch("/api/sync-mail", { method: "POST" });
+    }
+    init();
+
+    // Sync Handlers
+    const syncStatus = document.getElementById("sync-status");
+    document.getElementById("sync-imessage-btn").onclick = async () => {
+      const btn = document.getElementById("sync-imessage-btn");
       btn.disabled = true;
+      syncStatus.textContent = "Syncing iMessage...";
+      try {
+        const res = await fetch("/api/sync-imessage", { method: "POST" });
+        const data = await res.json();
+        // Handle both 'ok' and 'started' as success for background tasks
+        if (data.status === "ok" || data.status === "started") {
+          syncStatus.textContent = "iMessage Sync Started!";
+        } else {
+          syncStatus.textContent = "Sync Failed: " + (data.error || "Unknown error");
+        }
+        loadConversations();
+      } catch (e) {
+        syncStatus.textContent = "Error: " + e.message;
+      }
+      btn.disabled = false;
+    };
+
+    document.getElementById("sync-contacts-btn").onclick = async () => {
+      const btn = document.getElementById("sync-contacts-btn");
+      btn.disabled = true;
+      syncStatus.textContent = "Syncing Contacts...";
+      try {
+        const res = await fetch("/api/sync-contacts", { method: "POST" });
+        const data = await res.json();
+        if (data.status === "ok" || data.status === "started") {
+          syncStatus.textContent = data.count ? `Synced ${data.count} contacts!` : "Contacts Synced!";
+        } else {
+          syncStatus.textContent = "Sync Failed: " + (data.error || "Unknown error");
+        }
+        loadConversations();
+      } catch (e) {
+        syncStatus.textContent = "Error: " + e.message;
+      }
+      btn.disabled = false;
+    };
+
+    // Wired up buttons
+    document.getElementById("sync-mail-btn").onclick = async () => {
+      const btn = document.getElementById("sync-mail-btn");
+      btn.disabled = true;
+      syncStatus.textContent = "Syncing Mail...";
+      try {
+        const res = await fetch("/api/sync-mail", { method: "POST" });
+        const data = await res.json();
+        if (data.status === "ok" || data.status === "started") {
+          syncStatus.textContent = "Mail Sync Started!";
+        } else {
+          syncStatus.textContent = "Sync Failed: " + (data.error || "Unknown error");
+        }
+        loadConversations();
+      } catch (e) {
+        syncStatus.textContent = "Error: " + e.message;
+      }
+      btn.disabled = false;
+    };
+
+    document.getElementById("btn-suggest").onclick = async () => {
+      if (!currentHandle) return alert("Select a contact first");
+      const btn = document.getElementById("btn-suggest");
+      btn.disabled = true;
+      btn.textContent = "Analyzing...";
+
       try {
         const res = await fetch("/api/suggest-reply", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message }),
+          body: JSON.stringify({ message: "", context: "", recipient: currentHandle })
         });
         const data = await res.json();
-        const suggestion = data.suggestion || "No suggestion returned.";
-        addMessage("Suggested reply", suggestion, "reply");
-        if (data.snippets && data.snippets.length > 0) {
-          const from = data.snippets.map(function(s) { return s.text; }).join(" ");
-          addMessage("From your notes", from, "snippets");
-        }
+        chatInput.value = data.reply;
       } catch (e) {
-        addMessage("Error", e.message || "Request failed", "reply");
+        alert("Suggestion failed: " + e.message);
       }
       btn.disabled = false;
-      input.value = "";
-    });
+      btn.textContent = "Suggest Draft";
+    };
+
+    // Profile Modal Logic
+    window.closeProfileModal = function () {
+      document.getElementById("profile-modal").style.display = "none";
+    }
+
+    window.saveInlineProfile = async function () {
+      if (!currentHandle) return;
+
+      // Before saving, also clear any pending KYC if we're hitting save (implies manual review)
+      try {
+        fetch(`/api/clear-pending-kyc?handle=${encodeURIComponent(currentHandle)}`, { method: 'POST' });
+        const contact = conversations.find(c => c.handle === currentHandle);
+        if (contact) delete contact.pendingKYC;
+        document.getElementById("suggested-kyc-alert").style.display = "none";
+      } catch (e) { }
+
+      const data = {
+        displayName: document.getElementById("kyc-name-input").value,
+        profession: document.getElementById("kyc-role-input").value,
+        relationship: document.getElementById("kyc-rel-input").value,
+        notes: document.getElementById("kyc-notes-input").value
+      };
+
+      try {
+        const res = await fetch("/api/update-contact", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ handle: currentHandle, data })
+        });
+        const result = await res.json();
+        if (result.status === "ok") {
+          // Update local state in conversations list too to avoid mismatch on next select
+          const contact = conversations.find(c => c.handle === currentHandle);
+          if (contact) Object.assign(contact, result.contact);
+
+          alert("Profile updated!");
+          loadConversations(); // Re-render sidebar to reflect name changes
+        } else {
+          alert("Error: " + result.error);
+        }
+      } catch (e) {
+        alert("Request failed: " + e.message);
+      }
+    }
+
+    window.acceptKYC = function () {
+      if (!currentHandle) return;
+      const contact = conversations.find(c => c.handle === currentHandle);
+      if (!contact || !contact.pendingKYC) return;
+
+      if (contact.pendingKYC.profession) document.getElementById("kyc-role-input").value = contact.pendingKYC.profession;
+      if (contact.pendingKYC.relationship) document.getElementById("kyc-rel-input").value = contact.pendingKYC.relationship;
+      if (contact.pendingKYC.notes) {
+        const currentNotes = document.getElementById("kyc-notes-input").value;
+        document.getElementById("kyc-notes-input").value = currentNotes ? (currentNotes + "\n" + contact.pendingKYC.notes) : contact.pendingKYC.notes;
+      }
+
+      saveInlineProfile();
+    }
+
+    window.editKYC = function () {
+      if (!currentHandle) return;
+      const contact = conversations.find(c => c.handle === currentHandle);
+      if (!contact || !contact.pendingKYC) return;
+
+      if (contact.pendingKYC.profession) {
+        document.getElementById("kyc-role-input").value = contact.pendingKYC.profession;
+        document.getElementById("kyc-role-input").style.backgroundColor = "#fff9c4";
+      }
+      if (contact.pendingKYC.relationship) {
+        document.getElementById("kyc-rel-input").value = contact.pendingKYC.relationship;
+        document.getElementById("kyc-rel-input").style.backgroundColor = "#fff9c4";
+      }
+      if (contact.pendingKYC.notes) {
+        const currentNotes = document.getElementById("kyc-notes-input").value;
+        document.getElementById("kyc-notes-input").value = currentNotes ? (currentNotes + "\n" + contact.pendingKYC.notes) : contact.pendingKYC.notes;
+        document.getElementById("kyc-notes-input").style.backgroundColor = "#fff9c4";
+      }
+
+      // Hide alert after clicking edit
+      document.getElementById("suggested-kyc-alert").style.display = "none";
+    }
+
+    window.dismissKYC = async function () {
+      if (!currentHandle) return;
+      try {
+        await fetch(`/api/clear-pending-kyc?handle=${encodeURIComponent(currentHandle)}`, { method: 'POST' });
+        const contact = conversations.find(c => c.handle === currentHandle);
+        if (contact) delete contact.pendingKYC;
+        document.getElementById("suggested-kyc-alert").style.display = "none";
+      } catch (e) {
+        alert("Failed to dismiss suggestion: " + e.message);
+      }
+    }
+
+    window.updateManualStatus = async function () {
+      if (!currentHandle) return;
+      const status = document.getElementById("status-select").value;
+      try {
+        await fetch("/api/update-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ handle: currentHandle, status })
+        });
+        const contact = conversations.find(c => c.handle === currentHandle);
+        if (contact) contact.status = status;
+        loadConversations();
+      } catch (e) {
+        alert("Status update failed: " + e.message);
+      }
+    }
+
+    window.renderNotes = function (notes) {
+      const log = document.getElementById("notes-log");
+      log.innerHTML = "";
+
+      if (!notes || notes.length === 0) {
+        log.innerHTML = `<div style="padding:10px; color:#999; text-align:center; font-size:0.8rem;">No observations recorded yet.</div>`;
+        return;
+      }
+
+      // Sort newest first
+      const sorted = [...notes].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+      sorted.forEach(n => {
+        const date = new Date(n.timestamp).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const item = document.createElement("div");
+        item.className = "note-item";
+        item.style = "padding: 8px; border-bottom: 1px solid #f0f0f0; position: relative;";
+        item.innerHTML = `
+                <div style="font-size: 0.7rem; color: #888; margin-bottom: 2px;">${date}</div>
+                <div style="font-size: 0.85rem; color: #333; line-height: 1.4;">${n.text}</div>
+                <span onclick="deleteNote('${n.id}')" style="position: absolute; top: 8px; right: 8px; cursor: pointer; color: #ddd; font-size: 0.8rem;" title="Delete">✕</span>
+            `;
+        log.appendChild(item);
+      });
+    }
+
+    window.addNote = async function () {
+      if (!currentHandle) return;
+      const input = document.getElementById("new-note-input");
+      const text = input.value.trim();
+      if (!text) return;
+
+      try {
+        const res = await fetch("/api/add-note", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ handle: currentHandle, text })
+        });
+        if (res.ok) {
+          input.value = "";
+          // Refresh local state and re-render
+          await loadConversations();
+          const contact = conversations.find(c => c.handle === currentHandle);
+          if (contact) renderNotes(contact.notes);
+        }
+      } catch (e) {
+        alert("Failed to add note: " + e.message);
+      }
+    }
+
+    window.deleteNote = async function (id) {
+      if (!currentHandle || !confirm("Delete this observation?")) return;
+      try {
+        const res = await fetch(`/api/delete-note?handle=${encodeURIComponent(currentHandle)}&id=${id}`, { method: 'POST' });
+        if (res.ok) {
+          await loadConversations();
+          const contact = conversations.find(c => c.handle === currentHandle);
+          if (contact) renderNotes(contact.notes);
+        }
+      } catch (e) {
+        alert("Failed to delete note: " + e.message);
+      }
+    }
+
+    document.getElementById("btn-send").onclick = async () => {
+      const text = chatInput.value.trim();
+      if (!text || !currentHandle) return;
+
+      const isEmail = currentHandle && currentHandle.includes("@");
+      const endpoint = isEmail ? "/api/send-email" : "/api/send-imessage";
+
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ recipient: currentHandle, text })
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          chatInput.value = "";
+          // Optimistically add to messages at TOP
+          const bubble = document.createElement("div");
+          bubble.className = "message-bubble me";
+          bubble.textContent = text;
+          messagesEl.prepend(bubble);
+          messagesEl.scrollTop = 0;
+        } else {
+          alert("Send failed: " + data.error);
+        }
+      } catch (e) {
+        alert("Error: " + e.message);
+      }
+    };
   </script>
 </body>
+
 </html>
