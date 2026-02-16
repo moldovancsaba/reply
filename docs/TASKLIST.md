@@ -6,8 +6,9 @@
 
 ## Reference (mirrors board)
 
-- **POC — Localhost chat UI:** Browser chat on localhost to ask for reply suggestions (issue #154).
-- **POC — Knowledge ingestion:** Design + first source (local files or Gmail) to annotate "how I act" (issue #162).
+- **Apple Notes as source:** #163 Roadmap; #164 Design (Ready, delivery order 1); #165 Implement read ingestion (Backlog, 2); #166 Wire + docs (Backlog, 3).
+- **POC — Localhost chat UI:** Done (#154).
+- **POC — Knowledge ingestion:** Done (#162).
 - Prepare project and first issue (see issue #153).
 - Onboard Reply to MVP Factory — done (#158–#161).
 
