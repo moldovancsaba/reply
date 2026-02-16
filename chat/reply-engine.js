@@ -1,32 +1,88 @@
-/**
- * Reply engine — keyword-based suggestions (mirrors ReplyEngine.swift for POC).
- * Used by the localhost chat to generate reply suggestions.
- */
+const { Ollama } = require('ollama');
+const { getContext } = require('./context-engine.js');
 
-const RULES = {
-  hello: "Hi there! How can I help you?",
-  hi: "Hello! What's up?",
-  "how are you": "I'm doing well, thanks for asking!",
-  thanks: "You're welcome!",
-  bye: "Goodbye! Have a great day!",
-  yes: "Great!",
-  no: "Okay, noted.",
-  what: "I'm not sure, can you clarify?",
-  when: "Let me check the schedule.",
-  where: "Location details coming soon.",
-};
+// Using default localhost:11434
+const ollama = new Ollama();
+const MODEL = "qwen2.5:7b";
 
-function generateReply(message) {
+async function generateReply(message, contextSnippets = [], recipient = null) {
   if (!message || typeof message !== "string") {
-    return "Thanks for your message. I'll get back to you soon.";
+    return "Please provide a message to reply to.";
   }
-  const lower = message.toLowerCase();
-  for (const [key, reply] of Object.entries(RULES)) {
-    if (lower.includes(key)) {
-      return reply;
-    }
+
+  // 1. Get Stylistic Context & System Instructions
+  const { styleInstructions, history, identityContext } = await getContext(recipient);
+
+  // 2. Construct context string from snippets
+  const contextText = contextSnippets
+    .map((s) => `[Source: ${s.path}]\n${s.text}`)
+    .join("\n\n---\n\n");
+
+  const prompt = `${styleInstructions}
+${identityContext || ""}
+${history || ""}
+
+Based on the knowledge below (my notes/emails), draft a reply to the incoming message.
+
+CONTEXT FROM KNOWLEDGE BASE:
+${contextText || "No relevant notes found."}
+
+INCOMING MESSAGE:
+"${message}"
+
+DRAFT REPLY (Text only, no conversational filler):`;
+
+  try {
+    const response = await ollama.chat({
+      model: MODEL,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    return response.message.content;
+  } catch (error) {
+    console.error("Error connecting to Ollama:", error);
+    return `Error generating reply: ${error.message}. Is Ollama running?`;
   }
-  return "Thanks for your message. I'll get back to you soon.";
 }
 
-module.exports = { generateReply };
+async function extractKYC(message) {
+  if (!message || typeof message !== "string") return null;
+
+  const prompt = `
+Analyze the following message and extract any NEW personal information about the sender (who is NOT me).
+Look for:
+- Profession/Job
+- Relationship to me (e.g. wife, daughter, boss)
+- Significant notes (e.g. "prefers concise emails", "has a cat named Luna", "just moved to London")
+
+Output ONLY a valid JSON object with the fields "profession", "relationship", and "notes". 
+If no info is found for a field, leave it as null.
+DO NOT include any other text.
+
+MESSAGE:
+"${message}"
+
+JSON OUTPUT:`;
+
+  try {
+    const response = await ollama.chat({
+      model: MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      format: 'json' // Ensure JSON output if supported by model/library
+    });
+
+    let result = response.message.content;
+    // Basic cleanup in case model didn't follow format strictly
+    if (result.includes("```json")) {
+      result = result.split("```json")[1].split("```")[0].trim();
+    } else if (result.includes("```")) {
+      result = result.split("```")[1].split("```")[0].trim();
+    }
+
+    return JSON.parse(result);
+  } catch (error) {
+    console.error("Error in extractKYC:", error);
+    return null;
+  }
+}
+
+module.exports = { generateReply, extractKYC };

@@ -1,36 +1,43 @@
-# Reply
+# Reply — Your Local-First Digital "Brain"
 
-Reply is a local reply app (SwiftUI). It generates or suggests replies to messages using keyword-based rules today; optional integration with the MVP Factory Board and messaging channels is planned.
+**Reply** is a privacy-focused, local-first AI assistant that learns from your data (emails, notes, files) to act as your digital extension. It runs entirely on your machine, leveraging local LLMs (Ollama) and vector databases (LanceDB).
 
----
+## 🚀 Quick Start (POC)
 
-## Project board
+### Prerequisites
+*   Node.js (v18+)
+*   Ollama (running locally)
 
-Work for Reply is tracked on the [MVP Factory Board](https://github.com/users/moldovancsaba/projects/1). Filter by **Product = reply** for tasks and status. Source of truth for next work is the board, not local task files.
+### Installation
+```bash
+git clone https://github.com/moldovancsaba/reply.git
+cd reply/chat
+npm install
+```
 
----
+### Running the "Brain"
+1.  **Start the Server:**
+    ```bash
+    npm start
+    ```
+    Access the UI at `http://localhost:3000`.
 
-## For agents
+2.  **Ingest Data:**
+    *   **Local Files:** `node ingest.js` (scans `knowledge/documents`)
+    *   **Gmail Archive:** `node ingest.js --mbox /path/to/archive.mbox`
+    *   **Apple Notes:** Click "Sync Notes" in the Web UI.
 
-Agent rules and cold-start instructions for Reply are in the **mvp-factory-control** repo: [agent-operating-document-reply.md](https://github.com/moldovancsaba/mvp-factory-control/blob/main/docs/agent-operating-document-reply.md). Use that doc for board workflow, where documents are, and how to pick the next task.
+## 🧠 Core Features
+*   **Unified Knowledge Base:** Stores vectors of your notes and emails locally.
+*   **Hybrid Search:** Combines semantic understanding (Vector) with exact keyword matching (FTS) for 100% retrieval accuracy.
+*   **Context-Aware Chat:** Ask questions about your own data; the bot cites sources.
 
----
+## 📚 Documentation
+*   [Architecture Overview](docs/ARCHITECTURE.md)
+*   [Ingestion Guide](docs/INGESTION.md)
+*   [Coding Standards](docs/CODING_STANDARDS.md)
+*   [Developer Handover](docs/HANDOVER.md)
+*   [Release Notes](docs/RELEASE_NOTES.md)
 
-## How to run
-
-### POC: Localhost chat (reply suggestions in the browser)
-
-1. **(Optional)** Ingest your notes so Reply can use "how I act": put `.txt` or `.md` in `knowledge/documents/`, then run `node chat/ingest.js` from the repo root. See [docs/INGESTION.md](docs/INGESTION.md).
-2. From the repo root: `cd chat && npm start`
-3. Open in a browser: **http://localhost:3000**
-4. Type or paste a message and click **Suggest reply** to see a suggested reply (and matching snippets from your notes when available).
-
-No install needed (Node built-ins only). Node 18+.
-
-### SwiftUI app (macOS)
-
-1. Open the project in Xcode (e.g. open `Reply.xcodeproj` or the workspace from the repo root).
-2. Select the **Reply** scheme and a run destination (e.g. My Mac or a simulator).
-3. Run (⌘R). The Reply Machine window shows an input field and a "Generate Reply" button; enter text and tap to see the generated reply.
-
-Requirements: macOS (SwiftUI); Xcode 14+ recommended.
+## 🛡️ Privacy First
+All data remains on your device. No API keys required. No improved training data sent to cloud providers.

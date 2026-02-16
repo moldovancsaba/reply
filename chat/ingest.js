@@ -1,25 +1,23 @@
-/**
- * Reply POC — ingest local .txt/.md files into the knowledge store.
- * Run from repo root: node chat/ingest.js
- * Or from chat/: node ingest.js
- *
- * Set REPLY_KNOWLEDGE_PATH to override the documents folder (default: ../knowledge/documents when run from chat/).
- * Set REPLY_KNOWLEDGE_STORE to override the output file (default: ../knowledge/store.json).
- */
-
 const fs = require("fs");
 const path = require("path");
+const { mboxReader } = require("mbox-reader");
+const { simpleParser } = require("mailparser");
+const { addDocuments } = require("./vector-store.js");
 
 const CHAT_DIR = __dirname;
 const REPO_ROOT = path.join(CHAT_DIR, "..");
-
 const DEFAULT_DOCS = path.join(REPO_ROOT, "knowledge", "documents");
-const DEFAULT_STORE = path.join(REPO_ROOT, "knowledge", "store.json");
 
 const docsPath = process.env.REPLY_KNOWLEDGE_PATH || DEFAULT_DOCS;
-const storePath = process.env.REPLY_KNOWLEDGE_STORE || DEFAULT_STORE;
-
 const EXT = [".txt", ".md"];
+const BATCH_SIZE = 50;
+
+/**
+ * Basic argument parsing
+ */
+const args = process.argv.slice(2);
+const mboxIndex = args.indexOf("--mbox");
+const mboxPath = mboxIndex !== -1 ? args[mboxIndex + 1] : null;
 
 function walkDir(dir, files = []) {
   if (!fs.existsSync(dir)) return files;
@@ -32,30 +30,98 @@ function walkDir(dir, files = []) {
   return files;
 }
 
-function ingest() {
+/**
+ * Handle local directory ingestion
+ */
+async function ingestLocalDocs() {
+  console.log(`Scanning directory: ${docsPath}`);
   const absoluteDocs = path.isAbsolute(docsPath) ? docsPath : path.resolve(REPO_ROOT, docsPath);
-  const absoluteStore = path.isAbsolute(storePath) ? storePath : path.resolve(REPO_ROOT, storePath);
-
   const fileList = walkDir(absoluteDocs);
   const snippets = [];
-  let id = 0;
+  let id = Date.now();
+
   for (const file of fileList) {
     const rel = path.relative(absoluteDocs, file);
     const text = fs.readFileSync(file, "utf8").trim();
     if (!text) continue;
     snippets.push({
-      id: String(++id),
+      id: `local-${id++}`,
       source: "local",
       path: rel,
       text,
     });
   }
 
-  const storeDir = path.dirname(absoluteStore);
-  if (!fs.existsSync(storeDir)) fs.mkdirSync(storeDir, { recursive: true });
-  fs.writeFileSync(absoluteStore, JSON.stringify({ snippets, ingestedAt: new Date().toISOString() }, null, 2), "utf8");
-
-  console.log(`Ingested ${snippets.length} file(s) from ${absoluteDocs} -> ${absoluteStore}`);
+  if (snippets.length > 0) {
+    console.log(`Found ${snippets.length} snippets. Adding to vector store...`);
+    await addDocuments(snippets);
+    console.log("Local ingestion complete.");
+  } else {
+    console.log("No markdown/text documents found.");
+  }
 }
 
-ingest();
+/**
+ * Handle Mbox ingestion (Scalable Logic)
+ */
+async function ingestMbox(filePath) {
+  const fullPath = path.resolve(process.cwd(), filePath);
+  if (!fs.existsSync(fullPath)) {
+    console.error(`Error: Mbox file not found at ${fullPath}`);
+    return;
+  }
+
+  console.log(`Ingesting Mbox: ${fullPath}`);
+  const stream = fs.createReadStream(fullPath);
+  let batch = [];
+  let count = 0;
+  let totalStored = 0;
+
+  try {
+    for await (const msg of mboxReader(stream)) {
+      count++;
+      try {
+        const parsed = await simpleParser(msg.content);
+        const text = (parsed.text || parsed.subject || "").trim();
+
+        if (text) {
+          batch.push({
+            id: `email-${Date.now()}-${count}`,
+            source: "mbox",
+            path: path.basename(filePath),
+            text: `Subject: ${parsed.subject}\nFrom: ${parsed.from?.text}\nDate: ${parsed.date}\n\n${text}`,
+          });
+        }
+
+        if (batch.length >= BATCH_SIZE) {
+          const currentBatch = [...batch];
+          batch = [];
+          console.log(`Vectorizing batch... (Total emails found: ${count})`);
+          await addDocuments(currentBatch);
+          totalStored += currentBatch.length;
+        }
+      } catch (err) {
+        console.error(`Error parsing message #${count}:`, err.message);
+      }
+    }
+
+    if (batch.length > 0) {
+      console.log(`Vectorizing final batch of ${batch.length}...`);
+      await addDocuments(batch);
+      totalStored += batch.length;
+    }
+    console.log(`Successfully ingested ${totalStored} emails from Mbox.`);
+  } catch (err) {
+    console.error("Mbox Reader Error:", err.message);
+  }
+}
+
+async function run() {
+  if (mboxPath) {
+    await ingestMbox(mboxPath);
+  } else {
+    await ingestLocalDocs();
+  }
+}
+
+run().catch(console.error);

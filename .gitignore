@@ -1,4 +1,0 @@
-.env.local
-node_modules/
-.DS_Store
-knowledge/store.json
