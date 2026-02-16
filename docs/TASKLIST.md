@@ -6,8 +6,9 @@
 
 ## Reference (mirrors board)
 
-- Prepare project and first issue on the board (see issue #153).
-- Build local reply app that can reply to messages automatically (see issue #154).
-- Onboard Reply to MVP Factory (agent doc, repo docs, README, board fields) — issues #158–#161.
+- **POC — Localhost chat UI:** Browser chat on localhost to ask for reply suggestions (issue #154).
+- **POC — Knowledge ingestion:** Design + first source (local files or Gmail) to annotate "how I act" (issue #162).
+- Prepare project and first issue (see issue #153).
+- Onboard Reply to MVP Factory — done (#158–#161).
 
-For the next task, filter the board by **Product = reply** and **Status = Ready**.
+First functions for POC are in [POC_FIRST_FUNCTIONS.md](POC_FIRST_FUNCTIONS.md). For the next task, filter the board by **Product = reply** and **Status = Ready**.
