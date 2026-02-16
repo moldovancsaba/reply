@@ -16,4 +16,5 @@ Current job, where we left off, and open decisions. Update this at the end of ea
 
 ## Next
 
-- Pick next task from the [MVP Factory Board](https://github.com/users/moldovancsaba/projects/1) (Product = reply, Status = Ready). Candidates include: further app features (#154), board API integration, or messaging connectors.
+- **POC delivery:** #154 (localhost chat UI) and #162 (knowledge ingestion — design + first source). First functions are in [POC_FIRST_FUNCTIONS.md](POC_FIRST_FUNCTIONS.md). Pick from board (Product = reply, Status = Ready).
+- Later: board API integration, more knowledge sources (Gmail, Drive, iCloud, Notes, calendar), messaging connectors.
