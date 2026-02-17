@@ -1,580 +1,406 @@
-  <style>
-    :root {
-      --primary: #007aff;
-      --bg-sidebar: #1e1e1e;
-      --bg-chat: #f5f5f7;
-      --bg-kyc: #ffffff;
-      --text-main: #1d1d1f;
-      --text-dim: #86868b;
-      --border: #e5e5e5;
-      --status-draft: 🟠;
       --status-open: 🟢;
       --status-closed: 🔵;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    body,
-    html {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-
-    .app-container {
-      display: grid;
-      grid-template-columns: 280px 1fr 320px;
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    /* Sidebar */
-    .sidebar {
-      background: var(--bg-sidebar);
-      color: white;
-      display: flex;
-      flex-direction: column;
-      border-right: 1px solid #333;
-      height: 100vh;
-      max-height: 100vh;
-      overflow: hidden;
-    }
-
-    .sidebar-header {
-      padding: 1.5rem;
-      border-bottom: 1px solid #333;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .contact-list {
-      flex: 1;
-      overflow-y: auto;
-      min-height: 0;
-    }
-
-    .load-more-btn {
-      width: 100%;
-      padding: 12px;
-      background: rgba(255, 255, 255, 0.05);
-      border: none;
-      color: #888;
-      font-size: 0.8rem;
-      cursor: pointer;
-      border-top: 1px solid #333;
-      transition: background 0.2s;
-    }
-
-    .load-more-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: #aaa;
-    }
-
-    .contact-item {
-      padding: 1rem;
-      border-bottom: 1px solid #333;
-      cursor: pointer;
-      transition: background 0.2s;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .contact-item:hover {
-      background: #2c2c2e;
-    }
-
-    .contact-item.active {
-      background: #3a3a3c;
-    }
-
-    .status-dot {
-      font-size: 0.8rem;
-    }
-
-    .channel-icon {
-      font-size: 1rem;
-    }
-
-    .contact-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .contact-name {
-      font-weight: 600;
-      font-size: 0.95rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .contact-preview {
-      font-size: 0.8rem;
-      color: #aaa;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    /* Chat Area */
-    .chat-area {
-      background: var(--bg-chat);
-      display: flex;
-      flex-direction: column;
-      position: relative;
-      min-width: 0;
-      height: 100vh;
-      max-height: 100vh;
-      overflow: hidden;
-    }
-
-    .chat-header {
-      padding: 1rem 1.5rem;
-      background: white;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .messages-container {
-      flex: 1;
-      padding: 1.5rem;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      min-height: 0;
-      /* Important for flex-grow with overflow */
-    }
-
-    .message-bubble {
-      max-width: 85%;
-      padding: 0.75rem 1rem;
-      border-radius: 18px;
-      font-size: 0.95rem;
-      line-height: 1.4;
-      overflow-wrap: break-word;
-      position: relative;
-    }
-
-    .message-info {
-      font-size: 0.7rem;
-      color: rgba(0, 0, 0, 0.4);
-      margin-top: 4px;
-      display: block;
-    }
-
-    .message-bubble.me .message-info {
-      color: rgba(255, 255, 255, 0.7);
-      text-align: right;
-    }
-
-    .message-bubble.me {
-      align-self: flex-end;
-      background: var(--primary);
-      color: white;
-      border-bottom-right-radius: 4px;
-    }
-
-    .message-bubble.contact {
-      align-self: flex-start;
-      background: white;
-      color: var(--text-main);
-      border: 1px solid var(--border);
-      border-bottom-left-radius: 4px;
-    }
-
-    .input-area {
-      padding: 1.5rem;
-      background: white;
-      border-top: 1px solid var(--border);
-    }
-
-    .input-wrapper {
-      display: flex;
-      gap: 10px;
-      background: #f0f0f2;
-      padding: 8px;
-      border-radius: 24px;
-    }
-
-    textarea#chat-input {
-      flex: 1;
-      background: transparent;
-      border: none;
-      outline: none;
-      padding: 8px 12px;
-      resize: none;
-      font-size: 0.95rem;
-      max-height: 150px;
-    }
-
-    /* KYC Pane */
-    .kyc-pane {
-      background: var(--bg-kyc);
-      padding: 1.5rem;
-      border-left: 1px solid var(--border);
-      overflow-y: auto;
-      height: 100vh;
-      max-height: 100vh;
-    }
-
-    .kyc-card {
-      background: #f9f9fb;
-      border-radius: 12px;
-      padding: 1rem;
-      margin-bottom: 1rem;
-      border: 1px solid var(--border);
-    }
-
-    .kyc-label {
-      font-size: 0.75rem;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-
-    .kyc-value {
-      font-size: 0.95rem;
-      color: var(--text-main);
-      margin-bottom: 1rem;
-    }
-
-    .kyc-notes {
-      font-size: 0.85rem;
-      white-space: pre-wrap;
-    }
-
-    /* Modals */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.4);
-      backdrop-filter: blur(4px);
-      z-index: 1000;
-      justify-content: center;
-      align-items: center;
-    }
-
-    .modal-content {
-      background: white;
-      width: 400px;
-      padding: 2rem;
-      border-radius: 18px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    }
-
-    /* Buttons */
-    .btn {
-      border: none;
-      border-radius: 8px;
-      padding: 0.6rem 1.2rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.2s;
-    }
-
-    .btn-primary {
-      background: var(--primary);
-      color: white;
-    }
-
-    .btn-ghost {
-      background: transparent;
-      color: var(--primary);
-    }
-
-    .btn-icon {
-      background: transparent;
-      padding: 4px;
-      border-radius: 50%;
-      width: 36px;
-      height: 36px;
-      display: grid;
-      place-items: center;
-    }
-
-    .btn-icon:hover {
-      background: #eee;
-    }
-
-    /* Dashboard Styles */
-    .dashboard {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 1.5rem;
-      padding: 2rem;
-      background: var(--bg-chat);
-      height: 100%;
-      overflow-y: auto;
-    }
-
-    .health-card {
-      background: white;
-      border-radius: 16px;
-      padding: 1.5rem;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-      border: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .health-card h4 {
-      margin: 0;
-      font-size: 0.8rem;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .health-value {
-      font-size: 1.8rem;
-      font-weight: 700;
-      color: var(--text-main);
-    }
-
-    .health-status-tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      padding: 4px 10px;
-      border-radius: 20px;
-      width: fit-content;
-    }
-
-    .tag-online {
-      background: #e8f5e9;
-      color: #2e7d32;
-    }
-
-    .tag-syncing {
-      background: #e3f2fd;
-      color: #1976d2;
-    }
-
-    .tag-warning {
-      background: #fff3e0;
-      color: #ef6c00;
-    }
-
-    /* Statuses */
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 0.75rem;
-      font-weight: 600;
-    }
-
-    .status-badge.orange {
-      background: #fff3e0;
-      color: #e65100;
-    }
-
-    .status-badge.green {
-      background: #e8f5e9;
-      color: #2e7d32;
-    }
-  </style>
-</head>
-
-<body>
-  <div class="app-container">
-    <!-- PANE A: SIDEBAR -->
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <div>
-          <h2 style="margin:0; font-size: 1.1rem;">Reply Hub</h2>
-          <div id="sync-status" style="font-size: 0.7rem; color: #888; margin-top: 4px;">Ready</div>
-        </div>
-        <!-- Sync buttons moved to individual cards -->
-      </div>
-      <div id="contact-list" class="contact-list">
-        <!-- Contact Items will be injected here -->
-        <div class="contact-item active">
-          <span class="status-dot">🟠</span>
-          <div class="contact-info">
-            <div class="contact-name">Agneta</div>
-            <div class="contact-preview">Draft ready: "Let's meet tomorrow..."</div>
-          </div>
-          <span class="channel-icon">💬</span>
-        </div>
-      </div>
-    </aside>
-
-    <!-- PANE B: MAIN CHAT -->
-    <main class="chat-area">
-      <header class="chat-header">
-        <div style="display:flex; align-items:center; gap:12px;">
-          <div id="active-contact-name-chat" style="font-weight: 700; font-size: 1.1rem;">Select a contact</div>
-          <select id="status-select" onchange="updateManualStatus()"
-            style="font-size:0.8rem; border-radius:12px; border:1px solid #ddd; padding:2px 8px; cursor:pointer; display:none;">
-            <option value="open">🟢 Active</option>
-            <option value="draft">🟠 Draft Ready</option>
-            <option value="closed">🔵 Resolved</option>
-          </select>
-        </div>
-        <div style="display: flex; gap: 10px;">
-          <button class="btn btn-ghost">Refine</button>
-          <button class="btn btn-primary" id="btn-suggest">Suggest Draft</button>
-        </div>
-      </header>
-
-      <div class="input-area" style="border-top:none; border-bottom:1px solid var(--border);">
-        <div class="input-wrapper">
-          <textarea id="chat-input" placeholder="Type a message or let me suggest..."></textarea>
-          <button id="btn-mic" class="btn-icon" title="Voice Input">🎤</button>
-          <button class="btn-icon">✨</button>
-          <button id="btn-send" class="btn btn-primary">Send iMessage</button>
-        </div>
-      </div>
-
-      <div id="messages" class="messages-container">
-        <button id="btn-load-older" class="load-more-btn"
-          style="display:none; color:var(--text-dim); background:rgba(0,0,0,0.03); border-radius:12px; margin-bottom:1rem;"
-          onclick="loadMoreMessages()">Load Older Messages</button>
-        <!-- Messages will be injected here -->
-      </div>
-
-      <div id="dashboard" class="dashboard" style="display:none;">
-        <!-- Dashboard items will be injected here -->
-      </div>
-    </main>
-
-    <!-- PANE C: KYC DATA -->
-    <section class="kyc-pane">
-      <div id="kyc-empty-state" style="padding:20px; text-align:center;">
-        <h3 style="color:var(--text-dim);">Hub Overview</h3>
-        <p style="font-size:0.85rem; color:#888;">Select a contact from the sidebar to view their profile and history.
-        </p>
-        <div style="margin-top:40px; border-top:1px solid #eee; padding-top:20px;">
-          <div style="font-size:0.7rem; font-weight:700; color:#ddd; text-transform:uppercase;">Quick Tip</div>
-          <div style="font-size:0.85rem; color:#aaa; margin-top:8px;">You can search contacts by name or handle.</div>
-        </div>
-      </div>
-
-      <div id="kyc-content-editor" style="display:none;">
-        <div style="display: flex; justify-content: space-between; align-items: baseline;">
-          <h3 style="margin-top:0;">Profile</h3>
-          <div style="display:flex; gap:5px;">
-            <button id="btn-deep-analyze" class="btn-ghost" style="font-size:0.75rem; padding: 4px 8px;"
-              title="Run Deep Analysis with Ollama">✨ Analyze</button>
-            <button class="btn btn-primary" style="font-size:0.75rem; padding: 4px 8px;"
-              onclick="saveInlineProfile()">Save Changes</button>
-          </div>
-        </div>
-        <!-- KYC Cards follow... -->
-
-        <div class="kyc-card">
-          <div id="suggested-kyc-alert"
-            style="display:none; background: #fff8e1; border: 1px solid #ffe082; border-radius: 6px; padding: 10px; margin-bottom: 1rem;">
-            <div
-              style="font-size: 0.75rem; font-weight: 700; color: #795548; margin-bottom: 5px; display: flex; justify-content: space-between;">
-              <span>🤖 AI SUGGESTED UPDATE</span>
-              <span onclick="dismissKYC()" style="cursor:pointer;" title="Dismiss">✕</span>
-            </div>
-            <div id="suggested-kyc-content" style="font-size: 0.85rem; color: #5d4037; font-style: italic;">
-              <!-- Content injected via JS -->
-            </div>
-            <div style="margin-top: 8px; display: flex; gap: 8px;">
-              <button class="btn btn-primary" style="font-size: 0.7rem; padding: 3px 8px;" onclick="acceptKYC()">✅
-                Accept</button>
-              <button class="btn-ghost" style="font-size: 0.7rem; padding: 3px 8px;" onclick="editKYC()">📝
-                Edit</button>
-            </div>
-          </div>
-
-          <div style="margin-bottom: 0.8rem;">
-            <label style="font-size: 0.7rem; color: #888; text-transform: uppercase;">Display Name</label>
-            <input id="kyc-name-input"
-              style="width:100%; border:none; border-bottom:1px solid transparent; font-weight:700; font-size:1rem; padding: 2px 0;"
-              onfocus="this.style.borderBottom='1px solid var(--primary)'"
-              onblur="this.style.borderBottom='1px solid transparent'">
-          </div>
-
-          <div style="margin-bottom: 0.8rem;">
-            <label style="font-size: 0.7rem; color: #888; text-transform: uppercase;">Profession</label>
-            <input id="kyc-role-input"
-              style="width:100%; border:none; border-bottom:1px solid transparent; font-size:0.9rem; padding: 2px 0;"
-              onfocus="this.style.borderBottom='1px solid var(--primary)'"
-              onblur="this.style.borderBottom='1px solid transparent'">
-          </div>
-
-          <div style="margin-bottom: 0.8rem;">
-            <label style="font-size: 0.7rem; color: #888; text-transform: uppercase;">Relationship</label>
-            <input id="kyc-rel-input"
-              style="width:100%; border:none; border-bottom:1px solid transparent; font-size:0.9rem; padding: 2px 0;"
-              onfocus="this.style.borderBottom='1px solid var(--primary)'"
-              onblur="this.style.borderBottom='1px solid transparent'">
-          </div>
-
-          <div style="margin-bottom: 0.8rem;">
-            <label style="font-size: 0.7rem; color: #888; text-transform: uppercase;">Handle</label>
-            <input id="kyc-handle-input" readonly
-              style="width:100%; border:none; font-size:0.8rem; color:#666; background:transparent;">
-          </div>
-
-          <div style="margin-top: 1.5rem;">
-            <label style="font-size: 0.7rem; color: #888; text-transform: uppercase; font-weight:700;">Local
-              Intelligence
-              (Notes Log)</label>
-            <div id="notes-log"
-              style="margin-top:0.5rem; max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 5px; background: #fff;">
-              <!-- Notes injected here -->
-            </div>
-            <div style="margin-top: 0.8rem; display: flex; gap: 8px;">
-              <input id="new-note-input" placeholder="Add a new observation..."
-                style="flex:1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 20px; font-size: 0.85rem;">
-              <button class="btn-icon" onclick="addNote()"
-                style="background: var(--primary); color: white; border: none; width: 30px; height: 30px;">+</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  </div>
-
-  <!-- Profile Edit Modal -->
-  <div id="profile-modal" class="modal-overlay">
-    <div class="modal-content">
-      <h3 style="margin-top:0;">Edit Contact Profile</h3>
-      <div style="margin-bottom: 0.5rem;">
-        <label style="font-size:0.8rem; color:#666;">Name:</label>
-        <input id="prof-name" style="width:100%; padding:0.4rem; border:1px solid #ccc; border-radius:4px;">
-      </div>
-      <div style="margin-bottom: 0.5rem;">
-        <label style="font-size:0.8rem; color:#666;">Profession:</label>
-        <input id="prof-role" style="width:100%; padding:0.4rem; border:1px solid #ccc; border-radius:4px;">
-      </div>
-      <div style="margin-bottom: 0.5rem;">
-        <label style="font-size:0.8rem; color:#666;">Relationship:</label>
-        <input id="prof-rel" style="width:100%; padding:0.4rem; border:1px solid #ccc; border-radius:4px;">
-      </div>
-      <div style="margin-bottom: 1rem;">
-        <label style="font-size:0.8rem; color:#666;">Notes:</label>
-        <textarea id="prof-notes"
-          style="width:100%; height:60px; padding:0.4rem; border:1px solid #ccc; border-radius:4px;"></textarea>
-      </div>
-      <input type="hidden" id="prof-handle">
-      <div style="display:flex; justify-content:flex-end; gap:0.5rem;">
-        <button onclick="closeProfileModal()"
-          style="background:#eee; color:#333; border:1px solid #ccc; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">Cancel</button>
-        <button onclick="saveProfile()"
-          style="background:#056; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">Save
-          Profile</button>
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body,
+      html {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+
+      .app-container {
+        display: grid;
+        grid-template-columns: 280px 1fr 320px;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      /* Sidebar */
+      .sidebar {
+        background: var(--bg-sidebar);
+        color: white;
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid #333;
+        height: 100vh;
+        max-height: 100vh;
+        overflow: hidden;
+      }
+
+      .sidebar-header {
+        padding: 1.5rem;
+        border-bottom: 1px solid #333;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .contact-list {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+      }
+
+      .load-more-btn {
+        width: 100%;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.05);
+        border: none;
+        color: #888;
+        font-size: 0.8rem;
+        cursor: pointer;
+        border-top: 1px solid #333;
+        transition: background 0.2s;
+      }
+
+      .load-more-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #aaa;
+      }
+
+      .contact-item {
+        padding: 1rem;
+        border-bottom: 1px solid #333;
+        cursor: pointer;
+        transition: background 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .contact-item:hover {
+        background: #2c2c2e;
+      }
+
+      .contact-item.active {
+        background: #3a3a3c;
+      }
+
+      .status-dot {
+        font-size: 0.8rem;
+      }
+
+      .channel-icon {
+        font-size: 1rem;
+      }
+
+      .contact-info {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .contact-name {
+        font-weight: 600;
+        font-size: 0.95rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .contact-preview {
+        font-size: 0.8rem;
+        color: #aaa;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* Chat Area */
+      .chat-area {
+        background: var(--bg-chat);
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        min-width: 0;
+        height: 100vh;
+        max-height: 100vh;
+        overflow: hidden;
+      }
+
+      .chat-header {
+        padding: 1rem 1.5rem;
+        background: white;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .messages-container {
+        flex: 1;
+        padding: 1.5rem;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        min-height: 0;
+        /* Important for flex-grow with overflow */
+      }
+
+      .message-bubble {
+        max-width: 85%;
+        padding: 0.75rem 1rem;
+        border-radius: 18px;
+        font-size: 0.95rem;
+        line-height: 1.4;
+        overflow-wrap: break-word;
+        position: relative;
+      }
+
+      .message-info {
+        font-size: 0.7rem;
+        color: rgba(0, 0, 0, 0.4);
+        margin-top: 4px;
+        display: block;
+      }
+
+      .message-bubble.me .message-info {
+        color: rgba(255, 255, 255, 0.7);
+        text-align: right;
+      }
+
+      .message-bubble.me {
+        align-self: flex-end;
+        background: var(--primary);
+        color: white;
+        border-bottom-right-radius: 4px;
+      }
+
+      .message-bubble.contact {
+        align-self: flex-start;
+        background: white;
+        color: var(--text-main);
+        border: 1px solid var(--border);
+        border-bottom-left-radius: 4px;
+      }
+
+      .input-area {
+        padding: 1.5rem;
+        background: white;
+        border-top: 1px solid var(--border);
+      }
+
+      .input-wrapper {
+        display: flex;
+        gap: 10px;
+        background: #f0f0f2;
+        padding: 8px;
+        border-radius: 24px;
+      }
+
+      textarea#chat-input {
+        flex: 1;
+        background: transparent;
+        border: none;
+        outline: none;
+        padding: 8px 12px;
+        resize: none;
+        font-size: 0.95rem;
+        max-height: 150px;
+      }
+
+      /* KYC Pane */
+      .kyc-pane {
+        background: var(--bg-kyc);
+        padding: 1.5rem;
+        border-left: 1px solid var(--border);
+        overflow-y: auto;
+        height: 100vh;
+        max-height: 100vh;
+      }
+
+      .kyc-card {
+        background: #f9f9fb;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border: 1px solid var(--border);
+      }
+
+      .kyc-label {
+        font-size: 0.75rem;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+
+      .kyc-value {
+        font-size: 0.95rem;
+        color: var(--text-main);
+        margin-bottom: 1rem;
+      }
+
+      .kyc-notes {
+        font-size: 0.85rem;
+        white-space: pre-wrap;
+      }
+
+      /* Modals */
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(4px);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .modal-content {
+        background: white;
+        width: 400px;
+        padding: 2rem;
+        border-radius: 18px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+      }
+
+      /* Buttons */
+      .btn {
+        border: none;
+        border-radius: 8px;
+        padding: 0.6rem 1.2rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: opacity 0.2s;
+      }
+
+      .btn-primary {
+        background: var(--primary);
+        color: white;
+      }
+
+      .btn-ghost {
+        background: transparent;
+        color: var(--primary);
+      }
+
+      .btn-icon {
+        background: transparent;
+        padding: 4px;
+        border-radius: 50%;
+        width: 36px;
+        height: 36px;
+        display: grid;
+        place-items: center;
+      }
+
+      .btn-icon:hover {
+        background: #eee;
+      }
+
+      /* Dashboard Styles */
+      .dashboard {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 1.5rem;
+        padding: 2rem;
+        background: var(--bg-chat);
+        height: 100%;
+        overflow-y: auto;
+      }
+
+      .health-card {
+        background: white;
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+        border: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .health-card h4 {
+        margin: 0;
+        font-size: 0.8rem;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .health-value {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--text-main);
+      }
+
+      .health-status-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 20px;
+        width: fit-content;
+      }
+
+      .tag-online {
+        background: #e8f5e9;
+        color: #2e7d32;
+      }
+
+      .tag-syncing {
+        background: #e3f2fd;
+        color: #1976d2;
+      }
+
+      .tag-warning {
+        background: #fff3e0;
+        color: #ef6c00;
+      }
+
+      /* Statuses */
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+
+      .status-badge.orange {
+        background: #fff3e0;
+        color: #e65100;
+      }
+
+      .status-badge.green {
+        background: #e8f5e9;
+        color: #2e7d32;
+      }
+
+      </style></head><body><div class="app-container">< !-- PANE A: SIDEBAR --><aside class="sidebar"><div class="sidebar-header"><div><h2 style="margin:0; font-size: 1.1rem;">Reply Hub</h2><div id="sync-status" style="font-size: 0.7rem; color: #888; margin-top: 4px;">Ready</div></div>< !-- Sync buttons moved to individual cards --></div><div id="contact-list" class="contact-list">< !-- Contact Items will be injected here --><div class="contact-item active"><span class="status-dot">🟠</span><div class="contact-info"><div class="contact-name">Agneta</div><div class="contact-preview">Draft ready: "Let's meet tomorrow..." </div></div><span class="channel-icon">💬</span></div></div></aside>< !-- PANE B: MAIN CHAT --><main class="chat-area"><header class="chat-header"><div style="display:flex; align-items:center; gap:12px;"><div id="active-contact-name-chat" style="font-weight: 700; font-size: 1.1rem;">Select a contact</div><select id="status-select" onchange="updateManualStatus()"
+      style="font-size:0.8rem; border-radius:12px; border:1px solid #ddd; padding:2px 8px; cursor:pointer; display:none;"><option value="open">🟢 Active</option><option value="draft">🟠 Draft Ready</option><option value="closed">🔵 Resolved</option></select></div><div style="display: flex; gap: 10px;"><button class="btn btn-ghost">Refine</button><button class="btn btn-primary" id="btn-suggest">Suggest Draft</button></div></header><div class="input-area" style="border-top:none; border-bottom:1px solid var(--border);"><div class="input-wrapper"><textarea id="chat-input" placeholder="Type a message or let me suggest..."></textarea><button id="btn-mic" class="btn-icon" title="Voice Input">🎤</button><button class="btn-icon">✨</button><button id="btn-send" class="btn btn-primary">Send iMessage</button></div></div><div id="messages" class="messages-container"><button id="btn-load-older" class="load-more-btn"
+      style="display:none; color:var(--text-dim); background:rgba(0,0,0,0.03); border-radius:12px; margin-bottom:1rem;"
+      onclick="loadMoreMessages()">Load Older Messages</button>< !-- Messages will be injected here --></div><div id="dashboard" class="dashboard" style="display:none;">< !-- Dashboard items will be injected here --></div></main>< !-- PANE C: KYC DATA --><section class="kyc-pane"><div id="kyc-empty-state" style="padding:20px; text-align:center;"><h3 style="color:var(--text-dim);">Hub Overview</h3><p style="font-size:0.85rem; color:#888;">Select a contact from the sidebar to view their profile and history. </p><div style="margin-top:40px; border-top:1px solid #eee; padding-top:20px;"><div style="font-size:0.7rem; font-weight:700; color:#ddd; text-transform:uppercase;">Quick Tip</div><div style="font-size:0.85rem; color:#aaa; margin-top:8px;">You can search contacts by name or handle.</div></div></div><div id="kyc-content-editor" style="display:none;"><div style="display: flex; justify-content: space-between; align-items: baseline;"><h3 style="margin-top:0;">Profile</h3><div style="display:flex; gap:5px;"><button id="btn-deep-analyze" class="btn-ghost" style="font-size:0.75rem; padding: 4px 8px;"
+      title="Run Deep Analysis with Ollama">✨ Analyze</button><button class="btn btn-primary" style="font-size:0.75rem; padding: 4px 8px;"
+      onclick="saveInlineProfile()">Save Changes</button></div></div>< !-- KYC Cards follow... --><div class="kyc-card"><div id="suggested-kyc-alert"
+      style="display:none; background: #fff8e1; border: 1px solid #ffe082; border-radius: 6px; padding: 10px; margin-bottom: 1rem;"><div style="font-size: 0.75rem; font-weight: 700; color: #795548; margin-bottom: 5px; display: flex; justify-content: space-between;"><span>🤖 AI SUGGESTED UPDATE</span><span onclick="dismissKYC()" style="cursor:pointer;" title="Dismiss">✕</span></div><div id="suggested-kyc-content" style="font-size: 0.85rem; color: #5d4037; font-style: italic;">< !-- Content injected via JS --></div><div style="margin-top: 8px; display: flex; gap: 8px;"><button class="btn btn-primary" style="font-size: 0.7rem; padding: 3px 8px;" onclick="acceptKYC()">✅ Accept</button><button class="btn-ghost" style="font-size: 0.7rem; padding: 3px 8px;" onclick="editKYC()">📝 Edit</button></div></div><div style="margin-bottom: 0.8rem;"><label style="font-size: 0.7rem; color: #888; text-transform: uppercase;">Display Name</label><input id="kyc-name-input"
+      style="width:100%; border:none; border-bottom:1px solid transparent; font-weight:700; font-size:1rem; padding: 2px 0;"
+      onfocus="this.style.borderBottom='1px solid var(--primary)'"
+      onblur="this.style.borderBottom='1px solid transparent'"></div><div style="margin-bottom: 0.8rem;"><label style="font-size: 0.7rem; color: #888; text-transform: uppercase;">Profession</label><input id="kyc-role-input"
+      style="width:100%; border:none; border-bottom:1px solid transparent; font-size:0.9rem; padding: 2px 0;"
+      onfocus="this.style.borderBottom='1px solid var(--primary)'"
+      onblur="this.style.borderBottom='1px solid transparent'"></div><div style="margin-bottom: 0.8rem;"><label style="font-size: 0.7rem; color: #888; text-transform: uppercase;">Relationship</label><input id="kyc-rel-input"
+      style="width:100%; border:none; border-bottom:1px solid transparent; font-size:0.9rem; padding: 2px 0;"
+      onfocus="this.style.borderBottom='1px solid var(--primary)'"
+      onblur="this.style.borderBottom='1px solid transparent'"></div><div style="margin-bottom: 0.8rem;"><label style="font-size: 0.7rem; color: #888; text-transform: uppercase;">Handle</label><input id="kyc-handle-input" readonly style="width:100%; border:none; font-size:0.8rem; color:#666; background:transparent;"></div><div style="margin-top: 1.5rem;"><label style="font-size: 0.7rem; color: #888; text-transform: uppercase; font-weight:700;">Local Intelligence (Notes Log)</label><div id="notes-log"
+      style="margin-top:0.5rem; max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 5px; background: #fff;">< !-- Notes injected here --></div><div style="margin-top: 0.8rem; display: flex; gap: 8px;"><input id="new-note-input" placeholder="Add a new observation..."
+      style="flex:1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 20px; font-size: 0.85rem;"><button class="btn-icon" onclick="addNote()"
+      style="background: var(--primary); color: white; border: none; width: 30px; height: 30px;">+</button></div></div></div></div></section></div>< !-- Profile Edit Modal --><div id="profile-modal" class="modal-overlay"><div class="modal-content"><h3 style="margin-top:0;">Edit Contact Profile</h3><div style="margin-bottom: 0.5rem;"><label style="font-size:0.8rem; color:#666;">Name:</label><input id="prof-name" style="width:100%; padding:0.4rem; border:1px solid #ccc; border-radius:4px;"></div><div style="margin-bottom: 0.5rem;"><label style="font-size:0.8rem; color:#666;">Profession:</label><input id="prof-role" style="width:100%; padding:0.4rem; border:1px solid #ccc; border-radius:4px;"></div><div style="margin-bottom: 0.5rem;"><label style="font-size:0.8rem; color:#666;">Relationship:</label><input id="prof-rel" style="width:100%; padding:0.4rem; border:1px solid #ccc; border-radius:4px;"></div><div style="margin-bottom: 1rem;"><label style="font-size:0.8rem; color:#666;">Notes:</label><textarea id="prof-notes"
+      style="width:100%; height:60px; padding:0.4rem; border:1px solid #ccc; border-radius:4px;"></textarea></div><input type="hidden" id="prof-handle"><div style="display:flex; justify-content:flex-end; gap:0.5rem;"><button onclick="closeProfileModal()"
+      style="background:#eee; color:#333; border:1px solid #ccc; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">Cancel</button><button onclick="saveProfile()"
+      style="background:#056; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">Save Profile</button>
