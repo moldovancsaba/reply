@@ -5,14 +5,22 @@
     "handle": "+36706006555",
     "relationship": "feleség",
     "profession": "jogász",
-    "notes": "legkedvesebben, aranyosan, támogatóan szeretnék vele mindig beszélni ❤️ ",
+    "notes": [
+      {
+        "id": "note-1771302943358s6ozw",
+        "text": "legkedvesebben, aranyosan, támogatóan szeretnék vele mindig beszélni ❤️ ",
+        "timestamp": "2025-06-20T10:38:36.192Z"
+      }
+    ],
     "channels": {
       "phone": [
         "+36706006555"
       ],
       "email": []
     },
-    "lastContacted": "2025-06-20T10:38:36.192Z"
+    "lastContacted": "2025-06-20T10:38:36.192Z",
+    "draft": "Hi,\n\nMielőtt újra meghívom a bankot, gyorsan kielleni kell vele.\n\nHiatus.",
+    "status": "draft"
   },
   {
     "id": "id-nb0r85p63",
@@ -20,7 +28,13 @@
     "handle": "+36705140810",
     "relationship": "Friend",
     "profession": "",
-    "notes": "Appears to be discussing dog grooming, seems frustrated and possibly depressed. Considers giving up or ending the friendship.",
+    "notes": [
+      {
+        "id": "note-1771302943358oumkn",
+        "text": "Appears to be discussing dog grooming, seems frustrated and possibly depressed. Considers giving up or ending the friendship.",
+        "timestamp": "2025-06-18T09:42:41.259Z"
+      }
+    ],
     "channels": {
       "phone": [
         "+36705140810"
@@ -37,7 +51,13 @@
     "handle": "moldovanbora@icloud.com",
     "relationship": "lányom",
     "profession": "tanuló",
-    "notes": "nagyon szeretem ❤️ cuki, lány, kedves",
+    "notes": [
+      {
+        "id": "note-17713029433583lcmr",
+        "text": "nagyon szeretem ❤️ cuki, lány, kedves",
+        "timestamp": "2025-06-17T15:33:21.228Z"
+      }
+    ],
     "channels": {
       "phone": [],
       "email": [
@@ -52,14 +72,16 @@
     "handle": "+36309266245",
     "relationship": "information",
     "profession": "information",
-    "notes": "",
+    "notes": [],
     "channels": {
       "phone": [
         "+36309266245"
       ],
       "email": []
     },
-    "lastContacted": "2025-06-17T08:05:30.660Z"
+    "lastContacted": "2025-06-17T08:05:30.660Z",
+    "draft": "Hi,\n\nSikertelen tranzakcióról szól a megjelenő ésszó. Ellenőrizze a kártya és a fizetési adatokat.\n\nÜdv,\n[Your Name]",
+    "status": "draft"
   },
   {
     "id": "user-primary",
@@ -77,7 +99,13 @@
         "moldovancsaba@gmail.com"
       ]
     },
-    "notes": "Prefers concise, direct communication.",
+    "notes": [
+      {
+        "id": "note-1771302943358strcs",
+        "text": "Prefers concise, direct communication.",
+        "timestamp": "2025-01-29T21:22:34.019Z"
+      }
+    ],
     "lastContacted": "2025-01-29T21:22:34.019Z"
   },
   {
@@ -86,26 +114,19 @@
     "handle": "+36202981614",
     "relationship": "Colleague/Former Colleague",
     "profession": "Software Developer or App Developer",
-    "notes": "Inferred to be a software developer at NOEX who tried to develop an app independently, which led to a disagreement with his employer regarding the use of company resources and the proper handling of intellectual property. He is known for having a competitive and sometimes contentious attitude.",
+    "notes": [
+      {
+        "id": "note-1771302943358veq68",
+        "text": "Inferred to be a software developer at NOEX who tried to develop an app independently, which led to a disagreement with his employer regarding the use of company resources and the proper handling of intellectual property. He is known for having a competitive and sometimes contentious attitude.",
+        "timestamp": "2026-02-17T04:35:43.358Z"
+      }
+    ],
     "channels": {
       "phone": [
         "+36202981614"
       ],
       "email": []
     }
-  },
-  {
-    "id": "id-fhkfi7e2y",
-    "displayName": "+36706006555",
-    "handle": "+36706006555",
-    "channels": {
-      "phone": [
-        "+36706006555"
-      ]
-    },
-    "lastContacted": "2025-06-02T07:56:59.881Z",
-    "draft": "Hi,\n\nMegtaláltam azonnali megoldást, 1-2 alkalmat teszteltük már.\n\nHi",
-    "status": "draft"
   },
   {
     "id": "id-jd5tgy0z8",
@@ -118,7 +139,8 @@
     },
     "lastContacted": "2025-05-31T00:04:18.725Z",
     "draft": "Hi,\n\nPlease settle the overdue payment of 8174 HUF within 5 days as requested.\n\nBest,",
-    "status": "draft"
+    "status": "draft",
+    "notes": []
   },
   {
     "id": "id-c66jn4c0m",
@@ -129,7 +151,8 @@
         "moldovanmira09@gmail.com"
       ]
     },
-    "lastContacted": "2025-05-30T17:40:00.083Z"
+    "lastContacted": "2025-05-30T17:40:00.083Z",
+    "notes": []
   },
   {
     "id": "id-1jhvacsdr",
@@ -142,7 +165,8 @@
     },
     "lastContacted": "2025-05-28T17:10:20.866Z",
     "draft": "hi,\n\nunderstood. let me know if you need anything further.\n\nthanks,\ndear",
-    "status": "draft"
+    "status": "draft",
+    "notes": []
   },
   {
     "id": "id-oloumm2ik",
@@ -155,7 +179,8 @@
     },
     "lastContacted": "2025-05-24T09:11:43.190Z",
     "draft": "Hi,\n\nYou received an unanswered call from SMS provider at 11:11 on 24/05/2025. For details, contact +36707002489.\n\nBest,  \n[Your Name]",
-    "status": "draft"
+    "status": "draft",
+    "notes": []
   },
   {
     "id": "id-qoic0uufu",
@@ -168,7 +193,8 @@
     },
     "lastContacted": "2025-05-18T23:43:28.523Z",
     "draft": "Igen igen",
-    "status": "draft"
+    "status": "draft",
+    "notes": []
   },
   {
     "id": "id-5cggyn4au",
@@ -181,20 +207,8 @@
     },
     "lastContacted": "2025-05-20T07:22:38.023Z",
     "draft": "Hi,\n\nYou're a Viber user and want to create a group. We can do that if we split costs.\n\nBest,",
-    "status": "draft"
-  },
-  {
-    "id": "id-b3fatfk3i",
-    "displayName": "+36309266245",
-    "handle": "+36309266245",
-    "channels": {
-      "phone": [
-        "+36309266245"
-      ]
-    },
-    "lastContacted": "2025-05-21T19:31:53.976Z",
-    "draft": "Dear,\n\nSikertelen tranzakcióról szól a személyre szoruló információról. Ellenőrizze a kartya és兆龙，请继续你的问题或指令。我已经准备好帮助你了。",
-    "status": "draft"
+    "status": "draft",
+    "notes": []
   },
   {
     "id": "id-pzb8xo8qy",
@@ -207,7 +221,8 @@
     },
     "lastContacted": "2025-05-20T08:06:44.839Z",
     "draft": "hi, what's next?",
-    "status": "draft"
+    "status": "draft",
+    "notes": []
   },
   {
     "id": "id-36qui3bkb",
@@ -220,7 +235,8 @@
     },
     "lastContacted": "2025-05-23T08:32:05.384Z",
     "draft": "hi, everything ok? \n\ndear",
-    "status": "draft"
+    "status": "draft",
+    "notes": []
   },
   {
     "id": "id-ftzfjb253",
@@ -233,7 +249,8 @@
     },
     "lastContacted": "2025-05-20T14:41:33.286Z",
     "draft": "dear,\n\nthanks for the offer. i'll check it out.\n\nhi,",
-    "status": "draft"
+    "status": "draft",
+    "notes": []
   },
   {
     "id": "id-hljkouarw",
@@ -246,7 +263,8 @@
     },
     "lastContacted": "2025-05-19T05:31:29.050Z",
     "draft": "Hi,\n\nThank you for your payment. Ref: 2003625801, amount: 39580 Ft, balance: 18720 Ft.\n\nBest,",
-    "status": "draft"
+    "status": "draft",
+    "notes": []
   },
   {
     "id": "id-f6pr89c1m",
@@ -259,7 +277,8 @@
     },
     "lastContacted": "2025-05-19T04:34:54.997Z",
     "draft": "Hi, \nThanks for the feedback. Looking forward to the next round.\nDear",
-    "status": "draft"
+    "status": "draft",
+    "notes": []
   },
   {
     "id": "id-3lui7oyy4",
@@ -272,7 +291,8 @@
     },
     "lastContacted": "2025-05-11T14:50:26.620Z",
     "draft": "dear,\n\nköszi.\n\nhi,",
-    "status": "draft"
+    "status": "draft",
+    "notes": []
   },
   {
     "id": "id-97rwt0f2g",
@@ -285,7 +305,8 @@
     },
     "lastContacted": "2025-05-13T10:17:35.446Z",
     "draft": "hi, nem megfelel. hiadd 16.00-ra.",
-    "status": "draft"
+    "status": "draft",
+    "notes": []
   },
   {
     "id": "id-birvam0s4",
@@ -298,7 +319,8 @@
     },
     "lastContacted": "2025-05-14T07:14:34.727Z",
     "draft": "dear Balcsit,\n\nCalled you to ask when it would be convenient.\n\nhi",
-    "status": "draft"
+    "status": "draft",
+    "notes": []
   },
   {
     "id": "id-m1uob0lyo",
@@ -311,7 +333,8 @@
     },
     "lastContacted": "2025-05-07T11:05:12.545Z",
     "draft": "hi, \nnot sure what you mean by \"sumak-samesz kamu-koma\". clarify please. \nthanks, \ndear",
-    "status": "draft"
+    "status": "draft",
+    "notes": []
   },
   {
     "id": "id-ujxt87wm6",
@@ -324,7 +347,8 @@
     },
     "lastContacted": "2025-05-08T09:30:02.996Z",
     "draft": "Hi Lázár,\n\nThank you for reaching out. Could we schedule a call next Tuesday at 10 AM?\n\nBest,  \nCsaba",
-    "status": "draft"
+    "status": "draft",
+    "notes": []
   },
   {
     "id": "id-hph4gkkxu",
@@ -337,7 +361,8 @@
     },
     "lastContacted": "2025-05-06T12:52:00.909Z",
     "draft": "Hi,\n\nAlready received the email. Will pay by 10th June.\n\nThanks.",
-    "status": "draft"
+    "status": "draft",
+    "notes": []
   },
   {
     "id": "id-c5a6dm6qe",
@@ -350,6 +375,7 @@
     },
     "lastContacted": "2025-05-05T15:19:07.160Z",
     "draft": "Hi,\n\nRemílessem, hogy az állam a jó úton halad.\n\nHiatus:",
-    "status": "draft"
+    "status": "draft",
+    "notes": []
   }
 ]
