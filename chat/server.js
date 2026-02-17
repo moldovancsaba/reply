@@ -1278,7 +1278,8 @@ on run argv
   set msg to item 2 of argv
   set dryRun to false
   try
-    set dryRun to (item 3 of argv as boolean)
+    set dr to (item 3 of argv as string)
+    if dr is "1" or dr is "true" then set dryRun to true
   end try
   set candidates to {${candidateList}}
 
@@ -1371,7 +1372,7 @@ on focusLooksAboveY(p, maxY)
     try
       set r to value of attribute "AXRole" of el
     end try
-    if r is not "AXTextField" and r is not "AXSearchField" then return false
+    if r is not "AXTextField" and r is not "AXSearchField" and r is not "AXTextArea" then return false
 
     set fr to value of attribute "AXFrame" of el
     set y to item 2 of fr
