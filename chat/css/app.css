@@ -464,3 +464,18 @@
       style="width:100%; height:60px; padding:0.4rem; border:1px solid #ccc; border-radius:4px;"></textarea></div><input type="hidden" id="prof-handle"><div style="display:flex; justify-content:flex-end; gap:0.5rem;"><button onclick="closeProfileModal()"
       style="background:#eee; color:#333; border:1px solid #ccc; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">Cancel</button><button onclick="saveProfile()"
       style="background:#056; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">Save Profile</button>
+
+      /* Sync Indicator (Zero Count) refined style */
+      .message-badge.badge-zero {
+        background-color: transparent;
+        border: none;
+        color: var(--text-tertiary);
+        font-family: 'Menlo', 'Monaco', monospace;
+        /* Tech/Terminal feel */
+        font-size: 0.65rem;
+        opacity: 0.7;
+        padding: 0;
+        /* Remove padding to be as tight as possible */
+        min-width: unset;
+        /* Allow it to shrink to just the character width */
+      }

@@ -71,6 +71,26 @@ export async function loadConversations(append = false) {
             // time.className = 'contact-time'; 
 
             topRow.appendChild(name);
+
+            // Message count badge - Moved next to name for zero-gap
+            const count = parseInt(contact.count || '0');
+            const badge = document.createElement('div');
+            badge.className = 'message-badge';
+            badge.textContent = count > 99 ? '99+' : count;
+
+            if (count === 0) {
+                badge.classList.add('badge-zero');
+                badge.title = "Sync Active";
+                // Ensure virtually no space
+                badge.style.marginLeft = '2px';
+                badge.style.transform = 'scale(0.8)'; // Make it slightly smaller next to text
+                badge.style.border = 'none'; // Cleaner
+                badge.style.color = 'var(--text-tertiary)';
+            } else {
+                badge.style.marginLeft = '6px';
+            }
+
+            topRow.appendChild(badge);
             info.appendChild(topRow);
 
             const preview = document.createElement('div');
@@ -84,18 +104,8 @@ export async function loadConversations(append = false) {
 
             info.appendChild(preview);
 
-            // Message count badge - Only show if > 0
-            const count = parseInt(contact.count || '0');
-            if (count > 0) {
-                const badge = document.createElement('div');
-                badge.className = 'message-badge';
-                badge.textContent = count > 99 ? '99+' : count;
-                item.appendChild(badge);
-            }
-
             item.appendChild(statusDot);
             item.appendChild(info);
-            // Badge appends last to float right
 
             // Click handler
             item.onclick = () => window.selectContact(contact.handle);
