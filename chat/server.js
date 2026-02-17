@@ -191,6 +191,29 @@ function serveFeedback(req, res) {
 const server = http.createServer(async (req, res) => {
   // Use a dummy base URL to parse the path relative to the server root.
   const url = new URL(req.url || "/", `http://localhost:${boundPort}`);
+  const pathname = url.pathname;
+
+  // Serve static files (CSS, JS)
+  if (pathname.startsWith('/css/') || pathname.startsWith('/js/')) {
+    const filePath = path.join(__dirname, pathname);
+    try {
+      const content = await fs.promises.readFile(filePath);
+      const ext = path.extname(filePath);
+      const contentType = {
+        '.css': 'text/css',
+        '.js': 'application/javascript',
+        '.json': 'application/json'
+      }[ext] || 'text/plain';
+
+      res.writeHead(200, { 'Content-Type': contentType });
+      res.end(content);
+      return;
+    } catch (err) {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+  }
 
   if (url.pathname === "/api/thread") {
     const handle = url.searchParams.get("handle");
