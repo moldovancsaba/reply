@@ -1288,9 +1288,11 @@
       }
     }
 
-    // Initial Load
-    loadConversations();
-    selectContact(null);
+      // Initial Load - wrap in async to await loadConversations
+      (async () => {
+        await loadConversations();  // Wait for contacts to load
+        selectContact(null);  // Then show dashboard
+      })();
     document.getElementById("btn-send").onclick = async () => {
       const text = chatInput.value.trim();
       if (!text || !currentHandle) return;
