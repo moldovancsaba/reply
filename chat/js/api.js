@@ -1,5 +1,5 @@
 /**
- * Reply Hub - API Layer
+ * {reply} - API Layer
  * Handles all HTTP requests to the backend server
  */
 
@@ -57,17 +57,31 @@ export async function fetchTriageLogs(limit = 10) {
  * Send a message to a contact
  * @param {string} handle - Contact handle
  * @param {string} text - Message text
- * @param {boolean} isEmail - Whether this is an email
+ * @param {('imessage'|'email'|'whatsapp')} channel - Channel to use
  * @returns {Promise<Object>} Send result
  */
-export async function sendMessage(handle, text, isEmail = false) {
-    const endpoint = isEmail ? '/api/send-email' : '/api/send-imessage';
+export async function sendMessage(handle, text, channel = 'imessage') {
+    const ch = (channel || 'imessage').toString().toLowerCase();
+    const endpoint = ch === 'email' ? '/api/send-email' : (ch === 'whatsapp' ? '/api/send-whatsapp' : '/api/send-imessage');
     const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recipient: handle, text })
     });
-    if (!res.ok) throw new Error(`Failed to send message: ${res.statusText}`);
+    if (!res.ok) {
+        let detail = '';
+        try {
+            const raw = await res.text();
+            try {
+                const j = JSON.parse(raw);
+                detail = j?.error || j?.message || j?.hint || raw;
+            } catch {
+                detail = raw;
+            }
+        } catch { }
+        const msg = detail ? `Failed to send message: ${detail}` : `Failed to send message: ${res.status} ${res.statusText}`;
+        throw new Error(msg);
+    }
     return await res.json();
 }
 
@@ -108,4 +122,51 @@ export async function triggerSync(source) {
     const res = await fetch(endpoint, { method: 'POST' });
     if (!res.ok) throw new Error(`Failed to trigger ${source} sync: ${res.statusText}`);
     return await res.json();
+}
+
+/**
+ * Load UI settings (local-only)
+ * @returns {Promise<Object>}
+ */
+export async function getSettings() {
+    const res = await fetch(`${API_BASE}/api/settings`);
+    if (res.status === 404) {
+        throw new Error('Settings API not available (this server build is missing /api/settings).');
+    }
+    if (!res.ok) throw new Error(`Failed to load settings: ${res.status} ${res.statusText}`);
+    return await res.json();
+}
+
+/**
+ * Save UI settings (local-only)
+ * @param {Object} data
+ * @returns {Promise<Object>}
+ */
+export async function saveSettings(data) {
+    const res = await fetch(`${API_BASE}/api/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data || {})
+    });
+    if (res.status === 404) {
+        throw new Error('Settings API not available (this server build is missing /api/settings).');
+    }
+    if (!res.ok) throw new Error(`Failed to save settings: ${res.status} ${res.statusText}`);
+    return await res.json();
+}
+
+export async function getGmailAuthUrl() {
+    const res = await fetch(`${API_BASE}/api/gmail/auth-url`);
+    if (res.status === 404) throw new Error('Gmail API not available (restart the server).');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || `Failed to start Gmail auth: ${res.status} ${res.statusText}`);
+    return data;
+}
+
+export async function disconnectGmail() {
+    const res = await fetch(`${API_BASE}/api/gmail/disconnect`, { method: 'POST' });
+    if (res.status === 404) throw new Error('Gmail API not available (restart the server).');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || `Failed to disconnect Gmail: ${res.status} ${res.statusText}`);
+    return data;
 }

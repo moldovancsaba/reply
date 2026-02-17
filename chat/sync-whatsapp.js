@@ -4,6 +4,7 @@ const fs = require('fs');
 const { addDocuments } = require('./vector-store.js');
 
 const statusManager = require('./status-manager.js');
+const { withDefaults, readSettings } = require('./settings-store.js');
 
 const WA_DB_PATH = path.join(process.env.HOME, 'Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite');
 const STATE_FILE = path.join(__dirname, 'data', 'whatsapp_sync_state.json');
@@ -47,24 +48,32 @@ async function syncWhatsApp() {
     console.log(`Starting WhatsApp sync from date > ${state.lastDate}...`);
     updateStatus({ state: "running", message: "Reading WhatsApp database..." });
 
+    const settings = withDefaults(readSettings());
+    const batchLimit = Math.max(1, Math.min(Number(settings?.worker?.quantities?.whatsapp) || 500, 2000));
+
     // Query to get messages joined with session info could be complex.
     // simpler to just query ZWAMESSAGE for now and structure JIDs.
     // ZMESSAGEDATE is the sort key.
 
     const query = `
         SELECT 
-            Z_PK,
-            ZTEXT,
-            ZMESSAGEDATE,
-            ZISFROMME,
-            ZFROMJID,
-            ZTOJID,
-            ZCHATSESSION
-        FROM ZWAMESSAGE 
-        WHERE ZMESSAGEDATE > ?
-        AND ZTEXT IS NOT NULL 
-        ORDER BY ZMESSAGEDATE ASC
-        LIMIT 500
+            m.Z_PK,
+            m.ZTEXT,
+            m.ZMESSAGEDATE,
+            m.ZISFROMME,
+            m.ZFROMJID,
+            m.ZTOJID,
+            m.ZCHATSESSION,
+            m.ZPUSHNAME,
+            s.ZCONTACTJID AS ZSESSIONCONTACTJID,
+            s.ZPARTNERNAME AS ZSESSIONPARTNERNAME,
+            s.ZCONTACTIDENTIFIER AS ZSESSIONCONTACTIDENTIFIER
+        FROM ZWAMESSAGE m
+        LEFT JOIN ZWACHATSESSION s ON s.Z_PK = m.ZCHATSESSION
+        WHERE m.ZMESSAGEDATE > ?
+        AND m.ZTEXT IS NOT NULL 
+        ORDER BY m.ZMESSAGEDATE ASC
+        LIMIT ${batchLimit}
     `;
 
     return new Promise((resolve, reject) => {
@@ -95,44 +104,65 @@ async function syncWhatsApp() {
             updateStatus({ state: "running", progress: 20, message: `Processing ${rows.length} messages...` });
 
             const docs = rows.map(row => {
-                // Determine handle (JID)
-                // If it's from me, handle is TOJID. If from them, handle is FROMJID.
-                // JIDs look like "123456789@s.whatsapp.net" or "123-456@g.us"
-                let handle = row.ZISFROMME ? row.ZTOJID : row.ZFROMJID;
+                // Determine handle (JID). If it's from me, handle is TOJID. If from them, handle is FROMJID.
+                // JIDs may look like "36205631691@s.whatsapp.net", "1203...@g.us" (group), or "<digits>@lid" (linked device id).
+                let jid = row.ZISFROMME ? row.ZTOJID : row.ZFROMJID;
 
-                // Clean handle - remove suffixes
+                // If the message references a @lid identity, prefer the chat session's contact JID which points to the real phone JID.
+                if (jid && typeof jid === 'string' && jid.endsWith('@lid')) {
+                    const sessionJid = row.ZSESSIONCONTACTJID;
+                    if (sessionJid && typeof sessionJid === 'string' && sessionJid.includes('@s.whatsapp.net')) {
+                        jid = sessionJid;
+                    }
+                }
+
+                let handle = jid;
                 if (handle) {
                     handle = handle.replace('@s.whatsapp.net', '').replace('@g.us', '');
-                    // Sometimes has @lid suffix
                     handle = handle.split('@')[0];
                 } else {
                     handle = 'unknown';
                 }
 
                 const formattedDate = convertWADate(row.ZMESSAGEDATE);
+                const pushName = (row.ZPUSHNAME || row.ZSESSIONPARTNERNAME || '').trim();
 
                 return {
                     id: `wa-${row.Z_PK}`,
-                    text: `[${formattedDate}] ${row.ZISFROMME ? 'Me' : handle}: ${row.ZTEXT}`,
+                    text: `[${formattedDate}] ${row.ZISFROMME ? 'Me' : (pushName || handle)}: ${row.ZTEXT}`,
                     source: 'WhatsApp',
-                    path: `whatsapp://${handle}`
+                    path: `whatsapp://${handle}`,
+                    _meta: {
+                        formattedDate,
+                        handle,
+                        pushName,
+                    }
                 };
             });
 
             try {
                 updateStatus({ state: "running", progress: 50, message: `Vectorizing ${docs.length} messages...` });
-                await addDocuments(docs);
+                await addDocuments(docs.map(({ _meta, ...d }) => d));
 
                 // Update contact last contacted?
                 // The contact-store expects a handle it can match. WhatsApp handles are phone numbers.
                 // If we want to merge identities, we need logic for that. For now, we update strictly by handle.
                 const contactStore = require('./contact-store.js');
                 docs.forEach(d => {
-                    const handle = d.path.replace('whatsapp://', '');
-                    // We extract the date from the text snippet "[ISO] ..."
-                    const dateMatch = d.text.match(/^\[(.*?)\]/);
-                    if (dateMatch && handle !== 'unknown') {
-                        contactStore.updateLastContacted(handle, dateMatch[1]);
+                    const handle = d._meta?.handle || d.path.replace('whatsapp://', '');
+                    const formattedDate = d._meta?.formattedDate || null;
+                    if (handle && handle !== 'unknown' && formattedDate) {
+                        contactStore.updateLastContacted(handle, formattedDate, { channel: 'whatsapp' });
+
+                        const pushName = (d._meta?.pushName || '').trim();
+                        if (pushName) {
+                            const existing = contactStore.findContact(handle);
+                            const existingName = (existing?.displayName || '').trim();
+                            const looksAuto = !existingName || existingName === handle || /^\d+$/.test(existingName);
+                            if (looksAuto) {
+                                contactStore.updateContact(handle, { displayName: pushName });
+                            }
+                        }
                     }
                 });
 

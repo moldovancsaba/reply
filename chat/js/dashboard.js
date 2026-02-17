@@ -1,5 +1,5 @@
 /**
- * Reply Hub - Dashboard Module
+ * {reply} - Dashboard Module
  * Renders system health dashboard with sync status and triage log
  */
 
@@ -30,6 +30,7 @@ export async function renderDashboard() {
         const imessageSync = health.channels?.imessage || {};
         const whatsappSync = health.channels?.whatsapp || {};
         const notesSync = health.channels?.notes || {};
+        const mailSync = health.channels?.mail || {};
 
         // Format last sync times
         const formatLastSync = (timestamp) => {
@@ -50,9 +51,14 @@ export async function renderDashboard() {
       <div class="health-card">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <h4>iMessage Sync</h4>
-          <button class="btn-icon" onclick="window.handleSync('imessage')" title="Sync iMessage">
-            💬
-          </button>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="btn-icon" onclick="window.openChannelSettings('imessage')" title="Configure iMessage">
+              ⚙️
+            </button>
+            <button class="btn-icon" onclick="window.handleSync('imessage')" title="Sync iMessage">
+              💬
+            </button>
+          </div>
         </div>
         <div class="health-value">${imessageSync.processed || 0}</div>
         <div class="health-status-tag">● Messages Scanned</div>
@@ -64,9 +70,14 @@ export async function renderDashboard() {
       <div class="health-card">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <h4>WhatsApp Sync</h4>
-          <button class="btn-icon" onclick="window.handleSync('whatsapp')" title="Sync WhatsApp">
-            📱
-          </button>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="btn-icon" onclick="window.openChannelSettings('whatsapp')" title="Configure WhatsApp">
+              ⚙️
+            </button>
+            <button class="btn-icon" onclick="window.handleSync('whatsapp')" title="Sync WhatsApp">
+              📱
+            </button>
+          </div>
         </div>
         <div class="health-value">${whatsappSync.processed || 0}</div>
         <div class="health-status-tag">● Messages Scanned</div>
@@ -78,14 +89,41 @@ export async function renderDashboard() {
       <div class="health-card">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <h4>Notes Sync</h4>
-          <button class="btn-icon" onclick="window.handleSync('notes')" title="Sync Notes">
-            📝
-          </button>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="btn-icon" onclick="window.openChannelSettings('notes')" title="Configure Notes">
+              ⚙️
+            </button>
+            <button class="btn-icon" onclick="window.handleSync('notes')" title="Sync Notes">
+              📝
+            </button>
+          </div>
         </div>
         <div class="health-value">${notesSync.processed || 0}</div>
         <div class="health-status-tag">● Notes Scanned</div>
         <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
           Last Sync: ${formatLastSync(notesSync.lastSync)}
+        </div>
+      </div>
+
+      <div class="health-card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h4>Email Sync</h4>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="btn-icon" onclick="window.openChannelSettings('email')" title="Configure Email">
+              ⚙️
+            </button>
+            <button class="btn-icon" onclick="window.handleSync('mail')" title="Sync Email (Apple Mail or IMAP)">
+              📧
+            </button>
+          </div>
+        </div>
+        <div class="health-value">${mailSync.processed || 0}</div>
+        <div class="health-status-tag">● Emails Scanned</div>
+        <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
+          ${mailSync.connected && mailSync.account ? `Connected as: ${mailSync.account}` : 'Not connected'}
+        </div>
+        <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
+          Last Sync: ${formatLastSync(mailSync.lastSync)}
         </div>
       </div>
 

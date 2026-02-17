@@ -22,6 +22,11 @@ async function generateReply(message, contextSnippets = [], recipient = null) {
 ${identityContext || ""}
 ${history || ""}
 
+The Identity Context and Local Intelligence (if present) are the most reliable source of facts.
+Prioritize them above the general knowledge snippets if there is any conflict.
+Only use facts that appear in the provided context; do not invent personal details.
+Never mention that you used notes, profiles, or "context" in the draft.
+
 Based on the knowledge below (my notes/emails), draft a reply to the incoming message.
 
 CONTEXT FROM KNOWLEDGE BASE:

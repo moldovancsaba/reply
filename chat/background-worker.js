@@ -24,7 +24,10 @@ const { generateReply, extractKYC } = require('./reply-engine.js');
 const { getSnippets } = require('./knowledge.js');
 const { sync: syncIMessage } = require('./sync-imessage.js');
 const { syncWhatsApp } = require('./sync-whatsapp.js');
+const { syncMail, isImapConfigured, isGmailConfigured } = require('./sync-mail.js');
 const triageEngine = require('./triage-engine.js');
+const { withDefaults, readSettings } = require('./settings-store.js');
+const { extractSignals } = require('./signal-extractor.js');
 
 /**
  * Optimized Background Worker (SQLite version)
@@ -67,9 +70,18 @@ process.on('SIGINT', () => process.exit());
 process.on('SIGTERM', () => process.exit());
 
 const os = require('os');
-const POLL_INTERVAL_MS = 60000; // Check every 60 seconds (1 minute)
 const MESSAGE_LOOKBACK_SECONDS = 310;
 const CHAT_DB_PATH = path.join(os.homedir(), 'Library', 'Messages', 'chat.db');
+
+function getPollIntervalMs() {
+    try {
+        const settings = withDefaults(readSettings());
+        const secs = Number(settings?.worker?.pollIntervalSeconds) || 60;
+        return Math.max(10, Math.min(secs, 3600)) * 1000;
+    } catch {
+        return 60000;
+    }
+}
 
 // Simple bounded cache to prevent memory leaks
 const MAX_SEEN_IDS = 1000;
@@ -87,6 +99,16 @@ async function poll() {
 
         console.log("Running WhatsApp sync...");
         await syncWhatsApp();
+
+        // 2. Optional email sync (Gmail OAuth or IMAP)
+        const imapOk = typeof isImapConfigured === 'function'
+            ? isImapConfigured()
+            : (process.env.REPLY_IMAP_HOST && process.env.REPLY_IMAP_USER && process.env.REPLY_IMAP_PASS);
+        const gmailOk = typeof isGmailConfigured === 'function' ? isGmailConfigured() : false;
+        if (gmailOk || imapOk) {
+            console.log(`Running Mail sync (${gmailOk ? 'Gmail' : 'IMAP'})...`);
+            await syncMail();
+        }
     } catch (e) {
         console.error("Sync Error:", e);
     }
@@ -148,7 +170,7 @@ async function poll() {
 
                 // 2. Track activity
                 if (handle) {
-                    contactStore.updateLastContacted(handle, date);
+                    contactStore.updateLastContacted(handle, date, { channel: 'imessage' });
                 }
 
                 // 3. Intelligence Pipeline (Only if NOT from me)
@@ -178,6 +200,18 @@ async function runIntelligencePipeline(handle, text) {
         if (triageResult) {
             console.log(`[Worker] Triage Action: ${triageResult.action} (${triageResult.tag})`);
             // If action is NOT just log, we might want to do more here (e.g., notify)
+        }
+
+        // 0.5. Stage incremental AI Suggestions from the latest message (fast path)
+        try {
+            const signals = extractSignals(text);
+            for (const url of (signals.links || [])) contactStore.addSuggestion(handle, 'links', url);
+            for (const email of (signals.emails || [])) contactStore.addSuggestion(handle, 'emails', email);
+            for (const phone of (signals.phones || [])) contactStore.addSuggestion(handle, 'phones', phone);
+            for (const addr of (signals.addresses || [])) contactStore.addSuggestion(handle, 'addresses', addr);
+            for (const tag of (signals.hashtags || [])) contactStore.addSuggestion(handle, 'hashtags', tag);
+        } catch (e) {
+            console.warn('[Worker] Signal extraction failed:', e?.message || e);
         }
 
         // A. KYC Extraction
@@ -211,8 +245,15 @@ async function runIntelligencePipeline(handle, text) {
 
 console.log("==========================================");
 console.log("🚀 REPLY BACKGROUND WORKER ACTIVE (SQLITE)");
-console.log(`Interval: ${POLL_INTERVAL_MS / 1000}s`);
+console.log(`Interval: ${Math.round(getPollIntervalMs() / 1000)}s`);
 console.log("==========================================");
 
-setInterval(poll, POLL_INTERVAL_MS);
-poll();
+async function pollLoop() {
+    try {
+        await poll();
+    } finally {
+        setTimeout(pollLoop, getPollIntervalMs());
+    }
+}
+
+pollLoop();

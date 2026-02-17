@@ -1,5 +1,5 @@
 /**
- * Reply Hub - Messages Module
+ * {reply} - Messages Module
  * Handles message thread loading, display, and sending
  */
 
@@ -9,6 +9,92 @@ import { fetchMessages, sendMessage } from './api.js';
 let messageOffset = 0;
 let hasMoreMessages = true;
 const MESSAGE_LIMIT = 30;
+
+function channelEmoji(channel) {
+    const raw = (channel ?? '').toString().toLowerCase();
+    const key =
+        raw.includes('whatsapp') ? 'whatsapp' :
+            (raw.includes('mail') || raw.includes('email') || raw.includes('gmail') || raw.includes('imap')) ? 'email' :
+                'imessage';
+    const override = window.replySettings?.ui?.channels?.[key]?.emoji;
+    if (override) return override;
+    if (key === 'whatsapp') return '🟢';
+    if (key === 'email') return '📧';
+    if (raw.includes('messenger')) return '🔷';
+    if (raw.includes('instagram')) return '🔴';
+    if (raw.includes('linkedin')) return 'ℹ️';
+    return '💬';
+}
+
+function normalizeChannelKey(channel) {
+    const raw = (channel ?? '').toString().toLowerCase();
+    if (raw.includes('whatsapp')) return 'whatsapp';
+    if (raw.includes('mail') || raw.includes('email') || raw.includes('gmail') || raw.includes('imap')) return 'email';
+    return 'imessage';
+}
+
+function getSelectedChannel() {
+    const sel = document.getElementById('channel-select');
+    return (sel?.value || 'imessage').toLowerCase();
+}
+
+function setSelectedChannel(channel) {
+    const sel = document.getElementById('channel-select');
+    if (!sel) return;
+    const v = String(channel || '').toLowerCase();
+    if (!v) return;
+    const exists = Array.from(sel.options).some(o => o.value === v);
+    if (exists) sel.value = v;
+}
+
+function setSendButtonForChannel(channel) {
+    const btn = document.getElementById('btn-send');
+    if (!btn) return;
+
+    const v = String(channel || 'imessage').toLowerCase();
+    if (v === 'email') {
+        btn.textContent = 'Send Email';
+        btn.disabled = false;
+        return;
+    }
+    if (v === 'whatsapp') {
+        btn.textContent = 'Send WhatsApp';
+        btn.disabled = false;
+        return;
+    }
+    btn.textContent = 'Send iMessage';
+    btn.disabled = false;
+}
+
+function inferDefaultChannelFromMessages(messages) {
+    if (!Array.isArray(messages) || messages.length === 0) return null;
+    const lastIncoming = messages.find(m => !(m.is_from_me ?? (m.role === 'me')));
+    return (lastIncoming?.channel || '').toString().toLowerCase() || null;
+}
+
+async function copyToClipboard(text) {
+    if (!text) return false;
+    try {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        }
+    } catch { }
+
+    try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        ta.remove();
+        return ok;
+    } catch {
+        return false;
+    }
+}
 
 /**
  * Load message thread for a contact
@@ -40,17 +126,28 @@ export async function loadMessages(handle, append = false) {
         const loadMoreBtn = messagesEl.querySelector('.load-more-messages');
         if (loadMoreBtn) loadMoreBtn.remove();
 
-        // Render messages (newest first)
+        // Render messages
         messages.forEach(msg => {
             const bubble = document.createElement('div');
-            bubble.className = `message-bubble ${msg.is_from_me ? 'me' : 'them'}`;
-            bubble.textContent = msg.text || '';
+            const isFromMe = !!(msg.is_from_me ?? (msg.role === 'me'));
+            const channelKey = normalizeChannelKey(msg.channel || msg.source || '');
+            bubble.className = `message-bubble ${isFromMe ? 'me' : 'contact'} channel-${channelKey}`;
 
-            // Add timestamp
-            const time = document.createElement('div');
-            time.className = 'message-time';
-            time.textContent = new Date(msg.date).toLocaleString();
-            bubble.appendChild(time);
+            const text = document.createElement('div');
+            text.textContent = msg.text || '';
+            bubble.appendChild(text);
+
+            const date = msg.date ? new Date(msg.date) : null;
+            if (date && !Number.isNaN(date.getTime())) {
+                const info = document.createElement('div');
+                info.className = 'message-info';
+                const channel = msg.channel || msg.source || '';
+                info.textContent = `${channelEmoji(channel)} ${date.toLocaleString()}`;
+                const src = (msg.source || '').toString();
+                const ch = (msg.channel || '').toString();
+                info.title = [ch ? `Channel: ${ch}` : null, src ? `Source: ${src}` : null].filter(Boolean).join('\n');
+                bubble.appendChild(info);
+            }
 
             if (append) {
                 messagesEl.appendChild(bubble);
@@ -75,6 +172,16 @@ export async function loadMessages(handle, append = false) {
         // Scroll to top (newest messages)
         if (!append) {
             messagesEl.scrollTop = 0;
+        }
+
+        // Default channel: match the most recent incoming message when possible
+        if (!append) {
+            const inferred = inferDefaultChannelFromMessages(messages);
+            if (inferred) {
+                window.currentChannel = inferred;
+                setSelectedChannel(inferred);
+                setSendButtonForChannel(inferred);
+            }
         }
 
     } catch (error) {
@@ -104,25 +211,30 @@ export async function handleSendMessage() {
     if (!text) return;
 
     try {
-        // Determine if this is an email
-        const isEmail = currentHandle.includes('@') && !currentHandle.includes('icloud.com');
+        const channel = getSelectedChannel();
+        window.currentChannel = channel;
+        setSendButtonForChannel(channel);
 
         // Send message
-        const result = await sendMessage(currentHandle, text, isEmail);
+        const result = await sendMessage(currentHandle, text, channel);
 
         if (result.status === 'ok') {
             // Clear input
             chatInput.value = '';
+            try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
 
             // Optimistically add message to UI
             const bubble = document.createElement('div');
-            bubble.className = 'message-bubble me';
-            bubble.textContent = text;
+            bubble.className = `message-bubble me channel-${normalizeChannelKey(channel)}`;
 
-            const time = document.createElement('div');
-            time.className = 'message-time';
-            time.textContent = new Date().toLocaleString();
-            bubble.appendChild(time);
+            const textEl = document.createElement('div');
+            textEl.textContent = text;
+            bubble.appendChild(textEl);
+
+            const info = document.createElement('div');
+            info.className = 'message-info';
+            info.textContent = `${channelEmoji(channel)} ${new Date().toLocaleString()}`;
+            bubble.appendChild(info);
 
             messagesEl.prepend(bubble);
             messagesEl.scrollTop = 0;
@@ -131,10 +243,22 @@ export async function handleSendMessage() {
         }
     } catch (error) {
         console.error('Failed to send message:', error);
-        alert('Error: ' + error.message);
+        // WhatsApp send is best-effort; offer clipboard fallback.
+        const channel = getSelectedChannel();
+        if (channel === 'whatsapp') {
+            const ok = await copyToClipboard(text);
+            const extra = ok ? '\n\nCopied to clipboard as a fallback.' : '';
+            alert(`WhatsApp send failed: ${error?.message || String(error)}${extra}`);
+            return;
+        }
+        alert('Error: ' + (error?.message || String(error)));
     }
 }
 
 // Export to window for onclick handlers
 window.loadMessages = loadMessages;
 window.handleSendMessage = handleSendMessage;
+window.setSelectedChannel = (channel) => {
+    setSelectedChannel(channel);
+    setSendButtonForChannel(channel);
+};

@@ -1,57 +1,328 @@
-const { fetchConversation, fetchHandles } = require('./ingest-imessage.js');
 const { Ollama } = require('ollama');
 const ollama = new Ollama();
 const contactStore = require('./contact-store.js');
+const { mergeProfile } = require("./kyc-merge.js");
+const { getHistory } = require('./vector-store.js');
+const fs = require('fs');
+const path = require('path');
 
-const MODEL = "qwen2.5:7b";
+const MODEL = process.env.REPLY_KYC_OLLAMA_MODEL || "qwen2.5:7b";
+const KYC_DEBUG = process.env.REPLY_KYC_DEBUG === "1";
+
+function debugLog(...args) {
+    if (!KYC_DEBUG) return;
+    console.error("[KYC]", ...args);
+}
+
+function normalizePhone(phone) {
+    if (!phone) return null;
+    const raw = String(phone).trim();
+    if (!raw) return null;
+    let cleaned = raw.replace(/[^\d+]/g, "");
+    if (cleaned.startsWith("00")) cleaned = `+${cleaned.slice(2)}`;
+    const digits = cleaned.replace(/\D/g, "");
+    if (digits.length < 6) return null;
+    return digits;
+}
+
+function pathPrefixesForHandle(handle) {
+    if (!handle || typeof handle !== "string") return [];
+    const h = handle.trim();
+    if (!h) return [];
+    if (h.includes("@")) return [`mailto:${h}`];
+    const variants = new Set();
+    variants.add(h);
+    const normalized = normalizePhone(h);
+    if (normalized) variants.add(normalized);
+    const out = [];
+    for (const v of variants) {
+        out.push(`imessage://${v}`);
+        out.push(`whatsapp://${v}`);
+    }
+    return out;
+}
+
+function extractDateFromText(text) {
+    if (!text || typeof text !== "string") return null;
+    const m = text.match(/\[(.*?)\]/);
+    if (!m) return null;
+    const d = new Date(m[1]);
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function stripMessagePrefix(text) {
+    if (!text || typeof text !== "string") return "";
+    const idx = text.indexOf(": ");
+    return idx >= 0 ? text.slice(idx + 2) : text;
+}
+
+function uniqueClean(arr) {
+    const out = [];
+    const seen = new Set();
+    for (const v of (arr || [])) {
+        const s = String(v || "").trim();
+        if (!s) continue;
+        const key = s.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(s);
+    }
+    return out;
+}
+
+function extractUrls(text) {
+    const out = [];
+    const s = String(text || "");
+    const re = /\bhttps?:\/\/[^\s<>"')]+/gi;
+    const re2 = /\bwww\.[^\s<>"')]+/gi;
+    for (const m of s.matchAll(re)) out.push(m[0]);
+    for (const m of s.matchAll(re2)) out.push(`https://${m[0]}`);
+    return out.map(u => u.replace(/[),.;!?]+$/g, ""));
+}
+
+function extractEmails(text) {
+    const s = String(text || "");
+    const re = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,}\b/g;
+    return Array.from(s.matchAll(re)).map(m => m[0]);
+}
+
+function extractHashtags(text) {
+    const s = String(text || "");
+    const re = /#[\p{L}\p{N}_]{2,}/gu;
+    return Array.from(s.matchAll(re)).map(m => m[0]);
+}
+
+function extractPhones(text) {
+    const s = String(text || "");
+    const re = /(\+?\d[\d\s().-]{5,}\d)/g;
+    const raw = Array.from(s.matchAll(re)).map(m => m[1]);
+    const cleaned = raw
+        .map(v => String(v).trim())
+        .map(v => v.replace(/[^\d+]/g, ""))
+        .map(v => (v.startsWith("00") ? `+${v.slice(2)}` : v))
+        .filter(v => {
+            const digits = v.replace(/\D/g, "");
+            return digits.length >= 7 && digits.length <= 16;
+        });
+    return cleaned;
+}
+
+async function lidsForPhones(phoneDigitsList) {
+    try {
+        if (!process.env.HOME) return new Map();
+        const dbPath = path.join(process.env.HOME, "Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite");
+        if (!fs.existsSync(dbPath)) return new Map();
+
+        const phones = Array.from(new Set((phoneDigitsList || []).map(normalizePhone).filter(Boolean)));
+        if (phones.length === 0) return new Map();
+
+        debugLog("WA db:", dbPath);
+        debugLog("WA phone count:", phones.length);
+        const sqlite3 = require("sqlite3").verbose();
+        debugLog("sqlite3 loaded");
+        const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY);
+        debugLog("sqlite3 opened");
+        const all = (sql, params) =>
+            new Promise((resolve, reject) => {
+                db.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows || [])));
+            });
+
+        const out = new Map();
+        const CHUNK = 400;
+        for (let i = 0; i < phones.length; i += CHUNK) {
+            const chunk = phones.slice(i, i + CHUNK);
+            const jids = chunk.map(p => `${p}@s.whatsapp.net`);
+            const placeholders = jids.map(() => "?").join(",");
+            debugLog("WA query chunk:", jids.length);
+            const rows = await all(
+                `SELECT ZCONTACTJID, ZCONTACTIDENTIFIER FROM ZWACHATSESSION WHERE ZCONTACTJID IN (${placeholders})`,
+                jids
+            );
+            debugLog("WA rows:", rows.length);
+            for (const r of rows) {
+                const jid = String(r?.ZCONTACTJID || "");
+                const phone = jid.includes("@") ? jid.split("@")[0] : jid;
+                const identifier = String(r?.ZCONTACTIDENTIFIER || "");
+                const lidDigits = identifier.endsWith("@lid") ? identifier.slice(0, -4) : null;
+                if (phone && lidDigits) out.set(normalizePhone(phone), lidDigits);
+            }
+        }
+        try { db.close(); } catch {}
+        return out;
+    } catch (e) {
+        console.warn("WhatsApp lid lookup failed:", e?.message || e);
+        return new Map();
+    }
+}
 
 async function analyzeContact(handleId) {
     console.log(`Analyzing chat history for: ${handleId}...`);
     try {
-        const history = await fetchConversation(handleId, 50); // Increased context
+        debugLog("Step: get handles");
+        const handles = contactStore.getAllHandles(handleId);
+        debugLog("Handles:", handles);
+        const phoneDigits = handles
+            .filter(h => typeof h === 'string' && !String(h).includes('@'))
+            .map(h => normalizePhone(h))
+            .filter(Boolean);
+        debugLog("Phone digits:", phoneDigits);
+        debugLog("Step: lid lookup");
+        const lidByPhone = await lidsForPhones(phoneDigits);
+        debugLog("Lid map size:", lidByPhone.size);
+        const lidHandles = Array.from(new Set(Array.from(lidByPhone.values()).filter(Boolean)));
 
-        if (history.length < 5) {
+        const allHandles = Array.from(new Set([...handles, ...lidHandles]));
+        const prefixes = Array.from(new Set(allHandles.flatMap(pathPrefixesForHandle)));
+        debugLog("Prefix count:", prefixes.length);
+
+        // Fetch sequentially to reduce concurrent LanceDB pressure (and avoid native crashes).
+        const allDocs = [];
+        for (const p of prefixes) {
+            debugLog("History fetch:", p);
+            const docs = await getHistory(p);
+            if (docs && docs.length) allDocs.push(...docs);
+        }
+        debugLog("Docs:", allDocs.length);
+
+        const messages = allDocs
+            .map(d => {
+                const isFromMe = (d.text || "").includes("] Me:");
+                const dateObj = extractDateFromText(d.text || "");
+                return {
+                    isFromMe,
+                    text: stripMessagePrefix(d.text || ""),
+                    date: dateObj ? dateObj.toISOString() : null,
+                };
+            })
+            .filter(m => m.text && m.date)
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        const contactMessages = messages.filter(m => !m.isFromMe);
+        if (contactMessages.length < 5) {
             console.log(`Skipping ${handleId} (not enough data).`);
             return null;
         }
 
-        const conversationText = history.map(m => `${m.role}: ${m.text}`).join('\n');
-        const prompt = `
-ANALYZE THIS CONVERSATION to build a contact profile.
-The user ("Me") is "Moldovan Csaba Zoltan".
-The other person is identified by handle: "${handleId}".
+        // Deterministic extraction across the full history (covers "from the beginning").
+        const linkSet = new Set();
+        const emailSet = new Set();
+        const phoneSet = new Set();
+        const hashtagSet = new Set();
 
-Extract the following in JSON format:
-- "displayName": Likely real name.
-- "relationship": e.g., Friend, Colleague.
-- "profession": Job title.
-- "links": Array of strings (URLs shared by the CONTACT, e.g. "https://index.hu").
-- "emails": Array of strings (Email addresses shared by the CONTACT).
-- "phones": Array of strings (Phone numbers shared by the CONTACT, e.g. "+36...").
-- "notes": Array of strings (Key facts, e.g. "Likes coffee").
+        for (const m of contactMessages) {
+            extractUrls(m.text).forEach(v => linkSet.add(v));
+            extractEmails(m.text).forEach(v => emailSet.add(v));
+            extractPhones(m.text).forEach(v => phoneSet.add(v));
+            extractHashtags(m.text).forEach(v => hashtagSet.add(v));
+        }
 
-CONVERSATION:
-${conversationText}
+        // LLM extraction for higher-level items (chunked to avoid prompt limits).
+        // We sample across time to keep analysis fast while still covering "from the beginning".
+        const addressesSet = new Set();
+        const notesSet = new Set();
+
+        const maxLlmMessages = Math.max(50, parseInt(process.env.REPLY_KYC_LLM_MAX_MESSAGES || "400", 10) || 400);
+        const maxChunks = Math.max(1, parseInt(process.env.REPLY_KYC_LLM_MAX_CHUNKS || "8", 10) || 8);
+
+        const sampled = (() => {
+            if (contactMessages.length <= maxLlmMessages) return contactMessages;
+            const headCount = Math.floor(maxLlmMessages / 2);
+            const tailCount = maxLlmMessages - headCount;
+            return [...contactMessages.slice(0, headCount), ...contactMessages.slice(-tailCount)];
+        })();
+
+        const lines = sampled.map(m => `- [${m.date}] ${m.text}`); // include date for disambiguation
+        const MAX_CHARS = 12000;
+        let chunk = [];
+        let chars = 0;
+        const chunks = [];
+        for (const line of lines) {
+            if (chars + line.length + 1 > MAX_CHARS && chunk.length) {
+                chunks.push(chunk.join('\n'));
+                chunk = [];
+                chars = 0;
+            }
+            chunk.push(line);
+            chars += line.length + 1;
+        }
+        if (chunk.length) chunks.push(chunk.join('\n'));
+
+        let llmFailed = false;
+        for (const corpus of chunks.slice(0, maxChunks)) {
+            const prompt = `
+You extract structured contact intelligence from chat logs.
+The log lines are ONLY messages from the contact (not from me).
+
+Extract ONLY what is explicitly mentioned:
+- "addresses": addresses/locations/cities/venues (strings)
+- "notes": other durable facts worth remembering (strings)
+
+Rules:
+- DO NOT infer names, profession, relationship.
+- NEVER include the user's name "Csaba" or "Moldovan" in any output.
+- If unsure, leave arrays empty.
+
+CHAT LOG:
+${corpus}
 
 RETURN ONLY JSON:
-{
-  "displayName": "...",
-  "relationship": "...",
-  "profession": "...",
-  "links": ["..."],
-  "emails": ["..."],
-  "phones": ["..."],
-  "notes": ["..."]
-}`;
+{ "addresses": [], "notes": [] }`;
 
-        const response = await ollama.chat({
-            model: MODEL,
-            messages: [{ role: 'user', content: prompt }],
-            format: 'json'
-        });
+            let response = null;
+            try {
+                response = await ollama.chat({
+                    model: MODEL,
+                    messages: [{ role: 'user', content: prompt }],
+                    format: 'json'
+                });
+            } catch (e) {
+                llmFailed = true;
+                console.warn("KYC LLM extraction failed (skipping LLM step):", e?.message || e);
+                break;
+            }
 
-        const profile = JSON.parse(response.message.content);
-        profile.handle = handleId;
+            let parsed = {};
+            try { parsed = JSON.parse(response.message.content); } catch { parsed = {}; }
+            const addrs = Array.isArray(parsed.addresses) ? parsed.addresses : [];
+            const notes = Array.isArray(parsed.notes) ? parsed.notes : [];
+
+            for (const a of addrs) {
+                const v = String(a || '').trim();
+                if (!v) continue;
+                if (/csaba|moldovan/i.test(v)) continue;
+                addressesSet.add(v);
+            }
+            for (const n of notes) {
+                const v = String(n || '').trim();
+                if (!v) continue;
+                if (/csaba|moldovan/i.test(v)) continue;
+                notesSet.add(v);
+            }
+        }
+
+        const profile = {
+            handle: handleId,
+            links: uniqueClean(Array.from(linkSet)),
+            emails: uniqueClean(Array.from(emailSet)),
+            phones: uniqueClean(Array.from(phoneSet)),
+            addresses: uniqueClean(Array.from(addressesSet)),
+            hashtags: uniqueClean(Array.from(hashtagSet)),
+            notes: uniqueClean(Array.from(notesSet)),
+            meta: {
+                analyzedAt: new Date().toISOString(),
+                totalMessages: messages.length,
+                totalContactMessages: contactMessages.length,
+                newestMessageAt: messages[messages.length - 1]?.date || null,
+                oldestMessageAt: messages[0]?.date || null,
+                llm: {
+                    model: MODEL,
+                    sampledMessages: sampled.length,
+                    chunks: Math.min(chunks.length, maxChunks),
+                    failed: llmFailed
+                }
+            }
+        };
+
         return profile;
     } catch (e) {
         console.error(`Error analyzing contact ${handleId}: `, e.message);
@@ -59,42 +330,10 @@ RETURN ONLY JSON:
     }
 }
 
-async function mergeProfile(profile) {
-    if (!profile || !profile.handle) return;
-
-    console.log(`Generating suggestions for ${profile.handle}...`);
-
-    // 1. Update basic fields if provided (still auto-update for now, or move to suggestions too? 
-    // User only asked for Links/Emails/Phones/Notes to be capable of accept/decline. 
-    // Let's keep profile fields auto-updating for now as they are singular).
-    const updates = {};
-    if (profile.displayName && profile.displayName !== profile.handle) updates.displayName = profile.displayName;
-    if (profile.relationship) updates.relationship = profile.relationship;
-    if (profile.profession) updates.profession = profile.profession;
-
-    if (Object.keys(updates).length > 0) {
-        contactStore.updateContact(profile.handle, updates);
-    }
-
-    // 2. Generate Suggestions
-    const types = ['links', 'emails', 'phones', 'notes'];
-    for (const type of types) {
-        if (profile[type] && Array.isArray(profile[type])) {
-            for (const content of profile[type]) {
-                if (content && typeof content === 'string' && content.length > 2) {
-                    // Check for duplicates before adding generic suggestion
-                    contactStore.addSuggestion(profile.handle, type, content);
-                }
-            }
-        }
-    }
-
-    return contactStore.findContact(profile.handle);
-}
-
 async function run() {
     try {
         console.log("Starting KYC Agent analysis...");
+        const { fetchHandles } = require('./ingest-imessage.js');
         const handles = await fetchHandles(10);
 
         for (const meta of handles) {
