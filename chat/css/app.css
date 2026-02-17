@@ -21,24 +21,27 @@
         overflow: hidden;
       }
 
-      /* Sidebar */
+      /* --- Sidebar (iMessage Style) --- */
       .sidebar {
-        background: var(--bg-sidebar);
-        color: white;
+        background-color: rgba(30, 30, 30, 0.85);
+        /* Proper translucency base */
+        border-right: 1px solid rgba(0, 0, 0, 1);
         display: flex;
         flex-direction: column;
-        border-right: 1px solid #333;
-        height: 100vh;
+        height: 100%;
+        backdrop-filter: blur(20px);
+        /* Vibrancy effect */
         max-height: 100vh;
         overflow: hidden;
       }
 
       .sidebar-header {
-        padding: 1.5rem;
-        border-bottom: 1px solid #333;
+        padding: 12px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         display: flex;
-        justify-content: space-between;
         align-items: center;
+        justify-content: space-between;
+        height: 52px;
       }
 
       .contact-list {
@@ -64,26 +67,45 @@
         color: #aaa;
       }
 
-      .contact-item {
-        padding: 1rem;
-        border-bottom: 1px solid #333;
-        cursor: pointer;
-        transition: background 0.2s;
+      .sidebar-item {
         display: flex;
         align-items: center;
-        gap: 10px;
+        padding: 10px 12px;
+        margin: 4px 8px;
+        /* Floating items like macOS11+ */
+        border-radius: 8px;
+        border-bottom: none;
+        cursor: default;
+        transition: all 0.15s ease;
+        position: relative;
       }
 
-      .contact-item:hover {
-        background: #2c2c2e;
+      .sidebar-item:hover {
+        background-color: rgba(255, 255, 255, 0.05);
       }
 
-      .contact-item.active {
-        background: #3a3a3c;
+      .sidebar-item.active {
+        background-color: var(--primary);
+        /* iMessage Blue Selection */
+        color: white;
+      }
+
+      /* Fix text colors inside active state */
+      .sidebar-item.active .contact-name,
+      .sidebar-item.active .contact-preview,
+      .sidebar-item.active .status-dot,
+      .sidebar-item.active .message-badge {
+        color: white !important;
+        -webkit-font-smoothing: subpixel-antialiased;
       }
 
       .status-dot {
-        font-size: 0.8rem;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 10px;
+        flex-shrink: 0;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
       }
 
       .channel-icon {
@@ -97,25 +119,30 @@
 
       .contact-name {
         font-weight: 600;
-        font-size: 0.95rem;
+        font-size: 13px;
+        margin-bottom: 2px;
+        color: var(--text-primary);
+        letter-spacing: -0.2px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
 
       .contact-preview {
-        font-size: 0.8rem;
-        color: #aaa;
+        font-size: 12px;
+        color: var(--text-secondary);
+        opacity: 0.9;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
 
-      /* Chat Area */
+      /* --- Chat Area (iMessage Style) --- */
       .chat-area {
-        background: var(--bg-chat);
         display: flex;
         flex-direction: column;
+        background-color: #000000;
+        /* Pure black for contrast */
         position: relative;
         min-width: 0;
         height: 100vh;
@@ -124,12 +151,24 @@
       }
 
       .chat-header {
-        padding: 1rem 1.5rem;
-        background: var(--bg-sidebar);
-        border-bottom: 1px solid var(--border);
+        padding: 0 20px;
+        height: 52px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         display: flex;
         justify-content: space-between;
         align-items: center;
+        background-color: rgba(30, 30, 30, 0.6);
+        backdrop-filter: blur(20px);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+
+      .chat-header h3 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: #dfdfdf;
       }
 
       .messages-container {
@@ -143,14 +182,18 @@
         /* Important for flex-grow with overflow */
       }
 
+      /* --- Message Bubbles --- */
       .message-bubble {
-        max-width: 85%;
-        padding: 0.75rem 1rem;
+        max-width: 70%;
+        padding: 8px 14px;
         border-radius: 18px;
-        font-size: 0.95rem;
         line-height: 1.4;
-        overflow-wrap: break-word;
+        font-size: 15px;
         position: relative;
+        word-wrap: break-word;
+        margin-bottom: 8px;
+        /* Tighter spacing */
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
       }
 
       .message-info {
@@ -166,33 +209,49 @@
       }
 
       .message-bubble.me {
-        align-self: flex-end;
-        background: var(--primary);
+        background-color: var(--primary);
+        /* iMessage Blue */
         color: white;
-        border-bottom-right-radius: 4px;
+        align-self: flex-end;
+        border-bottom-right-radius: 18px;
+        background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 100%);
+        /* Subtle gradient */
       }
 
       .message-bubble.contact {
+        background-color: #262628;
+        /* iMessage Dark Gray */
+        color: white;
         align-self: flex-start;
-        background: var(--bg-card);
-        color: var(--text-main);
-        border: 1px solid var(--border);
-        border-bottom-left-radius: 4px;
+        border-bottom-left-radius: 18px;
+        /* Keep consistent roundness */
+        border: none;
+        /* Remove original border */
       }
 
+      .message-time {
+        display: none;
+        /* Hide time by default like iMessage, simpler look */
+      }
+
+      /* --- Input Area --- */
       .input-area {
-        padding: 1.5rem;
-        background: var(--bg-sidebar);
-        border-top: 1px solid var(--border);
+        padding: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        background-color: rgba(30, 30, 30, 0.8);
+        backdrop-filter: blur(20px);
       }
 
       .input-wrapper {
         display: flex;
         gap: 10px;
-        background: var(--bg-input);
-        padding: 8px;
-        border-radius: 24px;
-        border: 1px solid var(--border);
+        background-color: #1C1C1E;
+        /* Dark input bg */
+        padding: 4px 6px 4px 12px;
+        border-radius: 20px;
+        border: 1px solid #333;
+        align-items: flex-end;
+        /* Align to bottom for multiline */
       }
 
       textarea#chat-input {
