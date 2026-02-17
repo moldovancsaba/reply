@@ -1,0 +1,91 @@
+/* 
+ * Reply Hub - Global Design System
+ * Dark Theme by Default
+ */
+
+:root {
+  /* Color Palette - Industry Standard Dark Mode */
+  --bg-app: #0f0f10;       /* Deepest background (app container) */
+  --bg-sidebar: #161618;   /* Sidebar background */
+  --bg-card: #2c2c2e;      /* Card/Element background */
+  --bg-input: #1c1c1e;     /* Input fields */
+  --bg-hover: #3a3a3c;     /* Hover states */
+  
+  /* Text Colors */
+  --text-primary: #ffffff;      /* High emphasis */
+  --text-secondary: #ebebf599;  /* Medium emphasis (60%) */
+  --text-tertiary: #ebebf54d;   /* Low emphasis (30%) */
+  --text-placeholder: #ebebf54d;
+
+  /* Accents */
+  --primary: #0a84ff;      /* iOS Blue Dark Mode */
+  --primary-hover: #0077ed;
+  --danger: #ff453a;       /* iOS Red Dark Mode */
+  --success: #30d158;      /* iOS Green Dark Mode */
+  --warning: #ffd60a;      /* iOS Yellow Dark Mode */
+
+  /* Borders & Dividers */
+  --border: #38383a;
+  --border-light: #48484a;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.4);
+}
+
+/* Base Reset & Typography */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Layout Utilities */
+.app-container {
+  display: grid;
+  grid-template-columns: 280px 1fr 300px; /* Sidebar | Chat | KYC */
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--bg-app);
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-hover);
+  border-radius: var(--radius-full);
+  border: 2px solid var(--bg-app);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
