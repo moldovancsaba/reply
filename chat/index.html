@@ -50,17 +50,16 @@
             <option value="closed">🔵 Resolved</option>
           </select>
         </div>
-        <div style="display: flex; gap: 10px;">
-          <button class="btn btn-ghost">Refine</button>
-          <button class="btn btn-primary" id="btn-suggest">Suggest Draft</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-ghost" id="btn-mic" title="Voice Input">🎤 Mic</button>
+          <button class="btn btn-ghost" id="btn-magic" title="Instant Polish">✨ Magic</button>
+          <button class="btn btn-primary" id="btn-suggest">💡 Suggest</button>
         </div>
       </header>
 
       <div class="input-area" style="border-top:none; border-bottom:1px solid var(--border);">
         <div class="input-wrapper">
-          <textarea id="chat-input" placeholder="Type a message or let me suggest..."></textarea>
-          <button id="btn-mic" class="btn-icon" title="Voice Input">🎤</button>
-          <button class="btn-icon">✨</button>
+          <textarea id="chat-input" placeholder="Type a message..."></textarea>
           <button id="btn-send" class="btn btn-primary">Send iMessage</button>
         </div>
       </div>
