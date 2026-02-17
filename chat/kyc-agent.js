@@ -3,6 +3,8 @@ const ollama = new Ollama();
 const contactStore = require('./contact-store.js');
 const { mergeProfile } = require("./kyc-merge.js");
 const { getHistory } = require('./vector-store.js');
+const { extractSignals } = require('./signal-extractor.js');
+const { withDefaults, readSettings } = require('./settings-store.js');
 const fs = require('fs');
 const path = require('path');
 
@@ -67,6 +69,54 @@ function uniqueClean(arr) {
         seen.add(key);
         out.push(s);
     }
+    return out;
+}
+
+function normalizeEmail(email) {
+    const s = String(email || "").trim().toLowerCase();
+    return s || null;
+}
+
+function getSelfEmails() {
+    const out = new Set();
+    const addList = (raw) => {
+        const parts = String(raw || "")
+            .split(",")
+            .map((v) => v.trim())
+            .filter(Boolean);
+        for (const p of parts) {
+            const key = normalizeEmail(p);
+            if (key) out.add(key);
+        }
+    };
+
+    addList(process.env.REPLY_SELF_EMAILS || "");
+    addList(process.env.REPLY_IMAP_USER || "");
+    addList(process.env.GMAIL_USER || "");
+
+    try {
+        const settings = withDefaults(readSettings());
+        addList(settings?.imap?.user || "");
+        addList(settings?.imap?.selfEmails || "");
+        addList(settings?.gmail?.email || "");
+    } catch { }
+
+    return out;
+}
+
+function getSelfPhones() {
+    const out = new Set();
+    const addList = (raw) => {
+        const parts = String(raw || "")
+            .split(",")
+            .map((v) => v.trim())
+            .filter(Boolean);
+        for (const p of parts) {
+            const key = normalizePhone(p);
+            if (key) out.add(key);
+        }
+    };
+    addList(process.env.REPLY_SELF_PHONES || "");
     return out;
 }
 
@@ -161,6 +211,8 @@ async function analyzeContact(handleId) {
         debugLog("Step: get handles");
         const handles = contactStore.getAllHandles(handleId);
         debugLog("Handles:", handles);
+        const selfEmails = getSelfEmails();
+        const selfPhones = getSelfPhones();
         const phoneDigits = handles
             .filter(h => typeof h === 'string' && !String(h).includes('@'))
             .map(h => normalizePhone(h))
@@ -192,43 +244,47 @@ async function analyzeContact(handleId) {
                     isFromMe,
                     text: stripMessagePrefix(d.text || ""),
                     date: dateObj ? dateObj.toISOString() : null,
+                    dateObj: dateObj || null,
                 };
             })
-            .filter(m => m.text && m.date)
+            .filter(m => m.text)
             .sort((a, b) => new Date(a.date) - new Date(b.date));
 
         const contactMessages = messages.filter(m => !m.isFromMe);
-        if (contactMessages.length < 5) {
+        if (messages.length < 5) {
             console.log(`Skipping ${handleId} (not enough data).`);
             return null;
         }
 
-        // Deterministic extraction across the full history (covers "from the beginning").
+        // Deterministic extraction across the FULL history (covers "from the beginning").
+        // We intentionally scan BOTH directions so older URLs/emails/phones can still be found.
         const linkSet = new Set();
         const emailSet = new Set();
         const phoneSet = new Set();
         const hashtagSet = new Set();
+        const addressesSet = new Set();
 
-        for (const m of contactMessages) {
-            extractUrls(m.text).forEach(v => linkSet.add(v));
-            extractEmails(m.text).forEach(v => emailSet.add(v));
-            extractPhones(m.text).forEach(v => phoneSet.add(v));
-            extractHashtags(m.text).forEach(v => hashtagSet.add(v));
+        for (const m of messages) {
+            const signals = extractSignals(m.text || "");
+            for (const v of (signals.links || [])) linkSet.add(v);
+            for (const v of (signals.emails || [])) emailSet.add(v);
+            for (const v of (signals.phones || [])) phoneSet.add(v);
+            for (const v of (signals.hashtags || [])) hashtagSet.add(v);
+            for (const v of (signals.addresses || [])) addressesSet.add(v);
         }
 
         // LLM extraction for higher-level items (chunked to avoid prompt limits).
-        // We sample across time to keep analysis fast while still covering "from the beginning".
-        const addressesSet = new Set();
         const notesSet = new Set();
 
         const maxLlmMessages = Math.max(50, parseInt(process.env.REPLY_KYC_LLM_MAX_MESSAGES || "400", 10) || 400);
         const maxChunks = Math.max(1, parseInt(process.env.REPLY_KYC_LLM_MAX_CHUNKS || "8", 10) || 8);
 
+        const llmEligible = contactMessages.filter(m => m.dateObj);
         const sampled = (() => {
-            if (contactMessages.length <= maxLlmMessages) return contactMessages;
+            if (llmEligible.length <= maxLlmMessages) return llmEligible;
             const headCount = Math.floor(maxLlmMessages / 2);
             const tailCount = maxLlmMessages - headCount;
-            return [...contactMessages.slice(0, headCount), ...contactMessages.slice(-tailCount)];
+            return [...llmEligible.slice(0, headCount), ...llmEligible.slice(-tailCount)];
         })();
 
         const lines = sampled.map(m => `- [${m.date}] ${m.text}`); // include date for disambiguation
@@ -254,8 +310,7 @@ You extract structured contact intelligence from chat logs.
 The log lines are ONLY messages from the contact (not from me).
 
 Extract ONLY what is explicitly mentioned:
-- "addresses": addresses/locations/cities/venues (strings)
-- "notes": other durable facts worth remembering (strings)
+- "notes": durable facts worth remembering (strings)
 
 Rules:
 - DO NOT infer names, profession, relationship.
@@ -266,7 +321,7 @@ CHAT LOG:
 ${corpus}
 
 RETURN ONLY JSON:
-{ "addresses": [], "notes": [] }`;
+{ "notes": [] }`;
 
             let response = null;
             try {
@@ -283,15 +338,8 @@ RETURN ONLY JSON:
 
             let parsed = {};
             try { parsed = JSON.parse(response.message.content); } catch { parsed = {}; }
-            const addrs = Array.isArray(parsed.addresses) ? parsed.addresses : [];
             const notes = Array.isArray(parsed.notes) ? parsed.notes : [];
 
-            for (const a of addrs) {
-                const v = String(a || '').trim();
-                if (!v) continue;
-                if (/csaba|moldovan/i.test(v)) continue;
-                addressesSet.add(v);
-            }
             for (const n of notes) {
                 const v = String(n || '').trim();
                 if (!v) continue;
@@ -300,11 +348,20 @@ RETURN ONLY JSON:
             }
         }
 
+        const filteredEmails = Array.from(emailSet).filter((e) => {
+            const key = normalizeEmail(e);
+            return key && !selfEmails.has(key);
+        });
+        const filteredPhones = Array.from(phoneSet).filter((p) => {
+            const key = normalizePhone(p);
+            return key && !selfPhones.has(key);
+        });
+
         const profile = {
             handle: handleId,
             links: uniqueClean(Array.from(linkSet)),
-            emails: uniqueClean(Array.from(emailSet)),
-            phones: uniqueClean(Array.from(phoneSet)),
+            emails: uniqueClean(filteredEmails),
+            phones: uniqueClean(filteredPhones),
             addresses: uniqueClean(Array.from(addressesSet)),
             hashtags: uniqueClean(Array.from(hashtagSet)),
             notes: uniqueClean(Array.from(notesSet)),
@@ -312,8 +369,8 @@ RETURN ONLY JSON:
                 analyzedAt: new Date().toISOString(),
                 totalMessages: messages.length,
                 totalContactMessages: contactMessages.length,
-                newestMessageAt: messages[messages.length - 1]?.date || null,
-                oldestMessageAt: messages[0]?.date || null,
+                newestMessageAt: messages.filter(m => m.date).slice(-1)[0]?.date || null,
+                oldestMessageAt: messages.find(m => m.date)?.date || null,
                 llm: {
                     model: MODEL,
                     sampledMessages: sampled.length,
