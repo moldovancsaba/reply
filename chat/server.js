@@ -188,7 +188,7 @@ function serveFeedback(req, res) {
 }
 
 // Create the HTTP server and route requests.
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   // Use a dummy base URL to parse the path relative to the server root.
   const url = new URL(req.url || "/", `http://localhost:${boundPort}`);
 
@@ -258,32 +258,92 @@ const server = http.createServer((req, res) => {
     const limit = parseInt(url.searchParams.get("limit")) || 20;
     const offset = parseInt(url.searchParams.get("offset")) || 0;
 
-    const list = contactStore.contacts
-      .sort((a, b) => {
-        const da = a.lastContacted ? new Date(a.lastContacted) : new Date(0);
-        const db = b.lastContacted ? new Date(b.lastContacted) : new Date(0);
-        return db - da; // Descending
-      })
-      .slice(offset, offset + limit)
-      .map(c => {
-        const hasDraft = c.status === "draft" && c.draft;
+    try {
+      // Query LanceDB directly for contact list (database-level pagination)
+      const { connect } = require('./vector-store.js');
+      const db = await connect();
+      const table = await db.openTable("documents");
+
+      // Get distinct handles with their latest message timestamp
+      // Note: LanceDB doesn't support GROUP BY, so we query and dedupe in JS
+      // but limit data transfer by querying only recent messages
+      const results = await table
+        .search([0])  // Dummy vector for full scan
+        .where(`source IN ('iMessage', 'WhatsApp')`)
+        .limit(10000)  // Get more than needed for deduplication
+        .execute();
+
+      // Group by handle (path) and get latest message time
+      const contactMap = new Map();
+      for (const doc of results) {
+        const handle = doc.path.replace(/^(imessage:\/\/|whatsapp:\/\/|mailto:)/, '');
+        if (!contactMap.has(handle) || doc.timestamp > contactMap.get(handle).timestamp) {
+          contactMap.set(handle, {
+            handle,
+            lastMessageTime: doc.timestamp,
+            path: doc.path,
+            source: doc.source
+          });
+        }
+      }
+
+      // Convert to array and sort by last message time
+      const contacts = Array.from(contactMap.values())
+        .sort((a, b) => b.lastMessageTime - a.lastMessageTime)
+        .slice(offset, offset + limit);
+
+      // Enrich with contact store data
+      const enriched = contacts.map(c => {
+        const contact = contactStore.getByHandle(c.handle);
+        const hasDraft = contact?.status === "draft" && contact?.draft;
         return {
-          id: c.id,
-          displayName: c.displayName,
+          id: contact?.id || c.handle,
+          displayName: contact?.displayName || c.handle,
           handle: c.handle,
-          lastMessage: hasDraft ? `Draft: ${c.draft.slice(0, 50)}...` : "Click to see history",
-          status: c.status || "open", // open, closed, draft
-          draft: c.draft || null,
-          channel: c.handle && c.handle.includes("@") ? "email" : "imessage",
-          lastContacted: c.lastContacted
+          lastMessage: hasDraft ? `Draft: ${contact.draft.slice(0, 50)}...` : "Click to see history",
+          status: contact?.status || "open",
+          draft: contact?.draft || null,
+          channel: c.path.startsWith('whatsapp') ? 'whatsapp' : (c.handle.includes("@") ? "email" : "imessage"),
+          lastContacted: contact?.lastContacted || new Date(c.lastMessageTime).toISOString()
         };
       });
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({
-      contacts: list,
-      hasMore: contactStore.contacts.length > offset + limit,
-      total: contactStore.contacts.length
-    }));
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        contacts: enriched,
+        hasMore: contactMap.size > offset + limit,
+        total: contactMap.size
+      }));
+    } catch (err) {
+      console.error("Error loading conversations from database:", err);
+      // Fallback to contact store if database query fails
+      const list = contactStore.contacts
+        .sort((a, b) => {
+          const da = a.lastContacted ? new Date(a.lastContacted) : new Date(0);
+          const db = b.lastContacted ? new Date(b.lastContacted) : new Date(0);
+          return db - da;
+        })
+        .slice(offset, offset + limit)
+        .map(c => {
+          const hasDraft = c.status === "draft" && c.draft;
+          return {
+            id: c.id,
+            displayName: c.displayName,
+            handle: c.handle,
+            lastMessage: hasDraft ? `Draft: ${c.draft.slice(0, 50)}...` : "Click to see history",
+            status: c.status || "open",
+            draft: c.draft || null,
+            channel: c.handle && c.handle.includes("@") ? "email" : "imessage",
+            lastContacted: c.lastContacted
+          };
+        });
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        contacts: list,
+        hasMore: contactStore.contacts.length > offset + limit,
+        total: contactStore.contacts.length
+      }));
+    }
     return;
   }
   if (url.pathname === "/api/suggest-reply") {
