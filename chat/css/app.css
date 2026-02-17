@@ -1,11 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reply Hub v2</title>
-  <link rel="stylesheet" href="css/app.css">
+  <style>
     :root {
       --primary: #007aff;
       --bg-sidebar: #1e1e1e;
@@ -398,6 +391,7 @@
       background: #e8f5e9;
       color: #2e7d32;
     }
+  </style>
 </head>
 
 <body>
@@ -584,12 +578,3 @@
         <button onclick="saveProfile()"
           style="background:#056; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">Save
           Profile</button>
-      </div>
-    </div>
-  </div>
-
-
-  <!-- Application Modules (ES6) -->
-  <script type="module" src="js/app.js"></script>
-</body>
-</html>
