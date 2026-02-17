@@ -79,20 +79,15 @@ async function syncWhatsApp() {
             if (rows.length === 0) {
                 console.log("WhatsApp up to date.");
 
-                // Query total count from database
-                db.get(`SELECT COUNT(*) as total FROM ZWAMESSAGE WHERE ZMESSAGEDATE IS NOT NULL`, (err, row) => {
-                    const totalCount = row ? row.total : 0;
-
-                    updateStatus({
-                        state: "idle",
-                        lastSync: new Date().toISOString(),
-                        processed: totalCount,
-                        message: "No new messages"
-                    });
-
-                    db.close();
-                    resolve();
+                // Don't set 'processed' - server reads from database
+                updateStatus({
+                    state: "idle",
+                    lastSync: new Date().toISOString(),
+                    message: "No new messages"
                 });
+
+                db.close();
+                resolve();
                 return;
             }
 
@@ -147,20 +142,14 @@ async function syncWhatsApp() {
 
                 console.log(`WhatsApp Sync complete. Last Date: ${maxDate}`);
 
-                // Query total count from database as source of truth
-                db.get(`SELECT COUNT(*) as total FROM ZWAMESSAGE WHERE ZMESSAGEDATE IS NOT NULL`, (err, row) => {
-                    const totalCount = row ? row.total : 0;
-
-                    updateStatus({
-                        state: "idle",
-                        lastSync: new Date().toISOString(),
-                        processed: totalCount,  // Use actual database count
-                        lastDate: maxDate
-                    });
-
-                    db.close();
-                    resolve();
+                // Don't set 'processed' - server reads from database
+                updateStatus({
+                    state: "idle",
+                    lastSync: new Date().toISOString()
                 });
+
+                db.close();
+                resolve();
             } catch (syncErr) {
                 console.error("Vectorization Error:", syncErr);
                 updateStatus({ state: "error", message: syncErr.message });
