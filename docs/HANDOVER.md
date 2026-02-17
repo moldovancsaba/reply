@@ -22,8 +22,8 @@ You will find these files in the repository. Use them for specific needs:
 
 ## Current State (Status Quo)
 *   **Phase:** POC / MVP Factory
-*   **Latest Feature:** Hybrid Search (#172) & Apple Notes Integration (#163).
-*   **Stability:** Recovered, Optimized, and Stable. Fixed the Context Engine `SyntaxError`. Replaced the manual `watch-imessage.js` with a unified, SQLite-based `background-worker.js` running via `launchd`.
+*   **Latest Feature:** Multi-channel {reply}: unified feed across iMessage/WhatsApp/Email, channel-aware composer (defaults to last inbound channel with override dropdown), and a professional KYC pane (profile edit, channels, AI suggestions accept/decline, and Local Intelligence notes with add/edit/delete).
+*   **Stability:** Stable. Background intelligence runs via `background-worker.js` (poll interval configurable in Settings). WhatsApp direct-send uses macOS UI automation and requires Accessibility permission.
 
 ## 🚨 Single Source of Truth
 All tasks, roadmap items, and the Idea Bank are managed **strictly** on the **[GitHub Project Board](https://github.com/users/moldovancsaba/projects/1)**.
@@ -39,13 +39,13 @@ gh auth status # Verify login
 **2. List Items for 'Reply' Project:**
 ```bash
 # Get all items, filter for 'reply' product, exclude 'Done' and 'Backlog'
-gh project item-list 1 --owner moldovancsaba --format json --limit 180 | jq '[.items[] | select(.product == "reply" and (.status == "Ready" or .status == "In Progress"))]'
+gh project item-list 1 --owner moldovancsaba --format json --limit 180 --jq '.items[] | select(.product == "reply" and (.status == "Ready" or .status == "In Progress")) | {title, status, priority, type, url: (.content.url // null)}'
 ```
 
 **3. Identify Top Priorities:**
 ```bash
 # Sort by Priority field (P0, P1, P2)
-gh project item-list 1 --owner moldovancsaba --format json --limit 180 | jq '[.items[] | select(.product == "reply" and (.status == "Ready" or .status == "In Progress"))] | sort_by(.priority)'
+gh project item-list 1 --owner moldovancsaba --format json --limit 180 --jq '.items[] | select(.product == "reply" and (.status == "Ready" or .status == "In Progress")) | {priority, status, title, url: (.content.url // null)}'
 ```
 
 ### ⚠️ Obsolete Local Caches (DO NOT USE)
@@ -65,7 +65,7 @@ Future agents must verify the following to prevent regression:
 3.  **Memory Safety**: Verify that `background-worker.js` maintains its bounded cache limit (currently 1000 IDs).
 
 ### 📍 Current Strategic Focus
-The objective is the **Reply Hub**: A local-first, privacy-focused digital brain that ingests personal data (Contacts, Notes, Messages) and uses a local LLM to triage and provide intelligence.
+The objective is **{reply}**: A local-first, privacy-focused digital brain that ingests personal data (Contacts, Notes, Messages) and uses a local LLM to triage and provide intelligence.
 
 ### ⚠️ Critical Blockers (The 3 "Contact" Bugs)
 Before expanding the roadmap, these tactical issues must be resolved:
@@ -75,14 +75,14 @@ Before expanding the roadmap, these tactical issues must be resolved:
 
 ### 🚀 Roadmap Priorities (Status: Ready/Roadmap)
 1.  **Local Agent Annotation (P0)**:
-    *   **Status**: Prototype exists in `kyc-agent.js` and `reply-engine.js`.
-    *   **Verification**: Code confirms extraction works, but **merging into `contacts.json` is not implemented**. It remains a roadmap priority to wire this into the live data store.
+    *   **Status**: Implemented for structured suggestions + Local Intelligence (accept/decline workflow). The analyzer produces typed suggestions (links/emails/phones/addresses/hashtags/notes) without mutating display name/profession/relationship.
+    *   **Verification**: Use Profile → ✨ Analyze; accept suggestions to enrich channels + Local Intelligence.
 2.  **Apple Notes Bridge (P1)**:
-    *   **Status**: POC script `sync-notes.js` exists.
-    *   **Verification**: Successfully reads via AppleScript, but lacks deeper "knowledge model" alignment and UI integration.
+    *   **Status**: Implemented with delta-sync + UI button ("Sync Notes") and vectorization into LanceDB.
+    *   **Verification**: Use the Web UI "Sync Notes" button; confirm vectors appear via hybrid search queries.
 3.  **Multi-Channel Ingress (P1)**:
-    *   **Status**: Not Implemented.
-    *   **Verification**: No code found for WhatsApp/iMessage normalization beyond basic contact history fetch.
+    *   **Status**: Implemented for unified threads + contact list channel awareness (iMessage/WhatsApp/Email).
+    *   **Verification**: `/api/thread` merges channel histories; sidebar shows per-contact message counts + last channel; composer defaults to last inbound channel.
 
 ## 📂 Key File Index (What is what)
 

@@ -1,16 +1,6 @@
-# Ideabank - Future Sync Sources
+# Idea Bank
 
-## Social Media Messaging
-- [ ] **LinkedIn Messages** - Sync professional conversations from LinkedIn
-- [ ] **Instagram Messages** - Sync Instagram DMs
+**Single Source of Truth (SSOT):** Ideas are tracked on the GitHub Project Board and as issues in `moldovancsaba/mvp-factory-control`.
 
-## Email (Planned)
-- [ ] **IMAP-based Mail Sync** - Replace AppleScript with IMAP protocol (see `mail_imap_future.md`)
-
-## Other Potential Sources
-- [ ] Slack messages
-- [ ] Discord messages
-- [ ] Telegram messages
-- [ ] Twitter/X DMs
-- [ ] Facebook Messenger
-- [ ] Microsoft Teams
+- Board: https://github.com/users/moldovancsaba/projects/1
+- Issues: https://github.com/moldovancsaba/mvp-factory-control/issues

@@ -1,232 +1,279 @@
 /**
- * Reply Hub - Main Application Entry Point
+ * {reply} - Main Application Entry Point
  * Initializes the application and sets up event listeners
- * 
- * @author Reply Hub Team
- * @version 2.0.0
  */
 
 import { loadConversations, selectContact } from './contacts.js';
 import { handleSendMessage } from './messages.js';
-import { renderDashboard } from './dashboard.js';
-import { saveKYCData } from './kyc.js';
+import { getSettings } from './api.js';
+import './dashboard.js';
+import './kyc.js';
+import { applyReplyUiSettings } from './settings.js';
 
 // Global state
 window.currentHandle = null;
 window.conversations = [];
 
-/**
- * Initialize the application
- * Sets up event listeners and loads initial data
- */
+// Speech recognition state
+let speechRecognizer = null;
+let speechIsRecording = false;
+let speechBaseText = '';
+let speechFinalText = '';
+
 async function init() {
-    console.log('🚀 Reply Hub initializing...');
+  console.log('🚀 {reply} initializing...');
 
-    // Set up event listeners
-    setupEventListeners();
+  setupEventListeners();
 
-    // Load contacts first
-    await loadConversations();
+  try {
+    const settings = await getSettings();
+    applyReplyUiSettings(settings);
+  } catch (e) {
+    console.warn('Settings not loaded:', e?.message || e);
+  }
 
-    // Show dashboard by default (THIS IS THE KEY FIX!)
-    await selectContact(null);
+  await loadConversations();
+  await selectContact(null); // dashboard
 
-    console.log('✅ Reply Hub ready!');
+  console.log('✅ {reply} ready!');
 }
 
-/**
- * Set up all event listeners
- */
 function setupEventListeners() {
-    // Send message button
-    const btnSend = document.getElementById('btn-send');
-    if (btnSend) {
-        btnSend.onclick = handleSendMessage;
+  const btnSend = document.getElementById('btn-send');
+  if (btnSend) btnSend.onclick = handleSendMessage;
+
+  const chatInput = document.getElementById('chat-input');
+  if (chatInput) {
+    const autoResize = () => {
+      chatInput.style.height = 'auto';
+      const next = Math.min(chatInput.scrollHeight, 150);
+      chatInput.style.height = `${next}px`;
+      chatInput.style.overflowY = chatInput.scrollHeight > 150 ? 'auto' : 'hidden';
+    };
+
+    chatInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage();
+      }
+    });
+
+    chatInput.addEventListener('input', autoResize);
+    // Initial sizing
+    autoResize();
+  }
+
+  async function updateStatus(handle, status) {
+    if (!handle || !status) return;
+    try {
+      await fetch('/api/update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handle, status }),
+      });
+    } catch (error) {
+      console.error('Failed to update status:', error);
     }
+  }
 
-    // Chat input - send on Enter
-    const chatInput = document.getElementById('chat-input');
-    if (chatInput) {
-        chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSendMessage();
-            }
-        });
-    }
+  const statusSelect = document.getElementById('status-select');
+  if (statusSelect) {
+    statusSelect.addEventListener('change', (e) => updateStatus(window.currentHandle, e.target.value));
+  }
 
-    // Save KYC button
-    const btnSaveKYC = document.getElementById('btn-save-kyc');
-    if (btnSaveKYC) {
-        btnSaveKYC.onclick = saveKYCData;
-    }
+  // Inline handler used in chat/index.html
+  window.updateManualStatus = () => {
+    const sel = document.getElementById('status-select');
+    if (!sel) return;
+    return updateStatus(window.currentHandle, sel.value);
+  };
 
-    // Search contacts
-    const searchInput = document.getElementById('search-contacts');
-    if (searchInput) {
-        searchInput.addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase();
-            const items = document.querySelectorAll('.sidebar-item');
+  const btnSuggest = document.getElementById('btn-suggest');
+  if (btnSuggest) {
+    btnSuggest.onclick = async () => {
+      if (!chatInput) return;
 
-            items.forEach(item => {
-                const name = item.querySelector('.contact-name')?.textContent.toLowerCase() || '';
-                const handle = item.dataset.handle?.toLowerCase() || '';
+      const handle = window.currentHandle;
+      const originalText = btnSuggest.textContent;
 
-                if (name.includes(query) || handle.includes(query)) {
-                    item.style.display = 'flex';
-                } else {
-                    item.style.display = 'none';
-                }
+      try {
+        btnSuggest.disabled = true;
+        btnSuggest.textContent = '⏳ ...';
+
+        let suggestion = '';
+        if (handle) {
+          try {
+            const res = await fetch('/api/suggest', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ handle }),
             });
-        });
-    }
+            const data = await res.json();
+            suggestion = data?.suggestion || '';
+          } catch (e) {
+            console.warn('API suggest failed, using fallback', e);
+          }
+        }
 
-    // Status select
-    const statusSelect = document.getElementById('status-select');
-    if (statusSelect) {
-        statusSelect.addEventListener('change', async (e) => {
-            const status = e.target.value;
-            const handle = window.currentHandle;
+        if (!suggestion) {
+          const greetings = [
+            'Hi there, just checking in!',
+            'Hello! How can I help?',
+            'Hey, do you have a minute?',
+            'Just saw your message, thanks!',
+          ];
+          suggestion = greetings[Math.floor(Math.random() * greetings.length)];
+        }
 
-            if (!handle) return;
+        chatInput.value = suggestion;
+        try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
+      } finally {
+        btnSuggest.disabled = false;
+        btnSuggest.textContent = originalText;
+      }
+    };
+  }
 
-            try {
-                const res = await fetch('/api/status', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ handle, status })
-                });
+  const channelSelect = document.getElementById('channel-select');
+  if (channelSelect) {
+    channelSelect.addEventListener('change', (e) => {
+      const v = e.target?.value;
+      window.currentChannel = v;
+      if (typeof window.setSelectedChannel === 'function') window.setSelectedChannel(v);
+    });
+    // Initialize button label
+    if (typeof window.setSelectedChannel === 'function') window.setSelectedChannel(channelSelect.value);
+  }
 
-                if (res.ok) {
-                    console.log(`Status updated to ${status} for ${handle}`);
-
-                    // Update sidebar item
-                    const item = document.querySelector(`[data-handle="${handle}"]`);
-                    if (item) {
-                        const dot = item.querySelector('.status-dot');
-                        if (dot) {
-                            dot.className = 'status-dot ' + status;
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Failed to update status:', error);
-            }
-        });
-    }
-
-    // Suggest button - Guaranteed Output
-    const btnSuggest = document.getElementById('btn-suggest');
-    const chatInput = document.getElementById('chat-input'); // Ensure ref
-
-    if (btnSuggest) {
-        btnSuggest.onclick = async () => {
-            const handle = window.currentHandle;
-            // Provide suggestion even without handle for demo
-
-            try {
-                btnSuggest.disabled = true;
-                const originalText = btnSuggest.textContent;
-                btnSuggest.textContent = '⏳ ...';
-
-                // Try API first
-                let suggestion = "";
-                if (handle) {
-                    try {
-                        const res = await fetch('/api/suggest', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ handle })
-                        });
-                        const data = await res.json();
-                        suggestion = data.suggestion;
-                    } catch (e) {
-                        console.warn('API suggest failed, using fallback');
-                    }
-                }
-
-                // Fallback / Default Content if API returns nothing or fails
-                if (!suggestion) {
-                    const greetings = ["Hi there, just checking in!", "Hello! How can I help?", "Hey, do you have a minute?", "Just saw your message, thanks!"];
-                    suggestion = greetings[Math.floor(Math.random() * greetings.length)];
-                }
-
-                chatInput.value = suggestion;
-
-                btnSuggest.disabled = false;
-                btnSuggest.textContent = originalText;
-            } catch (error) {
-                console.error('Failed to get suggestion:', error);
-                chatInput.value = "Error generating draft, but here is a placeholder.";
-                btnSuggest.disabled = false;
-                btnSuggest.textContent = '💡 Suggest';
-            }
-        };
-    }
-
-    // Mic Button - Simulation
-    const btnMic = document.getElementById('btn-mic');
-    if (btnMic) {
-        btnMic.onclick = () => {
-            if (btnMic.classList.contains('recording')) {
-                btnMic.classList.remove('recording');
-                btnMic.textContent = '🎤 Mic';
-                btnMic.style.color = '';
-                btnMic.style.background = '';
-                chatInput.value += " [Voice Transcription Completed]";
-            } else {
-                btnMic.classList.add('recording');
-                btnMic.textContent = '🔴 Rec';
-                btnMic.style.color = 'white';
-                btnMic.style.background = 'var(--danger)';
-                // Simulate listening
-                setTimeout(() => {
-                    if (btnMic.classList.contains('recording')) {
-                        btnMic.click(); // Stop recording automatically for demo
-                    }
-                }, 3000);
-            }
-        };
-    }
-
-    // Magic Button - Instant Polish
-    const btnMagic = document.getElementById('btn-magic');
-    if (btnMagic) {
-        btnMagic.onclick = () => {
-            const val = chatInput.value;
-            if (!val) {
-                alert("Please type something to polish first!");
-                return;
-            }
-
-            // Simple deterministic "polish" for demo (Capitalize and add period)
-            // In future this would call AI
-            let polished = val.trim();
-            polished = polished.charAt(0).toUpperCase() + polished.slice(1);
-            if (!polished.endsWith('.') && !polished.endsWith('!') && !polished.endsWith('?')) {
-                polished += '.';
-            }
-
-            // Add professional padding if short
-            if (polished.length < 10 && !polished.includes("Thanks")) {
-                polished = "Hi, " + polished + " Thanks.";
-            }
-
-            chatInput.value = polished;
-
-            // Visual feedback
-            const originalText = btnMagic.textContent;
-            btnMagic.textContent = '✨ Done';
-            setTimeout(() => btnMagic.textContent = originalText, 1000);
-        };
-    }
-
-    // Start the application when DOM is ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+  function setMicUiRecording(btn, recording) {
+    if (!btn) return;
+    if (recording) {
+      btn.classList.add('recording');
+      btn.textContent = '🔴 Rec';
+      btn.style.color = 'white';
+      btn.style.background = 'var(--danger)';
     } else {
-        init();
+      btn.classList.remove('recording');
+      btn.textContent = '🎤 Mic';
+      btn.style.color = '';
+      btn.style.background = '';
     }
+  }
 
-    // Export for debugging
-    window.init = init;
+  function ensureSpeechRecognizer() {
+    if (speechRecognizer) return speechRecognizer;
+    const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+    if (!SpeechRecognition) return null;
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || 'en-US';
+
+    recognition.onresult = (event) => {
+      if (!chatInput) return;
+
+      let interimText = '';
+      let newFinalText = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0]?.transcript || '';
+        if (event.results[i].isFinal) newFinalText += transcript;
+        else interimText += transcript;
+      }
+
+      if (newFinalText) speechFinalText = `${speechFinalText} ${newFinalText}`.trim();
+
+      chatInput.value = [speechBaseText, speechFinalText, interimText]
+        .filter(Boolean)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trimStart();
+      try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
+    };
+
+    recognition.onerror = (event) => {
+      console.warn('Speech recognition error:', event?.error || event);
+      speechIsRecording = false;
+      const btnMic = document.getElementById('btn-mic');
+      setMicUiRecording(btnMic, false);
+    };
+
+    recognition.onend = () => {
+      speechIsRecording = false;
+      const btnMic = document.getElementById('btn-mic');
+      setMicUiRecording(btnMic, false);
+    };
+
+    speechRecognizer = recognition;
+    return recognition;
+  }
+
+  const btnMic = document.getElementById('btn-mic');
+  if (btnMic) {
+    btnMic.onclick = () => {
+      if (!chatInput) return;
+
+      const recognition = ensureSpeechRecognizer();
+      if (!recognition) {
+        const val = chatInput.value.trim();
+        chatInput.value = val ? `${val} (voice input not supported in this browser)` : '(voice input not supported in this browser)';
+        try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
+        return;
+      }
+
+      if (speechIsRecording) {
+        try {
+          recognition.stop();
+        } catch { }
+        speechIsRecording = false;
+        setMicUiRecording(btnMic, false);
+        return;
+      }
+
+      speechBaseText = chatInput.value.trim();
+      speechFinalText = '';
+      speechIsRecording = true;
+      setMicUiRecording(btnMic, true);
+
+      try {
+        recognition.start();
+      } catch (e) {
+        console.warn('Speech recognition start failed:', e);
+        speechIsRecording = false;
+        setMicUiRecording(btnMic, false);
+      }
+    };
+  }
+
+  const btnMagic = document.getElementById('btn-magic');
+  if (btnMagic) {
+    btnMagic.onclick = () => {
+      if (!chatInput) return;
+      const val = chatInput.value;
+      if (!val) {
+        alert('Please type something to polish first!');
+        return;
+      }
+
+      let polished = val.trim();
+      polished = polished.charAt(0).toUpperCase() + polished.slice(1);
+      if (!polished.endsWith('.') && !polished.endsWith('!') && !polished.endsWith('?')) polished += '.';
+      if (polished.length < 10 && !polished.includes('Thanks')) polished = `Hi, ${polished} Thanks.`;
+
+      chatInput.value = polished;
+      try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
+
+      const originalText = btnMagic.textContent;
+      btnMagic.textContent = '✨ Done';
+      setTimeout(() => (btnMagic.textContent = originalText), 1000);
+    };
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+
+window.init = init;

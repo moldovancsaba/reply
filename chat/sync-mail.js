@@ -12,6 +12,24 @@ function updateStatus(status) {
     statusManager.update('mail', status);
 }
 
+function hasGmailConfig() {
+    try {
+        const { readSettings, isGmailConfigured } = require('./settings-store.js');
+        return isGmailConfigured(readSettings());
+    } catch {
+        return false;
+    }
+}
+
+function hasImapConfig() {
+    try {
+        const { readSettings, isImapConfigured } = require('./settings-store.js');
+        return isImapConfigured(readSettings());
+    } catch {
+        return !!(process.env.REPLY_IMAP_HOST && process.env.REPLY_IMAP_USER && process.env.REPLY_IMAP_PASS);
+    }
+}
+
 function runAppleScript(script) {
     return new Promise((resolve, reject) => {
         const escapedScript = script.replace(/'/g, "'\\''");
@@ -26,11 +44,30 @@ function runAppleScript(script) {
 }
 
 /**
- * Enhanced sync script for Reply Hub v2.
+ * Enhanced sync script for {reply}.
  * Extracts: Date, Subject, Sender, Receiver, Content from Sent and Inbox.
  * @returns {Promise<number>} Number of synced emails
  */
 async function syncMail() {
+    // Prefer Gmail OAuth connector if configured.
+    if (hasGmailConfig()) {
+        const { syncGmail } = require('./gmail-connector.js');
+        try {
+            const { withDefaults, readSettings } = require('./settings-store.js');
+            const settings = withDefaults(readSettings());
+            const maxMessages = Math.max(1, Math.min(Number(settings?.worker?.quantities?.gmail) || 100, 500));
+            return await syncGmail({ maxMessages });
+        } catch {
+            return await syncGmail({ maxMessages: 100 });
+        }
+    }
+
+    // Prefer IMAP connector (supports Gmail via IMAP/App Password) when configured.
+    if (hasImapConfig()) {
+        const { syncImap } = require('./sync-imap.js');
+        return await syncImap();
+    }
+
     console.log("Synchronizing Apple Mail...");
     updateStatus({ state: "running", message: "Fetching emails from Mail.app..." });
 
@@ -85,7 +122,7 @@ async function syncMail() {
             const cleanHandle = handle.toLowerCase().trim();
 
             // 1. Update Contact Store
-            contactStore.updateLastContacted(cleanHandle, date);
+            contactStore.updateLastContacted(cleanHandle, date, { channel: 'email' });
 
             // 2. Prepare Vector Document
             docs.push({
@@ -128,3 +165,5 @@ if (require.main === module) {
 }
 
 module.exports = { syncMail };
+module.exports.isImapConfigured = hasImapConfig;
+module.exports.isGmailConfigured = hasGmailConfig;
