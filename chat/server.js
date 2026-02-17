@@ -509,7 +509,8 @@ const server = http.createServer((req, res) => {
       if (fs.existsSync(notesMetadata)) {
         try {
           const data = JSON.parse(fs.readFileSync(notesMetadata, "utf8"));
-          return data.totalNotes || 0;
+          // notes-metadata.json is a cache object with note IDs as keys
+          return Object.keys(data).length;
         } catch (e) {
           return 0;
         }
