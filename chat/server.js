@@ -190,6 +190,9 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname === "/api/thread") {
     const handle = url.searchParams.get("handle");
+    const limit = parseInt(url.searchParams.get("limit")) || 30;
+    const offset = parseInt(url.searchParams.get("offset")) || 0;
+
     if (!handle) {
       res.writeHead(400);
       res.end("Missing handle");
@@ -209,8 +212,8 @@ const server = http.createServer((req, res) => {
       // Flatten all docs into one list
       const allDocs = results.flat();
 
-      // Convert vector docs to message history items
-      const messages = allDocs.map(d => {
+      // Convert vector docs to message history items and sort by date
+      const allMessages = allDocs.map(d => {
         // Extract direction/role from text prefix [Date] Me/Handle: ...
         const isFromMe = d.text.includes("] Me:");
         return {
@@ -218,10 +221,16 @@ const server = http.createServer((req, res) => {
           text: d.text.split(": ").slice(1).join(": "), // Strip the prefix
           date: d.text.match(/\[(.*?)\]/)?.[1] || "Unknown"
         };
-      });
+      }).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      const pagedMessages = allMessages.slice(offset, offset + limit);
 
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ messages }));
+      res.end(JSON.stringify({
+        messages: pagedMessages,
+        hasMore: allMessages.length > offset + limit,
+        total: allMessages.length
+      }));
     }).catch(err => {
       res.writeHead(500);
       res.end(JSON.stringify({ error: err.message }));
@@ -242,12 +251,16 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (url.pathname === "/api/conversations") {
+    const limit = parseInt(url.searchParams.get("limit")) || 20;
+    const offset = parseInt(url.searchParams.get("offset")) || 0;
+
     const list = contactStore.contacts
       .sort((a, b) => {
         const da = a.lastContacted ? new Date(a.lastContacted) : new Date(0);
         const db = b.lastContacted ? new Date(b.lastContacted) : new Date(0);
         return db - da; // Descending
       })
+      .slice(offset, offset + limit)
       .map(c => {
         const hasDraft = c.status === "draft" && c.draft;
         return {
@@ -262,7 +275,11 @@ const server = http.createServer((req, res) => {
         };
       });
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(list));
+    res.end(JSON.stringify({
+      contacts: list,
+      hasMore: contactStore.contacts.length > offset + limit,
+      total: contactStore.contacts.length
+    }));
     return;
   }
   if (url.pathname === "/api/suggest-reply") {

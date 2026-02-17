@@ -75,20 +75,25 @@ class ContactStore {
                     }
                 });
                 this._contacts = Object.values(merged);
-                // Also save if we found duplicates to clean the file
+                // Also save if we found duplicates to clean the file (use _contacts to avoid getter loop)
                 if (raw.length > this._contacts.length) {
+                    console.log(`Deduplicated contacts: ${raw.length} -> ${this._contacts.length}`);
                     this.save();
                 }
             }
         } catch (err) {
             console.error("Error loading contacts:", err);
-            this._contacts = [];
+            // DO NOT wipe _contacts if load fails to prevent wiping the file on next save
+            if (!this._contacts || this._contacts.length === 0) {
+                this._contacts = [];
+            }
         }
     }
 
     save() {
         try {
-            fs.writeFileSync(DATA_FILE, JSON.stringify(this.contacts, null, 2));
+            // Use internal property to avoid triggering load() recursively
+            fs.writeFileSync(DATA_FILE, JSON.stringify(this._contacts, null, 2));
         } catch (err) {
             console.error("Error saving contacts:", err);
         }
