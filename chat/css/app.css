@@ -125,7 +125,7 @@
 
       .chat-header {
         padding: 1rem 1.5rem;
-        background: white;
+        background: var(--bg-sidebar);
         border-bottom: 1px solid var(--border);
         display: flex;
         justify-content: space-between;
@@ -174,7 +174,7 @@
 
       .message-bubble.contact {
         align-self: flex-start;
-        background: white;
+        background: var(--bg-card);
         color: var(--text-main);
         border: 1px solid var(--border);
         border-bottom-left-radius: 4px;
@@ -182,16 +182,17 @@
 
       .input-area {
         padding: 1.5rem;
-        background: white;
+        background: var(--bg-sidebar);
         border-top: 1px solid var(--border);
       }
 
       .input-wrapper {
         display: flex;
         gap: 10px;
-        background: #f0f0f2;
+        background: var(--bg-input);
         padding: 8px;
         border-radius: 24px;
+        border: 1px solid var(--border);
       }
 
       textarea#chat-input {
@@ -216,7 +217,7 @@
       }
 
       .kyc-card {
-        background: #f9f9fb;
+        background: var(--bg-card);
         border-radius: 12px;
         padding: 1rem;
         margin-bottom: 1rem;
@@ -258,7 +259,7 @@
       }
 
       .modal-content {
-        background: white;
+        background: var(--bg-card);
         width: 400px;
         padding: 2rem;
         border-radius: 18px;
@@ -311,7 +312,7 @@
       }
 
       .health-card {
-        background: white;
+        background: var(--bg-card);
         border-radius: 16px;
         padding: 1.5rem;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
