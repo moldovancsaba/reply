@@ -161,4 +161,4 @@ async function getSnippets(identifier, limit = 5) {
         .slice(0, limit);
 }
 
-module.exports = { addDocuments, search, getHistory, getSnippets };
+module.exports = { addDocuments, search, getHistory, getSnippets, connect };
