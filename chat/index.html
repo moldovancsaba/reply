@@ -1296,6 +1296,7 @@
       if (!text || !currentHandle) return;
 
       const isEmail = currentHandle && currentHandle.includes("@");
+      const endpoint = isEmail ? "/api/send-email" : "/api/send-imessage";
       try {
         const res = await fetch(endpoint, {
           method: "POST",
