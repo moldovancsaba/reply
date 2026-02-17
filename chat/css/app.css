@@ -265,6 +265,10 @@
         resize: none;
         font-size: 0.95rem;
         max-height: 150px;
+        color: var(--text-primary);
+        /* Fix: Ensure white text */
+        caret-color: var(--primary);
+        /* Fix: Blue cursor */
       }
 
       /* KYC Pane */
