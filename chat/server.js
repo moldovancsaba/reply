@@ -1291,16 +1291,26 @@ on run argv
   delay 0.6
 
   tell application "System Events"
-    tell process appName
+    set p to process appName
+    tell p
       set frontmost to true
       delay 0.25
-      set p to it
 
       -- Close any popovers/modals that might steal focus
       key code 53 -- escape
 	      delay 0.15
 	
-	      -- Try to enter search/new chat using shortcuts, but NEVER type the target unless focus is in the top area.
+	      -- Wait for a WhatsApp window to exist (activation can be slow)
+	      repeat 30 times
+	        if (count of windows) > 0 then exit repeat
+	        delay 0.2
+	      end repeat
+	      if (count of windows) = 0 then error "No WhatsApp window available."
+
+	      set w to window 1
+
+	      -- Try to enter search/new chat using shortcuts, then fall back to focusing the top text field directly.
+	      -- We NEVER type the target unless focus is in the top area.
 	      set focusedOk to my focusLooksAboveY(p, 260)
 	      if focusedOk is false then
 	        keystroke "k" using {command down}
@@ -1317,7 +1327,18 @@ on run argv
 	        delay 0.25
 	        set focusedOk to my focusLooksAboveY(p, 260)
 	      end if
-	      if focusedOk is false then error "Failed to focus WhatsApp search. Focus=" & my focusDebug(p)
+	      if focusedOk is false then
+	        set focusedOk to my focusTopTextField(w, 260)
+	      end if
+	      -- Focus can settle asynchronously; re-check a few times before failing.
+	      repeat 10 times
+	        if my focusLooksAboveY(p, 260) then
+	          set focusedOk to true
+	          exit repeat
+	        end if
+	        delay 0.08
+	      end repeat
+	      if focusedOk is false then error "Failed to focus WhatsApp search. Check=" & my focusCheck(p, 260)
 
       -- Clear any prior search text
       keystroke "a" using {command down}
@@ -1328,27 +1349,53 @@ on run argv
       -- Type the recipient and only press enter if we're still in the search area (prevents sending the number as a message).
       if my focusLooksAboveY(p, 260) is false then error "Search focus lost; aborting to avoid sending the recipient. Focus=" & my focusDebug(p)
       keystroke target
-      delay 0.25
+      delay 0.35
       if my focusLooksAboveY(p, 260) is false then error "Search focus lost; aborting to avoid sending the recipient. Focus=" & my focusDebug(p)
-	      key code 36 -- enter to open the chat
-	      delay 0.7
+	      key code 36 -- enter to open the chat (often opens first match)
+	      delay 0.6
 	
+	      -- Some WhatsApp builds keep focus in the search field after Enter; try selecting the first result.
+	      if my focusLooksAboveY(p, 260) then
+	        key code 125 -- down arrow
+	        delay 0.12
+	        key code 36 -- enter
+	        delay 0.7
+	      end if
+		
 	      -- Ensure the message composer is focused before pasting
-	      set composerOk to my focusLooksBelowY(p, 360)
+	      set composerOk to false
+	      try
+	        -- Prefer a deterministic click in the composer area (more reliable than tabbing across unknown UI trees).
+	        repeat with offVal in {90, 140, 190}
+	          set offNum to contents of offVal
+	          if my clickWindowBottom(w, offNum) then
+	            delay 0.18
+	            if my focusLooksAboveY(p, 260) is false then
+	              set composerOk to true
+	              exit repeat
+	            end if
+	          end if
+	        end repeat
+	      end try
+
 	      if composerOk is false then
-	        repeat 8 times
+	        -- Fallback: tab around a bit.
+	        repeat 12 times
 	          key code 48 -- tab
 	          delay 0.12
-	          set composerOk to my focusLooksBelowY(p, 360)
-	          if composerOk is true then exit repeat
+	          if my focusLooksAboveY(p, 260) is false then
+	            set composerOk to true
+	            exit repeat
+	          end if
 	        end repeat
 	      end if
-	      if composerOk is false then error "Failed to focus WhatsApp message composer. Focus=" & my focusDebug(p)
 
-      if dryRun is true then return "dry-run"
-      keystroke "v" using {command down}
-      delay 0.15
-      key code 36 -- send
+	      if composerOk is false then error "Failed to focus WhatsApp message composer. Check=" & my focusCheck(p, 360)
+
+	      if dryRun is true then return "dry-run"
+	      keystroke "v" using {command down}
+	      delay 0.15
+	      key code 36 -- send
     end tell
   end tell
 
@@ -1368,15 +1415,22 @@ using terms from application "System Events"
 on focusLooksAboveY(p, maxY)
   try
     set el to value of attribute "AXFocusedUIElement" of p
-    set r to ""
+    set y to missing value
     try
-      set r to value of attribute "AXRole" of el
+      set fr to value of attribute "AXFrame" of el
+      set y to item 2 of fr
     end try
-    if r is not "AXTextField" and r is not "AXSearchField" and r is not "AXTextArea" then return false
-
-    set fr to value of attribute "AXFrame" of el
-    set y to item 2 of fr
-    if y is not missing value and y < maxY then return true
+    if y is missing value then
+      try
+        set pos to value of attribute "AXPosition" of el
+        set y to item 2 of pos
+      end try
+    end if
+    set yNum to my numFrom(y)
+    set maxNum to my numFrom(maxY)
+    if yNum is not missing value and maxNum is not missing value then
+      if yNum < maxNum then return true
+    end if
   end try
   return false
 end focusLooksAboveY
@@ -1384,36 +1438,203 @@ end focusLooksAboveY
 on focusLooksBelowY(p, minY)
   try
     set el to value of attribute "AXFocusedUIElement" of p
-    set r to ""
+    set y to missing value
     try
-      set r to value of attribute "AXRole" of el
+      set fr to value of attribute "AXFrame" of el
+      set y to item 2 of fr
     end try
-    if r is not "AXTextArea" and r is not "AXTextField" then return false
-
-    set fr to value of attribute "AXFrame" of el
-    set y to item 2 of fr
-    if y is not missing value and y > minY then return true
+    if y is missing value then
+      try
+        set pos to value of attribute "AXPosition" of el
+        set y to item 2 of pos
+      end try
+    end if
+    set yNum to my numFrom(y)
+    set minNum to my numFrom(minY)
+    if yNum is not missing value and minNum is not missing value then
+      if yNum > minNum then return true
+    end if
   end try
   return false
 end focusLooksBelowY
 
+on focusBottomTextArea(w, minY)
+  set best to missing value
+  set bestY to -1
+
+  try
+    set ta to every text area of w
+    repeat with el in ta
+      set y to my yOf(el)
+      if y is not missing value and y > (minY as real) and y > bestY then
+        set bestY to y
+        set best to el
+      end if
+    end repeat
+  end try
+
+  if best is missing value then
+    try
+      set tf to every text field of w
+      repeat with el in tf
+        set y to my yOf(el)
+        if y is not missing value and y > (minY as real) and y > bestY then
+          set bestY to y
+          set best to el
+        end if
+      end repeat
+    end try
+  end if
+
+  if best is missing value then return false
+  return my tryFocus(best)
+end focusBottomTextArea
+
+on focusTopTextField(w, maxY)
+  try
+    set tf to every text field of w
+    repeat with el in tf
+      set y to my yOf(el)
+      if y is not missing value and y < (maxY as real) then
+        if my tryFocus(el) then return true
+      end if
+    end repeat
+  end try
+
+  -- Fallback: scan the entire window tree for any text-like element near the top.
+  try
+    set els to entire contents of w
+    set best to missing value
+    set bestY to 999999
+    repeat with el in els
+      try
+        set r to (value of attribute "AXRole" of el) as string
+        if r is "AXTextField" or r is "AXSearchField" or r is "AXTextArea" then
+          set y to my yOf(el)
+          if y is not missing value and y < (maxY as real) and y < bestY then
+            set bestY to y
+            set best to el
+          end if
+        end if
+      end try
+    end repeat
+    if best is not missing value then
+      if my tryFocus(best) then return true
+    end if
+  end try
+
+  return false
+end focusTopTextField
+
+on yOf(el)
+  set y to missing value
+  try
+    set fr to value of attribute "AXFrame" of el
+    set y to item 2 of fr
+  end try
+  if y is missing value then
+    try
+      set pos to value of attribute "AXPosition" of el
+      set y to item 2 of pos
+    end try
+  end if
+  return my numFrom(y)
+end yOf
+
+on numFrom(v)
+  if v is missing value then return missing value
+  try
+    return v as real
+  end try
+  try
+    return (v as string) as real
+  end try
+  return missing value
+end numFrom
+
+on tryFocus(el)
+  try
+    set focused of el to true
+    delay 0.08
+    return true
+  on error
+    try
+      click el
+      delay 0.08
+      return true
+    on error
+      return false
+    end try
+  end try
+end tryFocus
+
+on clickWindowBottom(w, offsetFromBottom)
+  try
+    set wpos to position of w
+    set wsz to size of w
+    set wx to item 1 of wpos
+    set wy to item 2 of wpos
+    set ww to item 1 of wsz
+    set wh to item 2 of wsz
+    set cx to (wx + (ww / 2)) as integer
+    set cy to (wy + wh - (offsetFromBottom as integer)) as integer
+    click at {cx, cy}
+    return true
+  on error
+    try
+      set fr to value of attribute "AXFrame" of w
+      set wx to item 1 of fr
+      set wy to item 2 of fr
+      set ww to item 3 of fr
+      set wh to item 4 of fr
+      set cx to (wx + (ww / 2)) as integer
+      set cy to (wy + wh - (offsetFromBottom as integer)) as integer
+      click at {cx, cy}
+      return true
+    on error
+      return false
+    end try
+  end try
+end clickWindowBottom
+
 on focusDebug(p)
   try
     set el to value of attribute "AXFocusedUIElement" of p
+    if el is missing value then return "none"
     set r to ""
     try
-      set r to value of attribute "AXRole" of el
+      set r to (value of attribute "AXRole" of el) as string
     end try
     set fr to {}
     try
       set fr to value of attribute "AXFrame" of el
     end try
+    if r is "" then set r to "unknown-role"
     if fr is {} then return r
     return r & " y=" & (item 2 of fr as string)
   on error
     return "unknown"
   end try
 end focusDebug
+
+on focusCheck(p, thresholdY)
+  try
+    set el to value of attribute "AXFocusedUIElement" of p
+    if el is missing value then return "none"
+    set r to ""
+    try
+      set r to (value of attribute "AXRole" of el) as string
+    end try
+    set y to missing value
+    try
+      set fr to value of attribute "AXFrame" of el
+      set y to item 2 of fr
+    end try
+    return r & " y=" & (y as string) & " thr=" & (thresholdY as string) & " above=" & ((my focusLooksAboveY(p, thresholdY)) as string) & " below=" & ((my focusLooksBelowY(p, thresholdY)) as string)
+  on error errMsg
+    return "err:" & errMsg
+  end try
+end focusCheck
 
 	end using terms from
 		    `;

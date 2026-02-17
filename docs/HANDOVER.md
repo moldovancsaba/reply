@@ -22,8 +22,9 @@ You will find these files in the repository. Use them for specific needs:
 
 ## Current State (Status Quo)
 *   **Phase:** POC / MVP Factory
-*   **Latest Feature:** Multi-channel {reply}: unified feed across iMessage/WhatsApp/Email, channel-aware composer (defaults to last inbound channel with override dropdown), and a professional KYC pane (profile edit, channels, AI suggestions accept/decline, and Local Intelligence notes with add/edit/delete).
-*   **Stability:** Stable. Background intelligence runs via `background-worker.js` (poll interval configurable in Settings). WhatsApp direct-send uses macOS UI automation and requires Accessibility permission.
+*   **Latest Feature (Shipped):** Reply Hub unified feed v1 + KYC pane + mic dictation + channel-aware send (see SSOT issues #179–#184 in `moldovancsaba/mvp-factory-control`).
+*   **In Review:** Recent enhancements are tracked as SSOT issues #185–#189 (Idea Bank + Review columns).
+*   **Stability:** Stable. Background intelligence runs via `background-worker.js` (poll interval configurable in Settings).
 
 ## 🚨 Single Source of Truth
 All tasks, roadmap items, and the Idea Bank are managed **strictly** on the **GitHub Project Board** and as issues in the SSOT repo:
@@ -71,22 +72,13 @@ Future agents must verify the following to prevent regression:
 ### 📍 Current Strategic Focus
 The objective is **{reply}**: A local-first, privacy-focused digital brain that ingests personal data (Contacts, Notes, Messages) and uses a local LLM to triage and provide intelligence.
 
-### ⚠️ Critical Blockers (The 3 "Contact" Bugs)
-Before expanding the roadmap, these tactical issues must be resolved:
-1.  **UI Ghosting**: Contacts exist in `contacts.json` but do not render in the UI.
-2.  **Sync Gap**: Only 51/100+ contacts are being synced (AppleScript or limit issue).
-3.  **Aggressive Deduplication**: Potential data loss in `contact-store.js` where mismatched merge logic deletes data.
+### ✅ Work Tracking (SSOT)
+All roadmap items, blockers, and ideas are tracked only on the board as issues in the SSOT repo:
 
-### 🚀 Roadmap Priorities (Status: Ready/Roadmap)
-1.  **Local Agent Annotation (P0)**:
-    *   **Status**: Implemented for structured suggestions + Local Intelligence (accept/decline workflow). The analyzer produces typed suggestions (links/emails/phones/addresses/hashtags/notes) without mutating display name/profession/relationship.
-    *   **Verification**: Use Profile → ✨ Analyze; accept suggestions to enrich channels + Local Intelligence.
-2.  **Apple Notes Bridge (P1)**:
-    *   **Status**: Implemented with delta-sync + UI button ("Sync Notes") and vectorization into LanceDB.
-    *   **Verification**: Use the Web UI "Sync Notes" button; confirm vectors appear via hybrid search queries.
-3.  **Multi-Channel Ingress (P1)**:
-    *   **Status**: Implemented for unified threads + contact list channel awareness (iMessage/WhatsApp/Email).
-    *   **Verification**: `/api/thread` merges channel histories; sidebar shows per-contact message counts + last channel; composer defaults to last inbound channel.
+- Board: https://github.com/users/moldovancsaba/projects/1
+- SSOT issues repo: `moldovancsaba/mvp-factory-control`
+
+Do not maintain task lists or “current blockers” in this file.
 
 ## 📂 Key File Index (What is what)
 
@@ -96,3 +88,7 @@ Before expanding the roadmap, these tactical issues must be resolved:
 *   **LanceDB:** We use version 0.26.x. The API for hybrid search is specific (`.fullTextSearch()`). Check `verify-hybrid-search.js` for reference.
 *   **Startup Failures:** If the server fails to start with a `SyntaxError` after a merge, check for duplicate `require` or constant declarations in `context-engine.js` or `reply-engine.js`.
 *   **Background Processes:** `background-worker.js` handles polling. Use `launchctl list | grep com.reply.worker` to verify it's active.
+*   **Auto KYC Suggestions:** Background worker can periodically run full-history “Profile → Analyze” and stage typed suggestions; configure with `REPLY_KYC_AUTO_INTERVAL_HOURS` (default: 24).
+
+## Follow-ups (Non-SSOT notes)
+*   **WhatsApp send automation debug:** Keep current detailed focus/debug strings in send errors temporarily; revisit to gate behind a debug flag or remove once stable.
