@@ -252,6 +252,8 @@
         border: 1px solid #333;
         align-items: flex-end;
         /* Align to bottom for multiline */
+        flex: 1;
+        /* Fix: Take full width */
       }
 
       textarea#chat-input {
