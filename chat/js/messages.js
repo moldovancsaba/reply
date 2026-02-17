@@ -126,7 +126,7 @@ export async function loadMessages(handle, append = false) {
         const loadMoreBtn = messagesEl.querySelector('.load-more-messages');
         if (loadMoreBtn) loadMoreBtn.remove();
 
-        // Render messages
+        // Render messages (server returns newest-first; we keep newest at top)
         messages.forEach(msg => {
             const bubble = document.createElement('div');
             const isFromMe = !!(msg.is_from_me ?? (msg.role === 'me'));
@@ -149,11 +149,7 @@ export async function loadMessages(handle, append = false) {
                 bubble.appendChild(info);
             }
 
-            if (append) {
-                messagesEl.appendChild(bubble);
-            } else {
-                messagesEl.prepend(bubble);
-            }
+            messagesEl.appendChild(bubble);
         });
 
         // Add "Load More" button if there are more messages
@@ -169,10 +165,8 @@ export async function loadMessages(handle, append = false) {
             messagesEl.appendChild(btn);
         }
 
-        // Scroll to top (newest messages)
-        if (!append) {
-            messagesEl.scrollTop = 0;
-        }
+        // Keep the view at the newest messages (top of the list)
+        if (!append) messagesEl.scrollTop = 0;
 
         // Default channel: match the most recent incoming message when possible
         if (!append) {

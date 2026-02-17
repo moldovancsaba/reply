@@ -3,7 +3,7 @@
 Completed work only. The [GitHub Project Board](https://github.com/users/moldovancsaba/projects/1) is the source of truth for delivered items.
 
 ## 2026-02-17 — System Recovery & Maintenance
-*   **Fix: Context Engine Syntax (#181):** Resolved a `SyntaxError` in `context-engine.js` caused by a duplicate `getSnippets` declaration that prevented server startup.
+*   **Fix: Context Engine Syntax:** Resolved a `SyntaxError` in `context-engine.js` caused by a duplicate `getSnippets` declaration that prevented server startup.
 *   **Maintenance: Unified Worker:** Standardized background intelligence on `background-worker.js` (polling interval configurable in Settings).
 *   **Documentation:** Updated system architecture to formally include background processes.
 *   **UX: Contact Channel Indicators:** Sidebar now shows a simple emoji for the latest channel (iMessage/WhatsApp/Mail/etc.).
@@ -16,26 +16,24 @@ Completed work only. The [GitHub Project Board](https://github.com/users/moldova
 *   **Feature: Gmail OAuth Connector:** Added Gmail API OAuth connect + sync + send (local token storage).
 *   **Feature: Settings UI:** Added Settings modal (global + per-channel via ⚙️ cogs) for mail/worker/channel UI configuration.
 *   **UX: Per-Channel Bubble Colors:** Message bubbles now support per-channel coloring (configurable).
+*   **UX: Composer + KYC Polish:** Composer alignment is consistent, KYC pane is wider, and background worker can refresh typed suggestions from full history on a debounced schedule.
 
 ---
 - **Unified Background Worker**: Implemented a SQLite-based monitoring service (`background-worker.js`) that replaces older watchers.
 - **macOS Startup Integration**: Added `launchd` support via `com.reply.worker.plist` for "always-on" background intelligence.
 - **Improved KYC & Drafting**: Background processes are now consolidated and throttled for high efficiency.
 - **{reply} web UI + Intelligence**: Message counts in sidebar, per-message timestamps in thread, real Mic dictation (SpeechRecognition), KYC-aware Suggest drafts, and a polished KYC pane (profile edit, channels, AI suggestions accept/decline, notes CRUD, and name propagation to feed + sidebar).
-- **Channel-aware Composer**: Added a channel dropdown in the composer; default channel follows the most recent inbound message. iMessage/email send normally; WhatsApp sends via Desktop automation with clipboard fallback.
-- **WhatsApp Direct Send (Desktop Automation)**: Composer can send via WhatsApp Desktop using `osascript` UI automation, with clipboard fallback and a clear error hint when macOS Accessibility permissions are missing.
-- **KYC Analyze (Suggestion-only)**: Profile ✨ Analyze no longer modifies display name/profession/relationship; it only produces accept/decline suggestions (links/emails/phones/addresses/hashtags/notes) across full historical messages.
-- **Local Intelligence (Professional UX)**: Notes support enter-to-add, click-to-edit (Enter save / Shift+Enter newline / Esc cancel), and typed “chips” for accepted AI items (LINK/EMAIL/PHONE/ADDRESS/HASHTAG).
+- **Channel-aware Composer**: Added a channel dropdown in the composer; default channel follows the most recent inbound message. iMessage/email can send; WhatsApp copies to clipboard as an interim.
 
 ## 2026-02-16 — Hybrid Search & Apple Notes Integration
-*   **Feature: Hybrid Search (#172):** Implemented combined Semantic (Vector) and Lexical (Keyword) search using LanceDB for 100% retrieval accuracy.
-*   **Feature: Apple Notes Sync (#163):** Added "Sync Notes" button to propertly ingest macOS Apple Notes with delta-sync capabilities.
-*   **Feature: Scalable Ingestion (#171):** Added streaming support for large Mbox (Gmail export) files.
+*   **Feature: Hybrid Search:** Implemented combined Semantic (Vector) and Lexical (Keyword) search using LanceDB for 100% retrieval accuracy.
+*   **Feature: Apple Notes Sync:** Added "Sync Notes" button to propertly ingest macOS Apple Notes with delta-sync capabilities.
+*   **Feature: Scalable Ingestion:** Added streaming support for large Mbox (Gmail export) files.
 *   **Verification:** All features verified with automated tests and UAT.
 
-## 2026-02-16 — POC: Knowledge Ingestion (#162)
+## 2026-02-16 — POC: Knowledge Ingestion
 *   **Knowledge Model:** Migrated to LanceDB Vector Database.
 *   **Embeddings:** Local embedding generation using `@xenova/transformers`.
 
-## 2026-02-16 — POC: Localhost Chat UI (#154)
+## 2026-02-16 — POC: Localhost Chat UI
 *   **UI:** Simple web interface for chatting with the local brain.

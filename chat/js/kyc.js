@@ -221,7 +221,16 @@ function renderSuggestions(handle, pendingSuggestions) {
 
     const tag = document.createElement('div');
     tag.className = 'kyc-sugg-tag';
-    tag.textContent = s.type ? String(s.type) : 'suggestion';
+    const kind = String(s.type || 'suggestion').toLowerCase();
+    const label =
+      kind === 'links' ? 'LINK' :
+        kind === 'emails' ? 'EMAIL' :
+          kind === 'phones' ? 'PHONE' :
+            kind === 'addresses' ? 'ADDRESS' :
+              kind === 'hashtags' ? 'HASHTAG' :
+                kind === 'notes' ? 'NOTE' :
+                  String(s.type || 'SUGGESTION').toUpperCase();
+    tag.textContent = label;
 
     const actions = document.createElement('div');
     actions.className = 'kyc-sugg-actions';
