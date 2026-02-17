@@ -605,6 +605,7 @@
     let currentHandle = null;
     let contactOffset = 0;
     let messageOffset = 0;
+    let conversations = []; // Global cache for contacts
     const CONTACT_LIMIT = 20;
     const MESSAGE_LIMIT = 30;
 
@@ -617,15 +618,23 @@
       try {
         const res = await fetch(`/api/conversations?limit=${CONTACT_LIMIT}&offset=${contactOffset}`);
         const data = await res.json();
-        const contacts = data.contacts;
 
-        if (!append) contactListEl.innerHTML = "";
+        // Defensive: handle both old array format and new object format
+        const contactsBatch = Array.isArray(data) ? data : (data.contacts || []);
+        const hasMore = Array.isArray(data) ? false : (data.hasMore || false);
+
+        if (!append) {
+          contactListEl.innerHTML = "";
+          conversations = [];
+        }
+
+        conversations = [...conversations, ...contactsBatch];
 
         // Remove existing load more button if present
         const oldBtn = document.getElementById("load-more-contacts");
         if (oldBtn) oldBtn.remove();
 
-        contacts.forEach(c => {
+        contactsBatch.forEach(c => {
           const item = document.createElement("div");
           item.className = "contact-item" + (currentHandle === c.handle ? " active" : "");
 
@@ -645,7 +654,7 @@
           contactListEl.appendChild(item);
         });
 
-        if (data.hasMore) {
+        if (hasMore) {
           const btn = document.createElement("button");
           btn.id = "load-more-contacts";
           btn.className = "load-more-btn";
@@ -949,8 +958,8 @@
       const data = {
         displayName: document.getElementById("kyc-name-input").value,
         profession: document.getElementById("kyc-role-input").value,
-        relationship: document.getElementById("kyc-rel-input").value,
-        notes: document.getElementById("kyc-notes-input").value
+        relationship: document.getElementById("kyc-rel-input").value
+        // REMOVED: notes overwrite here to prevent wiping log
       };
 
       try {

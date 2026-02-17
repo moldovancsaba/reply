@@ -25,7 +25,7 @@ function ingestContacts() {
                 newContactsData.push({
                     displayName: name,
                     profession: job,
-                    notes: notes,
+                    notes: notes ? notes.split('[NL]').join('\n') : "",
                     channels: {
                         email: emails ? emails.split(',').map(e => e.trim()) : [],
                         phone: phones ? phones.split(',').map(p => p.trim()) : []
