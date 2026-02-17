@@ -267,15 +267,29 @@ const server = http.createServer(async (req, res) => {
       // Get distinct handles with their latest message timestamp
       // Note: LanceDB doesn't support GROUP BY, so we query and dedupe in JS
       // but limit data transfer by querying only recent messages
+      // Use 384-dimension zero vector for full scan (all-MiniLM-L6-v2 embedding size)
+      const zeroVector = new Array(384).fill(0);
       const results = await table
-        .search([0])  // Dummy vector for full scan
+        .search(zeroVector)
         .where(`source IN ('iMessage', 'WhatsApp')`)
         .limit(10000)  // Get more than needed for deduplication
         .execute();
 
+      // Convert results to array (LanceDB returns async iterator)
+      let docs = [];
+      if (Array.isArray(results)) {
+        docs = results;
+      } else {
+        for await (const batch of results) {
+          for (const row of batch) {
+            docs.push(row.toJSON ? row.toJSON() : row);
+          }
+        }
+      }
+
       // Group by handle (path) and get latest message time
       const contactMap = new Map();
-      for (const doc of results) {
+      for (const doc of docs) {
         const handle = doc.path.replace(/^(imessage:\/\/|whatsapp:\/\/|mailto:)/, '');
         if (!contactMap.has(handle) || doc.timestamp > contactMap.get(handle).timestamp) {
           contactMap.set(handle, {
