@@ -9,7 +9,10 @@
 *   **Clarify:** If a CLI command fails or hangs, STOP. Do not retry blindly. Ask the user for help.
 
 ## 2. The Single Source of Truth (SSOT)
-The **[GitHub Project Board](https://github.com/users/moldovancsaba/projects/1)** is the ONLY source of truth for what is being worked on.
+The **GitHub Project Board** is the ONLY source of truth for what is being worked on, and **all issues for Reply live in the SSOT repo**:
+
+*   Board: https://github.com/users/moldovancsaba/projects/1
+*   SSOT Issues Repo: `moldovancsaba/mvp-factory-control`
 
 *   **Rule:** If it's not on the board, it doesn't exist.
 *   **Rule:** The **Status Column** defines the state (Backlog, Ready, In Progress, Done). Do NOT put status in titles (e.g., `[Backlog] Issue Title` is ILLEGAL).
