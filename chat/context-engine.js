@@ -20,7 +20,6 @@ function loadStyleProfile() {
 }
 
 const contactStore = require('./contact-store.js');
-const { getSnippets } = require('./vector-store.js');
 
 /**
  * Assembles the context and system instructions for generating a reply.
@@ -38,6 +37,22 @@ async function getContext(recipient) {
         identityContext = contactStore.getProfileContext(recipient);
     }
 
+    // 2. Determine Tone based on Relationship
+    let relationshipTone = "";
+    if (recipient) {
+        const contact = contactStore.findContact(recipient);
+        if (contact && contact.relationship) {
+            const rel = contact.relationship.toLowerCase();
+            if (rel.includes("boss") || rel.includes("manager") || rel.includes("client") || rel.includes("recruiter")) {
+                relationshipTone = "TONE ADJUSTMENT: This is a professional contact. Be formal, polite, and structured.";
+            } else if (rel.includes("friend") || rel.includes("family") || rel.includes("partner") || rel.includes("wife") || rel.includes("husband")) {
+                relationshipTone = "TONE ADJUSTMENT: This is a close personal contact. Be casual, warm, and brief. No stiff formalities.";
+            } else if (rel.includes("colleague")) {
+                relationshipTone = "TONE ADJUSTMENT: This is a colleague. Be professional but efficiently direct.";
+            }
+        }
+    }
+
     if (profile) {
         // Construct a prompt fragment based on the profile
         styleInstructions = `
@@ -47,14 +62,17 @@ You are the user. You must write in their specific voice based on analyzed "Sent
 - **Greetings:** Common greetings are: "${profile.topGreetings.join('", "')}". Use one of these.
 - **Sign-offs:** Common sign-offs are: "${profile.topSignOffs.join('", "')}". End with one of these.
 - **Tone:** Direct, efficient, and consistent with the above metrics.
+${relationshipTone}
 `;
     } else {
         // Fallback if no profile exists yet
         styleInstructions = `
 ### YOUR PERSONA
 You are a helpful assistant writing on behalf of the user. Keep it professional and concise.
+${relationshipTone}
 `;
     }
+
 
     if (recipient) {
         try {
