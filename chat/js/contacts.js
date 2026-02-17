@@ -44,34 +44,58 @@ export async function loadConversations(append = false) {
             item.className = 'sidebar-item';
             item.dataset.handle = contact.handle;
 
-            // Status indicator
+            // Status indicator (only if not 'open' which is default)
             const statusDot = document.createElement('div');
             statusDot.className = 'status-dot';
-            statusDot.classList.add(contact.status || 'open');
+            if (contact.status && contact.status !== 'open') {
+                statusDot.classList.add(contact.status);
+            } else {
+                statusDot.style.display = 'none'; // Clean look for normal contacts
+            }
 
             // Contact info
             const info = document.createElement('div');
             info.className = 'contact-info';
 
+            const topRow = document.createElement('div');
+            topRow.style.display = 'flex';
+            topRow.style.justifyContent = 'space-between';
+            topRow.style.alignItems = 'baseline';
+
             const name = document.createElement('div');
             name.className = 'contact-name';
             name.textContent = contact.name || contact.handle;
 
+            // Optional: Time would go here if available
+            // const time = document.createElement('div');
+            // time.className = 'contact-time'; 
+
+            topRow.appendChild(name);
+            info.appendChild(topRow);
+
             const preview = document.createElement('div');
             preview.className = 'contact-preview';
-            preview.textContent = contact.lastMessage || 'No messages';
+            // Only show preview if it exists and isn't the default placeholder
+            if (contact.lastMessage && contact.lastMessage !== 'Click to see history') {
+                preview.textContent = contact.lastMessage;
+            } else {
+                preview.textContent = 'No recent messages';
+            }
 
-            info.appendChild(name);
             info.appendChild(preview);
 
-            // Message count badge
-            const badge = document.createElement('div');
-            badge.className = 'message-badge';
-            badge.textContent = contact.count || '0';
+            // Message count badge - Only show if > 0
+            const count = parseInt(contact.count || '0');
+            if (count > 0) {
+                const badge = document.createElement('div');
+                badge.className = 'message-badge';
+                badge.textContent = count > 99 ? '99+' : count;
+                item.appendChild(badge);
+            }
 
             item.appendChild(statusDot);
             item.appendChild(info);
-            item.appendChild(badge);
+            // Badge appends last to float right
 
             // Click handler
             item.onclick = () => window.selectContact(contact.handle);
