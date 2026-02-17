@@ -503,9 +503,20 @@ class ContactStore {
             }
         }
         if (contact.notes && Array.isArray(contact.notes)) {
-            const sorted = [...contact.notes].sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
-            const top = sorted.slice(0, 20);
-            context += `Local Intelligence (HIGH PRIORITY; user-added + accepted AI, showing ${top.length}${sorted.length > top.length ? ` of ${sorted.length}` : ""}):\n`;
+            const weight = (n) => {
+                const src = String(n?.source || '').toLowerCase();
+                if (src === 'user') return 3;
+                if (src === 'ai') return 2; // accepted AI suggestions
+                return 1;
+            };
+            const sorted = [...contact.notes].sort((a, b) => {
+                const wa = weight(a);
+                const wb = weight(b);
+                if (wa !== wb) return wb - wa;
+                return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
+            });
+            const top = sorted.slice(0, 30);
+            context += `Local Intelligence (VERY HIGH PRIORITY; user-added first, then accepted AI; showing ${top.length}${sorted.length > top.length ? ` of ${sorted.length}` : ""}):\n`;
             top.forEach(n => {
                 const kind = String(n.kind || 'note').toLowerCase();
                 const src = String(n.source || '').toLowerCase();
@@ -514,7 +525,7 @@ class ContactStore {
                         : (kind === 'phone' ? 'PHONE'
                             : (kind === 'address' ? 'ADDRESS'
                                 : (kind === 'hashtag' ? 'HASHTAG' : 'NOTE'))));
-                const source = src === 'user' ? 'user' : (src === 'ai' ? 'ai' : '');
+                const source = src === 'user' ? 'user' : (src === 'ai' ? 'ai-accepted' : (src ? src : ''));
                 const val = (n.value ?? n.text ?? '').toString().trim();
                 if (!val) return;
                 context += `- ${source ? `(${source}) ` : ''}[${label}] ${val}\n`;

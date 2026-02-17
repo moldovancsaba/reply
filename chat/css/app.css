@@ -116,6 +116,18 @@
         min-width: 0;
       }
 
+      .contact-top-row {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        min-width: 0;
+      }
+
+      .contact-top-row .contact-name {
+        flex: 1;
+        min-width: 0;
+      }
+
       .contact-name {
         font-weight: 600;
         font-size: 13px;
@@ -125,6 +137,23 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+
+      .message-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 18px;
+        padding: 0 7px;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        color: var(--text-secondary);
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        flex-shrink: 0;
       }
 
       .contact-preview {
@@ -271,14 +300,15 @@
       }
 
       .input-wrapper {
-        display: flex;
+        display: grid;
+        grid-template-columns: 1fr auto auto;
         gap: 10px;
         background-color: var(--bg-input);
         /* Dark input bg */
         padding: 6px 8px 6px 12px;
         border-radius: 20px;
         border: 1px solid #333;
-        align-items: center;
+        align-items: end;
         flex: 1;
         /* Fix: Take full width */
         min-height: 48px;
@@ -286,6 +316,7 @@
 
       textarea#chat-input {
         flex: 1;
+        min-width: 0;
         background: transparent;
         border: none;
         outline: none;
@@ -315,6 +346,7 @@
         -webkit-appearance: none;
         height: 36px;
         min-width: 112px;
+        align-self: end;
       }
 
       .channel-select:focus {
@@ -330,6 +362,7 @@
         align-items: center;
         justify-content: center;
         white-space: nowrap;
+        align-self: end;
       }
 
       /* KYC Pane */
@@ -427,6 +460,17 @@
         display: flex;
         gap: 8px;
         align-items: center;
+      }
+
+      .kyc-editor-actions .btn {
+        height: 32px;
+        padding: 0 14px;
+        border-radius: 999px;
+        line-height: 32px;
+      }
+
+      .kyc-editor-actions .btn-primary {
+        box-shadow: 0 8px 18px rgba(10, 132, 255, 0.22);
       }
 
       .kyc-field {
@@ -661,8 +705,9 @@
       .kyc-sugg-header {
         display: flex;
         justify-content: space-between;
-        align-items: center;
+        align-items: flex-start;
         gap: 10px;
+        flex-wrap: wrap;
       }
 
       .kyc-sugg-tag {
@@ -681,6 +726,8 @@
         max-width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;
+        flex: 1 1 auto;
+        min-width: 120px;
       }
 
       .kyc-sugg-content {
@@ -703,10 +750,14 @@
         align-items: center;
         flex-wrap: wrap;
         justify-content: flex-end;
+        flex: 0 0 auto;
       }
 
       .kyc-sugg-actions .btn {
         border-radius: 999px;
+        height: 30px;
+        padding: 0 12px;
+        line-height: 30px;
       }
 
       .kyc-sugg-accept {

@@ -20,7 +20,7 @@ if (fs.existsSync(LOG_FILE)) {
 // process.stdout.write = process.stderr.write = access.write.bind(access);
 const { addDocuments } = require('./vector-store.js');
 const contactStore = require('./contact-store.js');
-const { generateReply, extractKYC } = require('./reply-engine.js');
+const { generateReply } = require('./reply-engine.js');
 const { getSnippets } = require('./knowledge.js');
 const { sync: syncIMessage } = require('./sync-imessage.js');
 const { syncWhatsApp } = require('./sync-whatsapp.js');
@@ -28,6 +28,8 @@ const { syncMail, isImapConfigured, isGmailConfigured } = require('./sync-mail.j
 const triageEngine = require('./triage-engine.js');
 const { withDefaults, readSettings } = require('./settings-store.js');
 const { extractSignals } = require('./signal-extractor.js');
+const { mergeProfile } = require('./kyc-merge.js');
+const { execFile } = require('child_process');
 
 /**
  * Optimized Background Worker (SQLite version)
@@ -87,6 +89,78 @@ function getPollIntervalMs() {
 const MAX_SEEN_IDS = 1000;
 let seenIds = new Set();
 let isProcessing = false;
+const deepAnalysisInFlightByHandle = new Map();
+
+function getAutoAnalyzeIntervalMs() {
+    const hours = Number(process.env.REPLY_KYC_AUTO_INTERVAL_HOURS || 24);
+    if (!Number.isFinite(hours) || hours <= 0) return null;
+    return Math.max(1, Math.min(hours, 24 * 14)) * 60 * 60 * 1000;
+}
+
+function analyzeContactInChild(handle) {
+    const childScript = path.join(__dirname, 'kyc-analyze-child.js');
+    return new Promise((resolve, reject) => {
+        execFile(
+            process.execPath,
+            [childScript, String(handle)],
+            {
+                cwd: __dirname,
+                timeout: 5 * 60 * 1000,
+                maxBuffer: 20 * 1024 * 1024,
+                env: process.env
+            },
+            (err, stdout, stderr) => {
+                if (err) {
+                    const details = String((stderr || stdout || '')).trim();
+                    return reject(new Error(details || err.message || 'Deep analyze failed.'));
+                }
+                const out = String(stdout || '').trim();
+                try {
+                    const parsed = out ? JSON.parse(out) : null;
+                    if (!parsed || parsed.status !== 'ok') return reject(new Error(parsed?.error || 'Deep analyze failed.'));
+                    resolve(parsed.profile || null);
+                } catch (e) {
+                    const details = String((stderr || stdout || '')).trim();
+                    reject(new Error(details ? `Deep analyze returned invalid JSON. ${details}` : 'Deep analyze returned invalid JSON.'));
+                }
+            }
+        );
+    });
+}
+
+function analyzeContactDeduped(handle) {
+    const key = String(handle || '').trim();
+    if (!key) return Promise.reject(new Error('Missing handle'));
+    const existing = deepAnalysisInFlightByHandle.get(key);
+    if (existing) return existing;
+    const p = analyzeContactInChild(key).finally(() => deepAnalysisInFlightByHandle.delete(key));
+    deepAnalysisInFlightByHandle.set(key, p);
+    return p;
+}
+
+async function maybeRunDeepAnalysis(handle, reason = 'new-message') {
+    const intervalMs = getAutoAnalyzeIntervalMs();
+    if (!intervalMs) return;
+
+    const contact = contactStore.findContact(handle);
+    if (!contact) return;
+    if (contact.status === 'closed') return;
+
+    const analyzedAt = contact?.kycAnalysis?.analyzedAt ? new Date(contact.kycAnalysis.analyzedAt) : null;
+    const lastMs = analyzedAt && !Number.isNaN(analyzedAt.getTime()) ? analyzedAt.getTime() : 0;
+    if (Date.now() - lastMs < intervalMs) return;
+
+    try {
+        console.log(`[Worker] Deep analyze queued (${reason}) for ${handle}...`);
+        const profile = await analyzeContactDeduped(handle);
+        if (profile) {
+            await mergeProfile(profile);
+            console.log('[Worker] Deep analyze merged into suggestions.');
+        }
+    } catch (e) {
+        console.warn('[Worker] Deep analyze failed:', e?.message || e);
+    }
+}
 
 async function poll() {
     if (isProcessing) return;
@@ -214,19 +288,9 @@ async function runIntelligencePipeline(handle, text) {
             console.warn('[Worker] Signal extraction failed:', e?.message || e);
         }
 
-        // A. KYC Extraction
-        const kycInfo = await extractKYC(text);
-        if (kycInfo && (kycInfo.profession || kycInfo.relationship || kycInfo.notes)) {
-            const isNew =
-                (kycInfo.profession && kycInfo.profession !== contact.profession) ||
-                (kycInfo.relationship && kycInfo.relationship !== contact.relationship) ||
-                (kycInfo.notes && !contact.notes?.some(n => n.text === kycInfo.notes));
-
-            if (isNew) {
-                contactStore.setPendingKYC(handle, kycInfo);
-                console.log(`[Worker] KYC suggestions staged.`);
-            }
-        }
+        // A. Deep KYC analysis (full history -> suggestions only), debounced.
+        // Fire-and-forget so the worker can keep processing inbound messages.
+        void maybeRunDeepAnalysis(handle, 'new-message');
 
         // B. Proactive Drafting
         if (!contact.draft) {

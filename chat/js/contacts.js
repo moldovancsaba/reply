@@ -57,12 +57,17 @@ export async function loadConversations(append = false) {
             conversations = data.contacts;
             contactListEl.innerHTML = '';
         }
+        // Keep a single global pointer for modules that update contact labels (e.g. KYC save).
+        window.conversations = conversations;
 
         // Render contacts
         data.contacts.forEach(contact => {
             const item = document.createElement('div');
             item.className = 'sidebar-item';
             item.dataset.handle = contact.handle;
+            if (window.currentHandle && (String(window.currentHandle) === String(contact.handle) || String(window.currentHandle) === String(contact.latestHandle || ''))) {
+                item.classList.add('active');
+            }
 
             // Status indicator (only if not 'open' which is default)
             const statusDot = document.createElement('div');
@@ -78,9 +83,7 @@ export async function loadConversations(append = false) {
             info.className = 'contact-info';
 
             const topRow = document.createElement('div');
-            topRow.style.display = 'flex';
-            topRow.style.justifyContent = 'space-between';
-            topRow.style.alignItems = 'baseline';
+            topRow.className = 'contact-top-row';
 
             const name = document.createElement('div');
             name.className = 'contact-name';
@@ -103,10 +106,8 @@ export async function loadConversations(append = false) {
             if (count === 0) {
                 badge.classList.add('badge-zero');
                 badge.title = 'No messages yet';
-                badge.style.marginLeft = '6px';
             } else {
                 badge.title = `${count} messages`;
-                badge.style.marginLeft = '6px';
             }
             topRow.appendChild(badge);
             info.appendChild(topRow);
@@ -246,7 +247,10 @@ export async function selectContact(handle) {
     if (magicBtn) magicBtn.style.display = 'inline-block';
 
     // Find contact info
-    const contact = conversations.find(c => c.handle === handle);
+    const contact =
+        conversations.find(c => String(c.handle) === String(handle)) ||
+        conversations.find(c => String(c.latestHandle || '') === String(handle)) ||
+        null;
     if (contact) {
         activeNameEl.textContent = contact.displayName || contact.name || contact.handle;
         if (typeof window.setSelectedChannel === 'function') {
