@@ -123,8 +123,8 @@ export async function loadMessages(handle, append = false) {
         }
 
         // Remove "Load More" button if it exists
-        const loadMoreBtn = messagesEl.querySelector('.load-more-messages');
-        if (loadMoreBtn) loadMoreBtn.remove();
+        const loadMoreWrap = messagesEl.querySelector('.load-more-messages-wrap');
+        if (loadMoreWrap) loadMoreWrap.remove();
 
         // Render messages (server returns newest-first; we keep newest at top)
         messages.forEach(msg => {
@@ -155,14 +155,18 @@ export async function loadMessages(handle, append = false) {
         // Add "Load More" button if there are more messages
         if (hasMoreMessages) {
             const btn = document.createElement('button');
-            btn.className = 'load-more-messages';
-            btn.textContent = 'Load Older Messages...';
-            btn.style.cssText = 'margin:1rem auto; padding:0.5rem 1rem; cursor:pointer; display:block;';
+            btn.type = 'button';
+            btn.className = 'btn btn-secondary load-more-messages';
+            btn.textContent = 'Load older messages…';
             btn.onclick = () => {
                 messageOffset += MESSAGE_LIMIT;
                 loadMessages(handle, true);
             };
-            messagesEl.appendChild(btn);
+
+            const wrap = document.createElement('div');
+            wrap.className = 'load-more-messages-wrap';
+            wrap.appendChild(btn);
+            messagesEl.appendChild(wrap);
         }
 
         // Keep the view at the newest messages (top of the list)

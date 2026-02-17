@@ -22,8 +22,8 @@ You will find these files in the repository. Use them for specific needs:
 
 ## Current State (Status Quo)
 *   **Phase:** POC / MVP Factory
-*   **Latest Feature (Shipped):** Reply Hub unified feed v1 + KYC pane + mic dictation + channel-aware send (see SSOT issues #179–#184 in `moldovancsaba/mvp-factory-control`).
-*   **In Review:** Recent enhancements are tracked as SSOT issues #185–#189 (Idea Bank + Review columns).
+*   **Latest Feature (Shipped):** {reply} unified feed v1 + KYC pane + mic dictation + channel-aware send (tracked on the SSOT Project Board).
+*   **In Review:** Recent enhancements are tracked in the SSOT Project Board (Review column).
 *   **Stability:** Stable. Background intelligence runs via `background-worker.js` (poll interval configurable in Settings).
 
 ## 🚨 Single Source of Truth

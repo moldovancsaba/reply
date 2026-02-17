@@ -210,6 +210,31 @@
         /* Important for flex-grow with overflow */
       }
 
+      .load-more-messages-wrap {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        padding: 8px 0 16px;
+      }
+
+      .load-more-messages.btn {
+        border-radius: 9999px;
+        padding: 0.55rem 1rem;
+        font-size: 0.9rem;
+        line-height: 1.1;
+        color: var(--text-secondary);
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        box-shadow: var(--shadow-sm);
+        backdrop-filter: blur(16px);
+        max-width: 360px;
+      }
+
+      .load-more-messages.btn:hover {
+        background: rgba(255, 255, 255, 0.10);
+        color: var(--text-primary);
+      }
+
       /* --- Message Bubbles --- */
       .message-bubble {
         max-width: 70%;
