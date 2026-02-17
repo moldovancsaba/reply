@@ -12,11 +12,15 @@ const fs = require("fs");
 const path = require("path");
 require("dotenv").config(); // Load environment variables
 
-const { generateReply } = require("./reply-engine.js");
+const { generateReply, extractKYC } = require('./reply-engine.js');
 const { getSnippets } = require("./knowledge.js");
-const { syncNotes } = require("./sync-notes.js");
+const { sync: syncIMessage } = require('./sync-imessage.js');
+const { syncNotes } = require('./sync-notes.js');
+const { syncWhatsApp } = require('./sync-whatsapp.js');
+const triageEngine = require('./triage-engine.js');
 const { refineReply } = require("./gemini-client.js");
 const contactStore = require("./contact-store.js");
+const { analyzeContact, mergeProfile } = require("./kyc-agent.js");
 
 // Default to port 3000 if not specified in environment variables.
 const PORT_MIN = parseInt(process.env.PORT || "3000", 10);
@@ -462,22 +466,33 @@ const server = http.createServer((req, res) => {
   /**
    * API Endpoint: /api/system-health
    * Returns metadata about the server uptime, sync status, and contact database health.
+   * Consolidated for Reply Hub v2.
    */
   if (url.pathname === "/api/system-health") {
-    const syncStatePath = path.join(__dirname, "data", "sync_state.json");
-    let syncState = {};
-    if (fs.existsSync(syncStatePath)) {
-      try {
-        syncState = JSON.parse(fs.readFileSync(syncStatePath, "utf8"));
-      } catch (e) {
-        console.error("Error reading sync state:", e);
+    const DATA_DIR = path.join(__dirname, "data");
+
+    const readStatus = (filename) => {
+      const p = path.join(DATA_DIR, filename);
+      if (fs.existsSync(p)) {
+        try {
+          return JSON.parse(fs.readFileSync(p, "utf8"));
+        } catch (e) {
+          return { state: "error", message: e.message };
+        }
       }
-    }
+      return { state: "idle", message: "No sync data available" };
+    };
 
     const health = {
       uptime: Math.floor(process.uptime()),
       status: "online",
-      sync: syncState,
+      channels: {
+        imessage: readStatus("imessage_sync_status.json"),
+        whatsapp: readStatus("whatsapp_sync_status.json"),
+        mail: readStatus("mail_sync_status.json"),
+        notes: readStatus("notes_sync_status.json"),
+        contacts: readStatus("sync_state.json") // Legacy sync state compatibility
+      },
       stats: contactStore.getStats(),
       lastCheck: new Date().toISOString()
     };
@@ -513,6 +528,92 @@ const server = http.createServer((req, res) => {
   }
   if (url.pathname === "/api/feedback") {
     serveFeedback(req, res);
+    return;
+  }
+  if (url.pathname === "/api/sync-whatsapp") {
+    if (req.method === "POST") {
+      // Trigger background sync
+      syncWhatsApp().catch(err => console.error("Manual WhatsApp Sync Error:", err));
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "started" }));
+    } else {
+      res.writeHead(405);
+      res.end("Method Not Allowed");
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/analyze-contact") {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", async () => {
+      try {
+        const { handle } = JSON.parse(body);
+        if (!handle) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Missing handle" }));
+          return;
+        }
+
+        const profile = await analyzeContact(handle);
+        let updatedContact = null;
+        if (profile) {
+          updatedContact = await mergeProfile(profile);
+        }
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          status: "ok",
+          contact: updatedContact,
+          message: profile ? "Analysis complete" : "Not enough data for analysis"
+        }));
+      } catch (e) {
+        console.error("Analysis error:", e);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/accept-suggestion") {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      try {
+        const { handle, id } = JSON.parse(body);
+        const contact = contactStore.acceptSuggestion(handle, id);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ status: "ok", contact }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/triage-log") {
+    const logs = triageEngine.getLogs(20);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ logs }));
+    return;
+  }
+
+  if (url.pathname === "/api/decline-suggestion") {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      try {
+        const { handle, id } = JSON.parse(body);
+        const contact = contactStore.declineSuggestion(handle, id);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ status: "ok", contact }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
     return;
   }
   if (url.pathname === "/" || url.pathname === "/index.html") {

@@ -5,27 +5,21 @@ tell application "Contacts"
         launch
         delay 1
     end if
-    set contactList to ""
+    set contactData to {}
     set allPeople to people
     repeat with p in allPeople
-        set firstN to (first name of p)
-        if firstN is missing value then set firstN to ""
-        set lastN to (last name of p)
-        if lastN is missing value then set lastN to ""
-        
         set fullName to (name of p)
+        if fullName is missing value then set fullName to ""
         
         -- Get Emails
-        set emailList to {}
-        repeat with e in (emails of p)
-            copy (value of e) to end of emailList
-        end repeat
+        set {TID, AppleScript's text item delimiters} to {AppleScript's text item delimiters, ","}
+        set emailList to (value of emails of p) as string
+        set AppleScript's text item delimiters to TID
         
         -- Get Phones
-        set phoneList to {}
-        repeat with ph in (phones of p)
-            copy (value of ph) to end of phoneList
-        end repeat
+        set {TID, AppleScript's text item delimiters} to {AppleScript's text item delimiters, ","}
+        set phoneList to (value of phones of p) as string
+        set AppleScript's text item delimiters to TID
         
         -- Get Note
         set theNote to (note of p)
@@ -43,7 +37,11 @@ tell application "Contacts"
         if theJob is missing value then set theJob to ""
         
         -- Format as pseudo-CSV for easy parsing
-        set contactList to contactList & fullName & "|SEP|" & (emailList as string) & "|SEP|" & (phoneList as string) & "|SEP|" & theJob & "|SEP|" & theNote & "\n"
+        set end of contactData to fullName & "|SEP|" & emailList & "|SEP|" & phoneList & "|SEP|" & theJob & "|SEP|" & theNote
     end repeat
-    return contactList
+    
+    set {TID, AppleScript's text item delimiters} to {AppleScript's text item delimiters, "\n"}
+    set output to contactData as text
+    set AppleScript's text item delimiters to TID
+    return output
 end tell

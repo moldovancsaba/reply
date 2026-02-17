@@ -26,8 +26,19 @@ Reply learns your context by ingesting your data into a local Vector Database (L
 
 ### 3. Apple Notes (macOS)
 *   **Command:** UI Button "Sync Notes" (at `http://localhost:3000`) or `node chat/sync-notes.js`.
-*   **Behavior:** Uses AppleScript to read all local/iCloud notes.
-*   **Delta Sync:** Only processes new or modified notes after the initial run.
+*   **Source Label:** `source: "apple-notes"`
+*   **Schema:**
+    ```json
+    {
+      "id": "apple-notes-<UUID>",
+      "source": "apple-notes",
+      "path": "Note Title",
+      "text": "[Date] Note: Title... \n\n Body Content..."
+    }
+    ```
+*   **Mechanism:** Uses `osascript` to query the Apple Notes app via AppleScript. This approach is read-only and respects the user's local permissions without needing direct database access.
+*   **Delta Sync:** Tracks note modification dates in `knowledge/notes-metadata.json`. Only notes with a newer modification date are re-processed.
+*   **Config:** Requires no special environment variables. It automatically detects notes available to the currently logged-in macOS user (iCloud or "On My Mac").
 
 ---
 
