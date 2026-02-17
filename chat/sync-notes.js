@@ -3,31 +3,24 @@ const fs = require("fs");
 const path = require("path");
 const { addDocuments } = require("./vector-store.js");
 
-const META_PATH = path.join(__dirname, "..", "knowledge", "notes-metadata.json");
+const statusManager = require('./status-manager.js');
 
-/**
- * Executes an AppleScript and returns the result.
- */
-function runAppleScript(script) {
-    return new Promise((resolve, reject) => {
-        exec(`osascript -e '${script.replace(/'/g, "'\\''")}'`, { maxBuffer: 1024 * 1024 * 50 }, (error, stdout, stderr) => { // 50MB
-            if (error) reject(error);
-            else resolve(stdout.trim());
-        });
-    });
+const KNOWLEDGE_DIR = path.join(__dirname, "..", "knowledge");
+const DATA_DIR = path.join(__dirname, "data");
+const META_PATH = path.join(KNOWLEDGE_DIR, "notes-metadata.json");
+
+// Ensure directories exist
+if (!fs.existsSync(KNOWLEDGE_DIR)) fs.mkdirSync(KNOWLEDGE_DIR, { recursive: true });
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+function updateStatus(status) {
+    statusManager.update('notes', status);
 }
 
 /**
  * Extracts all note IDs and their modification dates for delta comparison.
  */
 async function getNoteMeta() {
-    const script = `tell application "Notes" to get {id, modification date} of every note`;
-    const result = await runAppleScript(script);
-    if (!result) return [];
-
-    // osascript returns lists like "id1, id2, date1, date2"
-    // This is hard to parse reliably via string split because dates contain commas.
-    // Better strategy: iterate in AppleScript and return JSON-like format.
     const jsonScript = `
         tell application "Notes"
             set AppleScript's text item delimiters to "||"
@@ -55,9 +48,12 @@ async function getNoteBody(id) {
 
 /**
  * Main Sync Logic
+ * @param {number|null} limit - Optional limit for testing
+ * @returns {Promise<object>} Sync stats
  */
-async function syncNotes() {
+async function syncNotes(limit = null) {
     console.log("Starting Apple Notes sync...");
+    updateStatus({ state: "running", progress: 0, message: "Analyzing Apple Notes metadata..." });
 
     // Load local cache to see what's changed
     let cache = {};
@@ -65,14 +61,28 @@ async function syncNotes() {
         cache = JSON.parse(fs.readFileSync(META_PATH, "utf8"));
     }
 
-    const currentNotes = await getNoteMeta();
+    let currentNotes = [];
+    try {
+        currentNotes = await getNoteMeta();
+    } catch (e) {
+        updateStatus({ state: "error", message: `Failed to read Apple Notes: ${e.message}` });
+        throw e;
+    }
+
     console.log(`Found ${currentNotes.length} total notes in Apple Notes.`);
 
-    const toUpdate = currentNotes.filter(n => cache[n.id] !== n.modified);
-    console.log(`${toUpdate.length} notes need updating.`);
+    let toUpdate = currentNotes.filter(n => cache[n.id] !== n.modified);
+
+    if (limit && toUpdate.length > limit) {
+        console.log(`Limiting sync to ${limit} notes as requested.`);
+        toUpdate = toUpdate.slice(0, limit);
+    }
+
+    console.log(`${toUpdate.length} notes will be processed.`);
 
     if (toUpdate.length === 0) {
         console.log("Everything is up to date.");
+        updateStatus({ state: "idle", lastSync: new Date().toISOString(), total: currentNotes.length, updated: 0 });
         return { total: currentNotes.length, updated: 0 };
     }
 
@@ -81,13 +91,16 @@ async function syncNotes() {
 
     for (let i = 0; i < toUpdate.length; i++) {
         const n = toUpdate[i];
-        if (i % 20 === 0) console.log(`  Processing ${i}/${toUpdate.length}...`);
+        if (i % 10 === 0) {
+            const progress = Math.round((i / toUpdate.length) * 100);
+            updateStatus({ state: "running", progress, message: `Syncing note ${i + 1}/${toUpdate.length}...` });
+        }
 
         try {
             const body = await getNoteBody(n.id);
+            // Clean HTML and normalize whitespace
             const cleanText = body.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 
-            // Get name/title from AppleScript or first line of text
             const nameScript = `tell application "Notes" to get name of note id "${n.id}"`;
             const name = await runAppleScript(nameScript);
 
@@ -95,7 +108,7 @@ async function syncNotes() {
                 id: `apple-notes-${n.id}`,
                 source: "apple-notes",
                 path: name,
-                text: cleanText,
+                text: `[${n.modified}] Note: ${name}\n\n${cleanText}`, // Prepend metadata for RAG context
             });
 
             newCache[n.id] = n.modified;
@@ -106,17 +119,27 @@ async function syncNotes() {
 
     if (snippets.length > 0) {
         console.log(`Vectorizing ${snippets.length} notes...`);
+        updateStatus({ state: "running", progress: 90, message: `Vectorizing ${snippets.length} snippets...` });
         await addDocuments(snippets);
     }
 
     fs.writeFileSync(META_PATH, JSON.stringify(newCache, null, 2));
+
+    const finalStats = { state: "idle", lastSync: new Date().toISOString(), total: currentNotes.length, updated: toUpdate.length };
+    updateStatus(finalStats);
     console.log("Sync complete.");
-    return { total: currentNotes.length, updated: toUpdate.length };
+    return finalStats;
 }
 
 module.exports = { syncNotes };
 
-// Allow running standalone for testing
 if (require.main === module) {
-    syncNotes().catch(console.error);
+    const args = process.argv.slice(2);
+    const limitIndex = args.indexOf("--limit");
+    const limit = limitIndex !== -1 ? parseInt(args[limitIndex + 1]) : null;
+
+    syncNotes(limit).catch(e => {
+        console.error(e);
+        updateStatus({ state: "error", message: e.message });
+    });
 }

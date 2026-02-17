@@ -272,6 +272,99 @@ class ContactStore {
     }
 
     /**
+     * Add a pending suggestion to the contact.
+     * @param {string} handle 
+     * @param {string} type 'links', 'emails', 'phones', 'notes'
+     * @param {string} content 
+     */
+    addSuggestion(handle, type, content) {
+        this.load();
+        const contact = this.findContact(handle);
+        if (!contact) return;
+
+        // Initialize suggestions array if needed
+        if (!contact.pendingSuggestions) contact.pendingSuggestions = [];
+        if (!contact.rejectedSuggestions) contact.rejectedSuggestions = [];
+
+        // Check if already rejected
+        if (contact.rejectedSuggestions.includes(content)) return;
+
+        // Check if already exists in notes (simple text check)
+        if (contact.notes && contact.notes.some(n => n.text.includes(content))) return;
+
+        // Check if already pending
+        if (contact.pendingSuggestions.some(s => s.content === content)) return;
+
+        contact.pendingSuggestions.push({
+            id: 'sugg-' + Date.now() + Math.random().toString(36).substr(2, 5),
+            type: type,
+            content: content,
+            timestamp: new Date().toISOString()
+        });
+        this.save();
+    }
+
+    /**
+     * Accept a suggestion: remove from pending, add to notes/profile.
+     */
+    acceptSuggestion(handle, suggestionId) {
+        this.load();
+        const contact = this.findContact(handle);
+        if (!contact || !contact.pendingSuggestions) return;
+
+        const suggestionIndex = contact.pendingSuggestions.findIndex(s => s.id === suggestionId);
+        if (suggestionIndex === -1) return;
+
+        const suggestion = contact.pendingSuggestions[suggestionIndex];
+
+        // Remove from pending
+        contact.pendingSuggestions.splice(suggestionIndex, 1);
+
+        // Add to permanent record based on type
+        // For this MVP, all types become formatted notes
+        let icon = "📝";
+        if (suggestion.type === "links") icon = "🌐";
+        if (suggestion.type === "emails") icon = "📧";
+        if (suggestion.type === "phones") icon = "📞";
+
+        const noteText = `${icon} ${suggestion.content}`;
+
+        if (!contact.notes) contact.notes = [];
+        contact.notes.push({
+            id: 'note-' + Date.now() + Math.random().toString(36).substr(2, 5),
+            text: noteText,
+            timestamp: new Date().toISOString()
+        });
+
+        this.save();
+        return contact;
+    }
+
+    /**
+     * Decline a suggestion: remove from pending, add to rejected list.
+     */
+    declineSuggestion(handle, suggestionId) {
+        this.load();
+        const contact = this.findContact(handle);
+        if (!contact || !contact.pendingSuggestions) return;
+
+        const suggestionIndex = contact.pendingSuggestions.findIndex(s => s.id === suggestionId);
+        if (suggestionIndex === -1) return;
+
+        const suggestion = contact.pendingSuggestions[suggestionIndex];
+
+        // Remove from pending
+        contact.pendingSuggestions.splice(suggestionIndex, 1);
+
+        // Add content to rejected list to prevent re-suggestion
+        if (!contact.rejectedSuggestions) contact.rejectedSuggestions = [];
+        contact.rejectedSuggestions.push(suggestion.content);
+
+        this.save();
+        return contact;
+    }
+
+    /**
      * Manually override the contact status.
      * @param {string} handle 
      * @param {string} status 'open', 'draft', or 'closed'

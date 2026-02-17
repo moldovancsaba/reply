@@ -1,33 +1,34 @@
 const { fetchConversation, fetchHandles } = require('./ingest-imessage.js');
 const { Ollama } = require('ollama');
 const ollama = new Ollama();
-const fs = require('fs');
-const path = require('path');
+const contactStore = require('./contact-store.js');
 
 const MODEL = "qwen2.5:7b";
-const CONTACTS_FILE = path.join(__dirname, 'data', 'contacts.json');
 
 async function analyzeContact(handleId) {
     console.log(`Analyzing chat history for: ${handleId}...`);
-    const history = await fetchConversation(handleId, 30);
+    try {
+        const history = await fetchConversation(handleId, 50); // Increased context
 
-    if (history.length < 5) {
-        console.log(`Skipping ${handleId} (not enough data).`);
-        return null;
-    }
+        if (history.length < 5) {
+            console.log(`Skipping ${handleId} (not enough data).`);
+            return null;
+        }
 
-    const conversationText = history.map(m => `${m.role}: ${m.text}`).join('\n');
-
-    const prompt = `
+        const conversationText = history.map(m => `${m.role}: ${m.text}`).join('\n');
+        const prompt = `
 ANALYZE THIS CONVERSATION to build a contact profile.
 The user ("Me") is "Moldovan Csaba Zoltan".
 The other person is identified by handle: "${handleId}".
 
 Extract the following in JSON format:
-- "displayName": Likely real name (if mentioned or inferred). If unknown, use the handle.
-- "relationship": e.g., Friend, Colleague, Family, Recruiter.
-- "profession": Their job title or role (if inferred).
-- "notes": Key facts (e.g., "Likes coffee", "Works at Google").
+- "displayName": Likely real name.
+- "relationship": e.g., Friend, Colleague.
+- "profession": Job title.
+- "links": Array of strings (URLs shared by the CONTACT, e.g. "https://index.hu").
+- "emails": Array of strings (Email addresses shared by the CONTACT).
+- "phones": Array of strings (Phone numbers shared by the CONTACT, e.g. "+36...").
+- "notes": Array of strings (Key facts, e.g. "Likes coffee").
 
 CONVERSATION:
 ${conversationText}
@@ -37,10 +38,12 @@ RETURN ONLY JSON:
   "displayName": "...",
   "relationship": "...",
   "profession": "...",
-  "notes": "..."
+  "links": ["..."],
+  "emails": ["..."],
+  "phones": ["..."],
+  "notes": ["..."]
 }`;
 
-    try {
         const response = await ollama.chat({
             model: MODEL,
             messages: [{ role: 'user', content: prompt }],
@@ -51,29 +54,63 @@ RETURN ONLY JSON:
         profile.handle = handleId;
         return profile;
     } catch (e) {
-        console.error("Error analyzing contact:", e);
+        console.error(`Error analyzing contact ${handleId}: `, e.message);
         return null;
     }
 }
 
+async function mergeProfile(profile) {
+    if (!profile || !profile.handle) return;
+
+    console.log(`Generating suggestions for ${profile.handle}...`);
+
+    // 1. Update basic fields if provided (still auto-update for now, or move to suggestions too? 
+    // User only asked for Links/Emails/Phones/Notes to be capable of accept/decline. 
+    // Let's keep profile fields auto-updating for now as they are singular).
+    const updates = {};
+    if (profile.displayName && profile.displayName !== profile.handle) updates.displayName = profile.displayName;
+    if (profile.relationship) updates.relationship = profile.relationship;
+    if (profile.profession) updates.profession = profile.profession;
+
+    if (Object.keys(updates).length > 0) {
+        contactStore.updateContact(profile.handle, updates);
+    }
+
+    // 2. Generate Suggestions
+    const types = ['links', 'emails', 'phones', 'notes'];
+    for (const type of types) {
+        if (profile[type] && Array.isArray(profile[type])) {
+            for (const content of profile[type]) {
+                if (content && typeof content === 'string' && content.length > 2) {
+                    // Check for duplicates before adding generic suggestion
+                    contactStore.addSuggestion(profile.handle, type, content);
+                }
+            }
+        }
+    }
+
+    return contactStore.findContact(profile.handle);
+}
+
 async function run() {
     try {
-        const handles = await fetchHandles(5); // Analyze top 5 contacts
-        const newProfiles = [];
+        console.log("Starting KYC Agent analysis...");
+        const handles = await fetchHandles(10);
 
         for (const meta of handles) {
             const profile = await analyzeContact(meta.id);
-            if (profile) newProfiles.push(profile);
+            if (profile) {
+                await mergeProfile(profile);
+            }
         }
-
-        console.log("\n--- Proposed Profiles ---");
-        console.log(JSON.stringify(newProfiles, null, 2));
-
-        // In a real app, we would merge this into contacts.json
-        // For now, we just output it for review.
+        console.log("Analysis complete.");
     } catch (e) {
-        console.error("Runtime Error:", e);
+        console.error("KYC Agent Runtime Error:", e);
     }
 }
 
-run();
+if (require.main === module) {
+    run();
+}
+
+module.exports = { run, analyzeContact, mergeProfile };

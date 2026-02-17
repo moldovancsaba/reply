@@ -12,6 +12,12 @@ graph TD
     Server -->|Query| VectorDB[(LanceDB)]
     Server -->|Context + Prompt| LLM[Ollama (Local LLM)]
     
+    subgraph "Background Services"
+        Worker[Background Worker (background-worker.js)] -->|Poll| AppleMessages[Messages.app]
+        Worker -->|Proactive Intelligence| ContactStore[(Contact Store)]
+        Worker -->|Embed| VectorDB
+    end
+
     subgraph "Ingestion Pipeline"
         SyncEngine -->|Read| AppleNotes[Apple Notes (AppleScript)]
         SyncEngine -->|Stream| Mbox[Email Archives (.mbox)]
@@ -45,6 +51,14 @@ graph TD
 *   **Technology:** Ollama
 *   **Integration:** `ollama` npm package.
 *   **Role:** Generates natural language responses based on retrieved context.
+
+### 5. Background Services
+*   **Unified Background Worker (`background-worker.js`):** A lightweight service that handles message polling, vectorization, proactive drafting, and KYC extraction.
+*   **Worker Strategy**: To prevent system overload, the worker uses a single-threaded "Intelligence Pipeline." Heavy tasks (like LLM drafting) are only triggered for new data.
+*   **Load Management**:
+    *   **Low-Level Polling**: Direct SQLite queries on `chat.db` are sub-millisecond and near-zero CPU.
+    *   **CPU Throttling**: The worker sleeps for a minimum of 60 seconds between cycles.
+    *   **Scalability**: Future channels (Mail, etc.) can be added as separate workers or modular fetchers within the same throttled loop.
 
 ## Design Principles
 1.  **Local-First:** No reliance on external APIs for core functionality.

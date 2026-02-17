@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.reply.worker</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/Cellar/node/25.6.1/bin/node</string>
+        <string>/Users/moldovancsaba/Projects/reply/chat/background-worker.js</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardErrorPath</key>
+    <string>/Users/moldovancsaba/Projects/reply/chat/worker.err.log</string>
+    <key>StandardOutPath</key>
+    <string>/Users/moldovancsaba/Projects/reply/chat/worker.out.log</string>
+    <key>WorkingDirectory</key>
+    <string>/Users/moldovancsaba/Projects/reply/chat</string>
+</dict>
+</plist>

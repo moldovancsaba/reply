@@ -4,7 +4,13 @@ const path = require('path');
 const { addDocuments } = require('./vector-store.js');
 const contactStore = require('./contact-store.js');
 
+const statusManager = require('./status-manager.js');
+
 const MAX_BUFFER = 1024 * 1024 * 100; // 100MB for large mailboxes
+
+function updateStatus(status) {
+    statusManager.update('mail', status);
+}
 
 function runAppleScript(script) {
     return new Promise((resolve, reject) => {
@@ -22,9 +28,11 @@ function runAppleScript(script) {
 /**
  * Enhanced sync script for Reply Hub v2.
  * Extracts: Date, Subject, Sender, Receiver, Content from Sent and Inbox.
+ * @returns {Promise<number>} Number of synced emails
  */
 async function syncMail() {
     console.log("Synchronizing Apple Mail...");
+    updateStatus({ state: "running", message: "Fetching emails from Mail.app..." });
 
     // We'll target the last 500 messages from each to keep it snappy for the POC
     const BATCH_SIZE = 500;
@@ -66,6 +74,7 @@ async function syncMail() {
         const entries = raw.split(delimiter).filter(e => e.includes(fieldDelimiter));
 
         console.log(`Processing ${entries.length} emails...`);
+        updateStatus({ state: "running", progress: 30, message: `Processing ${entries.length} emails...` });
 
         const docs = [];
 
@@ -88,14 +97,28 @@ async function syncMail() {
         }
 
         if (docs.length > 0) {
+            updateStatus({ state: "running", progress: 70, message: `Vectorizing ${docs.length} emails...` });
             await addDocuments(docs);
             console.log("Mail sync complete.");
+
+            // Get current count and add new emails
+            const currentStatus = statusManager.get('mail');
+            const currentCount = currentStatus.processed || 0;
+
+            updateStatus({ state: "idle", lastSync: new Date().toISOString(), processed: currentCount + docs.length });
+        } else {
+            // No new emails - preserve existing count
+            const currentStatus = statusManager.get('mail');
+            const currentCount = currentStatus.processed || 0;
+
+            updateStatus({ state: "idle", lastSync: new Date().toISOString(), processed: currentCount, message: "No new emails found" });
         }
 
         return docs.length;
 
     } catch (e) {
         console.error("Mail Sync Error:", e);
+        updateStatus({ state: "error", message: e.message });
         throw e;
     }
 }

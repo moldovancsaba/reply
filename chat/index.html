@@ -411,8 +411,11 @@
           <div id="sync-status" style="font-size: 0.7rem; color: #888; margin-top: 4px;">Ready</div>
         </div>
         <div style="display: flex; gap: 5px;">
-          <button id="sync-imessage-btn" class="btn-icon" title="Sync iMessage">💬</button>
-          <button id="sync-mail-btn" class="btn-icon" title="Sync Mail">📧</button>
+          <button id="sync-imessage-btn" class="btn-icon" title="Sync iMessage"
+            onclick="triggerSync('imessage')">💬</button>
+          <button id="sync-whatsapp-btn" class="btn-icon" title="Sync WhatsApp"
+            onclick="triggerSync('whatsapp')">📱</button>
+          <button id="sync-mail-btn" class="btn-icon" title="Sync Mail" onclick="triggerSync('mail')">📧</button>
           <button id="sync-contacts-btn" class="btn-icon" title="Sync Contacts">👤</button>
         </div>
       </div>
@@ -450,6 +453,7 @@
       <div class="input-area" style="border-top:none; border-bottom:1px solid var(--border);">
         <div class="input-wrapper">
           <textarea id="chat-input" placeholder="Type a message or let me suggest..."></textarea>
+          <button id="btn-mic" class="btn-icon" title="Voice Input">🎤</button>
           <button class="btn-icon">✨</button>
           <button id="btn-send" class="btn btn-primary">Send iMessage</button>
         </div>
@@ -482,8 +486,12 @@
       <div id="kyc-content-editor" style="display:none;">
         <div style="display: flex; justify-content: space-between; align-items: baseline;">
           <h3 style="margin-top:0;">Profile</h3>
-          <button class="btn btn-primary" style="font-size:0.75rem; padding: 4px 8px;"
-            onclick="saveInlineProfile()">Save Changes</button>
+          <div style="display:flex; gap:5px;">
+            <button id="btn-deep-analyze" class="btn-ghost" style="font-size:0.75rem; padding: 4px 8px;"
+              title="Run Deep Analysis with Ollama">✨ Analyze</button>
+            <button class="btn btn-primary" style="font-size:0.75rem; padding: 4px 8px;"
+              onclick="saveInlineProfile()">Save Changes</button>
+          </div>
         </div>
         <!-- KYC Cards follow... -->
 
@@ -667,10 +675,9 @@
           contactListEl.appendChild(btn);
         }
 
-        // If a contact is selected, refresh their messages too
-        if (currentHandle && !append) {
-          refreshCurrentThread();
-        }
+        // If a contact is selected, we do NOT automatically refresh their messages here 
+        // because it causes a double-fetch loop/race condition with selectContact.
+        // refreshCurrentThread() should only be called by explicit user actions or polling interval if needed.
       } catch (e) {
         console.error("Failed to load conversations:", e);
       }
@@ -787,12 +794,37 @@
         console.error("Failed to load thread:", e);
       }
 
-      // Re-trigger sidebar refresh for active state
-      loadConversations();
+      // Manually update active state in sidebar to avoid full reload
+      document.querySelectorAll(".contact-item").forEach(el => {
+        if (el.querySelector(".contact-name").textContent === contact.displayName) {
+          el.classList.add("active");
+        } else {
+          el.classList.remove("active");
+        }
+      });
     }
 
-    function renderMessages(msgs, append = false, hasMore = false) {
-      if (!append) {
+    /**
+     * Convert ISO date to relative time (e.g., "5m ago").
+     */
+    function timeAgo(dateString) {
+      if (!dateString || dateString === "Unknown") return "";
+      const date = new Date(dateString);
+      const now = new Date();
+      const seconds = Math.floor((now - date) / 1000);
+
+      if (seconds < 60) return "just now";
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes}m ago`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours}h ago`;
+      const days = Math.floor(hours / 24);
+      if (days < 7) return `${days}d ago`;
+      return date.toLocaleDateString();
+    }
+
+    function renderMessages(msgs, prepend = false, hasMore = false) {
+      if (!prepend) {
         // Keep the button but clear other children
         Array.from(messagesEl.children).forEach(child => {
           if (child.id !== 'btn-load-older') child.remove();
@@ -805,44 +837,31 @@
         const bubble = document.createElement("div");
         bubble.className = "message-bubble " + (m.role === "me" ? "me" : "contact");
 
-        const textContent = document.createElement("div");
-        textContent.textContent = m.text;
-        bubble.appendChild(textContent);
+        bubble.innerHTML = `
+          ${m.text}
+          <span class="message-info">${timeAgo(m.date)}</span>
+        `;
 
-        if (m.date && m.date !== "Unknown") {
-          const dateObj = new Date(m.date);
-          const formatted = dateObj.toLocaleDateString() === new Date().toLocaleDateString()
-            ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            : dateObj.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-          const info = document.createElement("span");
-          info.className = "message-info";
-          info.textContent = formatted;
-          bubble.appendChild(info);
-        }
-
-        // When appending older messages, we should insert THEM before the current messages but after the button
-        if (append) {
+        if (prepend) {
           // Find first message bubble (excluding button)
           const firstBubble = Array.from(messagesEl.children).find(c => c.id !== 'btn-load-older');
           if (firstBubble) {
             messagesEl.insertBefore(bubble, firstBubble);
           } else {
-            messagesEl.appendChild(bubble);
+            messagesEl.appendChild(bubble); // Should unlikely happen if button exists
           }
         } else {
-          // Newest at top? The existing logic sorts descending and appends.
-          // If sorted newest-first and appended, the last appended is at bottom but newest.
-          // But newest-at-top means we should probably append at the top.
-          // Let's stick to newest-at-top UI: newest is at bottom of current list? 
-          // Actually usually newest is at BOTTOM like in iMessage. 
-          // Wait, the implementation plan said: "Newest messages at the TOP."
-          // Okay, let's respect that.
           messagesEl.appendChild(bubble);
         }
       });
 
-      if (!append) messagesEl.scrollTop = 0; // Show newest at top
+      // Auto-scroll logic
+      if (!prepend) {
+        // New conversation load: scroll to bottom
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      } else {
+        // Prepend: maintain scroll position (complex, for now just let it be)
+      }
     }
 
     // Polling for new messages/state (Live Feel)
@@ -858,65 +877,89 @@
     init();
 
     // Sync Handlers
-    const syncStatus = document.getElementById("sync-status");
-    document.getElementById("sync-imessage-btn").onclick = async () => {
-      const btn = document.getElementById("sync-imessage-btn");
-      btn.disabled = true;
-      syncStatus.textContent = "Syncing iMessage...";
-      try {
-        const res = await fetch("/api/sync-imessage", { method: "POST" });
-        const data = await res.json();
-        // Handle both 'ok' and 'started' as success for background tasks
-        if (data.status === "ok" || data.status === "started") {
-          syncStatus.textContent = "iMessage Sync Started!";
-        } else {
-          syncStatus.textContent = "Sync Failed: " + (data.error || "Unknown error");
-        }
-        loadConversations();
-      } catch (e) {
-        syncStatus.textContent = "Error: " + e.message;
-      }
-      btn.disabled = false;
-    };
+    // Unified Sync Trigger
+    async function triggerSync(type) {
+      const statusEl = document.getElementById("sync-status");
+      statusEl.textContent = `Syncing ${type}...`;
 
+      try {
+        let endpoint = `/api/sync-${type}`;
+        const res = await fetch(endpoint, { method: "POST" });
+        const data = await res.json();
+
+        if (data.status === "started" || data.status === "ok") {
+          statusEl.textContent = `${type} sync started.`;
+          // Refresh conversations after a short delay
+          setTimeout(() => loadConversations(), 2000);
+        } else {
+          statusEl.textContent = `Error: ${data.message || "Unknown"}`;
+        }
+      } catch (e) {
+        statusEl.textContent = "Error triggering sync.";
+        console.error(e);
+      }
+    }
+
+    // Sync Handlers
+    document.getElementById("sync-imessage-btn").onclick = () => triggerSync("imessage");
+    document.getElementById("sync-whatsapp-btn").onclick = () => triggerSync("whatsapp");
+    document.getElementById("sync-mail-btn").onclick = () => triggerSync("mail");
+
+    // Wiring up Contacts Sync separately
     document.getElementById("sync-contacts-btn").onclick = async () => {
       const btn = document.getElementById("sync-contacts-btn");
       btn.disabled = true;
-      syncStatus.textContent = "Syncing Contacts...";
+      const statusEl = document.getElementById("sync-status");
+      statusEl.textContent = "Syncing Contacts...";
       try {
-        const res = await fetch("/api/sync-contacts", { method: "POST" });
+        const res = await fetch("/api/sync-contacts");
         const data = await res.json();
-        if (data.status === "ok" || data.status === "started") {
-          syncStatus.textContent = data.count ? `Synced ${data.count} contacts!` : "Contacts Synced!";
-        } else {
-          syncStatus.textContent = "Sync Failed: " + (data.error || "Unknown error");
-        }
+        statusEl.textContent = data.count ? `Synced ${data.count} contacts!` : "Contacts Synced!";
         loadConversations();
       } catch (e) {
-        syncStatus.textContent = "Error: " + e.message;
+        statusEl.textContent = "Sync failed.";
+        console.error(e);
       }
       btn.disabled = false;
     };
 
-    // Wired up buttons
-    document.getElementById("sync-mail-btn").onclick = async () => {
-      const btn = document.getElementById("sync-mail-btn");
-      btn.disabled = true;
-      syncStatus.textContent = "Syncing Mail...";
-      try {
-        const res = await fetch("/api/sync-mail", { method: "POST" });
-        const data = await res.json();
-        if (data.status === "ok" || data.status === "started") {
-          syncStatus.textContent = "Mail Sync Started!";
+    // Voice Handling
+    const micBtn = document.getElementById("btn-mic");
+    if ('webkitSpeechRecognition' in window) {
+      const recognition = new webkitSpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = "en-US";
+
+      recognition.onstart = function () {
+        micBtn.style.background = "#ffeba0";
+        micBtn.classList.add("recording");
+      };
+
+      recognition.onend = function () {
+        micBtn.style.background = "";
+        micBtn.classList.remove("recording");
+      };
+
+      recognition.onresult = function (event) {
+        const transcript = event.results[0][0].transcript;
+        const input = document.getElementById("chat-input");
+        input.value = input.value ? input.value + " " + transcript : transcript;
+        input.focus();
+      };
+
+      micBtn.onclick = function () {
+        if (micBtn.classList.contains("recording")) {
+          recognition.stop();
         } else {
-          syncStatus.textContent = "Sync Failed: " + (data.error || "Unknown error");
+          recognition.start();
         }
-        loadConversations();
-      } catch (e) {
-        syncStatus.textContent = "Error: " + e.message;
-      }
-      btn.disabled = false;
-    };
+      };
+    } else {
+      if (micBtn) micBtn.style.display = "none";
+    }
+
+    // Wired up buttons
 
     document.getElementById("btn-suggest").onclick = async () => {
       if (!currentHandle) return alert("Select a contact first");
@@ -983,6 +1026,46 @@
         alert("Request failed: " + e.message);
       }
     }
+
+    // Wiring up Deep Analyze
+    document.getElementById("btn-deep-analyze").onclick = async () => {
+      if (!currentHandle) return;
+      const btn = document.getElementById("btn-deep-analyze");
+      const originalText = btn.innerHTML; // Save icon
+
+      btn.disabled = true;
+      btn.innerHTML = `<span class="status-dot" style="animation: pulse 1s infinite">🔵</span> Analyzing...`;
+
+      try {
+        const res = await fetch("/api/analyze-contact", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ handle: currentHandle })
+        });
+        const data = await res.json();
+
+        if (data.status === "ok") {
+          if (data.contact) {
+            // Update local state
+            const contact = conversations.find(c => c.handle === currentHandle);
+            if (contact) Object.assign(contact, data.contact);
+
+            // Refresh UI
+            selectContact(contact);
+            alert("Analysis Complete! Profile updated.");
+          } else {
+            alert(data.message || "Analysis ran but returned no new data.");
+          }
+        } else {
+          alert("Analysis failed: " + data.error);
+        }
+      } catch (e) {
+        alert("Error: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    };
 
     window.acceptKYC = function () {
       if (!currentHandle) return;
@@ -1123,8 +1206,11 @@
         const res = await fetch("/api/system-health");
         const health = await res.json();
 
+        // Use iMessage channel as primary sync indicator
+        const syncState = health.channels?.imessage || {};
+        const lastSync = syncState.lastSync ? new Date(syncState.lastSync).toLocaleString() : "Never";
+
         const uptimeHrs = (health.uptime / 3600).toFixed(1);
-        const lastSync = health.sync.lastSync ? new Date(health.sync.lastSync).toLocaleString() : "Never";
 
         dashboard.innerHTML = `
                 <div class="health-card">
@@ -1133,29 +1219,70 @@
                     <div class="health-status-tag tag-online">● Server Running</div>
                     <div style="font-size:0.8rem; color:#888;">Uptime: ${uptimeHrs} hours</div>
                 </div>
+                
+                <!-- iMessage Card -->
                 <div class="health-card">
                     <h4>iMessage Sync</h4>
-                    <div class="health-value">${health.sync.lastProcessedId || 0}</div>
-                    <div class="health-status-tag tag-syncing">● Messages Scanned</div>
+                    <div class="health-value">${syncState.processed || 0}</div>
+                    <div class="health-status-tag ${syncState.state === 'running' ? 'tag-warning' : 'tag-syncing'}">
+                        ${syncState.state === 'running' ? '⚡️ Syncing...' : '● Messages Scanned'}
+                    </div>
                     <div style="font-size:0.8rem; color:#888;">Last Sync: ${lastSync}</div>
                 </div>
+
+                <!-- WhatsApp Card -->
                 <div class="health-card">
-                    <h4>Contact Pipeline</h4>
-                    <div class="health-value">${health.stats.total}</div>
-                    <div style="display:flex; gap:8px;">
-                        <span style="font-size:0.75rem; color:#ef6c00;">🟠 ${health.stats.draft} Drafts</span>
-                        <span style="font-size:0.75rem; color:#2e7d32;">🟢 ${health.stats.active} Active</span>
+                    <h4>WhatsApp Sync</h4>
+                    <div class="health-value">${health.channels?.whatsapp?.processed || 0}</div>
+                    <div class="health-status-tag ${health.channels?.whatsapp?.state === 'running' ? 'tag-warning' : 'tag-syncing'}">
+                        ${health.channels?.whatsapp?.state === 'running' ? '⚡️ Syncing...' : '● Messages Scanned'}
+                    </div>
+                    <div style="font-size:0.8rem; color:#888;">
+                        Last Sync: ${health.channels?.whatsapp?.lastSync ? new Date(health.channels.whatsapp.lastSync).toLocaleString() : "Never"}
                     </div>
                 </div>
+
+                <!-- Notes Card -->
                 <div class="health-card">
-                    <h4>Intelligence Engine</h4>
-                    <div class="health-value">Active</div>
-                    <div class="health-status-tag tag-online">● Gemini AI Connected</div>
-                    <div style="font-size:0.8rem; color:#888;">Context: 2.1k Emails</div>
+                    <h4>Apple Notes</h4>
+                     <div class="health-value">${health.channels?.notes?.total || 0}</div>
+                    <div class="health-status-tag ${health.channels?.notes?.state === 'running' ? 'tag-warning' : 'tag-syncing'}">
+                        ${health.channels?.notes?.state === 'running' ? '⚡️ Indexing...' : '● Notes Indexed'}
+                    </div>
+                    <div style="font-size:0.8rem; color:#888;">
+                        Last Sync: ${health.channels?.notes?.lastSync ? new Date(health.channels.notes.lastSync).toLocaleString() : "Never"}
+                    </div>
+                </div>
+                
+                <div class="health-card" style="grid-column: span 2;">
+                    <h4>Auto-Triage Log</h4>
+                    <div id="triage-log-list" style="font-size:0.8rem; color:#555; max-height:100px; overflow-y:auto;">
+                        loading...
+                    </div>
                 </div>
             `;
       } catch (e) {
         dashboard.innerHTML = `<div style="padding:40px; color:red;">Failed to load health metrics: ${e.message}</div>`;
+      }
+
+      // Fetch Triage Logs separately
+      try {
+        const res = await fetch("/api/triage-log");
+        const data = await res.json();
+        const logList = document.getElementById("triage-log-list");
+        if (logList && data.logs && data.logs.length > 0) {
+          logList.innerHTML = data.logs.map(l => `
+                <div style="border-bottom:1px solid #eee; padding:4px 0;">
+                    <span style="font-weight:700; color:#555;">[${l.tag}]</span> 
+                    ${l.action.toUpperCase()} - ${l.sender}: "${l.preview}"
+                    <span style="color:#aaa; font-size:0.7rem;">${new Date(l.timestamp).toLocaleTimeString()}</span>
+                </div>
+              `).join('');
+        } else if (logList) {
+          logList.innerHTML = "<div style='color:#999; font-style:italic;'>No recent triage actions.</div>";
+        }
+      } catch (e) {
+        console.error("Failed to load triage logs", e);
       }
     }
 

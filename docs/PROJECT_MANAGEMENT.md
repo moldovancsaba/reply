@@ -3,7 +3,12 @@
 **Purpose:** This document defines how we work. It is the rulebook for maintaining the Single Source of Truth (SSOT).
 **Audience:** All Agents (Agnes, Tribeca, etc.) and Developers.
 
-## 1. The Single Source of Truth (SSOT)
+## 1. Safety & Hallucinations (CRITICAL AGENT RULES)
+*   **NEVER Hallucinate:** If you don't see it, ask. Do not guess commands or UI states.
+*   **Read Before Do:** Verify credentials (e.g., `gh auth status`) and capability before attempting actions.
+*   **Clarify:** If a CLI command fails or hangs, STOP. Do not retry blindly. Ask the user for help.
+
+## 2. The Single Source of Truth (SSOT)
 The **[GitHub Project Board](https://github.com/users/moldovancsaba/projects/1)** is the ONLY source of truth for what is being worked on.
 
 *   **Rule:** If it's not on the board, it doesn't exist.

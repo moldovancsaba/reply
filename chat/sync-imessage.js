@@ -5,10 +5,16 @@ const fs = require('fs');
 
 const DB_PATH = path.join(__dirname, 'data', 'chat.db');
 const STATE_FILE = path.join(__dirname, 'data', 'sync_state.json');
+const statusManager = require('./status-manager.js');
+
+function updateStatus(status) {
+    statusManager.update('imessage', status);
+}
 
 // Ensure DB exists
 if (!fs.existsSync(DB_PATH)) {
     console.error("Database not found. Please copy chat.db to chat/data/");
+    updateStatus({ state: "error", message: "Database not found" });
     process.exit(1);
 }
 
@@ -38,8 +44,10 @@ function convertDate(value) {
 
 /**
  * Sync messages in batches.
+ * @returns {Promise<void>}
  */
 async function sync() {
+    updateStatus({ state: "running", message: "Opening message database..." });
     const state = loadState();
     console.log(`Starting iMessage sync from ROWID > ${state.lastProcessedId}...`);
 
@@ -61,13 +69,27 @@ async function sync() {
 
     return new Promise((resolve, reject) => {
         db.all(query, [state.lastProcessedId], async (err, rows) => {
-            if (err) return reject(err);
+            if (err) {
+                updateStatus({ state: "error", message: err.message });
+                return reject(err);
+            }
             if (rows.length === 0) {
                 console.log("Everything is already in sync!");
+
+                // Read the actual state to get the true total
+                const state = loadState();
+
+                updateStatus({
+                    state: "idle",
+                    lastSync: new Date().toISOString(),
+                    processed: state.lastProcessedId || 0  // Use actual database count
+                });
                 return resolve();
             }
 
             console.log(`Processing ${rows.length} new messages...`);
+            // Don't update 'processed' during intermediate steps - only at the end
+            updateStatus({ state: "running", progress: 20, message: `Processing ${rows.length} new messages...` });
 
             const docs = rows.map(row => ({
                 id: `msg-${row.ROWID}`,
@@ -77,6 +99,7 @@ async function sync() {
             }));
 
             try {
+                updateStatus({ state: "running", progress: 50, message: `Vectorizing ${docs.length} messages...` });
                 await addDocuments(docs);
 
                 // Update LastContacted in the store
@@ -88,17 +111,31 @@ async function sync() {
                 const maxId = rows[rows.length - 1].ROWID;
                 saveState(maxId);
                 console.log(`Sync complete. Last ID: ${maxId}`);
+
+                // Use lastProcessedId as the source of truth for total count
+                updateStatus({
+                    state: "idle",
+                    lastSync: new Date().toISOString(),
+                    processed: maxId,  // This is the ACTUAL total in the database
+                    lastId: maxId
+                });
                 resolve();
             } catch (syncErr) {
+                updateStatus({ state: "error", message: syncErr.message });
                 reject(syncErr);
             }
         });
     });
 }
 
-sync().then(() => {
-    db.close();
-}).catch(err => {
-    console.error("Sync failed:", err);
-    db.close();
-});
+if (require.main === module) {
+    sync().then(() => {
+        db.close();
+    }).catch(err => {
+        console.error("Sync failed:", err);
+        updateStatus({ state: "error", message: err.message });
+        db.close();
+    });
+}
+
+module.exports = { sync };
