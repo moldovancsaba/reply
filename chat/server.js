@@ -483,14 +483,65 @@ const server = http.createServer((req, res) => {
       return { state: "idle", message: "No sync data available" };
     };
 
+    // Read actual counts from sync_state files (source of truth)
+    const getImessageCount = () => {
+      const stateFile = path.join(DATA_DIR, "sync_state.json");
+      if (fs.existsSync(stateFile)) {
+        try {
+          const state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
+          return state.lastProcessedId || 0;
+        } catch (e) {
+          return 0;
+        }
+      }
+      return 0;
+    };
+
+    const getWhatsappCount = () => {
+      const dbPath = path.join(process.env.HOME, 'Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite');
+      // For now, read from status file (will be replaced with direct DB query)
+      const status = readStatus("whatsapp_sync_status.json");
+      return status.processed || 0;
+    };
+
+    const getNotesCount = () => {
+      const notesMetadata = path.join(__dirname, '../knowledge/notes-metadata.json');
+      if (fs.existsSync(notesMetadata)) {
+        try {
+          const data = JSON.parse(fs.readFileSync(notesMetadata, "utf8"));
+          return data.totalNotes || 0;
+        } catch (e) {
+          return 0;
+        }
+      }
+      return 0;
+    };
+
+    // Build health response with counts from source of truth
+    const imessageStatus = readStatus("imessage_sync_status.json");
+    const whatsappStatus = readStatus("whatsapp_sync_status.json");
+    const notesStatus = readStatus("notes_sync_status.json");
+
     const health = {
       uptime: Math.floor(process.uptime()),
       status: "online",
       channels: {
-        imessage: readStatus("imessage_sync_status.json"),
-        whatsapp: readStatus("whatsapp_sync_status.json"),
+        imessage: {
+          ...imessageStatus,
+          processed: getImessageCount(),  // Override with actual database count
+          total: getImessageCount()
+        },
+        whatsapp: {
+          ...whatsappStatus,
+          processed: getWhatsappCount(),
+          total: getWhatsappCount()
+        },
+        notes: {
+          ...notesStatus,
+          processed: getNotesCount(),
+          total: getNotesCount()
+        },
         mail: readStatus("mail_sync_status.json"),
-        notes: readStatus("notes_sync_status.json"),
         contacts: readStatus("sync_state.json") // Legacy sync state compatibility
       },
       stats: contactStore.getStats(),
