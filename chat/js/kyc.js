@@ -46,9 +46,17 @@ export async function loadKYCData(handle) {
             kycNotesInput.value = '';
         }
     } catch (error) {
-        console.error('Failed to load KYC:', error);
-        kycEmptyState.style.display = 'block';
-        kycEditor.style.display = 'none';
+        console.error('Failed to load KYC (likely new profile):', error);
+        // Even on error (e.g. 404), show the editor so user can create the profile
+        kycEmptyState.style.display = 'none';
+        kycEditor.style.display = 'block';
+
+        // Reset fields for new profile
+        kycNameInput.value = '';
+        kycRoleInput.value = '';
+        kycRelInput.value = '';
+        kycHandleInput.value = handle;
+        kycNotesInput.value = '';
     }
 }
 
