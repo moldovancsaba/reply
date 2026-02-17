@@ -27,20 +27,23 @@ export async function loadKYCData(handle) {
     try {
         const data = await loadKYC(handle);
 
-        if (data && data.name) {
-            // Show editor with data
-            kycEmptyState.style.display = 'none';
-            kycEditor.style.display = 'block';
+        // Always show editor if a handle is selected, allowing user to create new profile
+        kycEmptyState.style.display = 'none';
+        kycEditor.style.display = 'block';
 
+        if (data) {
             kycNameInput.value = data.name || '';
             kycRoleInput.value = data.role || '';
             kycRelInput.value = data.relationship || '';
             kycHandleInput.value = handle;
             kycNotesInput.value = data.notes || '';
         } else {
-            // Show empty state
-            kycEmptyState.style.display = 'block';
-            kycEditor.style.display = 'none';
+            // New profile for this handle
+            kycNameInput.value = '';
+            kycRoleInput.value = '';
+            kycRelInput.value = '';
+            kycHandleInput.value = handle;
+            kycNotesInput.value = '';
         }
     } catch (error) {
         console.error('Failed to load KYC:', error);
