@@ -410,14 +410,7 @@
           <h2 style="margin:0; font-size: 1.1rem;">Reply Hub</h2>
           <div id="sync-status" style="font-size: 0.7rem; color: #888; margin-top: 4px;">Ready</div>
         </div>
-        <div style="display: flex; gap: 5px;">
-          <button id="sync-imessage-btn" class="btn-icon" title="Sync iMessage"
-            onclick="triggerSync('imessage')">💬</button>
-          <button id="sync-whatsapp-btn" class="btn-icon" title="Sync WhatsApp"
-            onclick="triggerSync('whatsapp')">📱</button>
-          <button id="sync-mail-btn" class="btn-icon" title="Sync Mail" onclick="triggerSync('mail')">📧</button>
-          <button id="sync-contacts-btn" class="btn-icon" title="Sync Contacts">👤</button>
-        </div>
+        <!-- Sync buttons moved to individual cards -->
       </div>
       <div id="contact-list" class="contact-list">
         <!-- Contact Items will be injected here -->
@@ -1222,7 +1215,10 @@
                 
                 <!-- iMessage Card -->
                 <div class="health-card">
-                    <h4>iMessage Sync</h4>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h4>iMessage Sync</h4>
+                        <button class="btn-icon" title="Sync iMessage" onclick="triggerSync('imessage')">💬</button>
+                    </div>
                     <div class="health-value">${syncState.processed || 0}</div>
                     <div class="health-status-tag ${syncState.state === 'running' ? 'tag-warning' : 'tag-syncing'}">
                         ${syncState.state === 'running' ? '⚡️ Syncing...' : '● Messages Scanned'}
@@ -1232,7 +1228,10 @@
 
                 <!-- WhatsApp Card -->
                 <div class="health-card">
-                    <h4>WhatsApp Sync</h4>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h4>WhatsApp Sync</h4>
+                        <button class="btn-icon" title="Sync WhatsApp" onclick="triggerSync('whatsapp')">📱</button>
+                    </div>
                     <div class="health-value">${health.channels?.whatsapp?.processed || 0}</div>
                     <div class="health-status-tag ${health.channels?.whatsapp?.state === 'running' ? 'tag-warning' : 'tag-syncing'}">
                         ${health.channels?.whatsapp?.state === 'running' ? '⚡️ Syncing...' : '● Messages Scanned'}
@@ -1244,7 +1243,10 @@
 
                 <!-- Notes Card -->
                 <div class="health-card">
-                    <h4>Apple Notes</h4>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h4>Apple Notes</h4>
+                        <button class="btn-icon" title="Sync Notes" onclick="triggerSync('notes')">📝</button>
+                    </div>
                      <div class="health-value">${health.channels?.notes?.total || 0}</div>
                     <div class="health-status-tag ${health.channels?.notes?.state === 'running' ? 'tag-warning' : 'tag-syncing'}">
                         ${health.channels?.notes?.state === 'running' ? '⚡️ Indexing...' : '● Notes Indexed'}
