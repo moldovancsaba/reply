@@ -26,7 +26,11 @@ You will find these files in the repository. Use them for specific needs:
 *   **Stability:** Stable. Background intelligence runs via `background-worker.js` (poll interval configurable in Settings). WhatsApp direct-send uses macOS UI automation and requires Accessibility permission.
 
 ## 🚨 Single Source of Truth
-All tasks, roadmap items, and the Idea Bank are managed **strictly** on the **[GitHub Project Board](https://github.com/users/moldovancsaba/projects/1)**.
+All tasks, roadmap items, and the Idea Bank are managed **strictly** on the **GitHub Project Board** and as issues in the SSOT repo:
+
+*   **Board:** https://github.com/users/moldovancsaba/projects/1
+*   **SSOT Issues Repo:** `moldovancsaba/mvp-factory-control`
+    *   **Rule:** Do **NOT** create/manage issues in product repositories (e.g. `moldovancsaba/reply`).
 
 ### 🛠️ Professional Board Access (Agnes/Agent Standard)
 Do **NOT** use browser-based tools for board management as they are unreliable for automated agents. Use the GitHub CLI (`gh`) exclusively for a reproducible, professional workflow.
