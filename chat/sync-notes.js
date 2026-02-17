@@ -125,7 +125,8 @@ async function syncNotes(limit = null) {
 
     fs.writeFileSync(META_PATH, JSON.stringify(newCache, null, 2));
 
-    const finalStats = { state: "idle", lastSync: new Date().toISOString(), total: currentNotes.length, updated: toUpdate.length };
+    // Don't set 'total' or 'processed' - server reads from notes-metadata.json
+    const finalStats = { state: "idle", lastSync: new Date().toISOString() };
     updateStatus(finalStats);
     console.log("Sync complete.");
     return finalStats;
