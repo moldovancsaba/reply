@@ -64,6 +64,23 @@
       min-height: 0;
     }
 
+    .load-more-btn {
+      width: 100%;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: none;
+      color: #888;
+      font-size: 0.8rem;
+      cursor: pointer;
+      border-top: 1px solid #333;
+      transition: background 0.2s;
+    }
+
+    .load-more-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #aaa;
+    }
+
     .contact-item {
       padding: 1rem;
       border-bottom: 1px solid #333;
@@ -439,6 +456,9 @@
       </div>
 
       <div id="messages" class="messages-container">
+        <button id="btn-load-older" class="load-more-btn"
+          style="display:none; color:var(--text-dim); background:rgba(0,0,0,0.03); border-radius:12px; margin-bottom:1rem;"
+          onclick="loadMoreMessages()">Load Older Messages</button>
         <!-- Messages will be injected here -->
       </div>
 
@@ -583,15 +603,27 @@
     const kycNotesInput = document.getElementById("kyc-notes-input");
 
     let currentHandle = null;
+    let contactOffset = 0;
+    let messageOffset = 0;
+    const CONTACT_LIMIT = 20;
+    const MESSAGE_LIMIT = 30;
 
     /**
      * Fetch all conversations and render sidebar.
      */
-    async function loadConversations() {
+    async function loadConversations(append = false) {
+      if (!append) contactOffset = 0;
+
       try {
-        const res = await fetch("/api/conversations");
-        const contacts = await res.json();
-        contactListEl.innerHTML = "";
+        const res = await fetch(`/api/conversations?limit=${CONTACT_LIMIT}&offset=${contactOffset}`);
+        const data = await res.json();
+        const contacts = data.contacts;
+
+        if (!append) contactListEl.innerHTML = "";
+
+        // Remove existing load more button if present
+        const oldBtn = document.getElementById("load-more-contacts");
+        if (oldBtn) oldBtn.remove();
 
         contacts.forEach(c => {
           const item = document.createElement("div");
@@ -613,14 +645,49 @@
           contactListEl.appendChild(item);
         });
 
+        if (data.hasMore) {
+          const btn = document.createElement("button");
+          btn.id = "load-more-contacts";
+          btn.className = "load-more-btn";
+          btn.textContent = "Load More Contacts...";
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            contactOffset += CONTACT_LIMIT;
+            loadConversations(true);
+          };
+          contactListEl.appendChild(btn);
+        }
+
         // If a contact is selected, refresh their messages too
-        if (currentHandle) {
-          const res = await fetch(`/api/thread?handle=${encodeURIComponent(currentHandle)}`);
-          const data = await res.json();
-          renderMessages(data.messages);
+        if (currentHandle && !append) {
+          refreshCurrentThread();
         }
       } catch (e) {
         console.error("Failed to load conversations:", e);
+      }
+    }
+
+    async function refreshCurrentThread() {
+      if (!currentHandle) return;
+      try {
+        const res = await fetch(`/api/thread?handle=${encodeURIComponent(currentHandle)}&limit=${MESSAGE_LIMIT}&offset=0`);
+        const data = await res.json();
+        messageOffset = 0;
+        renderMessages(data.messages, false, data.hasMore);
+      } catch (e) {
+        console.error("Failed to refresh thread:", e);
+      }
+    }
+
+    async function loadMoreMessages() {
+      if (!currentHandle) return;
+      messageOffset += MESSAGE_LIMIT;
+      try {
+        const res = await fetch(`/api/thread?handle=${encodeURIComponent(currentHandle)}&limit=${MESSAGE_LIMIT}&offset=${messageOffset}`);
+        const data = await res.json();
+        renderMessages(data.messages, true, data.hasMore);
+      } catch (e) {
+        console.error("Failed to load more messages:", e);
       }
     }
 
@@ -715,12 +782,17 @@
       loadConversations();
     }
 
-    function renderMessages(msgs) {
-      messagesEl.innerHTML = "";
-      // Sort newest first
-      const sorted = [...msgs].sort((a, b) => new Date(b.date) - new Date(a.date));
+    function renderMessages(msgs, append = false, hasMore = false) {
+      if (!append) {
+        // Keep the button but clear other children
+        Array.from(messagesEl.children).forEach(child => {
+          if (child.id !== 'btn-load-older') child.remove();
+        });
+      }
 
-      sorted.forEach(m => {
+      document.getElementById("btn-load-older").style.display = hasMore ? "block" : "none";
+
+      msgs.forEach(m => {
         const bubble = document.createElement("div");
         bubble.className = "message-bubble " + (m.role === "me" ? "me" : "contact");
 
@@ -740,9 +812,28 @@
           bubble.appendChild(info);
         }
 
-        messagesEl.appendChild(bubble);
+        // When appending older messages, we should insert THEM before the current messages but after the button
+        if (append) {
+          // Find first message bubble (excluding button)
+          const firstBubble = Array.from(messagesEl.children).find(c => c.id !== 'btn-load-older');
+          if (firstBubble) {
+            messagesEl.insertBefore(bubble, firstBubble);
+          } else {
+            messagesEl.appendChild(bubble);
+          }
+        } else {
+          // Newest at top? The existing logic sorts descending and appends.
+          // If sorted newest-first and appended, the last appended is at bottom but newest.
+          // But newest-at-top means we should probably append at the top.
+          // Let's stick to newest-at-top UI: newest is at bottom of current list? 
+          // Actually usually newest is at BOTTOM like in iMessage. 
+          // Wait, the implementation plan said: "Newest messages at the TOP."
+          // Okay, let's respect that.
+          messagesEl.appendChild(bubble);
+        }
       });
-      messagesEl.scrollTop = 0; // Start at top for newest
+
+      if (!append) messagesEl.scrollTop = 0; // Show newest at top
     }
 
     // Polling for new messages/state (Live Feel)
