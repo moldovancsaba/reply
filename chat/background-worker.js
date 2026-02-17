@@ -90,11 +90,41 @@ const MAX_SEEN_IDS = 1000;
 let seenIds = new Set();
 let isProcessing = false;
 const deepAnalysisInFlightByHandle = new Map();
+const AUTO_SCAN_CURSOR_PATH = path.join(__dirname, 'data', 'kyc_auto_scan_cursor.json');
 
 function getAutoAnalyzeIntervalMs() {
     const hours = Number(process.env.REPLY_KYC_AUTO_INTERVAL_HOURS || 24);
     if (!Number.isFinite(hours) || hours <= 0) return null;
     return Math.max(1, Math.min(hours, 24 * 14)) * 60 * 60 * 1000;
+}
+
+function getAutoScanPerHour() {
+    // How many contacts to deep-analyze per hour in the background.
+    // Default: 1 (safe). Set to 0 to disable.
+    const raw = process.env.REPLY_KYC_AUTO_SCAN_PER_HOUR;
+    if (raw === undefined || raw === null || String(raw).trim() === "") return 1;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) return 1;
+    return Math.min(n, 12); // hard cap: 12/hour
+}
+
+function readAutoScanCursor() {
+    try {
+        if (!fs.existsSync(AUTO_SCAN_CURSOR_PATH)) return { index: 0 };
+        const parsed = JSON.parse(fs.readFileSync(AUTO_SCAN_CURSOR_PATH, 'utf8') || "{}");
+        const index = Number(parsed?.index);
+        return { index: Number.isFinite(index) && index >= 0 ? index : 0 };
+    } catch {
+        return { index: 0 };
+    }
+}
+
+function writeAutoScanCursor(next) {
+    try {
+        const dir = path.dirname(AUTO_SCAN_CURSOR_PATH);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(AUTO_SCAN_CURSOR_PATH, JSON.stringify({ index: next?.index || 0 }, null, 2));
+    } catch { }
 }
 
 function analyzeContactInChild(handle) {
@@ -160,6 +190,50 @@ async function maybeRunDeepAnalysis(handle, reason = 'new-message') {
     } catch (e) {
         console.warn('[Worker] Deep analyze failed:', e?.message || e);
     }
+}
+
+async function runAutoDeepAnalyzeSweepOnce() {
+    const perHour = getAutoScanPerHour();
+    if (!perHour) return;
+    const intervalMs = getAutoAnalyzeIntervalMs();
+    if (!intervalMs) return;
+
+    const contacts = Array.isArray(contactStore.contacts) ? contactStore.contacts : [];
+    if (contacts.length === 0) return;
+
+    // Prefer recently-active contacts first.
+    const sorted = [...contacts]
+        .filter((c) => c && c.handle && c.status !== 'closed')
+        .sort((a, b) => {
+            const da = a.lastContacted ? new Date(a.lastContacted) : new Date(0);
+            const db = b.lastContacted ? new Date(b.lastContacted) : new Date(0);
+            return db - da;
+        });
+
+    const cursor = readAutoScanCursor();
+    let idx = cursor.index % Math.max(1, sorted.length);
+
+    // Find the next eligible contact (not analyzed within interval).
+    let pick = null;
+    for (let i = 0; i < sorted.length; i++) {
+        const c = sorted[(idx + i) % sorted.length];
+        const analyzedAt = c?.kycAnalysis?.analyzedAt ? new Date(c.kycAnalysis.analyzedAt) : null;
+        const lastMs = analyzedAt && !Number.isNaN(analyzedAt.getTime()) ? analyzedAt.getTime() : 0;
+        if (!lastMs || (Date.now() - lastMs) >= intervalMs) {
+            pick = c;
+            idx = (idx + i + 1) % sorted.length;
+            break;
+        }
+    }
+
+    if (!pick) {
+        // Still advance cursor to avoid getting stuck on a fixed index.
+        writeAutoScanCursor({ index: (idx + 1) % sorted.length });
+        return;
+    }
+
+    writeAutoScanCursor({ index: idx });
+    await maybeRunDeepAnalysis(String(pick.handle), 'auto-scan');
 }
 
 async function poll() {
@@ -321,3 +395,32 @@ async function pollLoop() {
 }
 
 pollLoop();
+
+// Background deep analysis sweep: N contacts per hour (default 1/hour).
+// This keeps AI Suggestions fresh even if a contact hasn't sent a new message recently.
+(() => {
+    const perHour = getAutoScanPerHour();
+    if (!perHour) return;
+    const intervalMs = getAutoAnalyzeIntervalMs();
+    if (!intervalMs) return;
+
+    const minutes = Math.max(5, Math.round(60 / perHour));
+    const everyMs = minutes * 60 * 1000;
+
+    console.log(`[Worker] Auto KYC sweep enabled: ~${perHour}/hour (every ${minutes}m), min interval ${Math.round(intervalMs / 3600000)}h/contact.`);
+
+    let inFlight = false;
+    const tick = async () => {
+        if (inFlight) return;
+        inFlight = true;
+        try {
+            await runAutoDeepAnalyzeSweepOnce();
+        } finally {
+            inFlight = false;
+        }
+    };
+
+    // Stagger first run slightly after startup to avoid competing with initial sync.
+    setTimeout(() => void tick(), 45 * 1000);
+    setInterval(() => void tick(), everyMs);
+})();
