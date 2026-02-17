@@ -20,12 +20,13 @@ npm install
     ```bash
     npm start
     ```
-    Access the UI at `http://localhost:3000`.
+    Access the UI at `http://localhost:3000` (or the port printed in the terminal if 3000 is already in use).
 
 2.  **Ingest Data:**
     *   **Local Files:** `node ingest.js` (scans `knowledge/documents`)
     *   **Gmail Archive:** `node ingest.js --mbox /path/to/archive.mbox`
     *   **Apple Notes:** Click "Sync Notes" in the Web UI.
+    *   **Email Sync (live):** Click "Sync Email" in the Web UI. Configure IMAP or Gmail OAuth via Settings (gear icon).
 
 ## 🧠 Core Features
 *   **Unified Knowledge Base:** Stores vectors of your notes and emails locally.
@@ -40,4 +41,4 @@ npm install
 *   [Release Notes](docs/RELEASE_NOTES.md)
 
 ## 🛡️ Privacy First
-All data remains on your device. No API keys required. No improved training data sent to cloud providers.
+All ingested data remains on your device. Core functionality runs locally (Ollama + LanceDB). Optional connectors (e.g. Gmail OAuth) use external provider APIs only when you configure them.

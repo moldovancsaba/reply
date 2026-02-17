@@ -1,8 +1,0 @@
-Error loading contacts: SyntaxError: Unexpected end of JSON input
-    at JSON.parse (<anonymous>)
-    at ContactStore.load (/Users/moldovancsaba/Projects/reply/chat/contact-store.js:24:34)
-    at get contacts (/Users/moldovancsaba/Projects/reply/chat/contact-store.js:13:14)
-    at Server.<anonymous> (/Users/moldovancsaba/Projects/reply/chat/server.js:284:29)
-    at Server.emit (node:events:508:20)
-    at parserOnIncoming (node:_http_server:1213:12)
-    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)

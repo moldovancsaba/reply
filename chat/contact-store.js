@@ -6,6 +6,7 @@ const DATA_FILE = path.join(__dirname, 'data', 'contacts.json');
 class ContactStore {
     constructor() {
         this._contacts = [];
+        this._lastMtimeMs = null;
         this.load();
     }
 
@@ -21,6 +22,11 @@ class ContactStore {
     load() {
         try {
             if (fs.existsSync(DATA_FILE)) {
+                const stat = fs.statSync(DATA_FILE);
+                if (this._lastMtimeMs !== null && stat.mtimeMs === this._lastMtimeMs) {
+                    return; // No changes on disk
+                }
+                this._lastMtimeMs = stat.mtimeMs;
                 const raw = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
                 // Deduplicate by handle on load
                 const merged = {};
@@ -80,6 +86,8 @@ class ContactStore {
                     console.log(`Deduplicated contacts: ${raw.length} -> ${this._contacts.length}`);
                     this.save();
                 }
+            } else {
+                this._lastMtimeMs = null;
             }
         } catch (err) {
             console.error("Error loading contacts:", err);
@@ -132,14 +140,29 @@ class ContactStore {
     }
 
     /**
+     * Get a contact by exact handle match (case-insensitive).
+     * Prefer this when you already have a normalized handle string.
+     * @param {string} handle
+     * @returns {object|null}
+     */
+    getByHandle(handle) {
+        if (!handle) return null;
+        this.load();
+        const search = String(handle).toLowerCase().trim();
+        return this.contacts.find(c => c.handle && c.handle.toLowerCase().trim() === search) || null;
+    }
+
+    /**
      * Update the last contacted timestamp for a contact.
      * @param {string} identifier handle or name
      * @param {Date|string} timestamp 
+     * @param {object} meta Optional metadata (e.g. { channel: 'whatsapp' })
      */
-    updateLastContacted(identifier, timestamp) {
+    updateLastContacted(identifier, timestamp, meta = {}) {
         if (!identifier) return;
         this.load();
         const search = identifier.toLowerCase().trim();
+        const channel = (meta?.channel || meta?.lastChannel || "").toString().trim().toLowerCase();
 
         // Try exact handle match first to avoid findContact's broader search logic
         let contact = this.contacts.find(c => c.handle && c.handle.toLowerCase() === search);
@@ -158,13 +181,15 @@ class ContactStore {
                 displayName: identifier,
                 handle: identifier,
                 channels: isEmail ? { email: [identifier] } : { phone: [identifier] },
-                lastContacted: date.toISOString()
+                lastContacted: date.toISOString(),
+                ...(channel ? { lastChannel: channel } : {})
             };
             this.contacts.push(contact);
         }
 
         if (!contact.lastContacted || date > new Date(contact.lastContacted)) {
             contact.lastContacted = date.toISOString();
+            if (channel) contact.lastChannel = channel;
         }
         this.save();
     }
@@ -250,7 +275,10 @@ class ContactStore {
             if (!contact.notes || !Array.isArray(contact.notes)) contact.notes = [];
             contact.notes.push({
                 id: 'note-' + Date.now() + Math.random().toString(36).substr(2, 5),
+                kind: 'note',
+                value: text,
                 text: text,
+                source: 'user',
                 timestamp: new Date().toISOString()
             });
             this.save();
@@ -272,6 +300,27 @@ class ContactStore {
     }
 
     /**
+     * Update a specific note's text.
+     * @param {string} handle
+     * @param {string} noteId
+     * @param {string} text
+     * @returns {object|null} updated note or null if not found
+     */
+    updateNote(handle, noteId, text) {
+        this.load();
+        const contact = this.findContact(handle);
+        if (!contact || !Array.isArray(contact.notes)) return null;
+        const note = contact.notes.find(n => n.id === noteId);
+        if (!note) return null;
+        const nextText = String(text ?? '');
+        note.text = nextText;
+        if (note.value !== undefined) note.value = nextText;
+        note.editedAt = new Date().toISOString();
+        this.save();
+        return note;
+    }
+
+    /**
      * Add a pending suggestion to the contact.
      * @param {string} handle 
      * @param {string} type 'links', 'emails', 'phones', 'notes'
@@ -290,7 +339,11 @@ class ContactStore {
         if (contact.rejectedSuggestions.includes(content)) return;
 
         // Check if already exists in notes (simple text check)
-        if (contact.notes && contact.notes.some(n => n.text.includes(content))) return;
+        if (contact.notes && contact.notes.some(n => (n.text && n.text.includes(content)) || (n.value && String(n.value).includes(content)))) return;
+
+        // Check if already exists in channels (for structured suggestions)
+        if (type === 'emails' && contact.channels?.email && contact.channels.email.some(e => String(e).toLowerCase() === String(content).toLowerCase())) return;
+        if (type === 'phones' && contact.channels?.phone && contact.channels.phone.some(p => String(p).replace(/\s+/g, '') === String(content).replace(/\s+/g, ''))) return;
 
         // Check if already pending
         if (contact.pendingSuggestions.some(s => s.content === content)) return;
@@ -300,6 +353,39 @@ class ContactStore {
             type: type,
             content: content,
             timestamp: new Date().toISOString()
+        });
+        this.save();
+    }
+
+    /**
+     * Add a typed entry to Local Intelligence (notes log).
+     * @param {string} handle
+     * @param {string} kind 'note'|'link'|'email'|'phone'|'address'|'hashtag'
+     * @param {string} content
+     * @param {object} meta
+     */
+    addLocalIntelligence(handle, kind, content, meta = {}) {
+        this.load();
+        const contact = this.findContact(handle);
+        if (!contact) return;
+        if (!contact.notes || !Array.isArray(contact.notes)) contact.notes = [];
+
+        const value = String(content ?? '').trim();
+        if (!value) return;
+
+        // Dedupe by kind+value
+        const k = String(kind || 'note').toLowerCase();
+        if (contact.notes.some(n => String(n.kind || 'note').toLowerCase() === k && String(n.value || n.text || '').trim() === value)) {
+            return;
+        }
+
+        contact.notes.push({
+            id: 'note-' + Date.now() + Math.random().toString(36).substr(2, 5),
+            kind: k,
+            value,
+            text: value,
+            timestamp: new Date().toISOString(),
+            ...(meta && typeof meta === 'object' ? meta : {}),
         });
         this.save();
     }
@@ -321,20 +407,34 @@ class ContactStore {
         contact.pendingSuggestions.splice(suggestionIndex, 1);
 
         // Add to permanent record based on type
-        // For this MVP, all types become formatted notes
-        let icon = "📝";
-        if (suggestion.type === "links") icon = "🌐";
-        if (suggestion.type === "emails") icon = "📧";
-        if (suggestion.type === "phones") icon = "📞";
+        if (suggestion.type === "emails" || suggestion.type === "phones") {
+            if (!contact.channels) contact.channels = { phone: [], email: [] };
+            if (!contact.channels.phone) contact.channels.phone = [];
+            if (!contact.channels.email) contact.channels.email = [];
 
-        const noteText = `${icon} ${suggestion.content}`;
+            if (suggestion.type === "emails") {
+                const email = String(suggestion.content).trim();
+                if (email && !contact.channels.email.some(e => String(e).toLowerCase() === email.toLowerCase())) {
+                    contact.channels.email.push(email);
+                }
+                this.addLocalIntelligence(handle, 'email', email, { source: 'ai' });
+            }
 
-        if (!contact.notes) contact.notes = [];
-        contact.notes.push({
-            id: 'note-' + Date.now() + Math.random().toString(36).substr(2, 5),
-            text: noteText,
-            timestamp: new Date().toISOString()
-        });
+            if (suggestion.type === "phones") {
+                const phone = String(suggestion.content).trim();
+                const norm = phone.replace(/\s+/g, '');
+                if (phone && !contact.channels.phone.some(p => String(p).replace(/\s+/g, '') === norm)) {
+                    contact.channels.phone.push(phone);
+                }
+                this.addLocalIntelligence(handle, 'phone', phone, { source: 'ai' });
+            }
+        } else {
+            const type = String(suggestion.type || 'notes').toLowerCase();
+            if (type === 'links') this.addLocalIntelligence(handle, 'link', suggestion.content, { source: 'ai' });
+            else if (type === 'addresses') this.addLocalIntelligence(handle, 'address', suggestion.content, { source: 'ai' });
+            else if (type === 'hashtags') this.addLocalIntelligence(handle, 'hashtag', suggestion.content, { source: 'ai' });
+            else this.addLocalIntelligence(handle, 'note', suggestion.content, { source: 'ai' });
+        }
 
         this.save();
         return contact;
@@ -391,11 +491,33 @@ class ContactStore {
         let context = `\n\n[IDENTITY CONTEXT]\n`;
         context += `You are talking to: ${contact.displayName}\n`;
         if (contact.profession) context += `Profession: ${contact.profession}\n`;
+        if (contact.relationship) context += `Relationship: ${contact.relationship}\n`;
         if (contact.intro) context += `Intro: ${contact.intro}\n`;
+        if (contact.channels) {
+            const phones = Array.isArray(contact.channels.phone) ? contact.channels.phone : [];
+            const emails = Array.isArray(contact.channels.email) ? contact.channels.email : [];
+            if (phones.length || emails.length) {
+                context += `Channels:\n`;
+                if (phones.length) context += `- Phones: ${phones.join(', ')}\n`;
+                if (emails.length) context += `- Emails: ${emails.join(', ')}\n`;
+            }
+        }
         if (contact.notes && Array.isArray(contact.notes)) {
-            context += `Notes (Latest first):\n`;
-            [...contact.notes].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).forEach(n => {
-                context += `- [${n.timestamp}] ${n.text}\n`;
+            const sorted = [...contact.notes].sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+            const top = sorted.slice(0, 20);
+            context += `Local Intelligence (HIGH PRIORITY; user-added + accepted AI, showing ${top.length}${sorted.length > top.length ? ` of ${sorted.length}` : ""}):\n`;
+            top.forEach(n => {
+                const kind = String(n.kind || 'note').toLowerCase();
+                const src = String(n.source || '').toLowerCase();
+                const label = kind === 'link' ? 'LINK'
+                    : (kind === 'email' ? 'EMAIL'
+                        : (kind === 'phone' ? 'PHONE'
+                            : (kind === 'address' ? 'ADDRESS'
+                                : (kind === 'hashtag' ? 'HASHTAG' : 'NOTE'))));
+                const source = src === 'user' ? 'user' : (src === 'ai' ? 'ai' : '');
+                const val = (n.value ?? n.text ?? '').toString().trim();
+                if (!val) return;
+                context += `- ${source ? `(${source}) ` : ''}[${label}] ${val}\n`;
             });
         }
 

@@ -1,5 +1,5 @@
 /* 
- * Reply Hub - Global Design System
+ * {reply} - Global Design System
  * Dark Theme by Default
  */
 
@@ -23,6 +23,14 @@
   --danger: #ff453a;       /* iOS Red Dark Mode */
   --success: #30d158;      /* iOS Green Dark Mode */
   --warning: #ffd60a;      /* iOS Yellow Dark Mode */
+
+  /* Channel bubble colors (overridden by Settings) */
+  --bubble-me-imessage: var(--primary);
+  --bubble-contact-imessage: #262628;
+  --bubble-me-whatsapp: #25D366;
+  --bubble-contact-whatsapp: #262628;
+  --bubble-me-email: #5e5ce6;
+  --bubble-contact-email: #262628;
 
   /* Borders & Dividers */
   --border: #38383a;
@@ -88,4 +96,72 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-tertiary);
+}
+
+/* Buttons */
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1.2rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s, background 0.15s, border-color 0.15s;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--primary);
+}
+
+.btn-ghost:hover {
+  opacity: 0.9;
+}
+
+.btn-sm {
+  padding: 0.45rem 0.85rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+
+.btn-icon {
+  background: transparent;
+  padding: 4px;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+}
+
+.btn-icon:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.btn-icon-sm {
+  width: 32px;
+  height: 32px;
 }

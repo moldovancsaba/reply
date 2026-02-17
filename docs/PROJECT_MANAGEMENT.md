@@ -14,6 +14,7 @@ The **[GitHub Project Board](https://github.com/users/moldovancsaba/projects/1)*
 *   **Rule:** If it's not on the board, it doesn't exist.
 *   **Rule:** The **Status Column** defines the state (Backlog, Ready, In Progress, Done). Do NOT put status in titles (e.g., `[Backlog] Issue Title` is ILLEGAL).
 *   **Rule:** Documentation (`HANDOVER.md`) must be updated *immediately* after a task is completed to match the board.
+*   **Rule:** Do **NOT** create/manage issues in product repositories (e.g. `moldovancsaba/reply`). Issues live in the SSOT repo (currently `moldovancsaba/mvp-factory-control`) and are tracked via the Project Board.
 
 ## 2. Issue Structure (What good looks like)
 Every issue on the board must follow this structure to be "Ready":
@@ -44,3 +45,12 @@ Accurate metadata is critical for filtering and finding work.
 4.  **Verify:** Run tests and UAT.
 5.  **Close:** Move to **Done**, set **DoD** to `Passed`.
 6.  **Document:** Update `HANDOVER.md` and `RELEASE_NOTES.md`.
+
+## Appendix: Board CLI (No external jq)
+Use `gh project item-list ... --jq ...` so you don't depend on a separate `jq` installation.
+
+```bash
+# List active Reply items (Ready/In Progress)
+gh project item-list 1 --owner moldovancsaba --format json --limit 200 \
+  --jq '.items[] | select(.product == "reply" and (.status == "Ready" or .status == "In Progress")) | {priority, status, title, url: (.content.url // null)}'
+```

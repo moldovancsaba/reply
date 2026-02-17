@@ -20,6 +20,7 @@ graph TD
 
     subgraph "Ingestion Pipeline"
         SyncEngine -->|Read| AppleNotes[Apple Notes (AppleScript)]
+        SyncEngine -->|Optional OAuth| GmailAPI[Gmail API]
         SyncEngine -->|Stream| Mbox[Email Archives (.mbox)]
         SyncEngine -->|Scan| LocalFiles[Local Docs (.md/.txt)]
         SyncEngine -->|Embed & Index| VectorDB
@@ -57,10 +58,10 @@ graph TD
 *   **Worker Strategy**: To prevent system overload, the worker uses a single-threaded "Intelligence Pipeline." Heavy tasks (like LLM drafting) are only triggered for new data.
 *   **Load Management**:
     *   **Low-Level Polling**: Direct SQLite queries on `chat.db` are sub-millisecond and near-zero CPU.
-    *   **CPU Throttling**: The worker sleeps for a minimum of 60 seconds between cycles.
-    *   **Scalability**: Future channels (Mail, etc.) can be added as separate workers or modular fetchers within the same throttled loop.
+    *   **CPU Throttling**: The poll interval is configurable via Settings (`worker.pollIntervalSeconds`) and is clamped to 10–3600 seconds.
+    *   **Scalability**: Mail sync is supported; additional channels can be added as separate workers or modular fetchers within the same throttled loop.
 
 ## Design Principles
-1.  **Local-First:** No reliance on external APIs for core functionality.
+1.  **Local-First:** No reliance on external APIs for core functionality. Optional connectors (e.g. Gmail OAuth) are opt-in.
 2.  **Dependency-Minimal:** Use standard libraries where possible.
 3.  **Future-Proof:** Data is stored in open formats (LanceDB, JSON) to ensure portability.

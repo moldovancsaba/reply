@@ -1,7 +1,3 @@
-      --status-open: 🟢;
-      --status-closed: 🔵;
-      }
-
       * {
         box-sizing: border-box;
       }
@@ -110,6 +106,9 @@
 
       .channel-icon {
         font-size: 1rem;
+        margin-left: 10px;
+        flex-shrink: 0;
+        opacity: 0.9;
       }
 
       .contact-info {
@@ -208,6 +207,11 @@
         text-align: right;
       }
 
+      .message-bubble.contact .message-info {
+        color: rgba(255, 255, 255, 0.55);
+        text-align: left;
+      }
+
       .message-bubble.me {
         background-color: var(--primary);
         /* iMessage Blue */
@@ -216,6 +220,18 @@
         border-bottom-right-radius: 18px;
         background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 100%);
         /* Subtle gradient */
+      }
+
+      .message-bubble.me.channel-imessage {
+        background-color: var(--bubble-me-imessage);
+      }
+
+      .message-bubble.me.channel-whatsapp {
+        background-color: var(--bubble-me-whatsapp);
+      }
+
+      .message-bubble.me.channel-email {
+        background-color: var(--bubble-me-email);
       }
 
       .message-bubble.contact {
@@ -227,6 +243,18 @@
         /* Keep consistent roundness */
         border: none;
         /* Remove original border */
+      }
+
+      .message-bubble.contact.channel-imessage {
+        background-color: var(--bubble-contact-imessage);
+      }
+
+      .message-bubble.contact.channel-whatsapp {
+        background-color: var(--bubble-contact-whatsapp);
+      }
+
+      .message-bubble.contact.channel-email {
+        background-color: var(--bubble-contact-email);
       }
 
       .message-time {
@@ -245,15 +273,15 @@
       .input-wrapper {
         display: flex;
         gap: 10px;
-        background-color: #1C1C1E;
+        background-color: var(--bg-input);
         /* Dark input bg */
-        padding: 4px 6px 4px 12px;
+        padding: 6px 8px 6px 12px;
         border-radius: 20px;
         border: 1px solid #333;
-        align-items: flex-end;
-        /* Align to bottom for multiline */
+        align-items: center;
         flex: 1;
         /* Fix: Take full width */
+        min-height: 48px;
       }
 
       textarea#chat-input {
@@ -261,19 +289,52 @@
         background: transparent;
         border: none;
         outline: none;
-        padding: 8px 12px;
+        padding: 7px 12px;
         resize: none;
         font-size: 0.95rem;
+        line-height: 1.35;
         max-height: 150px;
+        min-height: 36px;
+        overflow-y: hidden;
         color: var(--text-primary);
         /* Fix: Ensure white text */
         caret-color: var(--primary);
         /* Fix: Blue cursor */
       }
 
+      .channel-select {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        color: var(--text-primary);
+        border-radius: 999px;
+        padding: 0 14px;
+        font-size: 0.85rem;
+        cursor: pointer;
+        outline: none;
+        appearance: none;
+        -webkit-appearance: none;
+        height: 36px;
+        min-width: 112px;
+      }
+
+      .channel-select:focus {
+        border-color: var(--primary);
+      }
+
+      /* Composer send button: force alignment with textarea/select */
+      .input-wrapper #btn-send {
+        height: 36px;
+        padding: 0 16px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+      }
+
       /* KYC Pane */
       .kyc-pane {
-        background: var(--bg-kyc);
+        background: var(--bg-sidebar);
         padding: 1.5rem;
         border-left: 1px solid var(--border);
         overflow-y: auto;
@@ -291,7 +352,7 @@
 
       .kyc-label {
         font-size: 0.75rem;
-        color: var(--text-dim);
+        color: var(--text-tertiary);
         text-transform: uppercase;
         font-weight: 700;
         margin-bottom: 4px;
@@ -299,13 +360,371 @@
 
       .kyc-value {
         font-size: 0.95rem;
-        color: var(--text-main);
+        color: var(--text-primary);
         margin-bottom: 1rem;
       }
 
       .kyc-notes {
         font-size: 0.85rem;
         white-space: pre-wrap;
+      }
+
+      .kyc-empty {
+        padding: 20px;
+        text-align: center;
+      }
+
+      .kyc-empty-title {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 1.15rem;
+        font-weight: 700;
+      }
+
+      .kyc-empty-text {
+        margin: 10px 0 0 0;
+        color: var(--text-tertiary);
+        font-size: 0.9rem;
+        line-height: 1.4;
+      }
+
+      .kyc-tip {
+        margin-top: 24px;
+        padding-top: 18px;
+        border-top: 1px solid rgba(255, 255, 255, 0.10);
+      }
+
+      .kyc-tip-label {
+        font-size: 0.72rem;
+        font-weight: 800;
+        color: var(--text-tertiary);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .kyc-tip-text {
+        margin-top: 8px;
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+      }
+
+      .kyc-editor-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .kyc-editor-title {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 800;
+        letter-spacing: -0.2px;
+      }
+
+      .kyc-editor-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .kyc-field {
+        margin-bottom: 14px;
+      }
+
+      .kyc-field-label {
+        display: block;
+        font-size: 0.7rem;
+        color: var(--text-tertiary);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 800;
+        margin-bottom: 6px;
+      }
+
+      .kyc-field-input {
+        width: 100%;
+        border: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+        background: transparent;
+        color: var(--text-primary);
+        outline: none;
+        padding: 6px 0;
+        font-size: 0.95rem;
+      }
+
+      .kyc-field-input:focus {
+        border-bottom-color: var(--primary);
+      }
+
+      .kyc-field-input--title {
+        font-weight: 800;
+        font-size: 1.02rem;
+      }
+
+      .kyc-field-input--mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        border-bottom-color: rgba(255, 255, 255, 0.10);
+      }
+
+      .kyc-section + .kyc-section {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .kyc-section-label {
+        font-size: 0.7rem;
+        color: var(--text-tertiary);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 800;
+        margin-bottom: 10px;
+      }
+
+      .kyc-section-body {
+        min-height: 24px;
+      }
+
+      .kyc-notes-log {
+        margin-top: 8px;
+        max-height: 250px;
+        overflow-y: auto;
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.18);
+      }
+
+      .kyc-note-add {
+        margin-top: 10px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .kyc-note-input {
+        flex: 1;
+        padding: 10px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.18);
+        color: var(--text-primary);
+        font-size: 0.9rem;
+        outline: none;
+      }
+
+      .kyc-note-input::placeholder {
+        color: var(--text-placeholder);
+      }
+
+      .kyc-empty-row {
+        padding: 10px;
+        color: var(--text-tertiary);
+        font-size: 0.85rem;
+      }
+
+      .kyc-note-row {
+        display: flex;
+        gap: 10px;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      .kyc-note-left {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .kyc-note-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+      }
+
+      .kyc-note-tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        color: var(--text-secondary);
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      .kyc-note-tag--spacer {
+        opacity: 0.35;
+      }
+
+      .kyc-note-text {
+        font-size: 0.85rem;
+        color: var(--text-primary);
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .kyc-note-text--editable {
+        cursor: text;
+      }
+
+      .kyc-note-row:hover .kyc-note-text--editable {
+        text-decoration: underline;
+        text-decoration-color: rgba(255, 255, 255, 0.18);
+        text-underline-offset: 3px;
+      }
+
+      .kyc-note-meta {
+        font-size: 0.7rem;
+        color: var(--text-tertiary);
+        margin-top: 2px;
+      }
+
+      .kyc-note-actions {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        flex-shrink: 0;
+      }
+
+      .kyc-note-delete {
+        border: none;
+        background: transparent;
+        color: var(--text-tertiary);
+        cursor: pointer;
+        padding: 0 4px;
+        line-height: 1;
+      }
+
+      .kyc-note-editor {
+        width: 100%;
+        resize: none;
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.18);
+        color: var(--text-primary);
+        font-size: 0.85rem;
+        line-height: 1.35;
+        padding: 8px 10px;
+        outline: none;
+        overflow-y: hidden;
+      }
+
+      .kyc-note-editor:focus {
+        border-color: var(--primary);
+      }
+
+      .kyc-chip-wrap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .kyc-chip {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        color: var(--text-secondary);
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 0.78rem;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .kyc-sugg-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .kyc-sugg-row {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(0, 0, 0, 0.18);
+      }
+
+      .kyc-sugg-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .kyc-sugg-tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        color: var(--text-secondary);
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        white-space: nowrap;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .kyc-sugg-content {
+        color: var(--text-primary);
+        font-size: 0.85rem;
+        white-space: pre-wrap;
+        word-break: normal;
+        overflow-wrap: anywhere;
+        line-height: 1.35;
+      }
+
+      .kyc-sugg-meta {
+        font-size: 0.7rem;
+        color: var(--text-tertiary);
+      }
+
+      .kyc-sugg-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .kyc-sugg-actions .btn {
+        border-radius: 999px;
+      }
+
+      .kyc-sugg-accept {
+        border-color: rgba(48, 209, 88, 0.45);
+      }
+
+      .kyc-sugg-decline {
+        border-color: rgba(255, 69, 58, 0.45);
+      }
+
+      .kyc-sugg-accept:hover {
+        background: rgba(48, 209, 88, 0.12);
+        border-color: rgba(48, 209, 88, 0.6);
+      }
+
+      .kyc-sugg-decline:hover {
+        background: rgba(255, 69, 58, 0.12);
+        border-color: rgba(255, 69, 58, 0.6);
       }
 
       /* Modals */
@@ -331,47 +750,13 @@
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
       }
 
-      /* Buttons */
-      .btn {
-        border: none;
-        border-radius: 8px;
-        padding: 0.6rem 1.2rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: opacity 0.2s;
-      }
-
-      .btn-primary {
-        background: var(--primary);
-        color: white;
-      }
-
-      .btn-ghost {
-        background: transparent;
-        color: var(--primary);
-      }
-
-      .btn-icon {
-        background: transparent;
-        padding: 4px;
-        border-radius: 50%;
-        width: 36px;
-        height: 36px;
-        display: grid;
-        place-items: center;
-      }
-
-      .btn-icon:hover {
-        background: #eee;
-      }
-
       /* Dashboard Styles */
       .dashboard {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
         gap: 1.5rem;
         padding: 2rem;
-        background: var(--bg-chat);
+        background: var(--bg-app);
         height: 100%;
         overflow-y: auto;
       }
@@ -390,7 +775,7 @@
       .health-card h4 {
         margin: 0;
         font-size: 0.8rem;
-        color: var(--text-dim);
+        color: var(--text-tertiary);
         text-transform: uppercase;
         letter-spacing: 0.5px;
       }
@@ -398,7 +783,7 @@
       .health-value {
         font-size: 1.8rem;
         font-weight: 700;
-        color: var(--text-main);
+        color: var(--text-primary);
       }
 
       .health-status-tag {
@@ -447,29 +832,6 @@
         background: #e8f5e9;
         color: #2e7d32;
       }
-
-      </style></head><body><div class="app-container">< !-- PANE A: SIDEBAR --><aside class="sidebar"><div class="sidebar-header"><div><h2 style="margin:0; font-size: 1.1rem;">Reply Hub</h2><div id="sync-status" style="font-size: 0.7rem; color: #888; margin-top: 4px;">Ready</div></div>< !-- Sync buttons moved to individual cards --></div><div id="contact-list" class="contact-list">< !-- Contact Items will be injected here --><div class="contact-item active"><span class="status-dot">🟠</span><div class="contact-info"><div class="contact-name">Agneta</div><div class="contact-preview">Draft ready: "Let's meet tomorrow..." </div></div><span class="channel-icon">💬</span></div></div></aside>< !-- PANE B: MAIN CHAT --><main class="chat-area"><header class="chat-header"><div style="display:flex; align-items:center; gap:12px;"><div id="active-contact-name-chat" style="font-weight: 700; font-size: 1.1rem;">Select a contact</div><select id="status-select" onchange="updateManualStatus()"
-      style="font-size:0.8rem; border-radius:12px; border:1px solid #ddd; padding:2px 8px; cursor:pointer; display:none;"><option value="open">🟢 Active</option><option value="draft">🟠 Draft Ready</option><option value="closed">🔵 Resolved</option></select></div><div style="display: flex; gap: 10px;"><button class="btn btn-ghost">Refine</button><button class="btn btn-primary" id="btn-suggest">Suggest Draft</button></div></header><div class="input-area" style="border-top:none; border-bottom:1px solid var(--border);"><div class="input-wrapper"><textarea id="chat-input" placeholder="Type a message or let me suggest..."></textarea><button id="btn-mic" class="btn-icon" title="Voice Input">🎤</button><button class="btn-icon">✨</button><button id="btn-send" class="btn btn-primary">Send iMessage</button></div></div><div id="messages" class="messages-container"><button id="btn-load-older" class="load-more-btn"
-      style="display:none; color:var(--text-dim); background:rgba(0,0,0,0.03); border-radius:12px; margin-bottom:1rem;"
-      onclick="loadMoreMessages()">Load Older Messages</button>< !-- Messages will be injected here --></div><div id="dashboard" class="dashboard" style="display:none;">< !-- Dashboard items will be injected here --></div></main>< !-- PANE C: KYC DATA --><section class="kyc-pane"><div id="kyc-empty-state" style="padding:20px; text-align:center;"><h3 style="color:var(--text-dim);">Hub Overview</h3><p style="font-size:0.85rem; color:#888;">Select a contact from the sidebar to view their profile and history. </p><div style="margin-top:40px; border-top:1px solid #eee; padding-top:20px;"><div style="font-size:0.7rem; font-weight:700; color:#ddd; text-transform:uppercase;">Quick Tip</div><div style="font-size:0.85rem; color:#aaa; margin-top:8px;">You can search contacts by name or handle.</div></div></div><div id="kyc-content-editor" style="display:none;"><div style="display: flex; justify-content: space-between; align-items: baseline;"><h3 style="margin-top:0;">Profile</h3><div style="display:flex; gap:5px;"><button id="btn-deep-analyze" class="btn-ghost" style="font-size:0.75rem; padding: 4px 8px;"
-      title="Run Deep Analysis with Ollama">✨ Analyze</button><button class="btn btn-primary" style="font-size:0.75rem; padding: 4px 8px;"
-      onclick="saveInlineProfile()">Save Changes</button></div></div>< !-- KYC Cards follow... --><div class="kyc-card"><div id="suggested-kyc-alert"
-      style="display:none; background: #fff8e1; border: 1px solid #ffe082; border-radius: 6px; padding: 10px; margin-bottom: 1rem;"><div style="font-size: 0.75rem; font-weight: 700; color: #795548; margin-bottom: 5px; display: flex; justify-content: space-between;"><span>🤖 AI SUGGESTED UPDATE</span><span onclick="dismissKYC()" style="cursor:pointer;" title="Dismiss">✕</span></div><div id="suggested-kyc-content" style="font-size: 0.85rem; color: #5d4037; font-style: italic;">< !-- Content injected via JS --></div><div style="margin-top: 8px; display: flex; gap: 8px;"><button class="btn btn-primary" style="font-size: 0.7rem; padding: 3px 8px;" onclick="acceptKYC()">✅ Accept</button><button class="btn-ghost" style="font-size: 0.7rem; padding: 3px 8px;" onclick="editKYC()">📝 Edit</button></div></div><div style="margin-bottom: 0.8rem;"><label style="font-size: 0.7rem; color: #888; text-transform: uppercase;">Display Name</label><input id="kyc-name-input"
-      style="width:100%; border:none; border-bottom:1px solid transparent; font-weight:700; font-size:1rem; padding: 2px 0;"
-      onfocus="this.style.borderBottom='1px solid var(--primary)'"
-      onblur="this.style.borderBottom='1px solid transparent'"></div><div style="margin-bottom: 0.8rem;"><label style="font-size: 0.7rem; color: #888; text-transform: uppercase;">Profession</label><input id="kyc-role-input"
-      style="width:100%; border:none; border-bottom:1px solid transparent; font-size:0.9rem; padding: 2px 0;"
-      onfocus="this.style.borderBottom='1px solid var(--primary)'"
-      onblur="this.style.borderBottom='1px solid transparent'"></div><div style="margin-bottom: 0.8rem;"><label style="font-size: 0.7rem; color: #888; text-transform: uppercase;">Relationship</label><input id="kyc-rel-input"
-      style="width:100%; border:none; border-bottom:1px solid transparent; font-size:0.9rem; padding: 2px 0;"
-      onfocus="this.style.borderBottom='1px solid var(--primary)'"
-      onblur="this.style.borderBottom='1px solid transparent'"></div><div style="margin-bottom: 0.8rem;"><label style="font-size: 0.7rem; color: #888; text-transform: uppercase;">Handle</label><input id="kyc-handle-input" readonly style="width:100%; border:none; font-size:0.8rem; color:#666; background:transparent;"></div><div style="margin-top: 1.5rem;"><label style="font-size: 0.7rem; color: #888; text-transform: uppercase; font-weight:700;">Local Intelligence (Notes Log)</label><div id="notes-log"
-      style="margin-top:0.5rem; max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 5px; background: #fff;">< !-- Notes injected here --></div><div style="margin-top: 0.8rem; display: flex; gap: 8px;"><input id="new-note-input" placeholder="Add a new observation..."
-      style="flex:1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 20px; font-size: 0.85rem;"><button class="btn-icon" onclick="addNote()"
-      style="background: var(--primary); color: white; border: none; width: 30px; height: 30px;">+</button></div></div></div></div></section></div>< !-- Profile Edit Modal --><div id="profile-modal" class="modal-overlay"><div class="modal-content"><h3 style="margin-top:0;">Edit Contact Profile</h3><div style="margin-bottom: 0.5rem;"><label style="font-size:0.8rem; color:#666;">Name:</label><input id="prof-name" style="width:100%; padding:0.4rem; border:1px solid #ccc; border-radius:4px;"></div><div style="margin-bottom: 0.5rem;"><label style="font-size:0.8rem; color:#666;">Profession:</label><input id="prof-role" style="width:100%; padding:0.4rem; border:1px solid #ccc; border-radius:4px;"></div><div style="margin-bottom: 0.5rem;"><label style="font-size:0.8rem; color:#666;">Relationship:</label><input id="prof-rel" style="width:100%; padding:0.4rem; border:1px solid #ccc; border-radius:4px;"></div><div style="margin-bottom: 1rem;"><label style="font-size:0.8rem; color:#666;">Notes:</label><textarea id="prof-notes"
-      style="width:100%; height:60px; padding:0.4rem; border:1px solid #ccc; border-radius:4px;"></textarea></div><input type="hidden" id="prof-handle"><div style="display:flex; justify-content:flex-end; gap:0.5rem;"><button onclick="closeProfileModal()"
-      style="background:#eee; color:#333; border:1px solid #ccc; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">Cancel</button><button onclick="saveProfile()"
-      style="background:#056; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">Save Profile</button>
 
       /* Sync Indicator (Zero Count) refined style */
       .message-badge.badge-zero {

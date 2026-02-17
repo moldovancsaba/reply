@@ -2,6 +2,7 @@ const { addDocuments } = require('./vector-store.js');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+const { withDefaults, readSettings } = require('./settings-store.js');
 
 const DB_PATH = path.join(__dirname, 'data', 'chat.db');
 const STATE_FILE = path.join(__dirname, 'data', 'sync_state.json');
@@ -51,6 +52,9 @@ async function sync() {
     const state = loadState();
     console.log(`Starting iMessage sync from ROWID > ${state.lastProcessedId}...`);
 
+    const settings = withDefaults(readSettings());
+    const batchLimit = Math.max(1, Math.min(Number(settings?.worker?.quantities?.imessage) || 1000, 5000));
+
     const query = `
         SELECT 
             message.ROWID, 
@@ -64,7 +68,7 @@ async function sync() {
         AND message.text IS NOT NULL 
         AND message.text != ""
         ORDER BY message.ROWID ASC
-        LIMIT 1000
+        LIMIT ${batchLimit}
     `;
 
     return new Promise((resolve, reject) => {
@@ -102,7 +106,7 @@ async function sync() {
                 // Update LastContacted in the store
                 const contactStore = require('./contact-store.js');
                 rows.forEach(row => {
-                    contactStore.updateLastContacted(row.handle_id, convertDate(row.date));
+                    contactStore.updateLastContacted(row.handle_id, convertDate(row.date), { channel: 'imessage' });
                 });
 
                 const maxId = rows[rows.length - 1].ROWID;

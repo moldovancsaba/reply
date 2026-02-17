@@ -1,5 +1,5 @@
 /**
- * Reply Hub - Contacts Module
+ * {reply} - Contacts Module
  * Manages contact list loading, display, and pagination
  */
 
@@ -10,6 +10,22 @@ let contactOffset = 0;
 let hasMoreContacts = true;
 const CONTACT_LIMIT = 20;
 export let conversations = []; // Global cache for contacts
+
+function channelEmoji(channel) {
+    const raw = (channel ?? '').toString().toLowerCase();
+    const key =
+        raw.includes('whatsapp') ? 'whatsapp' :
+            (raw.includes('mail') || raw.includes('email') || raw.includes('gmail') || raw.includes('imap')) ? 'email' :
+                'imessage';
+    const override = window.replySettings?.ui?.channels?.[key]?.emoji;
+    if (override) return override;
+    if (key === 'whatsapp') return '🟢';
+    if (key === 'email') return '📧';
+    if (raw.includes('messenger')) return '🔷';
+    if (raw.includes('instagram')) return '🔴';
+    if (raw.includes('linkedin')) return 'ℹ️';
+    return '💬';
+}
 
 /**
  * Load conversations/contacts with pagination
@@ -22,11 +38,15 @@ export async function loadConversations(append = false) {
     try {
         // Show loading state
         if (!append) {
+            contactOffset = 0;
             contactListEl.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">Loading contacts...</div>';
         }
 
         // Fetch contacts from server
         const data = await fetchConversations(contactOffset, CONTACT_LIMIT);
+        if (data?.meta?.mode === 'fallback') {
+            console.warn('Contacts API in fallback mode:', data.meta);
+        }
 
         // Update state
         hasMoreContacts = data.hasMore;
@@ -64,7 +84,10 @@ export async function loadConversations(append = false) {
 
             const name = document.createElement('div');
             name.className = 'contact-name';
-            name.textContent = contact.name || contact.handle;
+            const channel = contact.lastChannel || contact.channel || contact.lastSource || contact.source || '';
+            const emoji = channelEmoji(channel);
+            const displayName = contact.displayName || contact.name || contact.handle;
+            name.textContent = displayName;
 
             // Optional: Time would go here if available
             // const time = document.createElement('div');
@@ -73,23 +96,18 @@ export async function loadConversations(append = false) {
             topRow.appendChild(name);
 
             // Message count badge - Moved next to name for zero-gap
-            const count = parseInt(contact.count || '0');
+            const count = Number.isFinite(Number(contact.count)) ? parseInt(contact.count, 10) : 0;
             const badge = document.createElement('div');
             badge.className = 'message-badge';
             badge.textContent = count > 99 ? '99+' : count;
-
             if (count === 0) {
                 badge.classList.add('badge-zero');
-                badge.title = "Sync Active";
-                // Ensure virtually no space
-                badge.style.marginLeft = '2px';
-                badge.style.transform = 'scale(0.8)'; // Make it slightly smaller next to text
-                badge.style.border = 'none'; // Cleaner
-                badge.style.color = 'var(--text-tertiary)';
+                badge.title = 'No messages yet';
+                badge.style.marginLeft = '6px';
             } else {
+                badge.title = `${count} messages`;
                 badge.style.marginLeft = '6px';
             }
-
             topRow.appendChild(badge);
             info.appendChild(topRow);
 
@@ -106,6 +124,18 @@ export async function loadConversations(append = false) {
 
             item.appendChild(statusDot);
             item.appendChild(info);
+
+            // Channel indicator (latest channel/source)
+            const icon = document.createElement('span');
+            icon.className = 'channel-icon';
+            icon.textContent = emoji;
+            const channelLabel = (contact.lastChannel || contact.channel || '').toString();
+            const sourceLabel = (contact.lastSource || contact.source || '').toString();
+            icon.title = [
+                channelLabel ? `Latest channel: ${channelLabel}` : null,
+                sourceLabel ? `Source: ${sourceLabel}` : null,
+            ].filter(Boolean).join('\n') || 'Latest channel';
+            item.appendChild(icon);
 
             // Click handler
             item.onclick = () => window.selectContact(contact.handle);
@@ -149,6 +179,15 @@ export async function selectContact(handle) {
     const dashboardEl = document.getElementById('dashboard');
     const activeNameEl = document.getElementById('active-contact-name-chat');
     const inputArea = document.querySelector('.input-area');
+    if (!messagesEl || !dashboardEl || !activeNameEl || !inputArea) {
+        console.warn('selectContact(): missing required DOM nodes', {
+            messagesEl: !!messagesEl,
+            dashboardEl: !!dashboardEl,
+            activeNameEl: !!activeNameEl,
+            inputArea: !!inputArea,
+        });
+        return;
+    }
 
     // Update active state in sidebar
     document.querySelectorAll('.sidebar-item').forEach(item => {
@@ -160,17 +199,35 @@ export async function selectContact(handle) {
 
     if (handle === null) {
         // Show dashboard
-        activeNameEl.textContent = 'Reply Hub Dashboard';
+        activeNameEl.textContent = '{reply}';
         dashboardEl.style.display = 'grid';
         messagesEl.style.display = 'none';
         inputArea.style.display = 'none';
-        document.getElementById('status-select').style.display = 'none';
-        document.getElementById('btn-suggest').style.display = 'none';
-        document.getElementById('kyc-empty-state').style.display = 'block';
-        document.getElementById('kyc-content-editor').style.display = 'none';
+        const statusSelect = document.getElementById('status-select');
+        if (statusSelect) statusSelect.style.display = 'none';
+        const suggestBtn = document.getElementById('btn-suggest');
+        if (suggestBtn) suggestBtn.style.display = 'none';
+        const micBtn = document.getElementById('btn-mic');
+        if (micBtn) micBtn.style.display = 'none';
+        const magicBtn = document.getElementById('btn-magic');
+        if (magicBtn) magicBtn.style.display = 'none';
+        const kycEmpty = document.getElementById('kyc-empty-state');
+        if (kycEmpty) kycEmpty.style.display = 'block';
+        const kycEditor = document.getElementById('kyc-content-editor');
+        if (kycEditor) kycEditor.style.display = 'none';
 
         // Render dashboard
-        await window.renderDashboard();
+        if (typeof window.renderDashboard === 'function') {
+            await window.renderDashboard();
+        } else {
+            console.warn('Dashboard module not loaded: window.renderDashboard is missing');
+            dashboardEl.innerHTML = `
+        <div style="padding:40px; text-align:center; color:#d32f2f;">
+          <h3>Dashboard unavailable</h3>
+          <p>Client failed to load the dashboard module.</p>
+        </div>
+      `;
+        }
         return;
     }
 
@@ -179,21 +236,35 @@ export async function selectContact(handle) {
     dashboardEl.style.display = 'none';
     messagesEl.style.display = 'flex';
     inputArea.style.display = 'flex';
-    document.getElementById('status-select').style.display = 'inline-block';
-    document.getElementById('btn-suggest').style.display = 'inline-block';
+    const statusSelect = document.getElementById('status-select');
+    if (statusSelect) statusSelect.style.display = 'inline-block';
+    const suggestBtn = document.getElementById('btn-suggest');
+    if (suggestBtn) suggestBtn.style.display = 'inline-block';
+    const micBtn = document.getElementById('btn-mic');
+    if (micBtn) micBtn.style.display = 'inline-block';
+    const magicBtn = document.getElementById('btn-magic');
+    if (magicBtn) magicBtn.style.display = 'inline-block';
 
     // Find contact info
     const contact = conversations.find(c => c.handle === handle);
     if (contact) {
-        activeNameEl.textContent = contact.name || contact.handle;
-        document.getElementById('active-contact-name').textContent = contact.name || contact.handle;
+        activeNameEl.textContent = contact.displayName || contact.name || contact.handle;
+        if (typeof window.setSelectedChannel === 'function') {
+            window.setSelectedChannel(contact.channel || (handle.includes('@') ? 'email' : 'imessage'));
+        }
     }
 
     // Load messages
     await window.loadMessages(handle);
 
     // Load KYC
-    await window.loadKYCData(handle);
+    try {
+        if (typeof window.loadKYCData === 'function') {
+            await window.loadKYCData(handle);
+        }
+    } catch (e) {
+        console.warn('Failed to load KYC data:', e);
+    }
 }
 
 // Export to window for onclick handlers
