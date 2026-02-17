@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { getSnippets } = require('./vector-store.js');
 
 const KNOWLEDGE_DIR = path.join(__dirname, '..', 'knowledge');
 const STYLE_PROFILE_PATH = path.join(KNOWLEDGE_DIR, 'style-profile.json');

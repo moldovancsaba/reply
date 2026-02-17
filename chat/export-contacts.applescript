@@ -31,6 +31,13 @@ tell application "Contacts"
         set theNote to (note of p)
         if theNote is missing value then set theNote to ""
         
+        -- Sanitize Note (Replace newlines with placeholder [NL])
+        set {TID, AppleScript's text item delimiters} to {AppleScript's text item delimiters, {return, linefeed, rotation}}
+        set noteLines to text items of theNote
+        set AppleScript's text item delimiters to "[NL]"
+        set theNote to noteLines as text
+        set AppleScript's text item delimiters to TID
+        
         -- Get Job Title
         set theJob to (job title of p)
         if theJob is missing value then set theJob to ""
