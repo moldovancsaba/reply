@@ -76,13 +76,10 @@ async function sync() {
             if (rows.length === 0) {
                 console.log("Everything is already in sync!");
 
-                // Read the actual state to get the true total
-                const state = loadState();
-
+                // Don't set 'processed' - server reads from sync_state.json
                 updateStatus({
                     state: "idle",
-                    lastSync: new Date().toISOString(),
-                    processed: state.lastProcessedId || 0  // Use actual database count
+                    lastSync: new Date().toISOString()
                 });
                 return resolve();
             }
@@ -112,12 +109,10 @@ async function sync() {
                 saveState(maxId);
                 console.log(`Sync complete. Last ID: ${maxId}`);
 
-                // Use lastProcessedId as the source of truth for total count
+                // Don't set 'processed' - server reads from sync_state.json
                 updateStatus({
                     state: "idle",
-                    lastSync: new Date().toISOString(),
-                    processed: maxId,  // This is the ACTUAL total in the database
-                    lastId: maxId
+                    lastSync: new Date().toISOString()
                 });
                 resolve();
             } catch (syncErr) {
