@@ -55,7 +55,7 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
   - Safety: automation remains defensive to avoid sending the recipient as a message.
 - `{reply}: Conversation list indexing (order/search/counts) cleanup` — https://github.com/moldovancsaba/mvp-factory-control/issues/197
   - Bug: `/api/conversations` currently runs in `meta.mode = fallback` because the “db index” helpers (e.g. `getConversationsIndexFresh`, query matching) are not wired; server-side `q=` filtering is effectively disabled.
-  - Note: a local WIP exists as `git stash` entry `wip-conversations-index` (apply only if you want to continue that partial implementation).
+  - Note: WIP branch `codex/wip-conversations-index` exists in `moldovancsaba/reply` (commit `788e3f3`) with a partial conversations index cache + sidebar `q=` wiring (use only if you want to continue that approach).
 
 ## Quick Verification (dev)
 - Email count:

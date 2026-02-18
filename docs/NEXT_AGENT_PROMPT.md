@@ -46,7 +46,7 @@ Stabilize WhatsApp Desktop send automation and fix conversations indexing (order
 
 ## Notes
 
-- Local WIP: git stash entry 'wip-conversations-index' contains a partial implementation of conversations index cache + sidebar q= wiring.
+- Local WIP: branch `codex/wip-conversations-index` (commit `788e3f3`) contains a partial implementation of conversations index cache + sidebar `q=` wiring.
 
 ## Docs To Read First
 
@@ -67,7 +67,7 @@ Follow this order:
 5. Execute immediate next actions:
  - Reproduce WhatsApp failures on WhatsApp vs WhatsApp Beta; capture failing AX roles/positions; tighten AppleScript steps and error messages; keep dryRun.
  - Implement a db-built conversations index (count + last preview + last channel/source) with caching/invalidation; wire server-side query matching and UI search input.
-  - Optional: inspect/apply local WIP stash `wip-conversations-index` (`git stash list`, `git stash show -p`, `git stash apply`).
+  - Optional: inspect local WIP branch `codex/wip-conversations-index` (`git fetch --all`, `git checkout codex/wip-conversations-index`).
 6. Run validations:
  - /usr/bin/curl -sS http://localhost:3000/api/system-health | /usr/bin/python3 -c 'import sys,json; d=json.load(sys.stdin); print(d["channels"]["mail"]["processed"])'
  - /usr/bin/curl -sS 'http://localhost:3000/api/conversations?offset=0&limit=10&q=csaba' | /usr/bin/python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("meta")); print([c.get("displayName") for c in d.get("contacts",[])])'
