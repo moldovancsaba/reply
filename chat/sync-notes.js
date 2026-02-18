@@ -1,7 +1,20 @@
-const { exec } = require("child_process");
+const { execFile } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const { addDocuments } = require("./vector-store.js");
+
+/**
+ * Run an AppleScript string via osascript and return the output.
+ * Uses execFile (argv-based) to avoid shell injection.
+ */
+function runAppleScript(script) {
+    return new Promise((resolve, reject) => {
+        execFile("/usr/bin/osascript", ["-e", script], { maxBuffer: 10 * 1024 * 1024 }, (err, stdout, _stderr) => {
+            if (err) return reject(err);
+            resolve(stdout.trim());
+        });
+    });
+}
 
 const statusManager = require('./status-manager.js');
 

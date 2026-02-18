@@ -22,6 +22,11 @@ function getSecurityPolicy(env = process.env) {
   };
 }
 
+/**
+ * Resolve the client IP from the request. Uses X-Forwarded-For if present.
+ * WARNING: Do NOT use this for security decisions (e.g. loopback checks).
+ * X-Forwarded-For can be spoofed by any client. Use for logging/observability only.
+ */
 function resolveClientIp(req) {
   const fwd = req?.headers?.["x-forwarded-for"];
   if (typeof fwd === "string" && fwd.trim()) {
@@ -41,8 +46,14 @@ function isLoopbackIp(ip) {
   return false;
 }
 
+/**
+ * Check if the request originates from localhost using the raw socket address.
+ * Ignores X-Forwarded-For to prevent spoofing.
+ */
 function isLocalRequest(req) {
-  return isLoopbackIp(resolveClientIp(req));
+  const remote = req?.socket?.remoteAddress;
+  const ip = typeof remote === "string" ? remote.trim() : "";
+  return isLoopbackIp(ip);
 }
 
 function hasValidOperatorToken(req, policy) {
