@@ -7,6 +7,8 @@ function el(id) {
 let gmailHasSavedSecret = false;
 let gmailHasRefreshToken = false;
 let currentSettingsFilter = null;
+let previousHandleBeforeSettings = null;
+let previousWasDashboard = false;
 
 function setVisible(element, visible) {
   if (!element) return;
@@ -286,14 +288,19 @@ async function onSave() {
 
     await saveSettings(payload);
     await loadIntoForm();
-    closeSettings();
+    if (btn) {
+      btn.textContent = 'Saved';
+      setTimeout(() => {
+        try { btn.textContent = original; } catch { }
+      }, 800);
+    }
   } catch (e) {
     console.error('Save settings failed:', e);
     alert(e?.message || 'Save failed');
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = original;
+      if (btn.textContent === '⏳') btn.textContent = original;
     }
   }
 }
@@ -319,7 +326,7 @@ async function onConnectGmail() {
 }
 
 async function onDisconnectGmail() {
-  const ok = confirm('Disconnect Gmail from Reply on this machine?');
+  const ok = confirm('Disconnect Gmail from {reply} on this machine?');
   if (!ok) return;
   try {
     await disconnectGmail();
@@ -330,9 +337,32 @@ async function onDisconnectGmail() {
   }
 }
 
+function setSettingsPageVisible(visible) {
+  const page = el('settings-page');
+  if (page) page.style.display = visible ? 'flex' : 'none';
+
+  try {
+    document.body?.classList?.toggle('mode-settings', !!visible);
+    if (visible) document.body?.classList?.remove('mode-dashboard');
+  } catch { }
+
+  const messagesEl = el('messages');
+  const dashboardEl = el('dashboard');
+  const inputArea = document.querySelector('.input-area');
+  const chatHeader = document.querySelector('.chat-header');
+  if (visible) {
+    if (messagesEl) messagesEl.style.display = 'none';
+    if (dashboardEl) dashboardEl.style.display = 'none';
+    if (inputArea) inputArea.style.display = 'none';
+    if (chatHeader) chatHeader.style.display = 'none';
+  }
+}
+
 export async function openSettings() {
-  const overlay = el('settings-modal');
-  setVisible(overlay, true);
+  const dash = el('dashboard');
+  previousWasDashboard = !!(dash && dash.style.display !== 'none');
+  previousHandleBeforeSettings = previousWasDashboard ? null : (window.currentHandle ?? null);
+  setSettingsPageVisible(true);
   applySettingsFilter(null);
   const scroller = el('settings-modal-scroll');
   if (scroller) scroller.scrollTop = 0;
@@ -347,8 +377,10 @@ export async function openSettings() {
 export async function openChannelSettings(channel) {
   const key = (channel || '').toString().toLowerCase();
   const normalized = key === 'mail' ? 'email' : key;
-  const overlay = el('settings-modal');
-  setVisible(overlay, true);
+  const dash = el('dashboard');
+  previousWasDashboard = !!(dash && dash.style.display !== 'none');
+  previousHandleBeforeSettings = previousWasDashboard ? null : (window.currentHandle ?? null);
+  setSettingsPageVisible(true);
   applySettingsFilter(normalized);
   const scroller = el('settings-modal-scroll');
   if (scroller) scroller.scrollTop = 0;
@@ -361,19 +393,24 @@ export async function openChannelSettings(channel) {
 }
 
 export function closeSettings() {
-  const overlay = el('settings-modal');
-  setVisible(overlay, false);
+  setSettingsPageVisible(false);
   applySettingsFilter(null);
+
+  const chatHeader = document.querySelector('.chat-header');
+  if (chatHeader) chatHeader.style.display = 'flex';
+
+  const prev = previousHandleBeforeSettings;
+  previousHandleBeforeSettings = null;
+  const wasDash = previousWasDashboard;
+  previousWasDashboard = false;
+  if (typeof window.selectContact === 'function') {
+    window.selectContact(wasDash ? null : (prev ?? null));
+  }
 }
 
 function wireDom() {
-  const overlay = el('settings-modal');
-  if (!overlay) return;
-
-  // click outside closes
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) closeSettings();
-  });
+  const page = el('settings-page');
+  if (!page) return;
 
   const btnClose = el('settings-close');
   if (btnClose) btnClose.onclick = closeSettings;
