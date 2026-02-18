@@ -11,7 +11,8 @@
     "security:fix": "node security-audit.js --fix",
     "channel-bridge:ingest": "node channel-bridge-sidecar.js",
     "lint": "eslint . --max-warnings 0",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "test": "node --test test/*.test.js"
   },
   "engines": {
     "node": ">=18"
