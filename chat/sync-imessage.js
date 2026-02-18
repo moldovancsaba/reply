@@ -12,6 +12,16 @@ function updateStatus(status) {
     statusManager.update('imessage', status);
 }
 
+function readCurrentProcessed() {
+    try {
+        const cur = statusManager.get('imessage') || {};
+        const n = Number(cur.processed);
+        return Number.isFinite(n) && n >= 0 ? n : 0;
+    } catch {
+        return 0;
+    }
+}
+
 // Ensure DB exists
 if (!fs.existsSync(DB_PATH)) {
     console.error("Database not found. Please copy chat.db to chat/data/");
@@ -80,10 +90,10 @@ async function sync() {
             if (rows.length === 0) {
                 console.log("Everything is already in sync!");
 
-                // Don't set 'processed' - server reads from sync_state.json
                 updateStatus({
                     state: "idle",
-                    lastSync: new Date().toISOString()
+                    lastSync: new Date().toISOString(),
+                    processed: readCurrentProcessed()
                 });
                 return resolve();
             }
@@ -113,10 +123,11 @@ async function sync() {
                 saveState(maxId);
                 console.log(`Sync complete. Last ID: ${maxId}`);
 
-                // Don't set 'processed' - server reads from sync_state.json
+                const nextProcessed = readCurrentProcessed() + docs.length;
                 updateStatus({
                     state: "idle",
-                    lastSync: new Date().toISOString()
+                    lastSync: new Date().toISOString(),
+                    processed: nextProcessed
                 });
                 resolve();
             } catch (syncErr) {

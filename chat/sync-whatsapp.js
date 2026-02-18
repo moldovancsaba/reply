@@ -18,6 +18,16 @@ function updateStatus(status) {
     statusManager.update('whatsapp', status);
 }
 
+function readCurrentProcessed() {
+    try {
+        const cur = statusManager.get('whatsapp') || {};
+        const n = Number(cur.processed);
+        return Number.isFinite(n) && n >= 0 ? n : 0;
+    } catch {
+        return 0;
+    }
+}
+
 function loadState() {
     if (fs.existsSync(STATE_FILE)) {
         return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
@@ -88,11 +98,11 @@ async function syncWhatsApp() {
             if (rows.length === 0) {
                 console.log("WhatsApp up to date.");
 
-                // Don't set 'processed' - server reads from database
                 updateStatus({
                     state: "idle",
                     lastSync: new Date().toISOString(),
-                    message: "No new messages"
+                    message: "No new messages",
+                    processed: readCurrentProcessed()
                 });
 
                 db.close();
@@ -172,10 +182,11 @@ async function syncWhatsApp() {
 
                 console.log(`WhatsApp Sync complete. Last Date: ${maxDate}`);
 
-                // Don't set 'processed' - server reads from database
+                const nextProcessed = readCurrentProcessed() + docs.length;
                 updateStatus({
                     state: "idle",
-                    lastSync: new Date().toISOString()
+                    lastSync: new Date().toISOString(),
+                    processed: nextProcessed
                 });
 
                 db.close();

@@ -30,6 +30,7 @@ const { withDefaults, readSettings } = require('./settings-store.js');
 const { extractSignals } = require('./signal-extractor.js');
 const { mergeProfile } = require('./kyc-merge.js');
 const { execFile } = require('child_process');
+const statusManager = require('./status-manager.js');
 
 /**
  * Optimized Background Worker (SQLite version)
@@ -315,6 +316,12 @@ async function poll() {
                     source: 'iMessage-live',
                     path: `imessage://${handle}`
                 }]);
+                try {
+                    const cur = statusManager.get('imessage') || {};
+                    const processed = Number(cur.processed);
+                    const next = (Number.isFinite(processed) && processed >= 0 ? processed : 0) + 1;
+                    statusManager.update('imessage', { processed: next, lastSync: new Date().toISOString() });
+                } catch { }
 
                 // 2. Track activity
                 if (handle) {
