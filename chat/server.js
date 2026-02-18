@@ -34,6 +34,242 @@ let gmailOauthState = null;
 let boundPort = PORT_MIN;
 const analysisInFlightByHandle = new Map();
 
+// Conversation list helpers
+const conversationsIndexCache = {
+  builtAtMs: 0,
+  ttlMs: 5 * 1000,
+  buildPromise: null,
+  items: [],
+};
+
+const conversationStatsCache = new Map(); // key -> { builtAtMs, lastContacted, stats }
+const CONVERSATION_STATS_TTL_MS = 60 * 1000;
+const CONVERSATION_PREVIEW_SAMPLE_ROWS = 200;
+
+let docsTablePromise = null;
+
+function escapeSqlString(value) {
+  return String(value ?? "").replace(/'/g, "''");
+}
+
+async function getDocsTable() {
+  if (docsTablePromise) return docsTablePromise;
+  docsTablePromise = (async () => {
+    const { connect } = require("./vector-store.js");
+    const db = await connect();
+    return await db.openTable("documents");
+  })();
+  return docsTablePromise;
+}
+
+function safeDateMs(v) {
+  try {
+    const d = new Date(v);
+    const t = d.getTime();
+    return Number.isFinite(t) ? t : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function buildSearchHaystack(contact, convo) {
+  const parts = [];
+  const c = contact || {};
+  const cv = convo || {};
+
+  parts.push(c.displayName, c.name, c.handle);
+  if (Array.isArray(c.aliases)) parts.push(...c.aliases);
+  if (c.channels?.phone) parts.push(...c.channels.phone);
+  if (c.channels?.email) parts.push(...c.channels.email);
+
+  parts.push(cv.channel, cv.source, cv.latestHandle);
+
+  return parts
+    .filter(Boolean)
+    .map((v) => String(v))
+    .join(" ")
+    .toLowerCase();
+}
+
+function matchesQuery(haystack, q) {
+  const query = (q ?? "").toString().trim().toLowerCase();
+  if (!query) return true;
+  const tokens = query.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+
+  const hs = (haystack || "").toString();
+  const hsDigits = hs.replace(/\D/g, "");
+
+  for (const t of tokens) {
+    const td = t.replace(/\D/g, "");
+    if (td.length >= 5) {
+      if (!hsDigits.includes(td)) return false;
+      continue;
+    }
+    if (!hs.includes(t)) return false;
+  }
+  return true;
+}
+
+function inferChannelFromHandle(handle, fallback = "imessage") {
+  const h = String(handle || "");
+  if (h.includes("@")) return "email";
+  if (h.includes("-")) return "whatsapp";
+  if (/^\d{11,}$/.test(h.replace(/\D/g, ""))) return "whatsapp";
+  return fallback;
+}
+
+function inferSourceFromChannel(channel) {
+  const c = String(channel || "").toLowerCase();
+  if (c === "whatsapp") return "WhatsApp";
+  if (c === "email") return "Mail";
+  if (c === "imessage") return "iMessage";
+  return null;
+}
+
+function stripPathScheme(p) {
+  return String(p || "").replace(/^(imessage:\/\/|whatsapp:\/\/|mailto:)/i, "").trim();
+}
+
+async function collectRows(results) {
+  if (!results) return [];
+  if (Array.isArray(results)) return results;
+  const out = [];
+  for await (const batch of results) {
+    for (const row of batch) out.push(row.toJSON ? row.toJSON() : row);
+  }
+  return out;
+}
+
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let nextIndex = 0;
+  const workers = new Array(Math.max(1, Math.min(limit, items.length))).fill(0).map(async () => {
+    while (true) {
+      const i = nextIndex++;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+async function getConversationsIndexFresh() {
+  const now = Date.now();
+  if (conversationsIndexCache.buildPromise) return conversationsIndexCache.buildPromise;
+  if (conversationsIndexCache.items.length && (now - conversationsIndexCache.builtAtMs) < conversationsIndexCache.ttlMs) {
+    return { items: conversationsIndexCache.items };
+  }
+
+  conversationsIndexCache.buildPromise = (async () => {
+    const items = (contactStore.contacts || [])
+      .slice()
+      .sort((a, b) => safeDateMs(b?.lastContacted) - safeDateMs(a?.lastContacted))
+      .map((c) => {
+        const handle = String(c?.handle || c?.displayName || "").trim();
+        const channel = (c?.lastChannel || inferChannelFromHandle(handle)).toString();
+        return {
+          key: String(c?.id || handle),
+          handle,
+          latestHandle: handle,
+          sortTime: safeDateMs(c?.lastContacted),
+          channel,
+          source: inferSourceFromChannel(channel),
+          contact: c || null,
+        };
+      })
+      .filter((x) => x.handle);
+
+    conversationsIndexCache.items = items;
+    conversationsIndexCache.builtAtMs = Date.now();
+    return { items };
+  })().finally(() => {
+    conversationsIndexCache.buildPromise = null;
+  });
+
+  return conversationsIndexCache.buildPromise;
+}
+
+async function getConversationStatsForHandle(handle, contact) {
+  const key = String(contact?.id || handle || "").trim();
+  const lastContacted = String(contact?.lastContacted || "");
+  const cached = conversationStatsCache.get(key);
+  const now = Date.now();
+  if (cached && cached.lastContacted === lastContacted && (now - cached.builtAtMs) < CONVERSATION_STATS_TTL_MS) {
+    return cached.stats;
+  }
+
+  const table = await getDocsTable();
+  const handles = contactStore.getAllHandles(handle);
+
+  // Add WhatsApp @lid aliases for known phone JIDs so older ingested messages remain discoverable.
+  const phoneDigits = handles
+    .filter((h) => typeof h === "string" && !h.includes("@"))
+    .map((h) => normalizePhone(h))
+    .filter(Boolean);
+  const lidByPhone = await whatsAppIdResolver.lidsForPhones(phoneDigits);
+  const lidHandles = Array.from(new Set(Array.from(lidByPhone.values()).filter(Boolean)));
+  const allHandles = Array.from(new Set([...handles, ...lidHandles]));
+  const prefixes = Array.from(new Set(allHandles.flatMap((h) => pathPrefixesForHandle(h))));
+
+  let totalCount = 0;
+  let best = { time: 0, preview: null, previewDate: null, channel: null, source: null, latestHandle: null, path: null };
+
+  for (const prefix of prefixes) {
+    const filter = `path LIKE '${escapeSqlString(prefix)}%'`;
+    const count = await table.countRows(filter);
+    totalCount += Number.isFinite(Number(count)) ? Number(count) : 0;
+    if (!count) continue;
+
+    const offset = Math.max(0, Number(count) - CONVERSATION_PREVIEW_SAMPLE_ROWS);
+    const results = await table
+      .query()
+      .where(filter)
+      .offset(offset)
+      .limit(CONVERSATION_PREVIEW_SAMPLE_ROWS)
+      .select(["text", "source", "path"])
+      .execute();
+
+    const rows = await collectRows(results);
+    for (const r of rows) {
+      const dt = extractDateFromText(r?.text || "");
+      const t = dt ? dt.getTime() : 0;
+      if (!t) continue;
+      if (t > best.time) {
+        best = {
+          time: t,
+          preview: stripMessagePrefix(r?.text || "").trim(),
+          previewDate: dt.toISOString(),
+          channel: channelFromDoc(r),
+          source: r?.source || null,
+          latestHandle: stripPathScheme(r?.path || ""),
+          path: r?.path || null,
+        };
+      }
+    }
+  }
+
+  // If the latest handle is a WhatsApp linked-device @lid, prefer the real phone JID for sending stability.
+  if (best.channel === "whatsapp" && best.latestHandle && /^\d{13,}$/.test(best.latestHandle)) {
+    const waMeta = await whatsAppIdResolver.phoneForLids([best.latestHandle]);
+    const meta = waMeta.get(best.latestHandle);
+    if (meta?.phone) best.latestHandle = meta.phone;
+  }
+
+  const stats = {
+    count: totalCount,
+    channel: best.channel,
+    source: best.source,
+    preview: best.preview,
+    previewDate: best.previewDate,
+    latestHandle: best.latestHandle || handle,
+  };
+
+  conversationStatsCache.set(key, { builtAtMs: now, lastContacted, stats });
+  return stats;
+}
+
 function writeJson(res, statusCode, payload) {
   res.writeHead(statusCode, { "Content-Type": "application/json" });
   res.end(JSON.stringify(payload));
@@ -952,30 +1188,39 @@ const server = http.createServer(async (req, res) => {
         : items;
 
       const page = filtered.slice(offset, offset + limit);
-      const enriched = page.map((c) => {
+      const enriched = await mapLimit(page, 4, async (c) => {
         const contact = c.contact || null;
         const hasDraft = contact?.status === "draft" && contact?.draft;
         const displayName = (contact?.displayName || contact?.name || c.handle).toString();
-        const lastChannel = (c.channel || contact?.lastChannel || "").toString();
+
+        let stats = null;
+        try {
+          stats = await getConversationStatsForHandle(c.handle, contact);
+        } catch (e) {
+          console.warn("Conversation stats failed:", c.handle, e?.message || e);
+        }
+
+        const lastChannel = (stats?.channel || c.channel || contact?.lastChannel || "").toString();
+        const lastSource = stats?.source || c.source || null;
         const lastContacted =
           contact?.lastContacted ||
-          c.previewDate ||
+          stats?.previewDate ||
           (c.sortTime ? new Date(c.sortTime).toISOString() : null);
 
         return {
           id: contact?.id || c.handle,
           displayName,
-          handle: c.latestHandle || c.handle,
-          latestHandle: c.latestHandle || c.handle,
-          count: Number.isFinite(Number(c.count)) ? c.count : 0,
+          handle: stats?.latestHandle || c.latestHandle || c.handle,
+          latestHandle: stats?.latestHandle || c.latestHandle || c.handle,
+          count: Number.isFinite(Number(stats?.count)) ? Number(stats.count) : 0,
           lastMessage: hasDraft
             ? `Draft: ${String(contact.draft).slice(0, 50)}...`
-            : (c.preview ? String(c.preview).slice(0, 80) : "Click to see history"),
+            : (stats?.preview ? String(stats.preview).slice(0, 80) : "Click to see history"),
           status: contact?.status || "open",
           draft: contact?.draft || null,
           channel: lastChannel,
           lastChannel,
-          lastSource: c.source || null,
+          lastSource,
           lastContacted: lastContacted || null,
         };
       });
@@ -1208,53 +1453,62 @@ on run argv
 
 	      set w to window 1
 
+        -- Compute thresholds relative to the WhatsApp window position.
+        -- Using absolute Y constants is flaky when the window is not near the top of the screen.
+        set wpos to position of w
+        set wsz to size of w
+        set wy to item 2 of wpos
+        set wh to item 2 of wsz
+        set searchThresholdY to (wy + 260) as integer
+        set composerMinY to (wy + (wh * 0.55)) as integer
+
 	      -- Try to enter search/new chat using shortcuts, then fall back to focusing the top text field directly.
 	      -- We NEVER type the target unless focus is in the top area.
-	      set focusedOk to my focusLooksAboveY(p, 260)
+	      set focusedOk to my focusLooksAboveY(p, searchThresholdY)
 	      if focusedOk is false then
 	        keystroke "k" using {command down}
 	        delay 0.25
-	        set focusedOk to my focusLooksAboveY(p, 260)
+	        set focusedOk to my focusLooksAboveY(p, searchThresholdY)
 	      end if
 	      if focusedOk is false then
 	        keystroke "f" using {command down}
 	        delay 0.25
-	        set focusedOk to my focusLooksAboveY(p, 260)
+	        set focusedOk to my focusLooksAboveY(p, searchThresholdY)
 	      end if
 	      if focusedOk is false then
 	        keystroke "n" using {command down}
 	        delay 0.25
-	        set focusedOk to my focusLooksAboveY(p, 260)
+	        set focusedOk to my focusLooksAboveY(p, searchThresholdY)
 	      end if
 	      if focusedOk is false then
-	        set focusedOk to my focusTopTextField(w, 260)
+	        set focusedOk to my focusTopTextField(w, searchThresholdY)
 	      end if
 	      -- Focus can settle asynchronously; re-check a few times before failing.
 	      repeat 10 times
-	        if my focusLooksAboveY(p, 260) then
+	        if my focusLooksAboveY(p, searchThresholdY) then
 	          set focusedOk to true
 	          exit repeat
 	        end if
 	        delay 0.08
 	      end repeat
-	      if focusedOk is false then error "Failed to focus WhatsApp search. Check=" & my focusCheck(p, 260)
+	      if focusedOk is false then error "Failed to focus WhatsApp search. Check=" & my focusCheck(p, searchThresholdY)
 
-      -- Clear any prior search text
-      keystroke "a" using {command down}
-      delay 0.05
-      key code 51 -- delete
-      delay 0.1
+	      -- Clear any prior search text
+	      keystroke "a" using {command down}
+	      delay 0.05
+	      key code 51 -- delete
+	      delay 0.1
 
-      -- Type the recipient and only press enter if we're still in the search area (prevents sending the number as a message).
-      if my focusLooksAboveY(p, 260) is false then error "Search focus lost; aborting to avoid sending the recipient. Focus=" & my focusDebug(p)
-      keystroke target
-      delay 0.35
-      if my focusLooksAboveY(p, 260) is false then error "Search focus lost; aborting to avoid sending the recipient. Focus=" & my focusDebug(p)
+	      -- Type the recipient and only press enter if we're still in the search area (prevents sending the number as a message).
+	      if my focusLooksAboveY(p, searchThresholdY) is false then error "Search focus lost; aborting to avoid sending the recipient. Focus=" & my focusDebug(p)
+	      keystroke target
+	      delay 0.35
+	      if my focusLooksAboveY(p, searchThresholdY) is false then error "Search focus lost; aborting to avoid sending the recipient. Focus=" & my focusDebug(p)
 	      key code 36 -- enter to open the chat (often opens first match)
 	      delay 0.6
 	
 	      -- Some WhatsApp builds keep focus in the search field after Enter; try selecting the first result.
-	      if my focusLooksAboveY(p, 260) then
+	      if my focusLooksAboveY(p, searchThresholdY) then
 	        key code 125 -- down arrow
 	        delay 0.12
 	        key code 36 -- enter
@@ -1269,7 +1523,7 @@ on run argv
 	          set offNum to contents of offVal
 	          if my clickWindowBottom(w, offNum) then
 	            delay 0.18
-	            if my focusLooksAboveY(p, 260) is false then
+	            if my focusLooksBelowY(p, composerMinY) then
 	              set composerOk to true
 	              exit repeat
 	            end if
@@ -1282,14 +1536,14 @@ on run argv
 	        repeat 12 times
 	          key code 48 -- tab
 	          delay 0.12
-	          if my focusLooksAboveY(p, 260) is false then
+	          if my focusLooksBelowY(p, composerMinY) then
 	            set composerOk to true
 	            exit repeat
 	          end if
 	        end repeat
 	      end if
 
-	      if composerOk is false then error "Failed to focus WhatsApp message composer. Check=" & my focusCheck(p, 360)
+	      if composerOk is false then error "Failed to focus WhatsApp message composer. Check=" & my focusCheck(p, composerMinY)
 
 	      if dryRun is true then return "dry-run"
 	      keystroke "v" using {command down}
