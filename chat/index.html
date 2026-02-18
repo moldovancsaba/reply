@@ -82,6 +82,212 @@
       <div id="dashboard" class="dashboard" style="display:none;">
         <!-- Dashboard items will be injected here -->
       </div>
+
+      <!-- Settings Page -->
+      <div id="settings-page" class="settings-page" style="display:none;">
+        <div class="settings-page-shell">
+          <div class="settings-page-topbar">
+            <div>
+              <div class="settings-page-title">Settings</div>
+              <div class="settings-page-subtitle">Local-only configuration for this machine</div>
+            </div>
+            <div class="settings-page-actions">
+              <button id="settings-close" class="btn btn-secondary btn-sm">Back</button>
+              <button id="settings-save" class="btn btn-primary btn-sm">Save</button>
+            </div>
+          </div>
+
+          <div id="settings-filter-bar" class="settings-filter-bar" style="display:none;">
+            <div id="settings-filter-label" class="settings-filter-label">Configuring</div>
+            <button id="settings-show-all" class="btn btn-ghost btn-sm">All Settings</button>
+          </div>
+
+          <div id="settings-modal-scroll" class="settings-page-scroll">
+            <div id="settings-channel-mail" style="margin-top: 0.5rem;">
+              <div style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">Email (IMAP / Gmail)</div>
+
+              <div style="display:grid; grid-template-columns: 1fr 120px; gap: 10px;">
+                <div>
+                  <label style="font-size:0.8rem; color:#666;">Host</label>
+                  <input id="settings-imap-host" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="imap.gmail.com">
+                </div>
+                <div>
+                  <label style="font-size:0.8rem; color:#666;">Port</label>
+                  <input id="settings-imap-port" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="993">
+                </div>
+              </div>
+
+              <div style="display:flex; align-items:center; gap:10px; margin-top:10px;">
+                <input id="settings-imap-secure" type="checkbox" checked>
+                <label for="settings-imap-secure" style="font-size:0.85rem; color:#666;">Use TLS</label>
+              </div>
+
+              <div style="margin-top:10px;">
+                <label style="font-size:0.8rem; color:#666;">Username</label>
+                <input id="settings-imap-user" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="you@gmail.com">
+              </div>
+
+              <div style="margin-top:10px;">
+                <label style="font-size:0.8rem; color:#666;">Password (Gmail: App Password)</label>
+                <input id="settings-imap-pass" type="password" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="Leave blank to keep existing">
+                <div id="settings-imap-pass-hint" style="font-size:0.75rem; color:#999; margin-top:6px;">Not set</div>
+              </div>
+
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top:10px;">
+                <div>
+                  <label style="font-size:0.8rem; color:#666;">Mailbox</label>
+                  <input id="settings-imap-mailbox" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="INBOX">
+                </div>
+                <div>
+                  <label style="font-size:0.8rem; color:#666;">Sent Mailbox (optional)</label>
+                  <input id="settings-imap-sent-mailbox" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="[Gmail]/Sent Mail">
+                </div>
+              </div>
+
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top:10px;">
+                <div>
+                  <label style="font-size:0.8rem; color:#666;">Fetch limit / run</label>
+                  <input id="settings-imap-limit" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="200">
+                </div>
+                <div>
+                  <label style="font-size:0.8rem; color:#666;">First-run lookback (days)</label>
+                  <input id="settings-imap-since-days" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="30">
+                </div>
+              </div>
+
+              <div style="margin-top:10px;">
+                <label style="font-size:0.8rem; color:#666;">Self emails (comma-separated, optional)</label>
+                <input id="settings-self-emails" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="me@domain.com, alias@domain.com">
+              </div>
+
+              <div style="font-size:0.75rem; color:#999; margin-top:10px;">
+                Stored locally on this machine (not encrypted). Use an App Password for Gmail.
+              </div>
+            </div>
+
+            <div id="settings-channel-gmail" style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
+              <div style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">Gmail (OAuth)</div>
+
+              <div style="margin-top:10px;">
+                <label style="font-size:0.8rem; color:#666;">OAuth Client ID</label>
+                <input id="settings-gmail-client-id" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="xxxx.apps.googleusercontent.com">
+              </div>
+
+              <div style="margin-top:10px;">
+                <label style="font-size:0.8rem; color:#666;">OAuth Client Secret</label>
+                <input id="settings-gmail-client-secret" type="password" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="Leave blank to keep existing">
+                <div id="settings-gmail-client-secret-hint" style="font-size:0.75rem; color:#999; margin-top:6px;">Not set</div>
+              </div>
+
+              <div id="settings-gmail-status" style="font-size:0.85rem; color:#666; margin-top:10px;">Not connected</div>
+
+              <div style="display:flex; justify-content:flex-end; gap:10px; margin-top: 12px;">
+                <button id="settings-gmail-disconnect" class="btn btn-ghost" style="padding: 8px 12px;">Disconnect</button>
+                <button id="settings-gmail-connect" class="btn btn-primary" style="padding: 8px 12px;">Connect Gmail</button>
+              </div>
+
+              <div style="font-size:0.75rem; color:#999; margin-top:10px;">
+                Redirect URI must be registered in Google Cloud Console (usually `http://localhost:3000/api/gmail/oauth-callback`).
+              </div>
+            </div>
+
+            <div id="settings-section-worker" style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
+              <div style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">Background Worker</div>
+
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div id="settings-worker-interval-wrap">
+                  <label style="font-size:0.8rem; color:#666;">Poll interval (seconds)</label>
+                  <input id="settings-worker-interval" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="60">
+                </div>
+                <div id="settings-worker-gmail-wrap">
+                  <label style="font-size:0.8rem; color:#666;">Gmail max / run</label>
+                  <input id="settings-worker-gmail-max" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="100">
+                </div>
+              </div>
+
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top:10px;">
+                <div id="settings-worker-imessage-wrap">
+                  <label style="font-size:0.8rem; color:#666;">iMessage max / run</label>
+                  <input id="settings-worker-imessage-max" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="1000">
+                </div>
+                <div id="settings-worker-whatsapp-wrap">
+                  <label style="font-size:0.8rem; color:#666;">WhatsApp max / run</label>
+                  <input id="settings-worker-whatsapp-max" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="500">
+                </div>
+              </div>
+
+              <div id="settings-channel-notes" style="margin-top:10px;">
+                <label style="font-size:0.8rem; color:#666;">Notes max / run (0 = unlimited)</label>
+                <input id="settings-worker-notes-max" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="0">
+              </div>
+            </div>
+
+            <div id="settings-section-ui" style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
+              <div style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">Channel UI</div>
+
+              <div style="display:grid; grid-template-columns: 1fr; gap: 12px;">
+                <div id="settings-channel-imessage" style="border:1px solid #eee; border-radius: 12px; padding: 12px;">
+                  <div style="font-weight:700; color:#444; margin-bottom:10px;">iMessage</div>
+                  <div style="display:grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; align-items:end;">
+                    <div>
+                      <label style="font-size:0.8rem; color:#666;">Emoji</label>
+                      <input id="settings-ui-imessage-emoji" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                    </div>
+                    <div>
+                      <label style="font-size:0.8rem; color:#666;">My bubble</label>
+                      <input id="settings-ui-imessage-me" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                    </div>
+                    <div>
+                      <label style="font-size:0.8rem; color:#666;">Their bubble</label>
+                      <input id="settings-ui-imessage-contact" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                    </div>
+                  </div>
+                </div>
+
+                <div id="settings-channel-whatsapp" style="border:1px solid #eee; border-radius: 12px; padding: 12px;">
+                  <div style="font-weight:700; color:#444; margin-bottom:10px;">WhatsApp</div>
+                  <div style="display:grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; align-items:end;">
+                    <div>
+                      <label style="font-size:0.8rem; color:#666;">Emoji</label>
+                      <input id="settings-ui-whatsapp-emoji" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                    </div>
+                    <div>
+                      <label style="font-size:0.8rem; color:#666;">My bubble</label>
+                      <input id="settings-ui-whatsapp-me" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                    </div>
+                    <div>
+                      <label style="font-size:0.8rem; color:#666;">Their bubble</label>
+                      <input id="settings-ui-whatsapp-contact" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                    </div>
+                  </div>
+                </div>
+
+                <div id="settings-channel-email" style="border:1px solid #eee; border-radius: 12px; padding: 12px;">
+                  <div style="font-weight:700; color:#444; margin-bottom:10px;">Email</div>
+                  <div style="display:grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; align-items:end;">
+                    <div>
+                      <label style="font-size:0.8rem; color:#666;">Emoji</label>
+                      <input id="settings-ui-email-emoji" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                    </div>
+                    <div>
+                      <label style="font-size:0.8rem; color:#666;">My bubble</label>
+                      <input id="settings-ui-email-me" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                    </div>
+                    <div>
+                      <label style="font-size:0.8rem; color:#666;">Their bubble</label>
+                      <input id="settings-ui-email-contact" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-page-footer">
+            <div style="font-size:0.75rem; color:#999;">Changes are saved when you click Save.</div>
+          </div>
+        </div>
+      </div>
     </main>
 
     <!-- PANE C: KYC DATA -->
@@ -189,207 +395,6 @@
       </div>
     </div>
   </div>
-
-  <!-- Settings Modal -->
-  <div id="settings-modal" class="modal-overlay" style="display:none;">
-    <div class="modal-content" style="width: 520px; max-width: calc(100vw - 40px); display:flex; flex-direction:column; max-height: calc(100vh - 80px);">
-      <div id="settings-filter-bar" style="display:none; align-items:center; justify-content:space-between; gap:10px; background:#f7f7f7; border:1px solid #eee; padding:10px 12px; border-radius:12px; margin-bottom:12px;">
-        <div id="settings-filter-label" style="font-size:0.85rem; color:#666;">Configuring</div>
-        <button id="settings-show-all" class="btn btn-ghost" style="padding: 6px 10px;">All Settings</button>
-      </div>
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-        <h3 style="margin-top:0;">Settings</h3>
-        <button id="settings-close" class="btn btn-ghost" style="padding: 6px 10px;">Close</button>
-      </div>
-
-      <div id="settings-modal-scroll" style="overflow-y:auto; padding-right: 4px;">
-      <div id="settings-channel-mail" style="margin-top: 0.5rem;">
-        <div style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">Email (IMAP / Gmail)</div>
-
-        <div style="display:grid; grid-template-columns: 1fr 120px; gap: 10px;">
-          <div>
-            <label style="font-size:0.8rem; color:#666;">Host</label>
-            <input id="settings-imap-host" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="imap.gmail.com">
-          </div>
-          <div>
-            <label style="font-size:0.8rem; color:#666;">Port</label>
-            <input id="settings-imap-port" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="993">
-          </div>
-        </div>
-
-        <div style="display:flex; align-items:center; gap:10px; margin-top:10px;">
-          <input id="settings-imap-secure" type="checkbox" checked>
-          <label for="settings-imap-secure" style="font-size:0.85rem; color:#666;">Use TLS</label>
-        </div>
-
-        <div style="margin-top:10px;">
-          <label style="font-size:0.8rem; color:#666;">Username</label>
-          <input id="settings-imap-user" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="you@gmail.com">
-        </div>
-
-        <div style="margin-top:10px;">
-          <label style="font-size:0.8rem; color:#666;">Password (Gmail: App Password)</label>
-          <input id="settings-imap-pass" type="password" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="Leave blank to keep existing">
-          <div id="settings-imap-pass-hint" style="font-size:0.75rem; color:#999; margin-top:6px;">Not set</div>
-        </div>
-
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top:10px;">
-          <div>
-            <label style="font-size:0.8rem; color:#666;">Mailbox</label>
-            <input id="settings-imap-mailbox" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="INBOX">
-          </div>
-          <div>
-            <label style="font-size:0.8rem; color:#666;">Sent Mailbox (optional)</label>
-            <input id="settings-imap-sent-mailbox" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="[Gmail]/Sent Mail">
-          </div>
-        </div>
-
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top:10px;">
-          <div>
-            <label style="font-size:0.8rem; color:#666;">Fetch limit / run</label>
-            <input id="settings-imap-limit" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="200">
-          </div>
-          <div>
-            <label style="font-size:0.8rem; color:#666;">First-run lookback (days)</label>
-            <input id="settings-imap-since-days" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="30">
-          </div>
-        </div>
-
-        <div style="margin-top:10px;">
-          <label style="font-size:0.8rem; color:#666;">Self emails (comma-separated, optional)</label>
-          <input id="settings-self-emails" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="me@domain.com, alias@domain.com">
-        </div>
-
-        <div style="font-size:0.75rem; color:#999; margin-top:10px;">
-          Stored locally on this machine (not encrypted). Use an App Password for Gmail.
-        </div>
-      </div>
-
-      <div id="settings-channel-gmail" style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
-        <div style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">Gmail (OAuth)</div>
-
-        <div style="margin-top:10px;">
-          <label style="font-size:0.8rem; color:#666;">OAuth Client ID</label>
-          <input id="settings-gmail-client-id" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="xxxx.apps.googleusercontent.com">
-        </div>
-
-        <div style="margin-top:10px;">
-          <label style="font-size:0.8rem; color:#666;">OAuth Client Secret</label>
-          <input id="settings-gmail-client-secret" type="password" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="Leave blank to keep existing">
-          <div id="settings-gmail-client-secret-hint" style="font-size:0.75rem; color:#999; margin-top:6px;">Not set</div>
-        </div>
-
-        <div id="settings-gmail-status" style="font-size:0.85rem; color:#666; margin-top:10px;">Not connected</div>
-
-        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top: 12px;">
-          <button id="settings-gmail-disconnect" class="btn btn-ghost" style="padding: 8px 12px;">Disconnect</button>
-          <button id="settings-gmail-connect" class="btn btn-primary" style="padding: 8px 12px;">Connect Gmail</button>
-        </div>
-
-        <div style="font-size:0.75rem; color:#999; margin-top:10px;">
-          Redirect URI must be registered in Google Cloud Console (usually `http://localhost:3000/api/gmail/oauth-callback`).
-        </div>
-      </div>
-
-      <div id="settings-section-worker" style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
-        <div style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">Background Worker</div>
-
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <div id="settings-worker-interval-wrap">
-            <label style="font-size:0.8rem; color:#666;">Poll interval (seconds)</label>
-            <input id="settings-worker-interval" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="60">
-          </div>
-          <div id="settings-worker-gmail-wrap">
-            <label style="font-size:0.8rem; color:#666;">Gmail max / run</label>
-            <input id="settings-worker-gmail-max" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="100">
-          </div>
-        </div>
-
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top:10px;">
-          <div id="settings-worker-imessage-wrap">
-            <label style="font-size:0.8rem; color:#666;">iMessage max / run</label>
-            <input id="settings-worker-imessage-max" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="1000">
-          </div>
-          <div id="settings-worker-whatsapp-wrap">
-            <label style="font-size:0.8rem; color:#666;">WhatsApp max / run</label>
-            <input id="settings-worker-whatsapp-max" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="500">
-          </div>
-        </div>
-
-        <div id="settings-channel-notes" style="margin-top:10px;">
-          <label style="font-size:0.8rem; color:#666;">Notes max / run (0 = unlimited)</label>
-          <input id="settings-worker-notes-max" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="0">
-        </div>
-      </div>
-
-      <div id="settings-section-ui" style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
-        <div style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">Channel UI</div>
-
-        <div style="display:grid; grid-template-columns: 1fr; gap: 12px;">
-          <div id="settings-channel-imessage" style="border:1px solid #eee; border-radius: 12px; padding: 12px;">
-            <div style="font-weight:700; color:#444; margin-bottom:10px;">iMessage</div>
-            <div style="display:grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; align-items:end;">
-              <div>
-                <label style="font-size:0.8rem; color:#666;">Emoji</label>
-                <input id="settings-ui-imessage-emoji" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
-              </div>
-              <div>
-                <label style="font-size:0.8rem; color:#666;">My bubble</label>
-                <input id="settings-ui-imessage-me" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
-              </div>
-              <div>
-                <label style="font-size:0.8rem; color:#666;">Their bubble</label>
-                <input id="settings-ui-imessage-contact" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
-              </div>
-            </div>
-          </div>
-
-          <div id="settings-channel-whatsapp" style="border:1px solid #eee; border-radius: 12px; padding: 12px;">
-            <div style="font-weight:700; color:#444; margin-bottom:10px;">WhatsApp</div>
-            <div style="display:grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; align-items:end;">
-              <div>
-                <label style="font-size:0.8rem; color:#666;">Emoji</label>
-                <input id="settings-ui-whatsapp-emoji" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
-              </div>
-              <div>
-                <label style="font-size:0.8rem; color:#666;">My bubble</label>
-                <input id="settings-ui-whatsapp-me" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
-              </div>
-              <div>
-                <label style="font-size:0.8rem; color:#666;">Their bubble</label>
-                <input id="settings-ui-whatsapp-contact" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
-              </div>
-            </div>
-          </div>
-
-          <div id="settings-channel-email" style="border:1px solid #eee; border-radius: 12px; padding: 12px;">
-            <div style="font-weight:700; color:#444; margin-bottom:10px;">Email</div>
-            <div style="display:grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; align-items:end;">
-              <div>
-                <label style="font-size:0.8rem; color:#666;">Emoji</label>
-                <input id="settings-ui-email-emoji" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
-              </div>
-              <div>
-                <label style="font-size:0.8rem; color:#666;">My bubble</label>
-                <input id="settings-ui-email-me" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
-              </div>
-              <div>
-                <label style="font-size:0.8rem; color:#666;">Their bubble</label>
-                <input id="settings-ui-email-contact" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      </div>
-
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee;">
-        <div style="font-size:0.75rem; color:#999;">Changes are saved when you click Save.</div>
-        <button id="settings-save" class="btn btn-primary" style="padding: 8px 14px;">Save</button>
-      </div>
-    </div>
-  </div>
-
 
   <!-- Application Modules (ES6) -->
   <script type="module" src="js/app.js"></script>

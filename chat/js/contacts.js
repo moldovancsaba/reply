@@ -178,9 +178,11 @@ export async function loadConversations(append = false) {
 export async function selectContact(handle) {
     const messagesEl = document.getElementById('messages');
     const dashboardEl = document.getElementById('dashboard');
+    const settingsPageEl = document.getElementById('settings-page');
     const activeNameEl = document.getElementById('active-contact-name-chat');
     const inputArea = document.querySelector('.input-area');
     const body = document.body;
+    const chatHeader = document.querySelector('.chat-header');
     if (!messagesEl || !dashboardEl || !activeNameEl || !inputArea) {
         console.warn('selectContact(): missing required DOM nodes', {
             messagesEl: !!messagesEl,
@@ -190,6 +192,10 @@ export async function selectContact(handle) {
         });
         return;
     }
+
+    if (settingsPageEl) settingsPageEl.style.display = 'none';
+    if (body) body.classList.remove('mode-settings');
+    if (chatHeader) chatHeader.style.display = 'flex';
 
     // Update active state in sidebar
     document.querySelectorAll('.sidebar-item').forEach(item => {
