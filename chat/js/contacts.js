@@ -180,6 +180,7 @@ export async function selectContact(handle) {
     const dashboardEl = document.getElementById('dashboard');
     const activeNameEl = document.getElementById('active-contact-name-chat');
     const inputArea = document.querySelector('.input-area');
+    const body = document.body;
     if (!messagesEl || !dashboardEl || !activeNameEl || !inputArea) {
         console.warn('selectContact(): missing required DOM nodes', {
             messagesEl: !!messagesEl,
@@ -199,6 +200,8 @@ export async function selectContact(handle) {
     });
 
     if (handle === null) {
+        if (body) body.classList.add('mode-dashboard');
+
         // Show dashboard
         activeNameEl.textContent = '{reply}';
         dashboardEl.style.display = 'grid';
@@ -212,10 +215,7 @@ export async function selectContact(handle) {
         if (micBtn) micBtn.style.display = 'none';
         const magicBtn = document.getElementById('btn-magic');
         if (magicBtn) magicBtn.style.display = 'none';
-        const kycEmpty = document.getElementById('kyc-empty-state');
-        if (kycEmpty) kycEmpty.style.display = 'block';
-        const kycEditor = document.getElementById('kyc-content-editor');
-        if (kycEditor) kycEditor.style.display = 'none';
+        // KYC pane is hidden in dashboard mode via CSS.
 
         // Render dashboard
         if (typeof window.renderDashboard === 'function') {
@@ -231,6 +231,8 @@ export async function selectContact(handle) {
         }
         return;
     }
+
+    if (body) body.classList.remove('mode-dashboard');
 
     // Show chat view
     window.currentHandle = handle;
