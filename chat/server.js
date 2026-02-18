@@ -1723,20 +1723,24 @@ end focusCheck
       }
 
       // Fallback: AppleScript to send via Mail.app (opens compose window).
-      const escapedMessage = text.replace(/"/g, '\\"');
+      // Use execFile argv to avoid shell-escaping problems and to support multiline text.
       const appleScript = `
-        tell application "Mail"
-          set newMessage to make new outgoing message with properties {subject:"Follow-up from {reply}", content:"${escapedMessage}", visible:true}
-          tell newMessage
-            make new to recipient at end of to recipients with properties {address:"${recipient}"}
-            -- send -- Uncomment to send automatically, keeping visible:true for safety now
-          end tell
-          activate
-        end tell
+on run argv
+  set toAddr to item 1 of argv
+  set bodyText to item 2 of argv
+  tell application "Mail"
+    set newMessage to make new outgoing message with properties {subject:"Follow-up from {reply}", content:bodyText, visible:true}
+    tell newMessage
+      make new to recipient at end of to recipients with properties {address:toAddr}
+      -- send -- Uncomment to send automatically, keeping visible:true for safety now
+    end tell
+    activate
+  end tell
+end run
       `;
 
-      const { exec } = require("child_process");
-      exec(`osascript -e '${appleScript}'`, (error, stdout) => {
+      const { execFile } = require("child_process");
+      execFile("/usr/bin/osascript", ["-e", appleScript, "--", String(recipient), String(text)], (error, stdout) => {
         if (error) {
           console.error(`Send Mail error: ${error}`);
           res.writeHead(500, { "Content-Type": "application/json" });
