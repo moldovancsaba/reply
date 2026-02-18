@@ -7,6 +7,7 @@
 *   **NEVER Hallucinate:** If you don't see it, ask. Do not guess commands or UI states.
 *   **Read Before Do:** Verify credentials (e.g., `gh auth status`) and capability before attempting actions.
 *   **Clarify:** If a CLI command fails or hangs, STOP. Do not retry blindly. Ask the user for help.
+*   **zsh quoting:** In `zsh`, unquoted `{reply}` in commands can trigger brace-expansion parse errors. When using `gh issue create -t '{reply}: ...'` always wrap the title in **single quotes** (or escape braces).
 
 ## 2. The Single Source of Truth (SSOT)
 The **GitHub Project Board** is the ONLY source of truth for what is being worked on, and **all issues for Reply live in the SSOT repo**:
