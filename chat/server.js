@@ -1390,6 +1390,10 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 	  if (url.pathname === "/api/send-whatsapp") {
+      if (req.method !== "POST") {
+        writeJson(res, 405, { error: "Method not allowed" });
+        return;
+      }
 	    const { execFile } = require("child_process");
 	    const payload = await readJsonBody(req);
 	    const recipientRaw = (payload?.recipient || "").toString().trim();
@@ -1804,12 +1808,33 @@ end focusCheck
 	          if (execErr.includes("Command failed:")) return "WhatsApp automation failed (osascript).";
 	          return execErr || "WhatsApp automation failed.";
 	        })();
+          const hint = (() => {
+            const s = `${rawErr}\n${execErr}\n${shortErr}`.toLowerCase();
+            if (s.includes("not authorized") && s.includes("system events")) {
+              return "Grant Accessibility permission to the process running {reply} (System Settings → Privacy & Security → Accessibility), then retry.";
+            }
+            if (s.includes("whatsapp is not running")) {
+              return "Open WhatsApp Desktop (or WhatsApp Beta), keep it running and logged in, then retry.";
+            }
+            if (s.includes("no whatsapp window")) {
+              return "Bring WhatsApp to the foreground and ensure a WhatsApp window is open (not minimized), then retry.";
+            }
+            if (s.includes("failed to focus whatsapp search")) {
+              return "In WhatsApp, close popovers/modals, click the search field once, then retry from {reply}.";
+            }
+            if (s.includes("failed to focus whatsapp message composer")) {
+              return "Open the target chat in WhatsApp and click the message composer once, then retry.";
+            }
+            if (s.includes("search focus lost")) {
+              return "WhatsApp focus moved away from search; close popovers and keep WhatsApp frontmost, then retry.";
+            }
+            return "Ensure WhatsApp Desktop is installed/logged in, and enable Accessibility for the process running this server (System Settings → Privacy & Security → Accessibility).";
+          })();
 	        console.error("Send WhatsApp error:", shortErr);
 	        // Common cases: missing Accessibility permissions, WhatsApp not installed, UI not focused.
 	        writeJson(res, 500, {
 	          error: shortErr,
-	          hint:
-	            "Ensure WhatsApp Desktop is installed and logged in, and enable Accessibility for the process running this server (System Settings → Privacy & Security → Accessibility).",
+	          hint,
 	        });
 	        return;
 	      }
