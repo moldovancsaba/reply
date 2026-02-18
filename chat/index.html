@@ -86,21 +86,31 @@
       <!-- Settings Page -->
       <div id="settings-page" class="settings-page" style="display:none;">
         <div class="settings-page-shell">
-          <div class="settings-page-topbar">
-            <div>
-              <div class="settings-page-title">Settings</div>
-              <div class="settings-page-subtitle">Local-only configuration for this machine</div>
-            </div>
-            <div class="settings-page-actions">
-              <button id="settings-close" class="btn btn-secondary btn-sm">Back</button>
-              <button id="settings-save" class="btn btn-primary btn-sm">Save</button>
-            </div>
-          </div>
+	          <div class="settings-page-topbar">
+	            <div>
+	              <div class="settings-page-title">Settings</div>
+	              <div class="settings-page-subtitle">Local-only configuration for this machine</div>
+	            </div>
+	            <div class="settings-page-actions">
+	              <button id="settings-close" class="btn btn-secondary btn-sm">Back</button>
+	              <button id="settings-save" class="btn btn-primary btn-sm">Save</button>
+	            </div>
+	          </div>
 
-          <div id="settings-filter-bar" class="settings-filter-bar" style="display:none;">
-            <div id="settings-filter-label" class="settings-filter-label">Configuring</div>
-            <button id="settings-show-all" class="btn btn-ghost btn-sm">All Settings</button>
-          </div>
+	          <div class="settings-services">
+	            <div class="settings-services-label">Configure a service:</div>
+	            <div class="settings-services-actions">
+	              <button type="button" class="btn btn-secondary btn-sm" onclick="window.openChannelSettings('imessage')">iMessage</button>
+	              <button type="button" class="btn btn-secondary btn-sm" onclick="window.openChannelSettings('whatsapp')">WhatsApp</button>
+	              <button type="button" class="btn btn-secondary btn-sm" onclick="window.openChannelSettings('email')">Email</button>
+	              <button type="button" class="btn btn-secondary btn-sm" onclick="window.openChannelSettings('notes')">Notes</button>
+	            </div>
+	          </div>
+
+	          <div id="settings-filter-bar" class="settings-filter-bar" style="display:none;">
+	            <div id="settings-filter-label" class="settings-filter-label">Configuring</div>
+	            <button id="settings-show-all" class="btn btn-ghost btn-sm">General Settings</button>
+	          </div>
 
           <div id="settings-modal-scroll" class="settings-page-scroll">
             <div id="settings-channel-mail" style="margin-top: 0.5rem;">

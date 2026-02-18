@@ -87,16 +87,19 @@ function applySettingsFilter(filterKey) {
     setNodeVisible(mailSection, true);
     setNodeVisible(gmailSection, true);
     setNodeVisible(workerSection, true);
-    setNodeVisible(uiSection, true);
+    // General Settings should not show per-service appearance controls.
+    setNodeVisible(uiSection, false);
 
-    setNodeVisible(el('settings-worker-imessage-wrap'), true);
-    setNodeVisible(el('settings-worker-whatsapp-wrap'), true);
-    setNodeVisible(el('settings-worker-gmail-wrap'), true);
-    setNodeVisible(el('settings-channel-notes'), true);
+    // Show only global worker interval in general settings.
+    setNodeVisible(el('settings-worker-interval-wrap'), true);
+    setNodeVisible(el('settings-worker-imessage-wrap'), false);
+    setNodeVisible(el('settings-worker-whatsapp-wrap'), false);
+    setNodeVisible(el('settings-worker-gmail-wrap'), false);
+    setNodeVisible(el('settings-channel-notes'), false);
 
-    setNodeVisible(el('settings-channel-imessage'), true);
-    setNodeVisible(el('settings-channel-whatsapp'), true);
-    setNodeVisible(el('settings-channel-email'), true);
+    setNodeVisible(el('settings-channel-imessage'), false);
+    setNodeVisible(el('settings-channel-whatsapp'), false);
+    setNodeVisible(el('settings-channel-email'), false);
     return;
   }
 
