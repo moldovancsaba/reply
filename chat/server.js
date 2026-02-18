@@ -40,6 +40,7 @@ const {
   toVectorDoc,
   readBridgeEventLog,
 } = require("./channel-bridge.js");
+const { createRateLimiter } = require("./rate-limiter.js");
 const {
   getSecurityPolicy,
   isLocalRequest,
@@ -1071,36 +1072,112 @@ function serveFeedback(req, res) {
   });
 }
 
+// --- Security Middleware ---
+
+// Rate limiter for sensitive routes (30 req/min per IP)
+const sensitiveRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 30 });
+
+// Routes that are rate-limited (send, sync, settings mutations, bridge ingest)
+const RATE_LIMITED_ROUTES = new Set([
+  "/api/send-imessage",
+  "/api/send-whatsapp",
+  "/api/send-email",
+  "/api/sync-imessage",
+  "/api/sync-whatsapp",
+  "/api/sync-mail",
+  "/api/sync-notes",
+  "/api/settings",
+  "/api/kyc",
+  "/api/gmail/disconnect",
+  "/api/analyze-contact",
+  "/api/channel-bridge/inbound",
+]);
+
+// Content Security Policy (restricts inline scripts, external resources)
+const CSP_HEADER = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",         // inline styles needed for dynamic UI
+  "img-src 'self' data: blob:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "media-src 'self' blob:",                     // mic recording
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
 // Create the HTTP server and route requests.
 const server = http.createServer(async (req, res) => {
   // Use a dummy base URL to parse the path relative to the server root.
   const url = new URL(req.url || "/", `http://localhost:${boundPort}`);
   const pathname = url.pathname;
 
-	  // Serve static files (CSS, JS)
-	  if (pathname.startsWith('/css/') || pathname.startsWith('/js/')) {
-	    const filePath = path.join(__dirname, pathname);
-	    try {
-	      const content = await fs.promises.readFile(filePath);
-	      const ext = path.extname(filePath);
-	      const contentType = {
-	        '.css': 'text/css',
-	        '.js': 'application/javascript',
-	        '.json': 'application/json'
-	      }[ext] || 'text/plain';
+  // --- CORS ---
+  const origin = req.headers.origin || "";
+  const allowedOrigin = `http://localhost:${boundPort}`;
+  // Only allow same-origin requests (or no origin for non-browser clients)
+  if (origin && origin !== allowedOrigin && origin !== `http://127.0.0.1:${boundPort}`) {
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "CORS: origin not allowed" }));
+    return;
+  }
+  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Reply-Operator-Token, X-Reply-Human-Approval");
+  res.setHeader("Access-Control-Max-Age", "86400");
 
-	      res.writeHead(200, {
-	        'Content-Type': contentType,
-	        'Cache-Control': 'no-store, max-age=0',
-	      });
-	      res.end(content);
-	      return;
-	    } catch (err) {
-	      res.writeHead(404);
-	      res.end('Not found');
-	      return;
-	    }
-	  }
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  // --- Content Security Policy ---
+  res.setHeader("Content-Security-Policy", CSP_HEADER);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+
+  // --- Rate Limiting (sensitive routes only) ---
+  if (RATE_LIMITED_ROUTES.has(pathname) && req.method === "POST") {
+    const clientIp = req.socket?.remoteAddress || "unknown";
+    if (!sensitiveRateLimiter.isAllowed(clientIp)) {
+      const status = sensitiveRateLimiter.getStatus(clientIp);
+      res.writeHead(429, {
+        "Content-Type": "application/json",
+        "Retry-After": String(Math.ceil(status.resetMs / 1000)),
+      });
+      res.end(JSON.stringify({ error: "Too many requests. Please try again later." }));
+      return;
+    }
+  }
+
+  // Serve static files (CSS, JS)
+  if (pathname.startsWith('/css/') || pathname.startsWith('/js/')) {
+    const filePath = path.join(__dirname, pathname);
+    try {
+      const content = await fs.promises.readFile(filePath);
+      const ext = path.extname(filePath);
+      const contentType = {
+        '.css': 'text/css',
+        '.js': 'application/javascript',
+        '.json': 'application/json'
+      }[ext] || 'text/plain';
+
+      res.writeHead(200, {
+        'Content-Type': contentType,
+        'Cache-Control': 'no-store, max-age=0',
+      });
+      res.end(content);
+      return;
+    } catch (err) {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+  }
 
   // Serve files from /public (e.g. /public/whatsapp.svg).
   if (pathname.startsWith('/public/')) {
@@ -1688,44 +1765,44 @@ const server = http.createServer(async (req, res) => {
 
       const list = (await Promise.all(
         contactStore.contacts
-        .sort((a, b) => {
-          const da = a.lastContacted ? new Date(a.lastContacted) : new Date(0);
-          const db = b.lastContacted ? new Date(b.lastContacted) : new Date(0);
-          return db - da;
-        })
-        .slice(offset, offset + limit)
-        .map(async (c) => {
-          const hasDraft = c.status === "draft" && c.draft;
-          const inferredChannel = (() => {
-            if (c.lastChannel) return c.lastChannel;
-            const h = (c.handle || "").toString();
-            if (h.includes("@")) return "email";
-            if (h.trim().startsWith("+")) return "imessage";
-            // Heuristics: WhatsApp identifiers are often digits without "+" or include a dash (e.g. groups).
-            if (h.includes("-")) return "whatsapp";
-            if (/^\d{11,}$/.test(h.replace(/\s+/g, ""))) return "whatsapp";
-            return "imessage";
-          })();
+          .sort((a, b) => {
+            const da = a.lastContacted ? new Date(a.lastContacted) : new Date(0);
+            const db = b.lastContacted ? new Date(b.lastContacted) : new Date(0);
+            return db - da;
+          })
+          .slice(offset, offset + limit)
+          .map(async (c) => {
+            const hasDraft = c.status === "draft" && c.draft;
+            const inferredChannel = (() => {
+              if (c.lastChannel) return c.lastChannel;
+              const h = (c.handle || "").toString();
+              if (h.includes("@")) return "email";
+              if (h.trim().startsWith("+")) return "imessage";
+              // Heuristics: WhatsApp identifiers are often digits without "+" or include a dash (e.g. groups).
+              if (h.includes("-")) return "whatsapp";
+              if (/^\d{11,}$/.test(h.replace(/\s+/g, ""))) return "whatsapp";
+              return "imessage";
+            })();
 
-          const stats = await statsForContactHandle(c.handle);
+            const stats = await statsForContactHandle(c.handle);
 
-          return {
-            id: c.id,
-            displayName: c.displayName,
-            handle: c.handle,
-            count: stats.count || 0,
-            lastMessage: hasDraft
-              ? `Draft: ${c.draft.slice(0, 50)}...`
-              : (stats.preview ? stats.preview.slice(0, 80) : "Click to see history"),
-            status: c.status || "open",
-            draft: c.draft || null,
-            channel: stats.channel || inferredChannel,
-            lastChannel: c.lastChannel || stats.channel || inferredChannel,
-            lastSource: stats.source || (inferredChannel === "whatsapp" ? "WhatsApp" : (inferredChannel === "email" ? "Mail" : "iMessage")),
-            lastContacted: c.lastContacted || stats.previewDate,
-            bridgePolicy: getBridgePolicyForChannel(c.lastChannel || stats.channel || inferredChannel, bridgeSettings),
-          };
-        })
+            return {
+              id: c.id,
+              displayName: c.displayName,
+              handle: c.handle,
+              count: stats.count || 0,
+              lastMessage: hasDraft
+                ? `Draft: ${c.draft.slice(0, 50)}...`
+                : (stats.preview ? stats.preview.slice(0, 80) : "Click to see history"),
+              status: c.status || "open",
+              draft: c.draft || null,
+              channel: stats.channel || inferredChannel,
+              lastChannel: c.lastChannel || stats.channel || inferredChannel,
+              lastSource: stats.source || (inferredChannel === "whatsapp" ? "WhatsApp" : (inferredChannel === "email" ? "Mail" : "iMessage")),
+              lastContacted: c.lastContacted || stats.previewDate,
+              bridgePolicy: getBridgePolicyForChannel(c.lastChannel || stats.channel || inferredChannel, bridgeSettings),
+            };
+          })
       )).filter(Boolean);
 
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -1829,23 +1906,23 @@ end run
     });
     return;
   }
-	  if (url.pathname === "/api/send-whatsapp") {
-      if (req.method !== "POST") {
-        writeJson(res, 405, { error: "Method not allowed" });
-        return;
-      }
-	    const { execFile } = require("child_process");
-	    const payload = await readJsonBody(req);
-      if (!authorizeSensitiveRoute(req, res, {
-        route: "/api/send-whatsapp",
-        action: "send-whatsapp",
-        payload,
-      })) {
-        return;
-      }
-	    const recipientRaw = (payload?.recipient || "").toString().trim();
-	    const textRaw = (payload?.text || "").toString();
-      const dryRun = Boolean(payload?.dryRun);
+  if (url.pathname === "/api/send-whatsapp") {
+    if (req.method !== "POST") {
+      writeJson(res, 405, { error: "Method not allowed" });
+      return;
+    }
+    const { execFile } = require("child_process");
+    const payload = await readJsonBody(req);
+    if (!authorizeSensitiveRoute(req, res, {
+      route: "/api/send-whatsapp",
+      action: "send-whatsapp",
+      payload,
+    })) {
+      return;
+    }
+    const recipientRaw = (payload?.recipient || "").toString().trim();
+    const textRaw = (payload?.text || "").toString();
+    const dryRun = Boolean(payload?.dryRun);
 
     if (!recipientRaw || !textRaw) {
       writeJson(res, 400, { error: "Missing recipient or text" });
@@ -1856,18 +1933,18 @@ end run
     const recipient = recipientRaw.replace(/\s+/g, "");
     const text = textRaw.replace(/\r\n/g, "\n");
 
-	    const appCandidates = [
-	      process.env.WHATSAPP_APP_NAME,
-	      "WhatsApp",
-	      "WhatsApp Beta",
-	    ]
-	      .map((v) => (v || "").toString().trim())
-	      .filter(Boolean)
-	      .filter((v, idx, arr) => arr.indexOf(v) === idx);
+    const appCandidates = [
+      process.env.WHATSAPP_APP_NAME,
+      "WhatsApp",
+      "WhatsApp Beta",
+    ]
+      .map((v) => (v || "").toString().trim())
+      .filter(Boolean)
+      .filter((v, idx, arr) => arr.indexOf(v) === idx);
 
-	    const candidateList = appCandidates.map((n) => `"${n.replace(/"/g, '\\"')}"`).join(", ");
+    const candidateList = appCandidates.map((n) => `"${n.replace(/"/g, '\\"')}"`).join(", ");
 
-		    const appleScript = `
+    const appleScript = `
 on run argv
   set target to item 1 of argv
   set msg to item 2 of argv
@@ -2243,48 +2320,48 @@ end focusCheck
 	end using terms from
 		    `;
 
-	    execFile("/usr/bin/osascript", ["-e", appleScript, "--", recipient, text, String(dryRun)], (error, stdout, stderr) => {
-	      if (error) {
-	        // Keep logs readable: avoid dumping the full script/command line into the console.
-	        const rawErr = (stderr || "").toString().trim();
-	        const execErr = (error?.message || "").toString().trim();
-	        const shortErr = (() => {
-	          const m = rawErr.match(/execution error: ([^\n\r]+)/i);
-	          if (m && m[1]) return m[1].trim();
-	          if (rawErr) return rawErr.split("\n").slice(-1)[0].trim();
-	          if (execErr.includes("Command failed:")) return "WhatsApp automation failed (osascript).";
-	          return execErr || "WhatsApp automation failed.";
-	        })();
-          const hint = (() => {
-            const s = `${rawErr}\n${execErr}\n${shortErr}`.toLowerCase();
-            if (s.includes("not authorized") && s.includes("system events")) {
-              return "Grant Accessibility permission to the process running {reply} (System Settings → Privacy & Security → Accessibility), then retry.";
-            }
-            if (s.includes("whatsapp is not running")) {
-              return "Open WhatsApp Desktop (or WhatsApp Beta), keep it running and logged in, then retry.";
-            }
-            if (s.includes("no whatsapp window")) {
-              return "Bring WhatsApp to the foreground and ensure a WhatsApp window is open (not minimized), then retry.";
-            }
-            if (s.includes("failed to focus whatsapp search")) {
-              return "In WhatsApp, close popovers/modals, click the search field once, then retry from {reply}.";
-            }
-            if (s.includes("failed to focus whatsapp message composer")) {
-              return "Open the target chat in WhatsApp and click the message composer once, then retry.";
-            }
-            if (s.includes("search focus lost")) {
-              return "WhatsApp focus moved away from search; close popovers and keep WhatsApp frontmost, then retry.";
-            }
-            return "Ensure WhatsApp Desktop is installed/logged in, and enable Accessibility for the process running this server (System Settings → Privacy & Security → Accessibility).";
-          })();
-	        console.error("Send WhatsApp error:", shortErr);
-	        // Common cases: missing Accessibility permissions, WhatsApp not installed, UI not focused.
-	        writeJson(res, 500, {
-	          error: shortErr,
-	          hint,
-	        });
-	        return;
-	      }
+    execFile("/usr/bin/osascript", ["-e", appleScript, "--", recipient, text, String(dryRun)], (error, stdout, stderr) => {
+      if (error) {
+        // Keep logs readable: avoid dumping the full script/command line into the console.
+        const rawErr = (stderr || "").toString().trim();
+        const execErr = (error?.message || "").toString().trim();
+        const shortErr = (() => {
+          const m = rawErr.match(/execution error: ([^\n\r]+)/i);
+          if (m && m[1]) return m[1].trim();
+          if (rawErr) return rawErr.split("\n").slice(-1)[0].trim();
+          if (execErr.includes("Command failed:")) return "WhatsApp automation failed (osascript).";
+          return execErr || "WhatsApp automation failed.";
+        })();
+        const hint = (() => {
+          const s = `${rawErr}\n${execErr}\n${shortErr}`.toLowerCase();
+          if (s.includes("not authorized") && s.includes("system events")) {
+            return "Grant Accessibility permission to the process running {reply} (System Settings → Privacy & Security → Accessibility), then retry.";
+          }
+          if (s.includes("whatsapp is not running")) {
+            return "Open WhatsApp Desktop (or WhatsApp Beta), keep it running and logged in, then retry.";
+          }
+          if (s.includes("no whatsapp window")) {
+            return "Bring WhatsApp to the foreground and ensure a WhatsApp window is open (not minimized), then retry.";
+          }
+          if (s.includes("failed to focus whatsapp search")) {
+            return "In WhatsApp, close popovers/modals, click the search field once, then retry from {reply}.";
+          }
+          if (s.includes("failed to focus whatsapp message composer")) {
+            return "Open the target chat in WhatsApp and click the message composer once, then retry.";
+          }
+          if (s.includes("search focus lost")) {
+            return "WhatsApp focus moved away from search; close popovers and keep WhatsApp frontmost, then retry.";
+          }
+          return "Ensure WhatsApp Desktop is installed/logged in, and enable Accessibility for the process running this server (System Settings → Privacy & Security → Accessibility).";
+        })();
+        console.error("Send WhatsApp error:", shortErr);
+        // Common cases: missing Accessibility permissions, WhatsApp not installed, UI not focused.
+        writeJson(res, 500, {
+          error: shortErr,
+          hint,
+        });
+        return;
+      }
       contactStore.clearDraft(recipientRaw);
       writeJson(res, 200, { status: "ok", result: (stdout || "").trim() });
     });
