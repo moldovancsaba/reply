@@ -101,7 +101,12 @@ class ContactStore {
     save() {
         try {
             // Use internal property to avoid triggering load() recursively
-            fs.writeFileSync(DATA_FILE, JSON.stringify(this._contacts, null, 2));
+            fs.writeFileSync(DATA_FILE, JSON.stringify(this._contacts, null, 2), { mode: 0o600 });
+            try {
+                fs.chmodSync(DATA_FILE, 0o600);
+            } catch {
+                // Best-effort hardening: keep normal writes working even if chmod fails.
+            }
         } catch (err) {
             console.error("Error saving contacts:", err);
         }
