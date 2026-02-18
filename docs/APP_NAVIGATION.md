@@ -15,7 +15,9 @@ This document answers: **“Where is X in the UI?”** and **“Where is X in th
 
 ### Settings
 * Open: click the gear icon in the sidebar header (calls `window.openSettings()`).
-* Purpose: configure connectors (IMAP/Gmail), worker interval, and per-service settings via the filter.
+* Purpose: configure connectors (IMAP/Gmail), global worker interval, and per-service settings via the filter.
+* Tip: use a Dashboard card **⚙️** (or Settings → “Configure a service”) to jump directly into a service-scoped settings view.
+* Note: General Settings intentionally hides per-service appearance controls (emoji + bubble colors).
 
 ### Profile pane (KYC / Local Intelligence)
 * Visible on feed view; hidden on dashboard to maximize space.
@@ -52,4 +54,3 @@ This document answers: **“Where is X in the UI?”** and **“Where is X in th
 * Project Board: https://github.com/users/moldovancsaba/projects/1
 * Issues live in: `moldovancsaba/mvp-factory-control`
 * Do not create/manage issues in product repos (e.g. `moldovancsaba/reply`).
-

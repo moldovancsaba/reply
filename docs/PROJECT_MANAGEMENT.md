@@ -59,3 +59,24 @@ Use `gh project item-list ... --jq ...` so you don't depend on a separate `jq` i
 gh project item-list 1 --owner moldovancsaba --format json --limit 200 \
   --jq '.items[] | select(.product == "reply" and (.status == "Ready" or .status == "In Progress")) | {priority, status, title, url: (.content.url // null)}'
 ```
+
+### Top priorities (what to deliver next)
+This prints the top 3 `{reply}` items that are **not Done**, sorted by `Priority` first, then by workflow status.
+
+```bash
+gh project item-list 1 --owner moldovancsaba --format json --limit 500 --jq '
+  .items
+  | map(select(.product=="reply" and .status != "Done"))
+  | map(. + {priorityRank: (if .priority=="P0" then 0 elif .priority=="P1" then 1 elif .priority=="P2" then 2 else 9 end)})
+  | map(. + {statusRank: (if .status=="In Progress" then 0 elif .status=="Ready" then 1 elif .status=="Review" then 2 elif .status=="Roadmap" then 3 elif .status=="Backlog" then 4 elif .status=="IDEA BANK" then 5 else 9 end)})
+  | sort_by(.priorityRank, .statusRank, .title)
+  | .[:3]
+  | map({priority, status, title, url:(.content.url // null)})
+'
+```
+
+### Idea bank (feature backlog)
+```bash
+gh project item-list 1 --owner moldovancsaba --format json --limit 500 \
+  --jq '.items[] | select(.product=="reply" and .status=="IDEA BANK") | {title, url:(.content.url // null)}'
+```

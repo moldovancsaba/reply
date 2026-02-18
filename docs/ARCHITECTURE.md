@@ -61,6 +61,7 @@ graph TD
     *   **Low-Level Polling**: Direct SQLite queries on `chat.db` are sub-millisecond and near-zero CPU.
     *   **CPU Throttling**: The poll interval is configurable via Settings (`worker.pollIntervalSeconds`) and is clamped to 10–3600 seconds.
     *   **Scalability**: Mail sync is supported; additional channels can be added as separate workers or modular fetchers within the same throttled loop.
+*   **Email sync:** Runs through `sync-mail.js` (prefers Gmail OAuth → IMAP → Mail.app) and is triggered from the same unified background worker when mail is configured.
 
 ## UI & Settings
 * **UI:** Static HTML + ES modules served by `chat/server.js`.
@@ -71,6 +72,7 @@ graph TD
   * General Settings: connectors (IMAP/Gmail) + global worker interval.
   * Service Settings: per-service worker limits + per-channel UI appearance (emoji + bubble colors).
 * **Settings storage:** `chat/data/settings.json` (local, not encrypted).
+* **Email send path:** Composer → `/api/send-email` → Gmail API when connected; otherwise opens a Mail.app compose window (fallback does not auto-send).
 
 ## Design Principles
 1.  **Local-First:** No reliance on external APIs for core functionality. Optional connectors (e.g. Gmail OAuth) are opt-in.
