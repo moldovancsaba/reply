@@ -906,6 +906,16 @@ const server = http.createServer(async (req, res) => {
     }
     return;
   }
+  if (url.pathname === "/api/gmail/check") {
+    try {
+      const { checkGmailConnection } = require("./gmail-connector.js");
+      const info = await checkGmailConnection();
+      writeJson(res, 200, { status: "ok", ...info });
+    } catch (e) {
+      writeJson(res, 500, { status: "error", error: e?.message || String(e) });
+    }
+    return;
+  }
   if (url.pathname === "/api/sync-mail") {
     console.log("Starting Mail sync in background...");
     const { syncMail } = require("./sync-mail.js");
