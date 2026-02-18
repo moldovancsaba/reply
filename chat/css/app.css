@@ -17,6 +17,14 @@
         overflow: hidden;
       }
 
+      body.mode-dashboard .app-container {
+        grid-template-columns: 280px 1fr;
+      }
+
+      body.mode-dashboard .kyc-pane {
+        display: none;
+      }
+
       /* --- Sidebar (iMessage Style) --- */
       .sidebar {
         background-color: rgba(30, 30, 30, 0.85);
