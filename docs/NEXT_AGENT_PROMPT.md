@@ -6,12 +6,7 @@ Trigger: User requested 70% context handover
 ## Session Snapshot
 
 - Branch: `main`
-- Working tree changes:
-- M docs/HANDOVER.md
-- M docs/LEARNINGS.md
-- M docs/PROJECT_MANAGEMENT.md
-- M docs/RELEASE_NOTES.md
-- ?? docs/NEXT_AGENT_PROMPT.md
+- Working tree: clean
 
 ## Objective
 
