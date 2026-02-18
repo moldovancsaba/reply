@@ -9,7 +9,9 @@
     "analyze": "node kyc-agent.js",
     "security:audit": "node security-audit.js",
     "security:fix": "node security-audit.js --fix",
-    "channel-bridge:ingest": "node channel-bridge-sidecar.js"
+    "channel-bridge:ingest": "node channel-bridge-sidecar.js",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix"
   },
   "engines": {
     "node": ">=18"
@@ -24,5 +26,9 @@
     "ollama": "^0.6.3",
     "sqlite3": "^5.1.7",
     "tar": "6.2.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "eslint": "^9.39.2"
   }
 }
