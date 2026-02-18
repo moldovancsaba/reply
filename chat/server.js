@@ -1055,19 +1055,49 @@ const server = http.createServer(async (req, res) => {
         .sort((a, b) => b.lastMessageTime - a.lastMessageTime)
         .slice(offset, offset + limit);
 
+      async function exactStatsForContactHandle(handle) {
+        if (!handle) return { count: 0 };
+
+        const { getHistory } = require("./vector-store.js");
+        const handles = contactStore.getAllHandles(handle);
+
+        const phoneDigits = handles
+          .filter((h) => typeof h === "string" && !h.includes("@"))
+          .map((h) => normalizePhone(h))
+          .filter(Boolean);
+
+        const lidByPhone = await whatsAppIdResolver.lidsForPhones(phoneDigits);
+        const lidHandles = Array.from(new Set(Array.from(lidByPhone.values()).filter(Boolean)));
+
+        const allHandles = Array.from(new Set([...handles, ...lidHandles]));
+        const prefixes = Array.from(new Set(allHandles.flatMap((h) => pathPrefixesForHandle(h))));
+
+        const historyBatches = await Promise.all(prefixes.map((p) => getHistory(p)));
+        const allDocs = historyBatches.flat().filter(Boolean);
+
+        // Dedupe by stable id if present (prevents double-counting across variants).
+        const byId = new Map();
+        for (const d of allDocs) {
+          const id = (d?.id || "").toString().trim() || crypto.createHash("sha1").update(String(d?.text || "") + "|" + String(d?.path || "") + "|" + String(d?.source || "")).digest("hex");
+          if (!byId.has(id)) byId.set(id, d);
+        }
+        return { count: byId.size };
+      }
+
       // Enrich with contact store data
-      const enriched = contacts.map(c => {
+      const enriched = await Promise.all(contacts.map(async (c) => {
         const contact = c.contact || resolveContact(c.handle);
         const hasDraft = contact?.status === "draft" && contact?.draft;
         const lastChannel = c.channel || channelFromDoc(c);
         const contactName = (contact?.displayName || contact?.name || "").toString();
         const displayName = (/^\d+$/.test(contactName) && c.waPartnerName) ? c.waPartnerName : (contactName || c.handle);
+        const exact = await exactStatsForContactHandle(c.handle);
         return {
           id: contact?.id || c.handle,
           displayName,
           // Use the handle from the latest message so actions (like sending) default to the latest channel.
           handle: c.latestHandle || c.handle,
-          count: c.count || countMap.get(c.key) || 0,
+          count: exact.count || c.count || countMap.get(c.key) || 0,
           lastMessage: hasDraft
             ? `Draft: ${contact.draft.slice(0, 50)}...`
             : (c.preview ? c.preview.slice(0, 80) : "Click to see history"),
@@ -1079,7 +1109,7 @@ const server = http.createServer(async (req, res) => {
           latestHandle: c.latestHandle || c.handle,
           lastContacted: contact?.lastContacted || (c.previewDate || new Date(c.lastMessageTime || 0).toISOString())
         };
-      });
+      }));
 
 	      res.writeHead(200, { "Content-Type": "application/json" });
 	      res.end(JSON.stringify({
@@ -1842,27 +1872,6 @@ end focusCheck
       return { state: "idle", message: "No sync data available" };
     };
 
-    // Read actual counts from sync_state files (source of truth)
-    const getImessageCount = () => {
-      const stateFile = path.join(DATA_DIR, "sync_state.json");
-      if (fs.existsSync(stateFile)) {
-        try {
-          const state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
-          return state.lastProcessedId || 0;
-        } catch (e) {
-          return 0;
-        }
-      }
-      return 0;
-    };
-
-    const getWhatsappCount = () => {
-      const dbPath = path.join(process.env.HOME, 'Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite');
-      // For now, read from status file (will be replaced with direct DB query)
-      const status = readStatus("whatsapp_sync_status.json");
-      return status.processed || 0;
-    };
-
     const getNotesCount = () => {
       const notesMetadata = path.join(__dirname, '../knowledge/notes-metadata.json');
       if (fs.existsSync(notesMetadata)) {
@@ -1898,13 +1907,13 @@ end focusCheck
       channels: {
         imessage: {
           ...imessageStatus,
-          processed: getImessageCount(),  // Override with actual database count
-          total: getImessageCount()
+          processed: imessageStatus.processed || 0,
+          total: imessageStatus.processed || 0
         },
         whatsapp: {
           ...whatsappStatus,
-          processed: getWhatsappCount(),
-          total: getWhatsappCount()
+          processed: whatsappStatus.processed || 0,
+          total: whatsappStatus.processed || 0
         },
         notes: {
           ...notesStatus,
