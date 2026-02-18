@@ -69,6 +69,7 @@ If Gmail is connected, selecting **Email** in the composer sends via the Gmail A
 *   **Prerequisites:** WhatsApp Desktop installed + logged in **and running**, and macOS **Accessibility** permission granted to the process running the server (System Settings → Privacy & Security → Accessibility).
 *   **Optional:** Set `WHATSAPP_APP_NAME` if your app name is not `WhatsApp` (e.g. `WhatsApp Beta`).
 *   **Behavior:** Best-effort UI automation; if sending fails, {reply} will show an error and offer a clipboard fallback.
+*   **Status:** Still flaky on some WhatsApp UI states; treat as “best effort” until `mvp-factory-control#196` is closed.
 
 ---
 

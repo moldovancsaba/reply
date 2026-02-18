@@ -12,6 +12,11 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
   - Issue title convention for Reply: `{reply}: <short description>`.
   - Naming: always use `{reply}` (no “Hub” or other renames).
 
+## Current Priorities (Board)
+- P0 Ready: `mvp-factory-control#196` — `{reply}: Stabilize WhatsApp Desktop send (⌘N flow)`
+- P1 Ready: `mvp-factory-control#197` — `{reply}: Conversation list indexing (order/search/counts) cleanup`
+- Idea Bank: `mvp-factory-control#195` — `{reply}: Manage multiple mailboxes`
+
 ## Docs Index
 - `README.md` — quickstart
 - `docs/ARCHITECTURE.md` — system overview
@@ -44,6 +49,7 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
 ## Known Quirks
 - `gh issue comment --body "..."` in `zsh`: backticks execute; prefer single quotes or `--body-file`.
 - WhatsApp direct send requires WhatsApp Desktop running + macOS Accessibility permission (UI automation).
+- WhatsApp UI automation is still flaky across WhatsApp builds/UI states; keep it defensive and validate on the real UI (tracked in `mvp-factory-control#196`).
 
 ## Recent Shipped (2026-02-18)
 - Email dashboard: `/api/system-health` now counts ingested email docs from LanceDB using `source IN ('Gmail','IMAP','Mail','mbox')`, fixing the “Email Sync = 0” mismatch.
