@@ -259,9 +259,21 @@ async function fetchMessage(accessToken, id) {
   return await apiRequest(accessToken, `/messages/${encodeURIComponent(id)}?format=full`);
 }
 
+function shouldIncludeMessageByScope(labelIds, scope) {
+  const ids = Array.isArray(labelIds) ? labelIds.map((x) => String(x || "")) : [];
+  const set = new Set(ids);
+  const s = String(scope || "inbox_sent");
+  if (s === "inbox_sent") return set.has("INBOX") || set.has("SENT");
+  if (s === "all_mail") return !(set.has("SPAM") || set.has("TRASH"));
+  return true; // custom or unknown scope
+}
+
 async function syncGmail({ maxMessages = 100 } = {}) {
   const settings = readSettings();
   const gmail = settings?.gmail || {};
+  const gmailSync = gmail?.sync || {};
+  const scope = (gmailSync.scope || "inbox_sent").toString();
+  const query = (gmailSync.query || "").toString().trim();
 
   if (!gmail.clientId || !gmail.clientSecret || !gmail.refreshToken) {
     const msg = "Gmail not connected (missing OAuth credentials or refresh token)";
@@ -304,12 +316,25 @@ async function syncGmail({ maxMessages = 100 } = {}) {
   }
 
   if (!state.historyId || messageIds.length === 0) {
-    // Initial sync: pull recent inbox + sent and set baseline historyId.
-    const listInbox = await apiRequest(accessToken, `/messages?maxResults=${Math.min(maxMessages, 200)}&labelIds=INBOX`);
-    const listSent = await apiRequest(accessToken, `/messages?maxResults=${Math.min(maxMessages, 200)}&labelIds=SENT`);
+    // Initial sync: pull recent messages based on configured scope and set baseline historyId.
+    const max = Math.min(maxMessages, 200);
     const ids = new Set();
-    for (const m of (listInbox.messages || [])) if (m?.id) ids.add(m.id);
-    for (const m of (listSent.messages || [])) if (m?.id) ids.add(m.id);
+
+    if (scope === "all_mail") {
+      const q = "-in:spam -in:trash";
+      const list = await apiRequest(accessToken, `/messages?maxResults=${max}&q=${encodeURIComponent(q)}`);
+      for (const m of (list.messages || [])) if (m?.id) ids.add(m.id);
+    } else if (scope === "custom" && query) {
+      const list = await apiRequest(accessToken, `/messages?maxResults=${max}&q=${encodeURIComponent(query)}`);
+      for (const m of (list.messages || [])) if (m?.id) ids.add(m.id);
+    } else {
+      // Default: inbox + sent.
+      const listInbox = await apiRequest(accessToken, `/messages?maxResults=${max}&labelIds=INBOX`);
+      const listSent = await apiRequest(accessToken, `/messages?maxResults=${max}&labelIds=SENT`);
+      for (const m of (listInbox.messages || [])) if (m?.id) ids.add(m.id);
+      for (const m of (listSent.messages || [])) if (m?.id) ids.add(m.id);
+    }
+
     messageIds = Array.from(ids).slice(0, maxMessages);
     state.historyId = String(profile.historyId || "");
   }
@@ -321,6 +346,8 @@ async function syncGmail({ maxMessages = 100 } = {}) {
     const id = messageIds[i];
     try {
       const msg = await fetchMessage(accessToken, id);
+      if (!shouldIncludeMessageByScope(msg?.labelIds, scope)) continue;
+
       const headers = msg?.payload?.headers || [];
       const subject = headerValue(headers, "Subject");
       const fromHeader = headerValue(headers, "From");

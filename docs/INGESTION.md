@@ -43,7 +43,7 @@ Reply learns your context by ingesting your data into a local Vector Database (L
 ### 4. Email Sync (Apple Mail or IMAP/Gmail)
 *   **Command:** UI Button "Sync Email" (in the Web UI) or `node chat/sync-mail.js`.
 *   **Mechanism (default):** Uses `osascript` to query Apple Mail via AppleScript (read-only).
-*   **Mechanism (recommended):** Gmail OAuth connector (Gmail API) configured in the UI Settings (gear icon).
+*   **Mechanism (recommended):** Gmail OAuth connector (Gmail API) configured in the Settings page (gear icon).
 *   **Alternative:** IMAP connector (supports Gmail via IMAP with an App Password) when `REPLY_IMAP_*` env vars are set (or configured in Settings).
 *   **Background Worker:** Email sync runs automatically only when Gmail OAuth or IMAP is configured (to avoid triggering Apple Mail AppleScript unintentionally).
 *   **Source Label:** `source: "IMAP"` (stored as email snippets with `path: mailto:<address>`).

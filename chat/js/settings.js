@@ -187,6 +187,7 @@ async function loadIntoForm() {
   const data = await getSettings();
   const imap = data?.imap || {};
   const gmail = data?.gmail || {};
+  const gmailSync = gmail?.sync || {};
   const worker = data?.worker || {};
   const ui = data?.ui || {};
   const channels = ui?.channels || {};
@@ -209,6 +210,14 @@ async function loadIntoForm() {
   el('settings-gmail-status').textContent = gmail.connectedEmail
     ? `Connected as ${gmail.connectedEmail}`
     : (gmail.hasRefreshToken ? 'Connected (email unknown)' : 'Not connected');
+  const gmailScopeEl = el('settings-gmail-scope');
+  const gmailQueryEl = el('settings-gmail-query');
+  const gmailScopeValue = (gmailSync.scope || 'inbox_sent');
+  if (gmailScopeEl) gmailScopeEl.value = gmailScopeValue;
+  if (gmailQueryEl) {
+    gmailQueryEl.value = gmailSync.query || '';
+    gmailQueryEl.disabled = gmailScopeValue !== 'custom';
+  }
 
   gmailHasSavedSecret = !!gmail.hasClientSecret;
   gmailHasRefreshToken = !!gmail.hasRefreshToken;
@@ -258,6 +267,10 @@ async function onSave() {
       gmail: {
         clientId: el('settings-gmail-client-id').value.trim(),
         clientSecret: el('settings-gmail-client-secret').value, // optional; empty keeps existing
+        sync: {
+          scope: el('settings-gmail-scope')?.value || 'inbox_sent',
+          query: el('settings-gmail-query')?.value || '',
+        },
       },
       worker: {
         pollIntervalSeconds: Number(el('settings-worker-interval').value) || 60,
@@ -430,6 +443,19 @@ function wireDom() {
   if (gmailClientId) gmailClientId.addEventListener('input', refreshGmailButtons);
   const gmailClientSecret = el('settings-gmail-client-secret');
   if (gmailClientSecret) gmailClientSecret.addEventListener('input', refreshGmailButtons);
+
+  const gmailScope = el('settings-gmail-scope');
+  const gmailQuery = el('settings-gmail-query');
+  const refreshGmailSyncInputs = () => {
+    if (!gmailScope || !gmailQuery) return;
+    const scope = gmailScope.value || 'inbox_sent';
+    gmailQuery.disabled = scope !== 'custom';
+    gmailQuery.placeholder = scope === 'custom'
+      ? 'e.g. label:finance OR from:foo@bar.com'
+      : 'Disabled unless scope is Custom';
+  };
+  if (gmailScope) gmailScope.addEventListener('change', refreshGmailSyncInputs);
+  refreshGmailSyncInputs();
 
   const btnShowAll = el('settings-show-all');
   if (btnShowAll) btnShowAll.onclick = () => applySettingsFilter(null);

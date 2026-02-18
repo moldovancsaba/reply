@@ -1,94 +1,39 @@
-# Developer Handover & Context
+# {reply} — Developer Handover
 
-**Target Audience:** New Developers & AI Agents  
-**Identity:** **Agnes** (Lead Developer for "Reply")
+This file is onboarding + operational context. Keep it accurate when behavior/architecture changes.
 
-> **CRITICAL RULE:** This document MUST be updated after every single task completion to reflect the new state of the system, roadmap, and known issues.
-
-## 🚨 Critical Documentation (Read First)
-Before starting ANY work, you MUST read **[docs/PROJECT_MANAGEMENT.md](file:///Users/moldovancsaba/Projects/reply/docs/PROJECT_MANAGEMENT.md)**.
-*   **Why:** It explains how to use the Project Board as separate Source of Truth, how to fill fields, and why we strictly avoid prefixes in titles.
-
-## 📂 Key File Index (What is what)
-You will find these files in the repository. Use them for specific needs:
-
-*   **[README.md](file:///Users/moldovancsaba/Projects/reply/README.md):** The entry point; installation, quickstart, and feature overview.
-*   **[docs/ARCHITECTURE.md](file:///Users/moldovancsaba/Projects/reply/docs/ARCHITECTURE.md):** High-level system design, data flow diagrams (Mermaid), and component breakdown.
-*   **[docs/INGESTION.md](file:///Users/moldovancsaba/Projects/reply/docs/INGESTION.md):** Detailed guide on how data (files, emails, notes) enters the system and is vectorized.
-*   **[docs/CODING_STANDARDS.md](file:///Users/moldovancsaba/Projects/reply/docs/CODING_STANDARDS.md):** Rules for code style, dependency management, and verification steps.
-*   **[docs/PROJECT_MANAGEMENT.md](file:///Users/moldovancsaba/Projects/reply/docs/PROJECT_MANAGEMENT.md):** The rulebook for the GitHub Project Board, SSOT, and issue structure.
-*   **[docs/RELEASE_NOTES.md](file:///Users/moldovancsaba/Projects/reply/docs/RELEASE_NOTES.md):** Log of delivered features and changelog.
-*   **[docs/HANDOVER.md](file:///Users/moldovancsaba/Projects/reply/docs/HANDOVER.md):** (This file) Context, roadmap status, and agent memory.
-
-## Current State (Status Quo)
-*   **Phase:** POC / MVP Factory
-*   **Latest Feature (Shipped):** {reply} unified feed v1 + KYC pane + mic dictation + channel-aware send (tracked on the SSOT Project Board).
-*   **In Review:** Recent enhancements are tracked in the SSOT Project Board (Review column).
-*   **Stability:** Stable. Background intelligence runs via `background-worker.js` (poll interval configurable in Settings).
-
-## 🚨 Single Source of Truth
-All tasks, roadmap items, and the Idea Bank are managed **strictly** on the **GitHub Project Board** and as issues in the SSOT repo:
-
-*   **Board:** https://github.com/users/moldovancsaba/projects/1
-*   **SSOT Issues Repo:** `moldovancsaba/mvp-factory-control`
-    *   **Rule:** Do **NOT** create/manage issues in product repositories (e.g. `moldovancsaba/reply`).
-
-### 🛠️ Professional Board Access (Agnes/Agent Standard)
-Do **NOT** use browser-based tools for board management as they are unreliable for automated agents. Use the GitHub CLI (`gh`) exclusively for a reproducible, professional workflow.
-
-**1. Authentication:**
-```bash
-gh auth status # Verify login
-```
-
-**2. List Items for 'Reply' Project:**
-```bash
-# Get all items, filter for 'reply' product, exclude 'Done' and 'Backlog'
-gh project item-list 1 --owner moldovancsaba --format json --limit 180 --jq '.items[] | select(.product == "reply" and (.status == "Ready" or .status == "In Progress")) | {title, status, priority, type, url: (.content.url // null)}'
-```
-
-**3. Identify Top Priorities:**
-```bash
-# Sort by Priority field (P0, P1, P2)
-gh project item-list 1 --owner moldovancsaba --format json --limit 180 --jq '.items[] | select(.product == "reply" and (.status == "Ready" or .status == "In Progress")) | {priority, status, title, url: (.content.url // null)}'
-```
-
-### ⚠️ Obsolete Local Caches (DO NOT USE)
-The following files in `chat/` are **UNTRUSTED** and should be ignored or deleted to maintain SSOT integrity:
-- `board_items_assign.json`
-- `board_items_full.json`
-- `board_items_latest.json`
-*These files were individual snapshots and are NOT kept in sync. Always use the CLI to get fresh data.*
-
-## 🧠 Brain-Dump & Context Opener
-*This section provides a state-of-the-brain summary for context-reloading agents.*
-
-### 🛡️ Operational Maintenance (Audit Checks)
-Future agents must verify the following to prevent regression:
-1.  **Secret leaks**: Check `.env.example` and recent commits for accidentally exposed API keys.
-2.  **Dependencies**: Run `npm audit`. If `sqlite3` breaks, reinstall specifically with `npm install sqlite3@5.1.7`.
-3.  **Memory Safety**: Verify that `background-worker.js` maintains its bounded cache limit (currently 1000 IDs).
-
-### 📍 Current Strategic Focus
-The objective is **{reply}**: A local-first, privacy-focused digital brain that ingests personal data (Contacts, Notes, Messages) and uses a local LLM to triage and provide intelligence.
-
-### ✅ Work Tracking (SSOT)
-All roadmap items, blockers, and ideas are tracked only on the board as issues in the SSOT repo:
-
+## SSOT (Work Tracking)
 - Board: https://github.com/users/moldovancsaba/projects/1
-- SSOT issues repo: `moldovancsaba/mvp-factory-control`
+- Issues repo: `moldovancsaba/mvp-factory-control`
+- Rules:
+  - Track Reply work only as issues in `mvp-factory-control` and as items on the board.
+  - Do not create/manage issues in product repos (e.g. `moldovancsaba/reply`).
+  - Issue title convention for Reply: `{reply}: <short description>`.
 
-Do not maintain task lists or “current blockers” in this file.
+## Docs Index
+- `README.md` — quickstart
+- `docs/ARCHITECTURE.md` — system overview
+- `docs/APP_NAVIGATION.md` — “where is X?” UI/code map
+- `docs/INGESTION.md` — sync/ingestion details
+- `docs/PROJECT_MANAGEMENT.md` — board rules/fields
+- `docs/RELEASE_NOTES.md` — shipped changes only
 
-## 📂 Key File Index (What is what)
+## Key Runtime Files
+- `chat/server.js` — HTTP API + static server
+- `chat/background-worker.js` — unified poll loop + intelligence pipeline
+- `chat/vector-store.js` — LanceDB connect + `addDocuments`
+- `chat/contact-store.js` — contact DB + last-contacted
+- `chat/kyc-agent.js` — Profile → Analyze (signals + suggestions)
 
-> **Rule:** Do not track tasks or ideas in local markdown files. Link them to issues on the board.
+## Email Sync (Gmail / IMAP / Mail.app)
+- Orchestrator: `chat/sync-mail.js` (prefers Gmail OAuth → IMAP → Mail.app fallback)
+- Gmail OAuth:
+  - Connector: `chat/gmail-connector.js`
+  - Sync scope is configurable in Settings (Inbox+Sent / All Mail / Custom query)
+- IMAP:
+  - Connector: `chat/sync-imap.js`
+  - Configure mailbox via Settings (e.g. Gmail “All Mail” via IMAP mailbox name)
 
 ## Known Quirks
-*   **LanceDB:** We use version 0.26.x. The API for hybrid search is specific (`.fullTextSearch()`). Check `verify-hybrid-search.js` for reference.
-*   **Startup Failures:** If the server fails to start with a `SyntaxError` after a merge, check for duplicate `require` or constant declarations in `context-engine.js` or `reply-engine.js`.
-*   **Background Processes:** `background-worker.js` handles polling. Use `launchctl list | grep com.reply.worker` to verify it's active.
-*   **Auto KYC Suggestions:** Background worker can periodically run full-history “Profile → Analyze” and stage typed suggestions; configure with `REPLY_KYC_AUTO_INTERVAL_HOURS` (default: 24).
-
-## Follow-ups (Non-SSOT notes)
-*   **WhatsApp send automation debug:** Keep current detailed focus/debug strings in send errors temporarily; revisit to gate behind a debug flag or remove once stable.
+- `gh issue comment --body "..."` in `zsh`: backticks execute; prefer single quotes or `--body-file`.
+- WhatsApp direct send requires WhatsApp Desktop running + macOS Accessibility permission (UI automation).
