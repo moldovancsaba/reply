@@ -6,10 +6,13 @@ Completed work only. The [GitHub Project Board](https://github.com/users/moldova
 *   **UX: Settings as a full page:** Replaced the modal with a dedicated Settings page (Dashboard-sized).
 *   **UX: Clear separation of General vs Service settings:** General Settings shows connectors + global worker interval; per-service settings are accessed via card cogs.
 *   **UX: Dashboard space:** Profile pane is hidden on the Dashboard for more room.
+*   **UX: Sidebar contact search:** Added a search box in the sidebar (server-side `q=` filter on `/api/conversations`).
+*   **Contacts: Better sidebar stats:** `/api/conversations` uses LanceDB `countRows(...)` + recent-row sampling for counts/previews and returns `meta.mode=db` (no longer stuck in fallback mode).
 *   **Email: Gmail health check:** Added `/api/gmail/check` to validate Gmail OAuth connectivity.
 *   **Email: Correct dashboard counts:** Email Sync now counts ingested email docs from LanceDB using `source IN ('Gmail','IMAP','Mail','mbox')`.
 *   **Email: Gmail sync scope:** Added Settings for Inbox+Sent / All Mail / Custom query.
 *   **Email: Safer Mail.app fallback:** Mail.app fallback now passes recipient/body via `osascript` argv to avoid quoting issues and support multiline bodies.
+*   **WhatsApp: Send reliability + errors:** Focus thresholds are computed relative to the WhatsApp window position, and failures return a more actionable `hint`.
 
 ## 2026-02-17 — System Recovery & Maintenance
 *   **Fix: Context Engine Syntax:** Resolved a `SyntaxError` in `context-engine.js` caused by a duplicate `getSnippets` declaration that prevented server startup.
