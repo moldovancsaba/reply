@@ -8,7 +8,9 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
 - Rules:
   - Track Reply work only as issues in `mvp-factory-control` and as items on the board.
   - Do not create/manage issues in product repos (e.g. `moldovancsaba/reply`).
+  - Issues are disabled in `moldovancsaba/reply` to prevent SSOT drift.
   - Issue title convention for Reply: `{reply}: <short description>`.
+  - Naming: always use `{reply}` (no “Hub” or other renames).
 
 ## Docs Index
 - `README.md` — quickstart
@@ -33,6 +35,11 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
 - IMAP:
   - Connector: `chat/sync-imap.js`
   - Configure mailbox via Settings (e.g. Gmail “All Mail” via IMAP mailbox name)
+
+## UI Navigation (fast)
+- Dashboard: health cards + manual sync + per-service **⚙️** configuration.
+- Feed: the thread + composer; `🎤 Mic`, `✨ Magic`, `💡 Suggest` are feed-only.
+- Settings: full-page settings (gear icon), includes “Configure a service” shortcuts.
 
 ## Known Quirks
 - `gh issue comment --body "..."` in `zsh`: backticks execute; prefer single quotes or `--body-file`.
