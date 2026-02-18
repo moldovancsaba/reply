@@ -2,11 +2,34 @@ const fs = require("fs");
 const path = require("path");
 
 const SETTINGS_PATH = path.join(__dirname, "data", "settings.json");
+const CHANNEL_BRIDGE_MODES = new Set(["disabled", "draft_only"]);
+
+function normalizeChannelBridgeMode(value, fallback = "disabled") {
+  const v = String(value || "").trim().toLowerCase();
+  if (CHANNEL_BRIDGE_MODES.has(v)) return v;
+  return fallback;
+}
 
 function withDefaults(settings) {
   const s = settings && typeof settings === "object" ? settings : {};
   return {
     ...s,
+    channelBridge: {
+      channels: {
+        telegram: {
+          inboundMode: normalizeChannelBridgeMode(
+            s?.channelBridge?.channels?.telegram?.inboundMode,
+            "draft_only"
+          ),
+        },
+        discord: {
+          inboundMode: normalizeChannelBridgeMode(
+            s?.channelBridge?.channels?.discord?.inboundMode,
+            "draft_only"
+          ),
+        },
+      },
+    },
     gmail: {
       ...(s?.gmail || {}),
       sync: {
@@ -58,10 +81,15 @@ function readSettings() {
 
 function writeSettings(next) {
   const dir = path.dirname(SETTINGS_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const tmp = `${SETTINGS_PATH}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(next, null, 2));
+  fs.writeFileSync(tmp, JSON.stringify(next, null, 2), { mode: 0o600 });
   fs.renameSync(tmp, SETTINGS_PATH);
+  try {
+    fs.chmodSync(SETTINGS_PATH, 0o600);
+  } catch {
+    // Best-effort hardening: avoid failing settings writes on chmod issues.
+  }
 }
 
 function maskSecret(value) {
@@ -77,6 +105,7 @@ function maskSettingsForClient(settings) {
   const gmail = cfg?.gmail || {};
   const worker = cfg?.worker || {};
   const ui = cfg?.ui || {};
+  const channelBridge = cfg?.channelBridge || {};
 
   const imapPass = maskSecret(imap.pass);
   const gmailClientSecret = maskSecret(gmail.clientSecret);
@@ -113,8 +142,19 @@ function maskSettingsForClient(settings) {
       pollIntervalSeconds: worker.pollIntervalSeconds,
       quantities: worker.quantities,
     },
+    channelBridge: channelBridge,
     ui: ui,
   };
+}
+
+function getChannelBridgeInboundMode(settingsOrNull, channel) {
+  const cfg = withDefaults(settingsOrNull || readSettings());
+  const key = String(channel || "").trim().toLowerCase();
+  if (!key) return "disabled";
+  return normalizeChannelBridgeMode(
+    cfg?.channelBridge?.channels?.[key]?.inboundMode,
+    "disabled"
+  );
 }
 
 function isImapConfigured(settings = null) {
@@ -139,4 +179,5 @@ module.exports = {
   maskSettingsForClient,
   isImapConfigured,
   isGmailConfigured,
+  getChannelBridgeInboundMode,
 };

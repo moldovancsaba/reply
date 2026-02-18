@@ -2,6 +2,7 @@
  * {reply} - KYC Module
  * Loads/saves the contact profile shown in the right pane.
  */
+import { createPlatformValueNode, resolvePlatformTarget } from './platform-icons.js';
 
 async function fetchJson(url, options) {
   const res = await fetch(url, options);
@@ -16,6 +17,32 @@ function el(id) {
 function setVisible(element, visible) {
   if (!element) return;
   element.style.display = visible ? 'block' : 'none';
+}
+
+function renderHandlePreview(handle) {
+  const input = el('kyc-handle-input');
+  const parent = input?.parentElement;
+  if (!input || !parent) return;
+
+  let preview = el('kyc-handle-preview');
+  if (!preview) {
+    preview = document.createElement('div');
+    preview.id = 'kyc-handle-preview';
+    preview.className = 'kyc-handle-preview';
+    parent.appendChild(preview);
+  }
+  preview.innerHTML = '';
+
+  const value = String(handle || '').trim();
+  if (!value) return;
+  const node = createPlatformValueNode(value, {
+    channelHint: 'handle',
+    showText: true,
+    showIcon: true,
+    showFallbackIcon: true,
+    className: 'kyc-handle-link',
+  });
+  preview.appendChild(node);
 }
 
 function createEmptyRow(text) {
@@ -63,7 +90,20 @@ function renderNotes(notes) {
 
     const text = document.createElement('div');
     text.className = 'kyc-note-text kyc-note-text--editable';
-    text.textContent = n.text || '';
+    const noteValue = (n.value ?? n.text ?? '').toString();
+    const target = resolvePlatformTarget(noteValue, { channelHint: kind });
+    if (target.href || kind !== 'note') {
+      const node = createPlatformValueNode(noteValue, {
+        channelHint: kind,
+        showText: true,
+        showIcon: true,
+        showFallbackIcon: kind !== 'note',
+        className: 'kyc-note-link',
+      });
+      text.appendChild(node);
+    } else {
+      text.textContent = noteValue;
+    }
     text.title = 'Click to edit';
 
     const meta = document.createElement('div');
@@ -160,7 +200,10 @@ function renderNotes(notes) {
       editor.setSelectionRange(editor.value.length, editor.value.length);
     };
 
-    text.onclick = startEdit;
+    text.addEventListener('click', (e) => {
+      if (e.target instanceof Element && e.target.closest('a')) return;
+      startEdit();
+    });
 
     row.appendChild(left);
     row.appendChild(actions);
@@ -184,16 +227,26 @@ function renderChannels(channels) {
   const wrap = document.createElement('div');
   wrap.className = 'kyc-chip-wrap';
 
-  const addChip = (label, value) => {
-    const chip = document.createElement('div');
-    chip.className = 'kyc-chip';
+  const addChip = (label, value, channelHint) => {
+    const chip = createPlatformValueNode(value, {
+      channelHint,
+      showText: false,
+      showIcon: true,
+      showFallbackIcon: true,
+      className: 'kyc-chip',
+    });
+    const labelEl = document.createElement('span');
+    labelEl.textContent = `${label}:`;
+    const valueEl = document.createElement('span');
+    valueEl.textContent = value;
+    chip.appendChild(labelEl);
+    chip.appendChild(valueEl);
     chip.title = value;
-    chip.textContent = `${label}: ${value}`;
     wrap.appendChild(chip);
   };
 
-  for (const p of phone) addChip('📞', p);
-  for (const e of email) addChip('📧', e);
+  for (const p of phone) addChip('Phone', p, 'phone');
+  for (const e of email) addChip('Email', e, 'email');
 
   root.appendChild(wrap);
 }
@@ -267,7 +320,15 @@ function renderSuggestions(handle, pendingSuggestions) {
 
     const content = document.createElement('div');
     content.className = 'kyc-sugg-content';
-    content.textContent = s.content || '';
+    const suggValue = (s.content || '').toString();
+    const valueNode = createPlatformValueNode(suggValue, {
+      channelHint: kind,
+      showText: true,
+      showIcon: true,
+      showFallbackIcon: kind !== 'notes',
+      className: 'kyc-sugg-link',
+    });
+    content.appendChild(valueNode);
 
     const meta = document.createElement('div');
     meta.className = 'kyc-sugg-meta';
@@ -334,6 +395,7 @@ export async function loadKYCData(handle) {
   const handleInput = el('kyc-handle-input');
 
   if (handleInput) handleInput.value = handle;
+  renderHandlePreview(handle);
 
   try {
     const data = await fetchJson(`/api/kyc?handle=${encodeURIComponent(handle)}`);
@@ -349,6 +411,7 @@ export async function loadKYCData(handle) {
     if (nameInput) nameInput.value = '';
     if (roleInput) roleInput.value = '';
     if (relInput) relInput.value = '';
+    renderHandlePreview(handle);
     renderNotes([]);
     renderChannels(null);
     renderSuggestions(handle, []);
@@ -435,10 +498,20 @@ export function dismissKYC() {
 }
 
 async function analyzeContact(handle) {
+  const headers = { 'Content-Type': 'application/json', 'X-Reply-Human-Approval': 'confirmed' };
+  const token = (window.localStorage && window.localStorage.getItem('replyOperatorToken')) || window.REPLY_OPERATOR_TOKEN;
+  if (token) headers['X-Reply-Operator-Token'] = token;
   await fetchJson('/api/analyze-contact', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ handle }),
+    headers,
+    body: JSON.stringify({
+      handle,
+      approval: {
+        confirmed: true,
+        source: 'ui-analyze-contact',
+        at: new Date().toISOString(),
+      },
+    }),
   });
   await loadKYCData(handle);
 }

@@ -69,6 +69,7 @@ function applySettingsFilter(filterKey) {
     const name =
       currentSettingsFilter === 'imessage' ? 'iMessage' :
         currentSettingsFilter === 'whatsapp' ? 'WhatsApp' :
+          currentSettingsFilter === 'bridge' ? 'Bridge' :
           currentSettingsFilter === 'notes' ? 'Notes' :
             currentSettingsFilter === 'email' ? 'Email' :
               'Settings';
@@ -79,6 +80,7 @@ function applySettingsFilter(filterKey) {
   const mailSection = el('settings-channel-mail');
   const gmailSection = el('settings-channel-gmail');
   const workerSection = el('settings-section-worker');
+  const bridgeSection = el('settings-section-channel-bridge');
   const uiSection = el('settings-section-ui');
 
   const showAll = !currentSettingsFilter;
@@ -87,6 +89,7 @@ function applySettingsFilter(filterKey) {
     setNodeVisible(mailSection, true);
     setNodeVisible(gmailSection, true);
     setNodeVisible(workerSection, true);
+    setNodeVisible(bridgeSection, true);
     // General Settings should not show per-service appearance controls.
     setNodeVisible(uiSection, false);
 
@@ -111,6 +114,7 @@ function applySettingsFilter(filterKey) {
     setNodeVisible(mailSection, false);
     setNodeVisible(gmailSection, false);
     setNodeVisible(uiSection, true);
+    setNodeVisible(bridgeSection, false);
 
     setNodeVisible(el('settings-worker-imessage-wrap'), true);
     setNodeVisible(el('settings-worker-whatsapp-wrap'), false);
@@ -127,6 +131,7 @@ function applySettingsFilter(filterKey) {
     setNodeVisible(mailSection, false);
     setNodeVisible(gmailSection, false);
     setNodeVisible(uiSection, true);
+    setNodeVisible(bridgeSection, false);
 
     setNodeVisible(el('settings-worker-imessage-wrap'), false);
     setNodeVisible(el('settings-worker-whatsapp-wrap'), true);
@@ -143,6 +148,7 @@ function applySettingsFilter(filterKey) {
     setNodeVisible(mailSection, false);
     setNodeVisible(gmailSection, false);
     setNodeVisible(uiSection, false);
+    setNodeVisible(bridgeSection, false);
 
     setNodeVisible(el('settings-worker-imessage-wrap'), false);
     setNodeVisible(el('settings-worker-whatsapp-wrap'), false);
@@ -155,6 +161,7 @@ function applySettingsFilter(filterKey) {
     setNodeVisible(mailSection, true);
     setNodeVisible(gmailSection, true);
     setNodeVisible(uiSection, true);
+    setNodeVisible(bridgeSection, false);
 
     setNodeVisible(el('settings-worker-imessage-wrap'), false);
     setNodeVisible(el('settings-worker-whatsapp-wrap'), false);
@@ -164,6 +171,15 @@ function applySettingsFilter(filterKey) {
     setNodeVisible(el('settings-channel-imessage'), false);
     setNodeVisible(el('settings-channel-whatsapp'), false);
     setNodeVisible(el('settings-channel-email'), true);
+    return;
+  }
+
+  if (currentSettingsFilter === 'bridge') {
+    setNodeVisible(mailSection, false);
+    setNodeVisible(gmailSection, false);
+    setNodeVisible(workerSection, false);
+    setNodeVisible(uiSection, false);
+    setNodeVisible(bridgeSection, true);
     return;
   }
 }
@@ -189,6 +205,8 @@ async function loadIntoForm() {
   const gmail = data?.gmail || {};
   const gmailSync = gmail?.sync || {};
   const worker = data?.worker || {};
+  const channelBridge = data?.channelBridge || {};
+  const bridgeChannels = channelBridge?.channels || {};
   const ui = data?.ui || {};
   const channels = ui?.channels || {};
 
@@ -228,6 +246,8 @@ async function loadIntoForm() {
   el('settings-worker-whatsapp-max').value = worker.quantities?.whatsapp !== undefined ? String(worker.quantities.whatsapp) : '500';
   el('settings-worker-gmail-max').value = worker.quantities?.gmail !== undefined ? String(worker.quantities.gmail) : '100';
   el('settings-worker-notes-max').value = worker.quantities?.notes !== undefined ? String(worker.quantities.notes) : '0';
+  el('settings-bridge-telegram-mode').value = bridgeChannels?.telegram?.inboundMode || 'draft_only';
+  el('settings-bridge-discord-mode').value = bridgeChannels?.discord?.inboundMode || 'draft_only';
 
   el('settings-ui-imessage-emoji').value = channels?.imessage?.emoji || '💬';
   el('settings-ui-imessage-me').value = channels?.imessage?.bubbleMe || '#0a84ff';
@@ -279,6 +299,16 @@ async function onSave() {
           whatsapp: Number(el('settings-worker-whatsapp-max').value) || 500,
           gmail: Number(el('settings-worker-gmail-max').value) || 100,
           notes: Number(el('settings-worker-notes-max').value) || 0,
+        }
+      },
+      channelBridge: {
+        channels: {
+          telegram: {
+            inboundMode: el('settings-bridge-telegram-mode').value || 'draft_only',
+          },
+          discord: {
+            inboundMode: el('settings-bridge-discord-mode').value || 'draft_only',
+          },
         }
       },
       ui: {

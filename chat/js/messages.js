@@ -4,31 +4,20 @@
  */
 
 import { fetchMessages, sendMessage } from './api.js';
+import { appendLinkedText, createPlatformIcon, resolvePlatformTarget } from './platform-icons.js';
 
 // State
 let messageOffset = 0;
 let hasMoreMessages = true;
 const MESSAGE_LIMIT = 30;
-
-function channelEmoji(channel) {
-    const raw = (channel ?? '').toString().toLowerCase();
-    const key =
-        raw.includes('whatsapp') ? 'whatsapp' :
-            (raw.includes('mail') || raw.includes('email') || raw.includes('gmail') || raw.includes('imap')) ? 'email' :
-                'imessage';
-    const override = window.replySettings?.ui?.channels?.[key]?.emoji;
-    if (override) return override;
-    if (key === 'whatsapp') return '🟢';
-    if (key === 'email') return '📧';
-    if (raw.includes('messenger')) return '🔷';
-    if (raw.includes('instagram')) return '🔴';
-    if (raw.includes('linkedin')) return 'ℹ️';
-    return '💬';
-}
+const SEND_CAPABLE_CHANNELS = new Set(['imessage', 'whatsapp', 'email']);
+const DRAFT_ONLY_CHANNELS = new Set(['telegram', 'discord']);
 
 function normalizeChannelKey(channel) {
     const raw = (channel ?? '').toString().toLowerCase();
     if (raw.includes('whatsapp')) return 'whatsapp';
+    if (raw.includes('telegram')) return 'telegram';
+    if (raw.includes('discord')) return 'discord';
     if (raw.includes('mail') || raw.includes('email') || raw.includes('gmail') || raw.includes('imap')) return 'email';
     return 'imessage';
 }
@@ -47,6 +36,30 @@ function setSelectedChannel(channel) {
     if (exists) sel.value = v;
 }
 
+function channelLabel(channel) {
+    const v = String(channel || '').toLowerCase();
+    if (v === 'email') return 'Email';
+    if (v === 'whatsapp') return 'WhatsApp';
+    if (v === 'telegram') return 'Telegram';
+    if (v === 'discord') return 'Discord';
+    return 'iMessage';
+}
+
+function setChannelPolicyHint(channel) {
+    const hint = document.getElementById('channel-policy-hint');
+    if (!hint) return;
+
+    const v = String(channel || '').toLowerCase();
+    if (DRAFT_ONLY_CHANNELS.has(v)) {
+        hint.style.display = 'block';
+        hint.innerHTML = `<strong>Draft-only:</strong> ${channelLabel(v)} sending is disabled in {reply}. Copy/paste and send manually in the channel app.`;
+        return;
+    }
+
+    hint.textContent = '';
+    hint.style.display = 'none';
+}
+
 function setSendButtonForChannel(channel) {
     const btn = document.getElementById('btn-send');
     if (!btn) return;
@@ -62,8 +75,20 @@ function setSendButtonForChannel(channel) {
         btn.disabled = false;
         return;
     }
+    if (DRAFT_ONLY_CHANNELS.has(v)) {
+        btn.textContent = `${channelLabel(v)} Draft`;
+        btn.disabled = true;
+        return;
+    }
     btn.textContent = 'Send iMessage';
     btn.disabled = false;
+}
+
+function applyComposerChannel(channel) {
+    const v = String(channel || 'imessage').toLowerCase();
+    setSelectedChannel(v);
+    setSendButtonForChannel(v);
+    setChannelPolicyHint(v);
 }
 
 function inferDefaultChannelFromMessages(messages) {
@@ -134,7 +159,8 @@ export async function loadMessages(handle, append = false) {
             bubble.className = `message-bubble ${isFromMe ? 'me' : 'contact'} channel-${channelKey}`;
 
             const text = document.createElement('div');
-            text.textContent = msg.text || '';
+            text.className = 'message-text';
+            appendLinkedText(text, msg.text || '', { channelHint: msg.channel || msg.source || '' });
             bubble.appendChild(text);
 
             const date = msg.date ? new Date(msg.date) : null;
@@ -142,7 +168,14 @@ export async function loadMessages(handle, append = false) {
                 const info = document.createElement('div');
                 info.className = 'message-info';
                 const channel = msg.channel || msg.source || '';
-                info.textContent = `${channelEmoji(channel)} ${date.toLocaleString()}`;
+                info.classList.add('message-info--with-icon');
+                const platform = resolvePlatformTarget(msg.text || '', { channelHint: channel }).platform;
+                const icon = createPlatformIcon(platform, channel || 'message');
+                icon.classList.add('platform-icon--sm');
+                info.appendChild(icon);
+                const time = document.createElement('span');
+                time.textContent = date.toLocaleString();
+                info.appendChild(time);
                 const src = (msg.source || '').toString();
                 const ch = (msg.channel || '').toString();
                 info.title = [ch ? `Channel: ${ch}` : null, src ? `Source: ${src}` : null].filter(Boolean).join('\n');
@@ -177,8 +210,7 @@ export async function loadMessages(handle, append = false) {
             const inferred = inferDefaultChannelFromMessages(messages);
             if (inferred) {
                 window.currentChannel = inferred;
-                setSelectedChannel(inferred);
-                setSendButtonForChannel(inferred);
+                applyComposerChannel(inferred);
             }
         }
 
@@ -211,7 +243,14 @@ export async function handleSendMessage() {
     try {
         const channel = getSelectedChannel();
         window.currentChannel = channel;
-        setSendButtonForChannel(channel);
+        applyComposerChannel(channel);
+
+        if (!SEND_CAPABLE_CHANNELS.has(channel)) {
+            const copied = await copyToClipboard(text);
+            const copyHint = copied ? '\n\nDraft copied to clipboard.' : '';
+            alert(`${channelLabel(channel)} is draft-only in {reply}.${copyHint}`);
+            return;
+        }
 
         // Send message
         const result = await sendMessage(currentHandle, text, channel);
@@ -226,12 +265,20 @@ export async function handleSendMessage() {
             bubble.className = `message-bubble me channel-${normalizeChannelKey(channel)}`;
 
             const textEl = document.createElement('div');
-            textEl.textContent = text;
+            textEl.className = 'message-text';
+            appendLinkedText(textEl, text, { channelHint: channel });
             bubble.appendChild(textEl);
 
             const info = document.createElement('div');
             info.className = 'message-info';
-            info.textContent = `${channelEmoji(channel)} ${new Date().toLocaleString()}`;
+            info.classList.add('message-info--with-icon');
+            const platform = resolvePlatformTarget(text, { channelHint: channel }).platform;
+            const icon = createPlatformIcon(platform, channel || 'message');
+            icon.classList.add('platform-icon--sm');
+            info.appendChild(icon);
+            const time = document.createElement('span');
+            time.textContent = new Date().toLocaleString();
+            info.appendChild(time);
             bubble.appendChild(info);
 
             messagesEl.prepend(bubble);
@@ -257,6 +304,5 @@ export async function handleSendMessage() {
 window.loadMessages = loadMessages;
 window.handleSendMessage = handleSendMessage;
 window.setSelectedChannel = (channel) => {
-    setSelectedChannel(channel);
-    setSendButtonForChannel(channel);
+    applyComposerChannel(channel);
 };

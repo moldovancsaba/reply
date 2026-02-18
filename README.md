@@ -32,13 +32,16 @@ npm install
 *   **Unified Knowledge Base:** Stores vectors of your notes and emails locally.
 *   **Hybrid Search:** Combines semantic understanding (Vector) with exact keyword matching (FTS) for 100% retrieval accuracy.
 *   **Context-Aware Chat:** Ask questions about your own data; the bot cites sources.
+*   **Draft-First Omnichannel:** External channels (e.g. Telegram/Discord) ingest inbound events through a local bridge while outbound remains human-controlled.
 
 ## 📚 Documentation
 *   [Architecture Overview](docs/ARCHITECTURE.md)
 *   [App Navigation + File Map](docs/APP_NAVIGATION.md)
 *   [Ingestion Guide](docs/INGESTION.md)
+*   [Channel Bridge Contract](docs/CHANNEL_BRIDGE.md)
 *   [Learnings & Decisions](docs/LEARNINGS.md)
 *   [Coding Standards](docs/CODING_STANDARDS.md)
+*   [Human Final Decision Policy](docs/HUMAN_FINAL_DECISION_POLICY.md)
 *   [Developer Handover](docs/HANDOVER.md)
 *   [Release Notes](docs/RELEASE_NOTES.md)
 

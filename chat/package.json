@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "ingest": "node ingest.js",
-    "analyze": "node kyc-agent.js"
+    "analyze": "node kyc-agent.js",
+    "security:audit": "node security-audit.js",
+    "security:fix": "node security-audit.js --fix",
+    "channel-bridge:ingest": "node channel-bridge-sidecar.js"
   },
   "engines": {
     "node": ">=18"

@@ -73,9 +73,12 @@
             <option value="imessage">iMessage</option>
             <option value="whatsapp">WhatsApp</option>
             <option value="email">Email</option>
+            <option value="telegram">Telegram (Draft only)</option>
+            <option value="discord">Discord (Draft only)</option>
           </select>
           <button id="btn-send" class="btn btn-primary">Send</button>
         </div>
+        <div id="channel-policy-hint" class="channel-policy-hint" style="display:none;"></div>
       </div>
 
       <div id="messages" class="messages-container">
@@ -106,6 +109,7 @@
 	              <button type="button" class="btn btn-secondary btn-sm" onclick="window.openChannelSettings('imessage')">iMessage</button>
 	              <button type="button" class="btn btn-secondary btn-sm" onclick="window.openChannelSettings('whatsapp')">WhatsApp</button>
 	              <button type="button" class="btn btn-secondary btn-sm" onclick="window.openChannelSettings('email')">Email</button>
+	              <button type="button" class="btn btn-secondary btn-sm" onclick="window.openChannelSettings('bridge')">Bridge</button>
 	              <button type="button" class="btn btn-secondary btn-sm" onclick="window.openChannelSettings('notes')">Notes</button>
 	            </div>
 	          </div>
@@ -247,6 +251,31 @@
               <div id="settings-channel-notes" style="margin-top:10px;">
                 <label style="font-size:0.8rem; color:#666;">Notes max / run (0 = unlimited)</label>
                 <input id="settings-worker-notes-max" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="0">
+              </div>
+            </div>
+
+            <div id="settings-section-channel-bridge" style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
+              <div style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">Channel Bridge (Inbound)</div>
+
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div>
+                  <label style="font-size:0.8rem; color:#666;">Telegram inbound mode</label>
+                  <select id="settings-bridge-telegram-mode" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                    <option value="draft_only">Draft only (recommended)</option>
+                    <option value="disabled">Disabled</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:0.8rem; color:#666;">Discord inbound mode</label>
+                  <select id="settings-bridge-discord-mode" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                    <option value="draft_only">Draft only (recommended)</option>
+                    <option value="disabled">Disabled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style="font-size:0.75rem; color:#999; margin-top:10px;">
+                These flags are enforced server-side on <code>/api/channel-bridge/inbound</code>.
               </div>
             </div>
 

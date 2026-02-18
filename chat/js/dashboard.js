@@ -3,7 +3,7 @@
  * Renders system health dashboard with sync status and triage log
  */
 
-import { fetchSystemHealth, fetchTriageLogs, triggerSync } from './api.js';
+import { fetchSystemHealth, fetchTriageLogs, fetchBridgeSummary, triggerSync } from './api.js';
 
 /**
  * Render the dashboard with system health cards
@@ -18,9 +18,10 @@ export async function renderDashboard() {
 
     try {
         // Fetch dashboard data
-        const [health, logs] = await Promise.all([
+        const [health, logs, bridgeData] = await Promise.all([
             fetchSystemHealth(),
-            fetchTriageLogs(10)
+            fetchTriageLogs(10),
+            fetchBridgeSummary(300)
         ]);
 
         // Calculate uptime
@@ -31,6 +32,14 @@ export async function renderDashboard() {
         const whatsappSync = health.channels?.whatsapp || {};
         const notesSync = health.channels?.notes || {};
         const mailSync = health.channels?.mail || {};
+        const bridgeSummary = bridgeData?.summary || {};
+        const bridgeCounts = bridgeSummary?.counts || {};
+        const bridgeIngested = Number(bridgeCounts?.ingested) || 0;
+        const bridgeDuplicates = Number(bridgeCounts?.duplicate) || 0;
+        const bridgeErrors = Number(bridgeCounts?.error) || 0;
+        const bridgeLast = bridgeSummary?.lastEventAt || null;
+        const telegramMode = bridgeSummary?.rollout?.telegram || 'draft_only';
+        const discordMode = bridgeSummary?.rollout?.discord || 'draft_only';
 
         // Format last sync times
         const formatLastSync = (timestamp) => {
@@ -56,7 +65,7 @@ export async function renderDashboard() {
               ⚙️
             </button>
             <button class="btn-icon" onclick="window.handleSync('imessage')" title="Sync iMessage">
-              💬
+              <img src="/public/imessage.svg" alt="iMessage" class="platform-icon platform-icon--sm">
             </button>
           </div>
         </div>
@@ -75,7 +84,7 @@ export async function renderDashboard() {
               ⚙️
             </button>
             <button class="btn-icon" onclick="window.handleSync('whatsapp')" title="Sync WhatsApp">
-              📱
+              <img src="/public/whatsapp.svg" alt="WhatsApp" class="platform-icon platform-icon--sm">
             </button>
           </div>
         </div>
@@ -113,7 +122,7 @@ export async function renderDashboard() {
               ⚙️
             </button>
             <button class="btn-icon" onclick="window.handleSync('mail')" title="Sync Email (Apple Mail or IMAP)">
-              📧
+              <img src="/public/mail.svg" alt="Email" class="platform-icon platform-icon--sm">
             </button>
           </div>
         </div>
@@ -124,6 +133,31 @@ export async function renderDashboard() {
         </div>
         <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
           Last Sync: ${formatLastSync(mailSync.lastSync)}
+        </div>
+      </div>
+
+      <div class="health-card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h4>Channel Bridge</h4>
+          <button class="btn-icon" onclick="window.openChannelSettings('bridge')" title="Configure Bridge rollout">
+            ⚙️
+          </button>
+        </div>
+        <div style="display:flex; gap:12px; align-items:flex-end;">
+          <div>
+            <div class="health-value">${bridgeIngested}</div>
+            <div class="health-status-tag">● Ingested (recent)</div>
+          </div>
+          <div style="font-size:0.85rem; color:#999;">
+            <div>Duplicates: ${bridgeDuplicates}</div>
+            <div>Errors: ${bridgeErrors}</div>
+          </div>
+        </div>
+        <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
+          Telegram: ${telegramMode} | Discord: ${discordMode}
+        </div>
+        <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
+          Last event: ${formatLastSync(bridgeLast)}
         </div>
       </div>
 
