@@ -23,16 +23,41 @@ const contactStore = require("./contact-store.js");
 const crypto = require("crypto");
 const { execFile } = require("child_process");
 const { mergeProfile } = require("./kyc-merge.js");
-const { readSettings, writeSettings, maskSettingsForClient, isImapConfigured, isGmailConfigured, withDefaults } = require("./settings-store.js");
+const {
+  readSettings,
+  writeSettings,
+  maskSettingsForClient,
+  isImapConfigured,
+  isGmailConfigured,
+  withDefaults,
+  getChannelBridgeInboundMode,
+} = require("./settings-store.js");
 const { buildAuthUrl, connectGmailFromCallback, disconnectGmail } = require("./gmail-connector.js");
+const {
+  ingestInboundEvent,
+  ingestInboundEvents,
+  normalizeInboundEvent,
+  toVectorDoc,
+  readBridgeEventLog,
+} = require("./channel-bridge.js");
+const {
+  getSecurityPolicy,
+  isLocalRequest,
+  hasValidOperatorToken,
+  isHumanApproved,
+  appendSecurityAudit,
+  resolveClientIp,
+} = require("./security-policy.js");
 
 // Default to port 3000 if not specified in environment variables.
 const PORT_MIN = parseInt(process.env.PORT || "3000", 10);
 const HTML_PATH = path.join(__dirname, "index.html");
+const PUBLIC_DIR = path.join(__dirname, "..", "public");
 let gmailOauthState = null;
 
 let boundPort = PORT_MIN;
 const analysisInFlightByHandle = new Map();
+const securityPolicy = getSecurityPolicy(process.env);
 
 // Conversation list helpers
 const conversationsIndexCache = {
@@ -47,6 +72,12 @@ const CONVERSATION_STATS_TTL_MS = 60 * 1000;
 const CONVERSATION_PREVIEW_SAMPLE_ROWS = 200;
 
 let docsTablePromise = null;
+
+function invalidateConversationCaches() {
+  conversationsIndexCache.items = [];
+  conversationsIndexCache.builtAtMs = 0;
+  conversationStatsCache.clear();
+}
 
 function escapeSqlString(value) {
   return String(value ?? "").replace(/'/g, "''");
@@ -124,11 +155,73 @@ function inferSourceFromChannel(channel) {
   if (c === "whatsapp") return "WhatsApp";
   if (c === "email") return "Mail";
   if (c === "imessage") return "iMessage";
+  if (c === "telegram") return "Telegram";
+  if (c === "discord") return "Discord";
   return null;
 }
 
+function getBridgePolicyForChannel(channel, settingsSnapshot = null) {
+  const key = String(channel || "").trim().toLowerCase();
+  if (!key) return null;
+  if (key !== "telegram" && key !== "discord") return null;
+  const inboundMode = getChannelBridgeInboundMode(settingsSnapshot, key);
+  return {
+    managed: true,
+    channel: key,
+    inboundMode,
+    label: `${key} ${inboundMode}`,
+  };
+}
+
+function buildChannelBridgeSummary(options = {}) {
+  const limit = Math.max(1, Math.min(Number(options.limit) || 200, 2000));
+  const events = readBridgeEventLog(limit);
+  const settings = readSettings();
+  const counts = { total: events.length, ingested: 0, duplicate: 0, error: 0, other: 0 };
+  const channels = {};
+  let lastEventAt = null;
+  let lastErrorAt = null;
+
+  for (const evt of events) {
+    const status = String(evt?.status || "").toLowerCase();
+    const channel = String(evt?.channel || "unknown").toLowerCase() || "unknown";
+    const at = String(evt?.at || "").trim();
+
+    if (status === "ingested") counts.ingested += 1;
+    else if (status === "duplicate") counts.duplicate += 1;
+    else if (status === "error") counts.error += 1;
+    else counts.other += 1;
+
+    if (!channels[channel]) {
+      channels[channel] = { ingested: 0, duplicate: 0, error: 0, other: 0, total: 0, lastAt: null };
+    }
+    channels[channel].total += 1;
+    if (status === "ingested") channels[channel].ingested += 1;
+    else if (status === "duplicate") channels[channel].duplicate += 1;
+    else if (status === "error") channels[channel].error += 1;
+    else channels[channel].other += 1;
+    if (at) channels[channel].lastAt = at;
+
+    if (at) lastEventAt = at;
+    if (status === "error" && at) lastErrorAt = at;
+  }
+
+  return {
+    limit,
+    sampleSize: events.length,
+    counts,
+    channels,
+    rollout: {
+      telegram: getChannelBridgeInboundMode(settings, "telegram"),
+      discord: getChannelBridgeInboundMode(settings, "discord"),
+    },
+    lastEventAt,
+    lastErrorAt,
+  };
+}
+
 function stripPathScheme(p) {
-  return String(p || "").replace(/^(imessage:\/\/|whatsapp:\/\/|mailto:)/i, "").trim();
+  return String(p || "").replace(/^(imessage:\/\/|whatsapp:\/\/|mailto:|telegram:\/\/|discord:\/\/)/i, "").trim();
 }
 
 async function collectRows(results) {
@@ -275,6 +368,94 @@ function writeJson(res, statusCode, payload) {
   res.end(JSON.stringify(payload));
 }
 
+function auditSecurityDecision(req, params) {
+  appendSecurityAudit({
+    route: params.route,
+    action: params.action,
+    method: req.method,
+    decision: params.decision,
+    reason: params.reason || "",
+    dryRun: Boolean(params.dryRun),
+    ip: resolveClientIp(req),
+    userAgent: String(req.headers["user-agent"] || ""),
+  });
+}
+
+function denySensitiveRoute(req, res, params) {
+  auditSecurityDecision(req, {
+    route: params.route,
+    action: params.action,
+    decision: "deny",
+    reason: params.code,
+    dryRun: params.dryRun,
+  });
+  writeJson(res, params.statusCode || 403, {
+    error: params.message,
+    code: params.code,
+    hint: params.hint,
+  });
+}
+
+function authorizeSensitiveRoute(req, res, options) {
+  const route = options.route || "unknown";
+  const action = options.action || route;
+  const payload = options.payload || {};
+  const requireHumanApproval = options.requireHumanApproval !== false;
+  const dryRun = Boolean(payload?.dryRun);
+
+  if (securityPolicy.localWritesOnly && !isLocalRequest(req)) {
+    denySensitiveRoute(req, res, {
+      route,
+      action,
+      code: "local_only",
+      message: "Sensitive route is restricted to local requests.",
+      hint: "Use localhost access or disable REPLY_SECURITY_LOCAL_WRITES_ONLY (not recommended).",
+      statusCode: 403,
+      dryRun,
+    });
+    return false;
+  }
+
+  if (securityPolicy.requireOperatorToken && !hasValidOperatorToken(req, securityPolicy)) {
+    denySensitiveRoute(req, res, {
+      route,
+      action,
+      code: "operator_token_required",
+      message: "Missing or invalid operator token.",
+      hint: "Provide X-Reply-Operator-Token with a valid token.",
+      statusCode: 401,
+      dryRun,
+    });
+    return false;
+  }
+
+  const approvalRequired =
+    securityPolicy.requireHumanApproval &&
+    requireHumanApproval &&
+    !(dryRun && securityPolicy.allowDryRunWithoutApproval);
+  if (approvalRequired && !isHumanApproved(req, payload)) {
+    denySensitiveRoute(req, res, {
+      route,
+      action,
+      code: "human_approval_required",
+      message: "Human approval is required for this sensitive action.",
+      hint: "Send approval.confirmed=true in payload or X-Reply-Human-Approval: confirmed.",
+      statusCode: 403,
+      dryRun,
+    });
+    return false;
+  }
+
+  auditSecurityDecision(req, {
+    route,
+    action,
+    decision: "allow",
+    reason: "authorized",
+    dryRun,
+  });
+  return true;
+}
+
 function readRequestBody(req) {
   return new Promise((resolve, reject) => {
     let body = "";
@@ -367,6 +548,8 @@ function pathPrefixesForHandle(handle) {
   for (const v of variants) {
     out.push(`imessage://${v}`);
     out.push(`whatsapp://${v}`);
+    out.push(`telegram://${v}`);
+    out.push(`discord://${v}`);
   }
   return out;
 }
@@ -391,6 +574,8 @@ function channelFromDoc(doc) {
   if (p.startsWith("whatsapp://") || s.includes("whatsapp")) return "whatsapp";
   if (p.startsWith("mailto:") || s.includes("mail") || s.includes("email")) return "email";
   if (p.startsWith("imessage://") || s.includes("imessage")) return "imessage";
+  if (p.startsWith("telegram://") || s.includes("telegram")) return "telegram";
+  if (p.startsWith("discord://") || s.includes("discord")) return "discord";
   if (s.includes("messenger")) return "messenger";
   if (s.includes("instagram")) return "instagram";
   if (s.includes("linkedin")) return "linkedin";
@@ -749,6 +934,13 @@ async function serveKyc(req, res, url) {
   if (req.method === "POST") {
     try {
       const json = await readJsonBody(req);
+      if (!authorizeSensitiveRoute(req, res, {
+        route: "/api/kyc",
+        action: "update-kyc",
+        payload: json,
+      })) {
+        return;
+      }
       const handle = json.handle;
       if (!handle) {
         writeJson(res, 400, { error: "Missing handle" });
@@ -910,6 +1102,52 @@ const server = http.createServer(async (req, res) => {
 	    }
 	  }
 
+  // Serve files from /public (e.g. /public/whatsapp.svg).
+  if (pathname.startsWith('/public/')) {
+    const fileName = pathname.replace(/^\/public\//, '');
+    const filePath = path.join(PUBLIC_DIR, fileName);
+    try {
+      const content = await fs.promises.readFile(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const contentType = {
+        '.svg': 'image/svg+xml',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.webp': 'image/webp',
+      }[ext] || 'application/octet-stream';
+      res.writeHead(200, {
+        'Content-Type': contentType,
+        'Cache-Control': 'no-store, max-age=0',
+      });
+      res.end(content);
+      return;
+    } catch {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+  }
+
+  // Backward compatible root SVG path support (e.g. /whatsapp.svg).
+  if (/^\/[a-zA-Z0-9_-]+\.svg$/.test(pathname)) {
+    const fileName = pathname.slice(1);
+    const filePath = path.join(PUBLIC_DIR, fileName);
+    try {
+      const content = await fs.promises.readFile(filePath);
+      res.writeHead(200, {
+        'Content-Type': 'image/svg+xml',
+        'Cache-Control': 'no-store, max-age=0',
+      });
+      res.end(content);
+      return;
+    } catch {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+  }
+
   if (url.pathname === "/api/thread") {
     const handle = url.searchParams.get("handle");
     const limit = parseInt(url.searchParams.get("limit")) || 30;
@@ -989,6 +1227,13 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST") {
       try {
         const incoming = await readJsonBody(req);
+        if (!authorizeSensitiveRoute(req, res, {
+          route: "/api/settings",
+          action: "update-settings",
+          payload: incoming,
+        })) {
+          return;
+        }
         const current = withDefaults(readSettings());
         const next = { ...current };
 
@@ -1074,6 +1319,22 @@ const server = http.createServer(async (req, res) => {
           }
         }
 
+        const channelBridge = incoming?.channelBridge || {};
+        if (channelBridge && typeof channelBridge === "object") {
+          next.channelBridge = { ...(current.channelBridge || {}), channels: { ...(current.channelBridge?.channels || {}) } };
+          const channels = channelBridge.channels || {};
+          if (channels && typeof channels === "object") {
+            for (const key of ["telegram", "discord"]) {
+              if (!channels[key] || typeof channels[key] !== "object") continue;
+              const mode = String(channels[key].inboundMode || "").trim().toLowerCase();
+              if (!next.channelBridge.channels[key]) next.channelBridge.channels[key] = {};
+              if (mode === "draft_only" || mode === "disabled") {
+                next.channelBridge.channels[key].inboundMode = mode;
+              }
+            }
+          }
+        }
+
         writeSettings(next);
         writeJson(res, 200, { status: "ok" });
       } catch (e) {
@@ -1145,6 +1406,14 @@ const server = http.createServer(async (req, res) => {
       writeJson(res, 405, { error: "Method not allowed" });
       return;
     }
+    const payload = await readJsonBody(req);
+    if (!authorizeSensitiveRoute(req, res, {
+      route: "/api/gmail/disconnect",
+      action: "disconnect-gmail",
+      payload,
+    })) {
+      return;
+    }
     try {
       await disconnectGmail();
       writeJson(res, 200, { status: "ok" });
@@ -1164,6 +1433,18 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (url.pathname === "/api/sync-mail") {
+    if (req.method !== "POST") {
+      writeJson(res, 405, { error: "Method not allowed" });
+      return;
+    }
+    const payload = await readJsonBody(req);
+    if (!authorizeSensitiveRoute(req, res, {
+      route: "/api/sync-mail",
+      action: "sync-mail",
+      payload,
+    })) {
+      return;
+    }
     console.log("Starting Mail sync in background...");
     const { syncMail } = require("./sync-mail.js");
     syncMail().then(count => {
@@ -1176,12 +1457,139 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify({ status: "started", message: "Mail sync started in background" }));
     return;
   }
+  if (url.pathname === "/api/channel-bridge/inbound") {
+    if (req.method !== "POST") {
+      writeJson(res, 405, { error: "Method not allowed" });
+      return;
+    }
+    const payload = await readJsonBody(req);
+    if (!authorizeSensitiveRoute(req, res, {
+      route: "/api/channel-bridge/inbound",
+      action: "channel-bridge-inbound",
+      payload,
+      requireHumanApproval: false,
+    })) {
+      return;
+    }
+
+    try {
+      const events = Array.isArray(payload)
+        ? payload
+        : (Array.isArray(payload?.events) ? payload.events : [payload]);
+
+      if (!events.length) {
+        writeJson(res, 400, { error: "Inbound payload is empty." });
+        return;
+      }
+
+      const settings = readSettings();
+      const normalizedForPolicy = events.map((evt) => normalizeInboundEvent(evt));
+      const denied = normalizedForPolicy
+        .map((event, index) => ({
+          index,
+          channel: event.channel,
+          inboundMode: getChannelBridgeInboundMode(settings, event.channel),
+        }))
+        .filter((x) => x.inboundMode !== "draft_only");
+
+      if (denied.length > 0) {
+        writeJson(res, 403, {
+          error: "Channel bridge inbound is disabled for one or more channels.",
+          code: "channel_bridge_disabled",
+          denied,
+        });
+        return;
+      }
+
+      const globalDryRun = payload?.dryRun === true;
+      const allDryRun = globalDryRun || events.every((evt) => evt?.dryRun === true);
+
+      if (allDryRun) {
+        const normalized = normalizedForPolicy.map((event, idx) => {
+          const doc = toVectorDoc(event);
+          return {
+            index: idx,
+            status: "dry-run",
+            event,
+            doc: { id: doc.id, source: doc.source, path: doc.path },
+          };
+        });
+
+        if (normalized.length === 1) {
+          writeJson(res, 200, normalized[0]);
+          return;
+        }
+
+        writeJson(res, 200, {
+          status: "dry-run",
+          total: normalized.length,
+          results: normalized,
+        });
+        return;
+      }
+
+      const ingestInput = globalDryRun
+        ? events.map((evt) => ({ ...(evt || {}), dryRun: false }))
+        : events;
+
+      if (ingestInput.length === 1) {
+        const out = await ingestInboundEvent(ingestInput[0]);
+        if (!out.duplicate) invalidateConversationCaches();
+        writeJson(res, 200, {
+          status: out.duplicate ? "duplicate" : "ok",
+          event: out.event,
+          doc: out.doc,
+          duplicate: Boolean(out.duplicate),
+        });
+        return;
+      }
+
+      const out = await ingestInboundEvents(ingestInput, { failFast: false });
+      if (out.accepted > 0) invalidateConversationCaches();
+      writeJson(res, 200, {
+        status: out.errors > 0 ? "partial" : "ok",
+        accepted: out.accepted,
+        skipped: out.skipped,
+        errors: out.errors,
+        total: out.total,
+        results: out.results,
+      });
+    } catch (e) {
+      writeJson(res, 400, { error: e?.message || "Invalid channel bridge payload" });
+    }
+    return;
+  }
+  if (url.pathname === "/api/channel-bridge/events") {
+    if (req.method !== "GET") {
+      writeJson(res, 405, { error: "Method not allowed" });
+      return;
+    }
+    const limit = Math.max(1, Math.min(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 500));
+    const events = readBridgeEventLog(limit);
+    writeJson(res, 200, {
+      status: "ok",
+      total: events.length,
+      events,
+    });
+    return;
+  }
+  if (url.pathname === "/api/channel-bridge/summary") {
+    if (req.method !== "GET") {
+      writeJson(res, 405, { error: "Method not allowed" });
+      return;
+    }
+    const limit = Math.max(1, Math.min(parseInt(url.searchParams.get("limit") || "200", 10) || 200, 2000));
+    const summary = buildChannelBridgeSummary({ limit });
+    writeJson(res, 200, { status: "ok", summary });
+    return;
+  }
   if (url.pathname === "/api/conversations") {
     const limit = parseInt(url.searchParams.get("limit")) || 20;
     const offset = parseInt(url.searchParams.get("offset")) || 0;
     const q = (url.searchParams.get("q") || url.searchParams.get("query") || "").toString();
 
     try {
+      const bridgeSettings = readSettings();
       const { items } = await getConversationsIndexFresh();
       const filtered = q && q.trim()
         ? items.filter((c) => matchesQuery(buildSearchHaystack(c.contact, c), q))
@@ -1206,6 +1614,7 @@ const server = http.createServer(async (req, res) => {
           contact?.lastContacted ||
           stats?.previewDate ||
           (c.sortTime ? new Date(c.sortTime).toISOString() : null);
+        const bridgePolicy = getBridgePolicyForChannel(lastChannel, bridgeSettings);
 
         return {
           id: contact?.id || c.handle,
@@ -1222,6 +1631,7 @@ const server = http.createServer(async (req, res) => {
           lastChannel,
           lastSource,
           lastContacted: lastContacted || null,
+          bridgePolicy,
         };
       });
 
@@ -1236,6 +1646,7 @@ const server = http.createServer(async (req, res) => {
       console.error("Error loading conversations from database:", err);
       // Fallback to contact store if database query fails
       const { getHistory } = require("./vector-store.js");
+      const bridgeSettings = readSettings();
 
       async function statsForContactHandle(handle) {
         if (!handle) return { count: 0, channel: null, source: null, preview: null, previewDate: null };
@@ -1311,7 +1722,8 @@ const server = http.createServer(async (req, res) => {
             channel: stats.channel || inferredChannel,
             lastChannel: c.lastChannel || stats.channel || inferredChannel,
             lastSource: stats.source || (inferredChannel === "whatsapp" ? "WhatsApp" : (inferredChannel === "email" ? "Mail" : "iMessage")),
-            lastContacted: c.lastContacted || stats.previewDate
+            lastContacted: c.lastContacted || stats.previewDate,
+            bridgePolicy: getBridgePolicyForChannel(c.lastChannel || stats.channel || inferredChannel, bridgeSettings),
           };
         })
       )).filter(Boolean);
@@ -1335,13 +1747,32 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (url.pathname === "/api/sync-notes") {
+    const payload = req.method === "POST" ? await readJsonBody(req) : {};
+    if (!authorizeSensitiveRoute(req, res, {
+      route: "/api/sync-notes",
+      action: "sync-notes",
+      payload,
+    })) {
+      return;
+    }
     serveSyncNotes(req, res);
     return;
   }
   if (url.pathname === "/api/sync-imessage") {
+    if (req.method !== "POST") {
+      writeJson(res, 405, { error: "Method not allowed" });
+      return;
+    }
+    const payload = await readJsonBody(req);
+    if (!authorizeSensitiveRoute(req, res, {
+      route: "/api/sync-imessage",
+      action: "sync-imessage",
+      payload,
+    })) {
+      return;
+    }
     console.log("Starting iMessage sync in background...");
-    const { exec } = require("child_process");
-    exec("node chat/sync-imessage.js", (error, stdout, stderr) => {
+    execFile(process.execPath, [path.join(__dirname, "sync-imessage.js")], { cwd: __dirname }, (error, stdout, stderr) => {
       if (error) {
         console.error(`Sync error: ${error.message}`);
         return;
@@ -1355,37 +1786,46 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (url.pathname === "/api/send-imessage") {
-    let body = "";
-    req.on("data", (chunk) => { body += chunk; });
-    req.on("end", () => {
-      const { recipient, text } = JSON.parse(body);
-      if (!recipient || !text) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Missing recipient or text" }));
+    if (req.method !== "POST") {
+      writeJson(res, 405, { error: "Method not allowed" });
+      return;
+    }
+    const payload = await readJsonBody(req);
+    if (!authorizeSensitiveRoute(req, res, {
+      route: "/api/send-imessage",
+      action: "send-imessage",
+      payload,
+    })) {
+      return;
+    }
+
+    const recipient = (payload?.recipient || "").toString().trim();
+    const text = (payload?.text || "").toString();
+    if (!recipient || !text) {
+      writeJson(res, 400, { error: "Missing recipient or text" });
+      return;
+    }
+
+    const appleScript = `
+on run argv
+  set recipientId to item 1 of argv
+  set msg to item 2 of argv
+  tell application "Messages"
+    set targetService to 1st service whose service type is iMessage
+    set targetBuddy to buddy recipientId of targetService
+    send msg to targetBuddy
+  end tell
+end run
+    `;
+
+    execFile("/usr/bin/osascript", ["-e", appleScript, "--", recipient, text], (error) => {
+      if (error) {
+        console.error(`Send error: ${error}`);
+        writeJson(res, 500, { error: error.message });
         return;
       }
-
-      const escapedMessage = text.replace(/"/g, '\\"');
-      const appleScript = `
-        tell application "Messages"
-          set targetService to 1st service whose service type is iMessage
-          set targetBuddy to buddy "${recipient}" of targetService
-          send "${escapedMessage}" to targetBuddy
-        end tell
-      `;
-
-      const { exec } = require("child_process");
-      exec(`osascript -e '${appleScript}'`, (error, stdout) => {
-        if (error) {
-          console.error(`Send error: ${error}`);
-          res.writeHead(500, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: error.message }));
-          return;
-        }
-        contactStore.clearDraft(recipient); // Clear draft on successful send
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ status: "ok" }));
-      });
+      contactStore.clearDraft(recipient);
+      writeJson(res, 200, { status: "ok" });
     });
     return;
   }
@@ -1396,6 +1836,13 @@ const server = http.createServer(async (req, res) => {
       }
 	    const { execFile } = require("child_process");
 	    const payload = await readJsonBody(req);
+      if (!authorizeSensitiveRoute(req, res, {
+        route: "/api/send-whatsapp",
+        action: "send-whatsapp",
+        payload,
+      })) {
+        return;
+      }
 	    const recipientRaw = (payload?.recipient || "").toString().trim();
 	    const textRaw = (payload?.text || "").toString();
       const dryRun = Boolean(payload?.dryRun);
@@ -1844,35 +2291,43 @@ end focusCheck
     return;
   }
   if (url.pathname === "/api/send-email") {
-    let body = "";
-    req.on("data", (chunk) => { body += chunk; });
-    req.on("end", async () => {
-      const { recipient, text } = JSON.parse(body);
-      if (!recipient || !text) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Missing recipient or text" }));
+    if (req.method !== "POST") {
+      writeJson(res, 405, { error: "Method not allowed" });
+      return;
+    }
+    const payload = await readJsonBody(req);
+    if (!authorizeSensitiveRoute(req, res, {
+      route: "/api/send-email",
+      action: "send-email",
+      payload,
+    })) {
+      return;
+    }
+    const recipient = (payload?.recipient || "").toString().trim();
+    const text = (payload?.text || "").toString();
+    if (!recipient || !text) {
+      writeJson(res, 400, { error: "Missing recipient or text" });
+      return;
+    }
+
+    // Prefer Gmail API send when connected.
+    try {
+      const settings = readSettings();
+      const gmail = settings?.gmail || {};
+      if (gmail.refreshToken && gmail.clientId && gmail.clientSecret) {
+        const { sendGmail } = require("./gmail-connector.js");
+        await sendGmail({ to: recipient, subject: "Follow-up from {reply}", text });
+        contactStore.clearDraft(recipient);
+        writeJson(res, 200, { status: "ok", provider: "gmail" });
         return;
       }
+    } catch (e) {
+      console.error("Gmail send failed, falling back to Mail.app:", e.message);
+    }
 
-      // Prefer Gmail API send when connected.
-      try {
-        const settings = readSettings();
-        const gmail = settings?.gmail || {};
-        if (gmail.refreshToken && gmail.clientId && gmail.clientSecret) {
-          const { sendGmail } = require("./gmail-connector.js");
-          await sendGmail({ to: recipient, subject: "Follow-up from {reply}", text });
-          contactStore.clearDraft(recipient);
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ status: "ok", provider: "gmail" }));
-          return;
-        }
-      } catch (e) {
-        console.error("Gmail send failed, falling back to Mail.app:", e.message);
-      }
-
-      // Fallback: AppleScript to send via Mail.app (opens compose window).
-      // Use execFile argv to avoid shell-escaping problems and to support multiline text.
-      const appleScript = `
+    // Fallback: AppleScript to send via Mail.app (opens compose window).
+    // Use execFile argv to avoid shell-escaping problems and to support multiline text.
+    const appleScript = `
 on run argv
   set toAddr to item 1 of argv
   set bodyText to item 2 of argv
@@ -1887,18 +2342,14 @@ on run argv
 end run
       `;
 
-      const { execFile } = require("child_process");
-      execFile("/usr/bin/osascript", ["-e", appleScript, "--", String(recipient), String(text)], (error, stdout) => {
-        if (error) {
-          console.error(`Send Mail error: ${error}`);
-          res.writeHead(500, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: error.message }));
-          return;
-        }
-        contactStore.clearDraft(recipient);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ status: "ok" }));
-      });
+    execFile("/usr/bin/osascript", ["-e", appleScript, "--", String(recipient), String(text)], (error) => {
+      if (error) {
+        console.error(`Send Mail error: ${error}`);
+        writeJson(res, 500, { error: error.message });
+        return;
+      }
+      contactStore.clearDraft(recipient);
+      writeJson(res, 200, { status: "ok" });
     });
     return;
   }
@@ -2146,6 +2597,14 @@ end run
   }
   if (url.pathname === "/api/sync-whatsapp") {
     if (req.method === "POST") {
+      const payload = await readJsonBody(req);
+      if (!authorizeSensitiveRoute(req, res, {
+        route: "/api/sync-whatsapp",
+        action: "sync-whatsapp",
+        payload,
+      })) {
+        return;
+      }
       // Trigger background sync
       syncWhatsApp().catch(err => console.error("Manual WhatsApp Sync Error:", err));
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -2158,35 +2617,40 @@ end run
   }
 
   if (url.pathname === "/api/analyze-contact") {
-    let body = "";
-    req.on("data", (chunk) => { body += chunk; });
-    req.on("end", async () => {
-      try {
-        const { handle } = JSON.parse(body);
-        if (!handle) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "Missing handle" }));
-          return;
-        }
-
-        const profile = await analyzeContactDeduped(handle);
-        let updatedContact = null;
-        if (profile) {
-          updatedContact = await mergeProfile(profile);
-        }
-
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({
-          status: "ok",
-          contact: updatedContact,
-          message: profile ? "Analysis complete" : "Not enough data for analysis"
-        }));
-      } catch (e) {
-        console.error("Analysis error:", e);
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: e.message }));
+    if (req.method !== "POST") {
+      writeJson(res, 405, { error: "Method not allowed" });
+      return;
+    }
+    const payload = await readJsonBody(req);
+    if (!authorizeSensitiveRoute(req, res, {
+      route: "/api/analyze-contact",
+      action: "analyze-contact",
+      payload,
+    })) {
+      return;
+    }
+    try {
+      const handle = (payload?.handle || "").toString().trim();
+      if (!handle) {
+        writeJson(res, 400, { error: "Missing handle" });
+        return;
       }
-    });
+
+      const profile = await analyzeContactDeduped(handle);
+      let updatedContact = null;
+      if (profile) {
+        updatedContact = await mergeProfile(profile);
+      }
+
+      writeJson(res, 200, {
+        status: "ok",
+        contact: updatedContact,
+        message: profile ? "Analysis complete" : "Not enough data for analysis"
+      });
+    } catch (e) {
+      console.error("Analysis error:", e);
+      writeJson(res, 500, { error: e.message });
+    }
     return;
   }
 

@@ -4,6 +4,7 @@
  */
 
 import { fetchConversations } from './api.js';
+import { createPlatformIcon, resolvePlatformTarget } from './platform-icons.js';
 
 // State
 let contactOffset = 0;
@@ -12,20 +13,12 @@ const CONTACT_LIMIT = 20;
 export let conversations = []; // Global cache for contacts
 let conversationsQuery = '';
 
-function channelEmoji(channel) {
-    const raw = (channel ?? '').toString().toLowerCase();
-    const key =
-        raw.includes('whatsapp') ? 'whatsapp' :
-            (raw.includes('mail') || raw.includes('email') || raw.includes('gmail') || raw.includes('imap')) ? 'email' :
-                'imessage';
-    const override = window.replySettings?.ui?.channels?.[key]?.emoji;
-    if (override) return override;
-    if (key === 'whatsapp') return '🟢';
-    if (key === 'email') return '📧';
-    if (raw.includes('messenger')) return '🔷';
-    if (raw.includes('instagram')) return '🔴';
-    if (raw.includes('linkedin')) return 'ℹ️';
-    return '💬';
+function formatBridgePolicyBadge(policy) {
+    if (!policy || !policy.managed) return '';
+    const key = String(policy.channel || '').toLowerCase();
+    const channelLabel = key === 'telegram' ? 'Telegram' : (key === 'discord' ? 'Discord' : key || 'Bridge');
+    const mode = String(policy.inboundMode || '').trim().toLowerCase() || 'unknown';
+    return `${channelLabel} ${mode}`;
 }
 
 /**
@@ -89,7 +82,6 @@ export async function loadConversations(append = false) {
             const name = document.createElement('div');
             name.className = 'contact-name';
             const channel = contact.lastChannel || contact.channel || contact.lastSource || contact.source || '';
-            const emoji = channelEmoji(channel);
             const displayName = contact.displayName || contact.name || contact.handle;
             name.textContent = displayName;
 
@@ -111,6 +103,15 @@ export async function loadConversations(append = false) {
                 badge.title = `${count} messages`;
             }
             topRow.appendChild(badge);
+
+            const bridgeBadgeLabel = formatBridgePolicyBadge(contact.bridgePolicy);
+            if (bridgeBadgeLabel) {
+                const bridgeBadge = document.createElement('div');
+                bridgeBadge.className = 'bridge-policy-badge';
+                bridgeBadge.textContent = bridgeBadgeLabel;
+                bridgeBadge.title = `Bridge inbound mode: ${bridgeBadgeLabel}`;
+                topRow.appendChild(bridgeBadge);
+            }
             info.appendChild(topRow);
 
             const preview = document.createElement('div');
@@ -128,14 +129,19 @@ export async function loadConversations(append = false) {
             item.appendChild(info);
 
             // Channel indicator (latest channel/source)
-            const icon = document.createElement('span');
-            icon.className = 'channel-icon';
-            icon.textContent = emoji;
+            const iconHint = [contact.latestHandle, contact.handle, contact.lastMessage]
+                .filter(Boolean)
+                .join(' ');
+            const iconSeed = channel || iconHint;
+            const iconPlatform = resolvePlatformTarget(iconSeed, { channelHint: channel }).platform;
+            const icon = createPlatformIcon(iconPlatform, channel || 'channel');
+            icon.classList.add('channel-icon');
             const channelLabel = (contact.lastChannel || contact.channel || '').toString();
             const sourceLabel = (contact.lastSource || contact.source || '').toString();
             icon.title = [
                 channelLabel ? `Latest channel: ${channelLabel}` : null,
                 sourceLabel ? `Source: ${sourceLabel}` : null,
+                bridgeBadgeLabel ? `Bridge: ${bridgeBadgeLabel}` : null,
             ].filter(Boolean).join('\n') || 'Latest channel';
             item.appendChild(icon);
 
