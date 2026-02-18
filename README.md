@@ -35,7 +35,9 @@ npm install
 
 ## 📚 Documentation
 *   [Architecture Overview](docs/ARCHITECTURE.md)
+*   [App Navigation + File Map](docs/APP_NAVIGATION.md)
 *   [Ingestion Guide](docs/INGESTION.md)
+*   [Learnings & Decisions](docs/LEARNINGS.md)
 *   [Coding Standards](docs/CODING_STANDARDS.md)
 *   [Developer Handover](docs/HANDOVER.md)
 *   [Release Notes](docs/RELEASE_NOTES.md)

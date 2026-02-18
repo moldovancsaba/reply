@@ -7,6 +7,14 @@ function withDefaults(settings) {
   const s = settings && typeof settings === "object" ? settings : {};
   return {
     ...s,
+    gmail: {
+      ...(s?.gmail || {}),
+      sync: {
+        ...(s?.gmail?.sync || {}),
+        scope: (s?.gmail?.sync?.scope || "inbox_sent").toString(),
+        query: (s?.gmail?.sync?.query || "").toString(),
+      },
+    },
     worker: {
       pollIntervalSeconds: Number(s?.worker?.pollIntervalSeconds) || 60,
       quantities: {
@@ -96,6 +104,10 @@ function maskSettingsForClient(settings) {
       connectedAt: gmail.connectedAt || "",
       hasRefreshToken: gmailRefresh.has,
       refreshTokenHint: gmailRefresh.hint,
+      sync: {
+        scope: gmail?.sync?.scope || "inbox_sent",
+        query: gmail?.sync?.query || "",
+      },
     },
     worker: {
       pollIntervalSeconds: worker.pollIntervalSeconds,

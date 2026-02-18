@@ -1,7 +1,7 @@
 # System Architecture
 
 ## Overview
-**Reply** follows a minimalist, local-first architecture designed for privacy, speed, and maintainability. It avoids heavy frameworks and cloud dependencies.
+**{reply}** follows a minimalist, local-first architecture designed for privacy, speed, and maintainability. It avoids heavy frameworks and cloud dependencies.
 
 ## High-Level Diagram
 
@@ -41,6 +41,7 @@ graph TD
     *   `server.js`: API endpoints and static file serving.
     *   `reply-engine.js`: Orchestrates the LLM prompt construction.
     *   `knowledge.js`: Interface for querying the vector store.
+    *   `settings-store.js`: Local settings read/write + masking for UI.
 
 ### 3. The Ingestion Layer
 *   **Design Pattern:** Delta-Sync & Streaming.
@@ -60,6 +61,16 @@ graph TD
     *   **Low-Level Polling**: Direct SQLite queries on `chat.db` are sub-millisecond and near-zero CPU.
     *   **CPU Throttling**: The poll interval is configurable via Settings (`worker.pollIntervalSeconds`) and is clamped to 10–3600 seconds.
     *   **Scalability**: Mail sync is supported; additional channels can be added as separate workers or modular fetchers within the same throttled loop.
+
+## UI & Settings
+* **UI:** Static HTML + ES modules served by `chat/server.js`.
+  * Layout: `chat/index.html`
+  * Modules: `chat/js/*`
+  * Styling: `chat/css/*`
+* **Settings UX:** A full settings page in the main pane (same space as the Dashboard).
+  * General Settings: connectors (IMAP/Gmail) + global worker interval.
+  * Service Settings: per-service worker limits + per-channel UI appearance (emoji + bubble colors).
+* **Settings storage:** `chat/data/settings.json` (local, not encrypted).
 
 ## Design Principles
 1.  **Local-First:** No reliance on external APIs for core functionality. Optional connectors (e.g. Gmail OAuth) are opt-in.

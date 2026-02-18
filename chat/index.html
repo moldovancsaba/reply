@@ -191,6 +191,21 @@
 
               <div id="settings-gmail-status" style="font-size:0.85rem; color:#666; margin-top:10px;">Not connected</div>
 
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px;">
+                <div>
+                  <label style="font-size:0.8rem; color:#666;">Sync scope</label>
+                  <select id="settings-gmail-scope" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                    <option value="inbox_sent">Inbox + Sent</option>
+                    <option value="all_mail">All Mail (exclude Spam/Trash)</option>
+                    <option value="custom">Custom query</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:0.8rem; color:#666;">Custom query</label>
+                  <input id="settings-gmail-query" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder='e.g. label:finance OR from:foo@bar.com'>
+                </div>
+              </div>
+
               <div style="display:flex; justify-content:flex-end; gap:10px; margin-top: 12px;">
                 <button id="settings-gmail-disconnect" class="btn btn-ghost" style="padding: 8px 12px;">Disconnect</button>
                 <button id="settings-gmail-connect" class="btn btn-primary" style="padding: 8px 12px;">Connect Gmail</button>

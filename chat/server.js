@@ -786,6 +786,17 @@ const server = http.createServer(async (req, res) => {
             const s = gmail.clientSecret;
             if (s.trim()) next.gmail.clientSecret = s;
           }
+          const sync = gmail.sync || {};
+          if (sync && typeof sync === "object") {
+            next.gmail.sync = { ...(current.gmail?.sync || {}) };
+            if (typeof sync.scope === "string") {
+              const scope = sync.scope.trim();
+              if (["inbox_sent", "all_mail", "custom"].includes(scope)) next.gmail.sync.scope = scope;
+            }
+            if (typeof sync.query === "string") {
+              next.gmail.sync.query = sync.query.trim().slice(0, 500);
+            }
+          }
         }
 
         const worker = incoming?.worker || {};
@@ -932,216 +943,50 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === "/api/conversations") {
     const limit = parseInt(url.searchParams.get("limit")) || 20;
     const offset = parseInt(url.searchParams.get("offset")) || 0;
+    const q = (url.searchParams.get("q") || url.searchParams.get("query") || "").toString();
 
     try {
-      // Build a stable in-memory index (avoid re-reading contacts.json repeatedly)
-      const contactsSnapshot = contactStore.contacts || [];
-      const contactIndex = (() => {
-        const byHandle = new Map();
-        const byEmail = new Map();
-        const byPhone = new Map();
-        const byAlias = new Map();
+      const { items } = await getConversationsIndexFresh();
+      const filtered = q && q.trim()
+        ? items.filter((c) => matchesQuery(buildSearchHaystack(c.contact, c), q))
+        : items;
 
-        for (const c of contactsSnapshot) {
-          if (!c) continue;
-          if (c.handle) byHandle.set(String(c.handle).trim().toLowerCase(), c);
-          const emails = c.channels?.email || [];
-          for (const e of emails) {
-            const key = normalizeEmail(e);
-            if (key) byEmail.set(key, c);
-          }
-          const phones = c.channels?.phone || [];
-          for (const p of phones) {
-            const key = normalizePhone(p);
-            if (key) byPhone.set(key, c);
-          }
-          const aliases = c.aliases || [];
-          for (const a of aliases) {
-            const key = String(a || "").trim().toLowerCase();
-            if (key) byAlias.set(key, c);
-          }
-        }
-        return { byHandle, byEmail, byPhone, byAlias };
-      })();
-
-      function resolveContact(identifier) {
-        if (!identifier) return null;
-        const raw = String(identifier).trim();
-        if (!raw) return null;
-        const key = raw.toLowerCase();
-        if (contactIndex.byHandle.has(key)) return contactIndex.byHandle.get(key);
-        if (contactIndex.byAlias.has(key)) return contactIndex.byAlias.get(key);
-        const emailKey = normalizeEmail(raw);
-        if (emailKey && contactIndex.byEmail.has(emailKey)) return contactIndex.byEmail.get(emailKey);
-        const phoneKey = normalizePhone(raw);
-        if (phoneKey && contactIndex.byPhone.has(phoneKey)) return contactIndex.byPhone.get(phoneKey);
-        return null;
-      }
-
-      // Query LanceDB directly for contact list (database-level pagination)
-      const { connect } = require('./vector-store.js');
-      const db = await connect();
-      const table = await db.openTable("documents");
-
-      // Get distinct handles with their latest message timestamp
-      // Note: LanceDB doesn't support GROUP BY, so we query and dedupe in JS
-      // but limit data transfer by querying only recent messages
-      // Use 384-dimension zero vector for full scan (all-MiniLM-L6-v2 embedding size)
-      const zeroVector = new Array(384).fill(0);
-      const results = await table
-        .search(zeroVector)
-        .where(`source IN ('iMessage', 'iMessage-live', 'WhatsApp', 'Mail')`)
-        .limit(10000)  // Get more than needed for deduplication
-        .execute();
-
-      // Convert results to array (LanceDB returns async iterator)
-      let docs = [];
-      if (Array.isArray(results)) {
-        docs = results;
-      } else {
-        for await (const batch of results) {
-          for (const row of batch) {
-            docs.push(row.toJSON ? row.toJSON() : row);
-          }
-        }
-      }
-
-      // Map WhatsApp linked-device IDs ("...@lid") to their real phone JIDs for stable display/merging.
-      const waLidCandidates = new Set();
-      for (const d of docs) {
-        const p = (d?.path || "").toString();
-        if (!p.toLowerCase().startsWith("whatsapp://")) continue;
-        const h = p.replace(/^whatsapp:\/\//i, "").trim();
-        if (/^\d{13,}$/.test(h)) waLidCandidates.add(h);
-      }
-      const waLidMeta = await whatsAppIdResolver.phoneForLids(Array.from(waLidCandidates));
-
-      // Group by contact (if known) and get latest message time
-      const contactMap = new Map();
-      const countMap = new Map();
-      for (const doc of docs) {
-        if (!doc?.path) continue;
-        const rawHandle = doc.path.replace(/^(imessage:\/\/|whatsapp:\/\/|mailto:)/, '');
-        const isWhatsApp = (doc.path || "").toString().toLowerCase().startsWith("whatsapp://") || (doc.source || "").toString().toLowerCase().includes("whatsapp");
-        const waMeta = isWhatsApp ? waLidMeta.get(rawHandle) : null;
-        const identityHandle = waMeta?.phone || rawHandle;
-
-        const resolved = resolveContact(identityHandle);
-        const groupKey = (resolved?.id || resolved?.handle || identityHandle).toString();
-        const canonicalHandle = (resolved?.handle || identityHandle).toString();
-
-        const nextCount = (countMap.get(groupKey) || 0) + 1;
-        countMap.set(groupKey, nextCount);
-
-        const previewText = stripMessagePrefix(doc.text || "").trim();
-        const previewDate = extractDateFromText(doc.text || "");
-        const messageTime = previewDate ? previewDate.getTime() : 0;
-        const lastChannel = channelFromDoc(doc);
-
-        if (!contactMap.has(groupKey) || messageTime > (contactMap.get(groupKey).lastMessageTime || 0)) {
-          contactMap.set(groupKey, {
-            key: groupKey,
-            handle: canonicalHandle,
-            latestHandle: identityHandle,
-            lastMessageTime: messageTime,
-            path: doc.path,
-            source: doc.source,
-            channel: lastChannel,
-            waPartnerName: waMeta?.partnerName || null,
-            preview: previewText,
-            previewDate: previewDate ? previewDate.toISOString() : null,
-            count: nextCount,
-            contact: resolved || null
-          });
-        } else {
-          // Keep count updated even if this isn't the latest item
-          const existing = contactMap.get(groupKey);
-          if (existing) existing.count = nextCount;
-        }
-      }
-
-      // Convert to array and sort by last message time
-      const contacts = Array.from(contactMap.values())
-        .sort((a, b) => b.lastMessageTime - a.lastMessageTime)
-        .slice(offset, offset + limit);
-
-      async function exactStatsForContactHandle(handle) {
-        if (!handle) return { count: 0 };
-
-        const { getHistory } = require("./vector-store.js");
-        const handles = contactStore.getAllHandles(handle);
-
-        const phoneDigits = handles
-          .filter((h) => typeof h === "string" && !h.includes("@"))
-          .map((h) => normalizePhone(h))
-          .filter(Boolean);
-
-        const lidByPhone = await whatsAppIdResolver.lidsForPhones(phoneDigits);
-        const lidHandles = Array.from(new Set(Array.from(lidByPhone.values()).filter(Boolean)));
-
-        const allHandles = Array.from(new Set([...handles, ...lidHandles]));
-        const prefixes = Array.from(new Set(allHandles.flatMap((h) => pathPrefixesForHandle(h))));
-
-        const historyBatches = await Promise.all(prefixes.map((p) => getHistory(p)));
-        const allDocs = historyBatches.flat().filter(Boolean);
-
-        // Dedupe by stable id if present (prevents double-counting across variants).
-        const byId = new Map();
-        for (const d of allDocs) {
-          const id = (d?.id || "").toString().trim() || crypto.createHash("sha1").update(String(d?.text || "") + "|" + String(d?.path || "") + "|" + String(d?.source || "")).digest("hex");
-          if (!byId.has(id)) byId.set(id, d);
-        }
-        return { count: byId.size };
-      }
-
-      async function mapLimit(items, limit, fn) {
-        const out = new Array(items.length);
-        let nextIndex = 0;
-        const workers = new Array(Math.max(1, Math.min(limit, items.length))).fill(0).map(async () => {
-          while (true) {
-            const i = nextIndex++;
-            if (i >= items.length) return;
-            out[i] = await fn(items[i], i);
-          }
-        });
-        await Promise.all(workers);
-        return out;
-      }
-
-      // Enrich with contact store data
-      const enriched = await mapLimit(contacts, 4, async (c) => {
-        const contact = c.contact || resolveContact(c.handle);
+      const page = filtered.slice(offset, offset + limit);
+      const enriched = page.map((c) => {
+        const contact = c.contact || null;
         const hasDraft = contact?.status === "draft" && contact?.draft;
-        const lastChannel = c.channel || channelFromDoc(c);
-        const contactName = (contact?.displayName || contact?.name || "").toString();
-        const displayName = (/^\d+$/.test(contactName) && c.waPartnerName) ? c.waPartnerName : (contactName || c.handle);
-        const exact = await exactStatsForContactHandle(c.handle);
+        const displayName = (contact?.displayName || contact?.name || c.handle).toString();
+        const lastChannel = (c.channel || contact?.lastChannel || "").toString();
+        const lastContacted =
+          contact?.lastContacted ||
+          c.previewDate ||
+          (c.sortTime ? new Date(c.sortTime).toISOString() : null);
+
         return {
           id: contact?.id || c.handle,
           displayName,
-          // Use the handle from the latest message so actions (like sending) default to the latest channel.
           handle: c.latestHandle || c.handle,
-          count: exact.count || c.count || countMap.get(c.key) || 0,
+          latestHandle: c.latestHandle || c.handle,
+          count: Number.isFinite(Number(c.count)) ? c.count : 0,
           lastMessage: hasDraft
-            ? `Draft: ${contact.draft.slice(0, 50)}...`
-            : (c.preview ? c.preview.slice(0, 80) : "Click to see history"),
+            ? `Draft: ${String(contact.draft).slice(0, 50)}...`
+            : (c.preview ? String(c.preview).slice(0, 80) : "Click to see history"),
           status: contact?.status || "open",
           draft: contact?.draft || null,
           channel: lastChannel,
           lastChannel,
           lastSource: c.source || null,
-          latestHandle: c.latestHandle || c.handle,
-          lastContacted: contact?.lastContacted || (c.previewDate || new Date(c.lastMessageTime || 0).toISOString())
+          lastContacted: lastContacted || null,
         };
       });
 
-	      res.writeHead(200, { "Content-Type": "application/json" });
-	      res.end(JSON.stringify({
-	        contacts: enriched,
-	        hasMore: contactMap.size > offset + limit,
-	        total: contactMap.size,
-	        meta: { mode: "db" },
-	      }));
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        contacts: enriched,
+        hasMore: filtered.length > offset + limit,
+        total: filtered.length,
+        meta: { mode: "db", q: q || "" },
+      }));
     } catch (err) {
       console.error("Error loading conversations from database:", err);
       // Fallback to contact store if database query fails
@@ -1944,7 +1789,8 @@ end run
     const [imessageCount, whatsappCount, mailCount, notesCountIngested] = await Promise.all([
       countIngested("source IN ('iMessage','iMessage-live')"),
       countIngested("source IN ('WhatsApp')"),
-      countIngested("source IN ('Mail','IMAP')"),
+      // Email can come from Gmail OAuth, IMAP, Mail.app, or legacy mbox ingestion.
+      countIngested("source IN ('Gmail','IMAP','Mail','mbox')"),
       countIngested("source IN ('apple-notes')"),
     ]);
 

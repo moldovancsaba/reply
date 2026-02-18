@@ -16,8 +16,10 @@ The **GitHub Project Board** is the ONLY source of truth for what is being worke
 
 *   **Rule:** If it's not on the board, it doesn't exist.
 *   **Rule:** The **Status Column** defines the state (Backlog, Ready, In Progress, Done). Do NOT put status in titles (e.g., `[Backlog] Issue Title` is ILLEGAL).
+*   **Rule:** Issue title convention for Reply: `{reply}: <short description>` (no status/prefix noise).
 *   **Rule:** Documentation (`HANDOVER.md`) must be updated *immediately* after a task is completed to match the board.
 *   **Rule:** Do **NOT** create/manage issues in product repositories (e.g. `moldovancsaba/reply`). Issues live in the SSOT repo (currently `moldovancsaba/mvp-factory-control`) and are tracked via the Project Board.
+*   **Rule:** Issues are disabled in `moldovancsaba/reply` to prevent accidental drift away from SSOT.
 
 ## 2. Issue Structure (What good looks like)
 Every issue on the board must follow this structure to be "Ready":
