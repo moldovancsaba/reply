@@ -7,6 +7,8 @@ Completed work only. The [GitHub Project Board](https://github.com/users/moldova
 *   **UX: Clear separation of General vs Service settings:** General Settings shows connectors + global worker interval; per-service settings are accessed via card cogs.
 *   **UX: Dashboard space:** Profile pane is hidden on the Dashboard for more room.
 *   **Email: Gmail health check:** Added `/api/gmail/check` to validate Gmail OAuth connectivity.
+*   **Email: Correct dashboard counts:** Email Sync now counts ingested email docs from LanceDB using `source IN ('Gmail','IMAP','Mail','mbox')`.
+*   **Email: Gmail sync scope:** Added Settings for Inbox+Sent / All Mail / Custom query.
 *   **Email: Safer Mail.app fallback:** Mail.app fallback now passes recipient/body via `osascript` argv to avoid quoting issues and support multiline bodies.
 
 ## 2026-02-17 — System Recovery & Maintenance

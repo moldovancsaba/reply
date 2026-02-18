@@ -44,3 +44,23 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
 ## Known Quirks
 - `gh issue comment --body "..."` in `zsh`: backticks execute; prefer single quotes or `--body-file`.
 - WhatsApp direct send requires WhatsApp Desktop running + macOS Accessibility permission (UI automation).
+
+## Recent Shipped (2026-02-18)
+- Email dashboard: `/api/system-health` now counts ingested email docs from LanceDB using `source IN ('Gmail','IMAP','Mail','mbox')`, fixing the “Email Sync = 0” mismatch.
+- Gmail Settings: configurable Gmail sync scope (Inbox+Sent / All Mail / Custom query).
+
+## Current Status / Known Issues (SSOT)
+- `{reply}: Stabilize WhatsApp Desktop send (⌘N flow)` — https://github.com/moldovancsaba/mvp-factory-control/issues/196
+  - Status: still flaky depending on WhatsApp UI state (popovers, wrong focus, WhatsApp vs WhatsApp Beta).
+  - Safety: automation remains defensive to avoid sending the recipient as a message.
+- `{reply}: Conversation list indexing (order/search/counts) cleanup` — https://github.com/moldovancsaba/mvp-factory-control/issues/197
+  - Bug: `/api/conversations` currently runs in `meta.mode = fallback` because the “db index” helpers (e.g. `getConversationsIndexFresh`, query matching) are not wired; server-side `q=` filtering is effectively disabled.
+  - Note: a local WIP exists as `git stash` entry `wip-conversations-index` (apply only if you want to continue that partial implementation).
+
+## Quick Verification (dev)
+- Email count:
+  - `GET /api/system-health` → expect `channels.mail.processed > 0` after Gmail/IMAP/Mail sync.
+- Contacts list mode:
+  - `GET /api/conversations?offset=0&limit=10` → currently expects `meta.mode = fallback` until #197 is completed.
+- WhatsApp send (safe):
+  - `POST /api/send-whatsapp` with `{"recipient":"+3670...","text":"...","dryRun":true}` should return `ok` without sending.
