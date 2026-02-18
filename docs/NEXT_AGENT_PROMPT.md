@@ -1,14 +1,13 @@
 # Next Agent Continuation Prompt
 
-Generated: 2026-02-18 07:42:20 UTC
+Generated: 2026-02-18 07:44:41 UTC
 Trigger: User requested 70% context handover
 
 ## Session Snapshot
 
 - Branch: `main`
 - Working tree changes:
-- M docs/HANDOVER.md
-- M docs/USER_GUIDE.md
+- None
 
 ## Objective
 
@@ -17,6 +16,7 @@ Stabilize WhatsApp Desktop send automation and fix conversations indexing (order
 ## Completed
 
 - Docs: clarified navigation/SSOT/architecture/board queries; pushed to origin/main (commit 08d1c69).
+- Docs: handover updated with priorities + WhatsApp flaky status; pushed to origin/main (commit 211ad53).
 - Board: normalized all Reply issue titles to '{reply}: …' (no 'Reply Hub', no prefixes).
 - Board: added Idea Bank issue #195 '{reply}: Manage multiple mailboxes' (P2).
 
