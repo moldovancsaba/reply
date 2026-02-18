@@ -1094,8 +1094,22 @@ const server = http.createServer(async (req, res) => {
         return { count: byId.size };
       }
 
+      async function mapLimit(items, limit, fn) {
+        const out = new Array(items.length);
+        let nextIndex = 0;
+        const workers = new Array(Math.max(1, Math.min(limit, items.length))).fill(0).map(async () => {
+          while (true) {
+            const i = nextIndex++;
+            if (i >= items.length) return;
+            out[i] = await fn(items[i], i);
+          }
+        });
+        await Promise.all(workers);
+        return out;
+      }
+
       // Enrich with contact store data
-      const enriched = await Promise.all(contacts.map(async (c) => {
+      const enriched = await mapLimit(contacts, 4, async (c) => {
         const contact = c.contact || resolveContact(c.handle);
         const hasDraft = contact?.status === "draft" && contact?.draft;
         const lastChannel = c.channel || channelFromDoc(c);
@@ -1119,7 +1133,7 @@ const server = http.createServer(async (req, res) => {
           latestHandle: c.latestHandle || c.handle,
           lastContacted: contact?.lastContacted || (c.previewDate || new Date(c.lastMessageTime || 0).toISOString())
         };
-      }));
+      });
 
 	      res.writeHead(200, { "Content-Type": "application/json" });
 	      res.end(JSON.stringify({
@@ -1886,6 +1900,18 @@ end run
       return { state: "idle", message: "No sync data available" };
     };
 
+    // "Real" counts: number of ingested docs in LanceDB by channel/source.
+    async function countIngested(whereClause) {
+      try {
+        const { connect } = require("./vector-store.js");
+        const db = await connect();
+        const table = await db.openTable("documents");
+        return await table.countRows(whereClause);
+      } catch {
+        return 0;
+      }
+    }
+
     const getNotesCount = () => {
       const notesMetadata = path.join(__dirname, '../knowledge/notes-metadata.json');
       if (fs.existsSync(notesMetadata)) {
@@ -1915,23 +1941,30 @@ end run
     const whatsappStatus = readStatus("whatsapp_sync_status.json");
     const notesStatus = readStatus("notes_sync_status.json");
 
+    const [imessageCount, whatsappCount, mailCount, notesCountIngested] = await Promise.all([
+      countIngested("source IN ('iMessage','iMessage-live')"),
+      countIngested("source IN ('WhatsApp')"),
+      countIngested("source IN ('Mail','IMAP')"),
+      countIngested("source IN ('apple-notes')"),
+    ]);
+
     const health = {
       uptime: Math.floor(process.uptime()),
       status: "online",
       channels: {
         imessage: {
           ...imessageStatus,
-          processed: imessageStatus.processed || 0,
-          total: imessageStatus.processed || 0
+          processed: imessageCount || 0,
+          total: imessageCount || 0
         },
         whatsapp: {
           ...whatsappStatus,
-          processed: whatsappStatus.processed || 0,
-          total: whatsappStatus.processed || 0
+          processed: whatsappCount || 0,
+          total: whatsappCount || 0
         },
         notes: {
           ...notesStatus,
-          processed: getNotesCount(),
+          processed: notesCountIngested || 0,
           total: getNotesCount()
         },
         mail: {
@@ -1939,6 +1972,8 @@ end run
           provider: mailProvider,
           account: mailAccount,
           connected: !!(gmailOk || imapOk),
+          processed: mailCount || 0,
+          total: mailCount || 0,
         },
         contacts: readStatus("sync_state.json") // Legacy sync state compatibility
       },
