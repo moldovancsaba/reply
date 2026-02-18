@@ -3,7 +3,7 @@
  * Initializes the application and sets up event listeners
  */
 
-import { loadConversations, selectContact } from './contacts.js';
+import { loadConversations, selectContact, setContactQuery } from './contacts.js';
 import { handleSendMessage } from './messages.js';
 import { getSettings } from './api.js';
 import './dashboard.js';
@@ -41,6 +41,26 @@ async function init() {
 function setupEventListeners() {
   const btnSend = document.getElementById('btn-send');
   if (btnSend) btnSend.onclick = handleSendMessage;
+
+  // Sidebar predictive search (server-side filter)
+  const contactSearch = document.getElementById('contact-search');
+  if (contactSearch) {
+    let timer = null;
+    const run = () => {
+      try { setContactQuery(contactSearch.value); } catch { }
+    };
+    contactSearch.addEventListener('input', () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(run, 150);
+    });
+    contactSearch.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        contactSearch.value = '';
+        run();
+        try { contactSearch.blur(); } catch { }
+      }
+    });
+  }
 
   const chatInput = document.getElementById('chat-input');
   if (chatInput) {

@@ -34,6 +34,200 @@ let gmailOauthState = null;
 let boundPort = PORT_MIN;
 const analysisInFlightByHandle = new Map();
 
+// --- Conversations index (contacts list) ---
+// Builds a unified list of conversations from LanceDB docs + contact store.
+// Cached to keep the UI responsive while preserving correct ordering/counts.
+const conversationsIndexCache = {
+  builtAtMs: 0,
+  items: null,
+  building: null,
+};
+
+function invalidateConversationsIndex() {
+  conversationsIndexCache.items = null;
+  conversationsIndexCache.builtAtMs = 0;
+}
+
+function safeDateMs(v) {
+  if (!v) return 0;
+  const d = v instanceof Date ? v : new Date(v);
+  const ms = d.getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function buildSearchHaystack(contact, conv) {
+  const parts = [];
+  const c = contact || {};
+  const v = (x) => (x === null || x === undefined ? "" : String(x));
+
+  parts.push(v(c.displayName));
+  parts.push(v(c.name));
+  parts.push(v(c.handle));
+  parts.push(v(conv?.handle));
+  parts.push(v(conv?.latestHandle));
+
+  if (Array.isArray(c.aliases)) parts.push(c.aliases.map(v).join(" "));
+  if (c.profession) parts.push(v(c.profession));
+  if (c.relationship) parts.push(v(c.relationship));
+  if (c.intro) parts.push(v(c.intro));
+
+  if (c.channels) {
+    if (Array.isArray(c.channels.phone)) parts.push(c.channels.phone.map(v).join(" "));
+    if (Array.isArray(c.channels.email)) parts.push(c.channels.email.map(v).join(" "));
+  }
+
+  if (Array.isArray(c.notes)) {
+    // Notes can include hashtags, links, etc.
+    parts.push(
+      c.notes
+        .map((n) => {
+          const kind = v(n?.kind).toLowerCase();
+          const val = v(n?.value || n?.text);
+          return kind ? `${kind}:${val}` : val;
+        })
+        .join(" ")
+    );
+  }
+
+  if (conv?.preview) parts.push(v(conv.preview));
+  if (conv?.channel) parts.push(v(conv.channel));
+  if (conv?.source) parts.push(v(conv.source));
+
+  return parts
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .trim();
+}
+
+function matchesQuery(haystack, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return true;
+
+  const hs = String(haystack || "").toLowerCase();
+  const tokens = q.split(/\s+/g).filter(Boolean);
+  if (tokens.length === 0) return true;
+
+  for (const tok of tokens) {
+    if (!tok) continue;
+
+    // Hashtag search: "#tag" should match either "#tag" or "hashtag:tag"
+    if (tok.startsWith("#")) {
+      const tag = tok.slice(1);
+      if (!tag) continue;
+      if (hs.includes(tok)) continue;
+      if (hs.includes(`hashtag:${tag}`)) continue;
+      return false;
+    }
+
+    // Phone-like search: allow matching digits-only.
+    const digits = tok.replace(/\D/g, "");
+    if (digits.length >= 6) {
+      const hsDigits = hs.replace(/\D/g, "");
+      if (!hsDigits.includes(digits)) return false;
+      continue;
+    }
+
+    if (!hs.includes(tok)) return false;
+  }
+
+  return true;
+}
+
+let docsTablePromise = null;
+async function getDocsTable() {
+  if (docsTablePromise) return docsTablePromise;
+  docsTablePromise = (async () => {
+    const { connect } = require("./vector-store.js");
+    const db = await connect();
+    return await db.openTable("documents");
+  })().catch((e) => {
+    docsTablePromise = null;
+    throw e;
+  });
+  return docsTablePromise;
+}
+
+function escapeSqlStringLiteral(v) {
+  return String(v || "").replace(/'/g, "''");
+}
+
+async function countDocsForHandle(handle) {
+  const table = await getDocsTable();
+  const handles = contactStore.getAllHandles(handle);
+
+  // Add WhatsApp @lid aliases for known phone JIDs so older ingested messages remain discoverable.
+  const phoneDigits = handles
+    .filter((h) => typeof h === "string" && !h.includes("@"))
+    .map((h) => normalizePhone(h))
+    .filter(Boolean);
+
+  let lidHandles = [];
+  try {
+    const lidByPhone = await whatsAppIdResolver.lidsForPhones(phoneDigits);
+    lidHandles = Array.from(new Set(Array.from(lidByPhone.values()).filter(Boolean)));
+  } catch { }
+
+  const allHandles = Array.from(new Set([...handles, ...lidHandles]));
+  const prefixes = Array.from(new Set(allHandles.flatMap((h) => pathPrefixesForHandle(h))));
+
+  if (prefixes.length === 0) return 0;
+
+  let total = 0;
+  for (const p of prefixes) {
+    const safe = escapeSqlStringLiteral(p);
+    try {
+      total += await table.countRows(`path LIKE '${safe}%'`);
+    } catch { }
+  }
+  return total;
+}
+
+async function rebuildConversationsIndex() {
+  const started = Date.now();
+  const items = contactStore.contacts
+    .map((c) => {
+      const handle = String(c?.handle || "").trim();
+      if (!handle) return null;
+      return {
+        handle,
+        latestHandle: handle,
+        contact: c,
+        sortTime: safeDateMs(c?.lastContacted),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => (Number(b.sortTime) || 0) - (Number(a.sortTime) || 0));
+
+  const durationMs = Date.now() - started;
+  return { items, meta: { mode: "contactStore", durationMs } };
+}
+
+async function getConversationsIndexFresh() {
+  const TTL_MS = 2_000;
+  const now = Date.now();
+  if (conversationsIndexCache.items && now - conversationsIndexCache.builtAtMs < TTL_MS) {
+    return { items: conversationsIndexCache.items, meta: { mode: "contactStore", cached: true } };
+  }
+
+  if (conversationsIndexCache.building) {
+    await conversationsIndexCache.building;
+    return { items: conversationsIndexCache.items || [], meta: { mode: "contactStore", cached: true, awaited: true } };
+  }
+
+  conversationsIndexCache.building = (async () => {
+    const { items } = await rebuildConversationsIndex();
+    conversationsIndexCache.items = items;
+    conversationsIndexCache.builtAtMs = Date.now();
+  })().finally(() => {
+    conversationsIndexCache.building = null;
+  });
+
+  await conversationsIndexCache.building;
+  return { items: conversationsIndexCache.items || [], meta: { mode: "contactStore", cached: false } };
+}
+
 function writeJson(res, statusCode, payload) {
   res.writeHead(statusCode, { "Content-Type": "application/json" });
   res.end(JSON.stringify(payload));
@@ -932,8 +1126,10 @@ const server = http.createServer(async (req, res) => {
     const { syncMail } = require("./sync-mail.js");
     syncMail().then(count => {
       console.log(`Mail sync completed: ${count} emails.`);
+      invalidateConversationsIndex();
     }).catch(err => {
       console.error(`Mail sync error: ${err.message}`);
+      invalidateConversationsIndex();
     });
 
     res.writeHead(200, { "Content-Type": "application/json" });
@@ -946,37 +1142,64 @@ const server = http.createServer(async (req, res) => {
     const q = (url.searchParams.get("q") || url.searchParams.get("query") || "").toString();
 
     try {
-      const { items } = await getConversationsIndexFresh();
+      const { items, meta: idxMeta } = await getConversationsIndexFresh();
       const filtered = q && q.trim()
         ? items.filter((c) => matchesQuery(buildSearchHaystack(c.contact, c), q))
         : items;
 
       const page = filtered.slice(offset, offset + limit);
-      const enriched = page.map((c) => {
+
+      const counts = await Promise.all(
+        page.map(async (c) => {
+          try {
+            return await countDocsForHandle(c.handle);
+          } catch {
+            return 0;
+          }
+        })
+      );
+
+      const inferChannel = (handle, contact) => {
+        const ch = (contact?.lastChannel || "").toString().trim().toLowerCase();
+        if (ch) return ch;
+        const h = (handle || contact?.handle || "").toString();
+        if (h.includes("@")) return "email";
+        if (h.trim().startsWith("+")) return "imessage";
+        if (h.includes("-")) return "whatsapp";
+        if (/^\d{11,}$/.test(h.replace(/\s+/g, ""))) return "whatsapp";
+        return "imessage";
+      };
+
+      const sourceFromChannel = (ch) => {
+        const v = String(ch || "").toLowerCase();
+        if (v.includes("whatsapp")) return "WhatsApp";
+        if (v.includes("mail") || v.includes("email") || v.includes("gmail") || v.includes("imap")) return "Mail";
+        return "iMessage";
+      };
+
+      const enriched = page.map((c, i) => {
         const contact = c.contact || null;
         const hasDraft = contact?.status === "draft" && contact?.draft;
         const displayName = (contact?.displayName || contact?.name || c.handle).toString();
-        const lastChannel = (c.channel || contact?.lastChannel || "").toString();
-        const lastContacted =
-          contact?.lastContacted ||
-          c.previewDate ||
-          (c.sortTime ? new Date(c.sortTime).toISOString() : null);
+        const lastChannel = inferChannel(c.handle, contact);
+        const count = Number.isFinite(Number(counts[i])) ? Number(counts[i]) : 0;
+        const lastContacted = contact?.lastContacted || null;
 
         return {
           id: contact?.id || c.handle,
           displayName,
           handle: c.latestHandle || c.handle,
           latestHandle: c.latestHandle || c.handle,
-          count: Number.isFinite(Number(c.count)) ? c.count : 0,
+          count,
           lastMessage: hasDraft
             ? `Draft: ${String(contact.draft).slice(0, 50)}...`
-            : (c.preview ? String(c.preview).slice(0, 80) : "Click to see history"),
+            : (count > 0 ? "Click to see history" : "No recent messages"),
           status: contact?.status || "open",
           draft: contact?.draft || null,
           channel: lastChannel,
           lastChannel,
-          lastSource: c.source || null,
-          lastContacted: lastContacted || null,
+          lastSource: sourceFromChannel(lastChannel),
+          lastContacted,
         };
       });
 
@@ -985,7 +1208,7 @@ const server = http.createServer(async (req, res) => {
         contacts: enriched,
         hasMore: filtered.length > offset + limit,
         total: filtered.length,
-        meta: { mode: "db", q: q || "" },
+        meta: { ...(idxMeta || {}), q: q || "" },
       }));
     } catch (err) {
       console.error("Error loading conversations from database:", err);
@@ -1099,10 +1322,12 @@ const server = http.createServer(async (req, res) => {
     exec("node chat/sync-imessage.js", (error, stdout, stderr) => {
       if (error) {
         console.error(`Sync error: ${error.message}`);
+        invalidateConversationsIndex();
         return;
       }
       if (stderr) console.warn(`Sync stderr: ${stderr}`);
       console.log(`Sync completed: ${stdout.trim()}`);
+      invalidateConversationsIndex();
     });
 
     res.writeHead(200, { "Content-Type": "application/json" });
@@ -1138,6 +1363,8 @@ const server = http.createServer(async (req, res) => {
           return;
         }
         contactStore.clearDraft(recipient); // Clear draft on successful send
+        contactStore.updateLastContacted(recipient, new Date().toISOString(), { channel: "imessage" });
+        invalidateConversationsIndex();
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ status: "ok" }));
       });
@@ -1209,21 +1436,22 @@ on run argv
 	      set w to window 1
 
 	      -- Try to enter search/new chat using shortcuts, then fall back to focusing the top text field directly.
-	      -- We NEVER type the target unless focus is in the top area.
+	      -- IMPORTANT: We NEVER type the target unless focus is in the top area (prevents sending the number as a message).
+	      -- Prefer ⌘N (New Chat) first; it's the most consistent entry point on many WhatsApp builds.
+	      set focusedOk to false
+
+	      keystroke "n" using {command down}
+	      delay 0.45
 	      set focusedOk to my focusLooksAboveY(p, 260)
+
 	      if focusedOk is false then
 	        keystroke "k" using {command down}
-	        delay 0.25
+	        delay 0.30
 	        set focusedOk to my focusLooksAboveY(p, 260)
 	      end if
 	      if focusedOk is false then
 	        keystroke "f" using {command down}
-	        delay 0.25
-	        set focusedOk to my focusLooksAboveY(p, 260)
-	      end if
-	      if focusedOk is false then
-	        keystroke "n" using {command down}
-	        delay 0.25
+	        delay 0.30
 	        set focusedOk to my focusLooksAboveY(p, 260)
 	      end if
 	      if focusedOk is false then
@@ -1264,12 +1492,16 @@ on run argv
 	      -- Ensure the message composer is focused before pasting
 	      set composerOk to false
 	      try
+	        set composerOk to my focusBottomTextArea(w, 260)
+	      end try
+
+	      try
 	        -- Prefer a deterministic click in the composer area (more reliable than tabbing across unknown UI trees).
-	        repeat with offVal in {90, 140, 190}
+	        repeat with offVal in {40, 70, 90, 140, 190}
 	          set offNum to contents of offVal
 	          if my clickWindowBottom(w, offNum) then
 	            delay 0.18
-	            if my focusLooksAboveY(p, 260) is false then
+	            if my focusLooksAboveY(p, 260) is false and my focusLooksBelowY(p, 320) then
 	              set composerOk to true
 	              exit repeat
 	            end if
@@ -1282,14 +1514,14 @@ on run argv
 	        repeat 12 times
 	          key code 48 -- tab
 	          delay 0.12
-	          if my focusLooksAboveY(p, 260) is false then
+	          if my focusLooksAboveY(p, 260) is false and my focusLooksBelowY(p, 320) then
 	            set composerOk to true
 	            exit repeat
 	          end if
 	        end repeat
 	      end if
 
-	      if composerOk is false then error "Failed to focus WhatsApp message composer. Check=" & my focusCheck(p, 360)
+	      if composerOk is false then error "Failed to focus WhatsApp message composer. Check=" & my focusCheck(p, 320)
 
 	      if dryRun is true then return "dry-run"
 	      keystroke "v" using {command down}
@@ -1560,6 +1792,8 @@ end focusCheck
 	        return;
 	      }
       contactStore.clearDraft(recipientRaw);
+      contactStore.updateLastContacted(recipientRaw, new Date().toISOString(), { channel: "whatsapp" });
+      invalidateConversationsIndex();
       writeJson(res, 200, { status: "ok", result: (stdout || "").trim() });
     });
     return;
@@ -1583,6 +1817,8 @@ end focusCheck
           const { sendGmail } = require("./gmail-connector.js");
           await sendGmail({ to: recipient, subject: "Follow-up from {reply}", text });
           contactStore.clearDraft(recipient);
+          contactStore.updateLastContacted(recipient, new Date().toISOString(), { channel: "email" });
+          invalidateConversationsIndex();
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ status: "ok", provider: "gmail" }));
           return;
@@ -1617,6 +1853,8 @@ end run
           return;
         }
         contactStore.clearDraft(recipient);
+        contactStore.updateLastContacted(recipient, new Date().toISOString(), { channel: "email" });
+        invalidateConversationsIndex();
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ status: "ok" }));
       });
@@ -1868,7 +2106,12 @@ end run
   if (url.pathname === "/api/sync-whatsapp") {
     if (req.method === "POST") {
       // Trigger background sync
-      syncWhatsApp().catch(err => console.error("Manual WhatsApp Sync Error:", err));
+      syncWhatsApp()
+        .then(() => invalidateConversationsIndex())
+        .catch(err => {
+          console.error("Manual WhatsApp Sync Error:", err);
+          invalidateConversationsIndex();
+        });
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ status: "started" }));
     } else {

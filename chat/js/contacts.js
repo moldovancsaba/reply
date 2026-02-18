@@ -10,6 +10,15 @@ let contactOffset = 0;
 let hasMoreContacts = true;
 const CONTACT_LIMIT = 20;
 export let conversations = []; // Global cache for contacts
+let contactQuery = '';
+
+export function setContactQuery(q) {
+    contactQuery = (q || '').toString();
+    // Reset pagination on query changes
+    contactOffset = 0;
+    hasMoreContacts = true;
+    loadConversations(false);
+}
 
 function channelEmoji(channel) {
     const raw = (channel ?? '').toString().toLowerCase();
@@ -42,8 +51,8 @@ export async function loadConversations(append = false) {
             contactListEl.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">Loading contacts...</div>';
         }
 
-        // Fetch contacts from server
-        const data = await fetchConversations(contactOffset, CONTACT_LIMIT);
+        // Fetch contacts from server (server-side filter when query is present)
+        const data = await fetchConversations(contactOffset, CONTACT_LIMIT, contactQuery);
         if (data?.meta?.mode === 'fallback') {
             console.warn('Contacts API in fallback mode:', data.meta);
         }
@@ -102,7 +111,7 @@ export async function loadConversations(append = false) {
             const count = Number.isFinite(Number(contact.count)) ? parseInt(contact.count, 10) : 0;
             const badge = document.createElement('div');
             badge.className = 'message-badge';
-            badge.textContent = count > 99 ? '99+' : count;
+            badge.textContent = String(count);
             if (count === 0) {
                 badge.classList.add('badge-zero');
                 badge.title = 'No messages yet';

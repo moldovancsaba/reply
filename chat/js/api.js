@@ -11,8 +11,13 @@ const API_BASE = '';
  * @param {number} limit - Number of contacts to fetch
  * @returns {Promise<{contacts: Array, hasMore: boolean, total: number}>}
  */
-export async function fetchConversations(offset = 0, limit = 20) {
-    const res = await fetch(`${API_BASE}/api/conversations?offset=${offset}&limit=${limit}`);
+export async function fetchConversations(offset = 0, limit = 20, q = '') {
+    const params = new URLSearchParams();
+    params.set('offset', String(offset));
+    params.set('limit', String(limit));
+    const query = (q || '').toString().trim();
+    if (query) params.set('q', query);
+    const res = await fetch(`${API_BASE}/api/conversations?${params.toString()}`);
     if (!res.ok) throw new Error(`Failed to fetch conversations: ${res.statusText}`);
     return await res.json();
 }
