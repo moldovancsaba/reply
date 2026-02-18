@@ -16,6 +16,7 @@ To stop: close the terminal window.
 *   Click a contact to open the **Feed** view for that person.
 *   Click the dashboard icon to return to the **Dashboard**.
 *   Click the **gear icon** to open **Settings**.
+*   Use the **Search contacts** box to filter by name/handle/phone/email.
 
 ### Dashboard (home)
 *   Shows system health cards (iMessage/WhatsApp/Notes/Email).

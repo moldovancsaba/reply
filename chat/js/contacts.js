@@ -10,6 +10,7 @@ let contactOffset = 0;
 let hasMoreContacts = true;
 const CONTACT_LIMIT = 20;
 export let conversations = []; // Global cache for contacts
+let conversationsQuery = '';
 
 function channelEmoji(channel) {
     const raw = (channel ?? '').toString().toLowerCase();
@@ -43,7 +44,7 @@ export async function loadConversations(append = false) {
         }
 
         // Fetch contacts from server
-        const data = await fetchConversations(contactOffset, CONTACT_LIMIT);
+        const data = await fetchConversations(contactOffset, CONTACT_LIMIT, conversationsQuery);
         if (data?.meta?.mode === 'fallback') {
             console.warn('Contacts API in fallback mode:', data.meta);
         }
@@ -169,6 +170,13 @@ export async function loadConversations(append = false) {
       </div>
     `;
     }
+}
+
+export async function setConversationsQuery(query) {
+    conversationsQuery = (query || '').toString();
+    contactOffset = 0;
+    hasMoreContacts = true;
+    return await loadConversations(false);
 }
 
 /**

@@ -56,6 +56,30 @@
         height: 52px;
       }
 
+      .sidebar-search {
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .sidebar-search-input {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.92);
+        outline: none;
+      }
+
+      .sidebar-search-input::placeholder {
+        color: rgba(255, 255, 255, 0.55);
+      }
+
+      .sidebar-search-input:focus {
+        border-color: rgba(255, 255, 255, 0.18);
+        box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.25);
+      }
+
       .contact-list {
         flex: 1;
         overflow-y: auto;

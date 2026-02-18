@@ -9,10 +9,15 @@ const API_BASE = '';
  * Fetch paginated list of conversations/contacts
  * @param {number} offset - Starting index for pagination
  * @param {number} limit - Number of contacts to fetch
+ * @param {string} query - Optional search query
  * @returns {Promise<{contacts: Array, hasMore: boolean, total: number}>}
  */
-export async function fetchConversations(offset = 0, limit = 20) {
-    const res = await fetch(`${API_BASE}/api/conversations?offset=${offset}&limit=${limit}`);
+export async function fetchConversations(offset = 0, limit = 20, query = '') {
+    const q = (query || '').toString().trim();
+    const url = q
+        ? `${API_BASE}/api/conversations?offset=${offset}&limit=${limit}&q=${encodeURIComponent(q)}`
+        : `${API_BASE}/api/conversations?offset=${offset}&limit=${limit}`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`Failed to fetch conversations: ${res.statusText}`);
     return await res.json();
 }
