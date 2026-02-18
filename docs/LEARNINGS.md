@@ -15,6 +15,12 @@
 * If Gmail isn’t connected (or send fails), {reply} falls back to Mail.app by opening a compose window (no auto-send in fallback).
 * Gmail OAuth gotchas: the Google Cloud project must have **Gmail API enabled**, and OAuth consent/app testing must allow your account (test user) during development.
 
+## Gmail Counting Gotcha
+* Gmail API `messages.list` `resultSizeEstimate` can be misleading for “All Mail”-style totals (observed returning low numbers despite a large mailbox).
+* For a reliable mailbox-wide count, use:
+  * `GET /profile` → `messagesTotal` / `threadsTotal`
+  * `GET /labels/SPAM` and `GET /labels/TRASH` to subtract spam/trash when you want “All Mail excluding Spam/Trash”.
+
 ## Worker Behavior
 * Email sync runs automatically only when Gmail OAuth or IMAP is configured (to avoid triggering Apple Mail AppleScript unintentionally).
 * Worker interval is configurable (clamped for safety).
