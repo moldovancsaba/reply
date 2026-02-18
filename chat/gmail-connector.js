@@ -404,6 +404,29 @@ async function sendGmail({ to, subject, text }) {
   return resp;
 }
 
+async function checkGmailConnection() {
+  const settings = readSettings();
+  const gmail = settings?.gmail || {};
+  if (!gmail.clientId || !gmail.clientSecret || !gmail.refreshToken) {
+    throw new Error("Gmail not connected (missing clientId/clientSecret/refreshToken)");
+  }
+
+  const accessToken = await getAccessToken(settings);
+  const profile = await apiRequest(accessToken, "/profile");
+  const email = (profile.emailAddress || gmail.email || "").toString().trim();
+  const historyId = profile.historyId ? String(profile.historyId) : (gmail.historyId ? String(gmail.historyId) : "");
+
+  // Opportunistically persist the account email if missing.
+  if (email && email !== gmail.email) {
+    const next = { ...settings, gmail: { ...(settings.gmail || {}) } };
+    next.gmail.email = email;
+    if (profile.historyId) next.gmail.historyId = String(profile.historyId);
+    writeSettings(next);
+  }
+
+  return { email, historyId };
+}
+
 module.exports = {
   SCOPES,
   buildAuthUrl,
@@ -411,4 +434,5 @@ module.exports = {
   disconnectGmail,
   syncGmail,
   sendGmail,
+  checkGmailConnection,
 };
