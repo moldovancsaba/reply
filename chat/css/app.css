@@ -281,6 +281,30 @@
         flex-shrink: 0;
       }
 
+      .settings-services {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+      }
+
+      .settings-services-label {
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.65);
+        font-weight: 700;
+      }
+
+      .settings-services-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
       .settings-filter-bar {
         display: flex;
         align-items: center;
