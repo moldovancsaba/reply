@@ -10,7 +10,9 @@ This document answers: **“Where is X in the UI?”** and **“Where is X in th
 
 ### Feed (per contact)
 * Open: click a contact in the sidebar list.
-* Purpose: read the thread, write replies, pick channel (`iMessage` / `WhatsApp` / `Email`).
+* Purpose: read the thread, write replies, pick channel.
+* Send-enabled channels: `iMessage` / `WhatsApp` / `Email`.
+* Draft-only channels: `Telegram` / `Discord` / `Signal` / `Viber` / `LinkedIn`.
 * Feed-only buttons: `🎤 Mic`, `✨ Magic`, `💡 Suggest`.
 
 ### Settings
