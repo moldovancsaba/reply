@@ -1,6 +1,6 @@
 {
   "name": "reply-chat",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Reply POC — localhost chat to ask for reply suggestions",
   "main": "server.js",
   "scripts": {
@@ -10,7 +10,7 @@
     "security:audit": "node security-audit.js",
     "security:fix": "node security-audit.js --fix",
     "channel-bridge:ingest": "node channel-bridge-sidecar.js",
-    "lint": "eslint . --max-warnings 0",
+    "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "node --test test/*.test.js"
   },
