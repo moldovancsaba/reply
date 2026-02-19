@@ -78,11 +78,11 @@ async function sync() {
         AND message.text IS NOT NULL 
         AND message.text != ""
         ORDER BY message.ROWID ASC
-        LIMIT ${batchLimit}
+        LIMIT ?
     `;
 
     return new Promise((resolve, reject) => {
-        db.all(query, [state.lastProcessedId], async (err, rows) => {
+        db.all(query, [state.lastProcessedId, batchLimit], async (err, rows) => {
             if (err) {
                 updateStatus({ state: "error", message: err.message });
                 return reject(err);

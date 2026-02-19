@@ -1,9 +1,71 @@
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const SETTINGS_PATH = path.join(__dirname, "data", "settings.json");
 const CHANNEL_BRIDGE_MODES = new Set(["disabled", "draft_only"]);
 const CHANNEL_BRIDGE_CHANNELS = ["telegram", "discord", "signal", "viber", "linkedin"];
+
+// Encryption settings
+const ALGORITHM = "aes-256-cbc";
+const ENCRYPTION_KEY = crypto.scryptSync(
+  process.env.REPLY_OPERATOR_TOKEN || "reply-local-fallback-salt",
+  "salt",
+  32
+);
+const IV_LENGTH = 16;
+const SENSITIVE_FIELDS = ["imap.pass", "gmail.clientSecret", "gmail.refreshToken"];
+
+function encrypt(text) {
+  if (!text) return text;
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY), iv);
+  let encrypted = cipher.update(text);
+  encrypted = Buffer.concat([encrypted, cipher.final()]);
+  return iv.toString("hex") + ":" + encrypted.toString("hex");
+}
+
+function decrypt(text) {
+  if (!text || !text.includes(":")) return text;
+  try {
+    const textParts = text.split(":");
+    const iv = Buffer.from(textParts.shift(), "hex");
+    const encryptedText = Buffer.from(textParts.join(":"), "hex");
+    const decipher = crypto.createDecipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY), iv);
+    let decrypted = decipher.update(encryptedText);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    return decrypted.toString();
+  } catch (e) {
+    console.warn("[Settings] Decryption failed, returning raw value.");
+    return text;
+  }
+}
+
+function getByPath(obj, path) {
+  return path.split(".").reduce((o, i) => (o ? o[i] : undefined), obj);
+}
+
+function setByPath(obj, path, value) {
+  const parts = path.split(".");
+  const last = parts.pop();
+  const target = parts.reduce((o, i) => {
+    if (!o[i]) o[i] = {};
+    return o[i];
+  }, obj);
+  target[last] = value;
+}
+
+function processSensitive(settings, action) {
+  if (!settings || typeof settings !== "object") return settings;
+  const next = JSON.parse(JSON.stringify(settings)); // Deep clone
+  for (const field of SENSITIVE_FIELDS) {
+    const val = getByPath(next, field);
+    if (typeof val === "string" && val.trim()) {
+      setByPath(next, field, action(val));
+    }
+  }
+  return next;
+}
 
 function normalizeChannelBridgeMode(value, fallback = "disabled") {
   const v = String(value || "").trim().toLowerCase();
@@ -61,6 +123,11 @@ function withDefaults(settings) {
           bubbleMe: (s?.ui?.channels?.email?.bubbleMe || "#5e5ce6").toString(),
           bubbleContact: (s?.ui?.channels?.email?.bubbleContact || "#262628").toString(),
         },
+        whatsapp: {
+          emoji: (s?.ui?.channels?.whatsapp?.emoji || "🟢").toString(),
+          bubbleMe: (s?.ui?.channels?.whatsapp?.bubbleMe || "#25D366").toString(),
+          bubbleContact: (s?.ui?.channels?.whatsapp?.bubbleContact || "#262628").toString(),
+        },
         linkedin: {
           emoji: (s?.ui?.channels?.linkedin?.emoji || "🟦").toString(),
           bubbleMe: (s?.ui?.channels?.linkedin?.bubbleMe || "#0077b5").toString(),
@@ -74,7 +141,8 @@ function withDefaults(settings) {
 function readSettings() {
   try {
     if (!fs.existsSync(SETTINGS_PATH)) return {};
-    return JSON.parse(fs.readFileSync(SETTINGS_PATH, "utf8"));
+    const raw = JSON.parse(fs.readFileSync(SETTINGS_PATH, "utf8"));
+    return processSensitive(raw, decrypt);
   } catch (e) {
     console.warn("[Settings] Failed to read settings.json:", e.message);
     return {};
@@ -82,10 +150,11 @@ function readSettings() {
 }
 
 function writeSettings(next) {
+  const encrypted = processSensitive(next, encrypt);
   const dir = path.dirname(SETTINGS_PATH);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const tmp = `${SETTINGS_PATH}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(next, null, 2), { mode: 0o600 });
+  fs.writeFileSync(tmp, JSON.stringify(encrypted, null, 2), { mode: 0o600 });
   fs.renameSync(tmp, SETTINGS_PATH);
   try {
     fs.chmodSync(SETTINGS_PATH, 0o600);
@@ -98,6 +167,8 @@ function maskSecret(value) {
   if (!value) return { has: false, hint: "" };
   const s = String(value);
   if (!s.trim()) return { has: false, hint: "" };
+  // If it's an encrypted string, we don't want to show the IV+Hash hash hint as it leaks too much info (or is confusing)
+  // However, decrypt() is called in readSettings, so the value passed to maskSecret should already be decrypted.
   return { has: true, hint: s.slice(-2) };
 }
 

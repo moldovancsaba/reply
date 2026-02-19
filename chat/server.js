@@ -1335,16 +1335,17 @@ const RATE_LIMITED_ROUTES = new Set([
 // Content Security Policy (restricts inline scripts, external resources)
 const CSP_HEADER = [
   "default-src 'self'",
-  "script-src 'self'",
+  "script-src 'self' 'unsafe-eval'",           // unsafe-eval needed for some JS templates/workers
   "style-src 'self' 'unsafe-inline'",         // inline styles needed for dynamic UI
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: https://www.gravatar.com",
   "font-src 'self'",
-  "connect-src 'self'",
-  "media-src 'self' blob:",                     // mic recording
+  "connect-src 'self' ws: wss:",              // Allow WebSockets
+  "media-src 'self' blob:",
   "object-src 'none'",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
+  "upgrade-insecure-requests",
 ].join("; ");
 
 // Create the HTTP server and route requests.
@@ -2993,9 +2994,17 @@ end run
   if (url.pathname === "/api/add-note") {
     let body = "";
     req.on("data", (chunk) => { body += chunk; });
-    req.on("end", () => {
+    req.on("end", async () => {
       try {
-        const { handle, text } = JSON.parse(body);
+        const payload = JSON.parse(body);
+        if (!authorizeSensitiveRoute(req, res, {
+          route: "/api/add-note",
+          action: "add-note",
+          payload,
+        })) {
+          return;
+        }
+        const { handle, text } = payload;
         if (!handle || !text) {
           res.writeHead(400, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "Missing handle or text" }));
@@ -3013,6 +3022,13 @@ end run
   }
   if (url.pathname === "/api/update-note") {
     const payload = await readJsonBody(req);
+    if (!authorizeSensitiveRoute(req, res, {
+      route: "/api/update-note",
+      action: "update-note",
+      payload,
+    })) {
+      return;
+    }
     const handle = (payload?.handle || "").toString().trim();
     const id = (payload?.id || "").toString().trim();
     const text = (payload?.text || "").toString();
@@ -3037,6 +3053,13 @@ end run
   if (url.pathname === "/api/delete-note") {
     const handle = url.searchParams.get("handle");
     const id = url.searchParams.get("id");
+    if (!authorizeSensitiveRoute(req, res, {
+      route: "/api/delete-note",
+      action: "delete-note",
+      payload: { handle, id },
+    })) {
+      return;
+    }
     if (handle && id) {
       contactStore.deleteNote(handle, id);
       res.writeHead(200, { "Content-Type": "application/json" });

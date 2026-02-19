@@ -22,6 +22,7 @@ export default [
                 clearInterval: "readonly",
                 URL: "readonly",
                 URLSearchParams: "readonly",
+                fetch: "readonly",
             },
         },
         rules: {
@@ -42,7 +43,9 @@ export default [
                 document: "readonly",
                 fetch: "readonly",
                 HTMLElement: "readonly",
+                Element: "readonly",
                 Event: "readonly",
+                event: "readonly",
                 FormData: "readonly",
                 FileReader: "readonly",
                 localStorage: "readonly",
@@ -62,6 +65,7 @@ export default [
             "test-hybrid-db-final/**",
             "tmp-db/**",
             "data/**",
+            "eslint.config.mjs",
         ],
     },
 ];

@@ -39,6 +39,8 @@ export function applyReplyUiSettings(settings) {
   setVar('--bubble-contact-whatsapp', channels?.whatsapp?.bubbleContact);
   setVar('--bubble-me-email', channels?.email?.bubbleMe);
   setVar('--bubble-contact-email', channels?.email?.bubbleContact);
+  setVar('--bubble-me-linkedin', channels?.linkedin?.bubbleMe);
+  setVar('--bubble-contact-linkedin', channels?.linkedin?.bubbleContact);
 }
 
 function setNodeVisible(node, visible) {
@@ -70,9 +72,10 @@ function applySettingsFilter(filterKey) {
       currentSettingsFilter === 'imessage' ? 'iMessage' :
         currentSettingsFilter === 'whatsapp' ? 'WhatsApp' :
           currentSettingsFilter === 'bridge' ? 'Bridge' :
-          currentSettingsFilter === 'notes' ? 'Notes' :
-            currentSettingsFilter === 'email' ? 'Email' :
-              'Settings';
+            currentSettingsFilter === 'notes' ? 'Notes' :
+              currentSettingsFilter === 'email' ? 'Email' :
+                currentSettingsFilter === 'linkedin' ? 'LinkedIn' :
+                  'Settings';
     label.textContent = `Configuring: ${name}`;
   }
 
@@ -82,6 +85,13 @@ function applySettingsFilter(filterKey) {
   const workerSection = el('settings-section-worker');
   const bridgeSection = el('settings-section-channel-bridge');
   const uiSection = el('settings-section-ui');
+
+  // Bridge wrappers
+  const bridgeTel = el('settings-bridge-telegram-wrap');
+  const bridgeDis = el('settings-bridge-discord-wrap');
+  const bridgeSig = el('settings-bridge-signal-wrap');
+  const bridgeVib = el('settings-bridge-viber-wrap');
+  const bridgeLin = el('settings-bridge-linkedin-wrap');
 
   const showAll = !currentSettingsFilter;
 
@@ -103,12 +113,21 @@ function applySettingsFilter(filterKey) {
     setNodeVisible(el('settings-channel-imessage'), false);
     setNodeVisible(el('settings-channel-whatsapp'), false);
     setNodeVisible(el('settings-channel-email'), false);
+    setNodeVisible(el('settings-channel-linkedin'), false);
+
+    // Show all bridge items
+    setNodeVisible(bridgeTel, true);
+    setNodeVisible(bridgeDis, true);
+    setNodeVisible(bridgeSig, true);
+    setNodeVisible(bridgeVib, true);
+    setNodeVisible(bridgeLin, true);
     return;
   }
 
-  // Always show worker interval when filtering (it’s global)
-  setNodeVisible(workerSection, true);
-  setNodeVisible(el('settings-worker-interval-wrap'), true);
+  // Hide worker section for per-channel filters unless specifically needed
+  // (We'll show it only if the channel has specific worker settings)
+  setNodeVisible(workerSection, false);
+  setNodeVisible(el('settings-worker-interval-wrap'), false);
 
   if (currentSettingsFilter === 'imessage') {
     setNodeVisible(mailSection, false);
@@ -116,6 +135,7 @@ function applySettingsFilter(filterKey) {
     setNodeVisible(uiSection, true);
     setNodeVisible(bridgeSection, false);
 
+    setNodeVisible(workerSection, true);
     setNodeVisible(el('settings-worker-imessage-wrap'), true);
     setNodeVisible(el('settings-worker-whatsapp-wrap'), false);
     setNodeVisible(el('settings-worker-gmail-wrap'), false);
@@ -124,6 +144,7 @@ function applySettingsFilter(filterKey) {
     setNodeVisible(el('settings-channel-imessage'), true);
     setNodeVisible(el('settings-channel-whatsapp'), false);
     setNodeVisible(el('settings-channel-email'), false);
+    setNodeVisible(el('settings-channel-linkedin'), false);
     return;
   }
 
@@ -133,6 +154,7 @@ function applySettingsFilter(filterKey) {
     setNodeVisible(uiSection, true);
     setNodeVisible(bridgeSection, false);
 
+    setNodeVisible(workerSection, true);
     setNodeVisible(el('settings-worker-imessage-wrap'), false);
     setNodeVisible(el('settings-worker-whatsapp-wrap'), true);
     setNodeVisible(el('settings-worker-gmail-wrap'), false);
@@ -141,6 +163,7 @@ function applySettingsFilter(filterKey) {
     setNodeVisible(el('settings-channel-imessage'), false);
     setNodeVisible(el('settings-channel-whatsapp'), true);
     setNodeVisible(el('settings-channel-email'), false);
+    setNodeVisible(el('settings-channel-linkedin'), false);
     return;
   }
 
@@ -150,6 +173,7 @@ function applySettingsFilter(filterKey) {
     setNodeVisible(uiSection, false);
     setNodeVisible(bridgeSection, false);
 
+    setNodeVisible(workerSection, true);
     setNodeVisible(el('settings-worker-imessage-wrap'), false);
     setNodeVisible(el('settings-worker-whatsapp-wrap'), false);
     setNodeVisible(el('settings-worker-gmail-wrap'), false);
@@ -163,6 +187,7 @@ function applySettingsFilter(filterKey) {
     setNodeVisible(uiSection, true);
     setNodeVisible(bridgeSection, false);
 
+    setNodeVisible(workerSection, true);
     setNodeVisible(el('settings-worker-imessage-wrap'), false);
     setNodeVisible(el('settings-worker-whatsapp-wrap'), false);
     setNodeVisible(el('settings-worker-gmail-wrap'), true);
@@ -171,6 +196,31 @@ function applySettingsFilter(filterKey) {
     setNodeVisible(el('settings-channel-imessage'), false);
     setNodeVisible(el('settings-channel-whatsapp'), false);
     setNodeVisible(el('settings-channel-email'), true);
+    setNodeVisible(el('settings-channel-linkedin'), false);
+    return;
+  }
+
+  if (currentSettingsFilter === 'linkedin') {
+    setNodeVisible(mailSection, false);
+    setNodeVisible(gmailSection, false);
+    setNodeVisible(uiSection, true); // Show UI section for LinkedIn
+    setNodeVisible(bridgeSection, true); // Show bridge section
+
+    // Worker section hidden for LinkedIn as it has no worker settings
+    setNodeVisible(workerSection, false);
+
+    // UI - only LinkedIn
+    setNodeVisible(el('settings-channel-imessage'), false);
+    setNodeVisible(el('settings-channel-whatsapp'), false);
+    setNodeVisible(el('settings-channel-email'), false);
+    setNodeVisible(el('settings-channel-linkedin'), true);
+
+    // Bridge - only LinkedIn
+    setNodeVisible(bridgeTel, false);
+    setNodeVisible(bridgeDis, false);
+    setNodeVisible(bridgeSig, false);
+    setNodeVisible(bridgeVib, false);
+    setNodeVisible(bridgeLin, true);
     return;
   }
 
@@ -180,6 +230,13 @@ function applySettingsFilter(filterKey) {
     setNodeVisible(workerSection, false);
     setNodeVisible(uiSection, false);
     setNodeVisible(bridgeSection, true);
+
+    // Show all bridge items
+    setNodeVisible(bridgeTel, true);
+    setNodeVisible(bridgeDis, true);
+    setNodeVisible(bridgeSig, true);
+    setNodeVisible(bridgeVib, true);
+    setNodeVisible(bridgeLin, true);
     return;
   }
 }
@@ -248,6 +305,9 @@ async function loadIntoForm() {
   el('settings-worker-notes-max').value = worker.quantities?.notes !== undefined ? String(worker.quantities.notes) : '0';
   el('settings-bridge-telegram-mode').value = bridgeChannels?.telegram?.inboundMode || 'draft_only';
   el('settings-bridge-discord-mode').value = bridgeChannels?.discord?.inboundMode || 'draft_only';
+  el('settings-bridge-signal-mode').value = bridgeChannels?.signal?.inboundMode || 'draft_only';
+  el('settings-bridge-viber-mode').value = bridgeChannels?.viber?.inboundMode || 'draft_only';
+  el('settings-bridge-linkedin-mode').value = bridgeChannels?.linkedin?.inboundMode || 'draft_only';
 
   el('settings-ui-imessage-emoji').value = channels?.imessage?.emoji || '💬';
   el('settings-ui-imessage-me').value = channels?.imessage?.bubbleMe || '#0a84ff';
@@ -258,6 +318,9 @@ async function loadIntoForm() {
   el('settings-ui-email-emoji').value = channels?.email?.emoji || '📧';
   el('settings-ui-email-me').value = channels?.email?.bubbleMe || '#5e5ce6';
   el('settings-ui-email-contact').value = channels?.email?.bubbleContact || '#262628';
+  el('settings-ui-linkedin-emoji').value = channels?.linkedin?.emoji || '🟦';
+  el('settings-ui-linkedin-me').value = channels?.linkedin?.bubbleMe || '#0077b5';
+  el('settings-ui-linkedin-contact').value = channels?.linkedin?.bubbleContact || '#262628';
 
   applyReplyUiSettings(data);
 }
@@ -309,6 +372,15 @@ async function onSave() {
           discord: {
             inboundMode: el('settings-bridge-discord-mode').value || 'draft_only',
           },
+          signal: {
+            inboundMode: el('settings-bridge-signal-mode').value || 'draft_only',
+          },
+          viber: {
+            inboundMode: el('settings-bridge-viber-mode').value || 'draft_only',
+          },
+          linkedin: {
+            inboundMode: el('settings-bridge-linkedin-mode').value || 'draft_only',
+          },
         }
       },
       ui: {
@@ -327,6 +399,11 @@ async function onSave() {
             emoji: el('settings-ui-email-emoji').value,
             bubbleMe: el('settings-ui-email-me').value,
             bubbleContact: el('settings-ui-email-contact').value,
+          },
+          linkedin: {
+            emoji: el('settings-ui-linkedin-emoji').value,
+            bubbleMe: el('settings-ui-linkedin-me').value,
+            bubbleContact: el('settings-ui-linkedin-contact').value,
           },
         }
       },
@@ -457,6 +534,14 @@ export function closeSettings() {
 function wireDom() {
   const page = el('settings-page');
   if (!page) return;
+
+  document.querySelectorAll('[data-open-channel-settings]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const channel = (btn.getAttribute('data-open-channel-settings') || '').trim();
+      if (!channel) return;
+      openChannelSettings(channel);
+    });
+  });
 
   const btnClose = el('settings-close');
   if (btnClose) btnClose.onclick = closeSettings;

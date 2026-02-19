@@ -39,6 +39,19 @@ async function init() {
 }
 
 function setupEventListeners() {
+  document.querySelectorAll('.sidebar-nav-btn[data-nav-action]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const action = (btn.getAttribute('data-nav-action') || '').trim();
+      if (action === 'dashboard') {
+        if (typeof window.selectContact === 'function') window.selectContact(null);
+        return;
+      }
+      if (action === 'settings') {
+        if (typeof window.openSettings === 'function') window.openSettings();
+      }
+    });
+  });
+
   const btnSend = document.getElementById('btn-send');
   if (btnSend) btnSend.onclick = handleSendMessage;
 

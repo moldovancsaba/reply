@@ -7,8 +7,6 @@
   <title>{reply}</title>
   <link rel="stylesheet" href="css/global.css">
   <link rel="stylesheet" href="css/app.css">
-  <link rel="stylesheet"
-    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
 </head>
 
 <body>
@@ -16,15 +14,25 @@
     <!-- PANE A: SIDEBAR -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <div style="display:flex; gap:10px; align-items:center;">
-          <span class="material-symbols-outlined" style="font-size: 28px; color: var(--text-primary); cursor: pointer;"
-            onclick="window.selectContact(null)" title="Go to Dashboard">
-            flip_camera_android
-          </span>
-          <span class="material-symbols-outlined" style="font-size: 24px; color: var(--text-primary); cursor: pointer;"
-            onclick="window.openSettings()" title="Settings">
-            settings
-          </span>
+        <div class="sidebar-nav-actions">
+          <button type="button" class="sidebar-nav-btn" data-nav-action="dashboard" title="Go to Dashboard"
+            aria-label="Go to Dashboard">
+            <svg class="sidebar-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="3" width="8" height="8" rx="1.5"></rect>
+              <rect x="13" y="3" width="8" height="5" rx="1.5"></rect>
+              <rect x="13" y="10" width="8" height="11" rx="1.5"></rect>
+              <rect x="3" y="13" width="8" height="8" rx="1.5"></rect>
+            </svg>
+          </button>
+          <button type="button" class="sidebar-nav-btn" data-nav-action="settings" title="Settings"
+            aria-label="Settings">
+            <svg class="sidebar-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.33 1V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-.33-1A1.65 1.65 0 0 0 8.6 19a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1-.33H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1-.33A1.65 1.65 0 0 0 4.6 8.6a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6 1.65 1.65 0 0 0 .33-1V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 .33 1 1.65 1.65 0 0 0 .6.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 .6 1 1.65 1.65 0 0 0 1 .33H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1 .33 1.65 1.65 0 0 0-.51.34z">
+              </path>
+            </svg>
+          </button>
         </div>
         <div id="sync-status" title="Sync Status">
           <span class="status-dot active"></span>
@@ -32,7 +40,8 @@
         <!-- Sync buttons moved to individual cards -->
       </div>
       <div class="sidebar-search">
-        <input id="contact-search" class="sidebar-search-input" type="search" placeholder="Search contacts..." autocomplete="off" spellcheck="false">
+        <input id="contact-search" class="sidebar-search-input" type="search" placeholder="Search contacts..."
+          autocomplete="off" spellcheck="false">
       </div>
       <div id="contact-list" class="contact-list">
         <!-- Contact Items will be injected here -->
@@ -52,7 +61,7 @@
       <header class="chat-header">
         <div style="display:flex; align-items:center; gap:12px;">
           <div id="active-contact-name-chat" style="font-weight: 700; font-size: 1.1rem;">Select a contact</div>
-          <select id="status-select" onchange="updateManualStatus()"
+          <select id="status-select"
             style="font-size:0.8rem; border-radius:12px; border:1px solid #ddd; padding:2px 8px; cursor:pointer; display:none;">
             <option value="open">🟢 Active</option>
             <option value="draft">🟠 Draft Ready</option>
@@ -75,62 +84,74 @@
             <option value="email">Email</option>
             <option value="telegram">Telegram (Draft only)</option>
             <option value="discord">Discord (Draft only)</option>
+            <option value="signal">Signal (Draft only)</option>
+            <option value="viber">Viber (Draft only)</option>
+            <option value="linkedin">LinkedIn (Draft only)</option>
           </select>
           <button id="btn-send" class="btn btn-primary">Send</button>
         </div>
         <div id="channel-policy-hint" class="channel-policy-hint" style="display:none;"></div>
       </div>
 
-      <div id="messages" class="messages-container">
+      <div id="messages" class="messages-container" style="display:none;">
         <!-- Messages will be injected here -->
       </div>
 
-      <div id="dashboard" class="dashboard" style="display:none;">
+      <div id="dashboard" class="dashboard">
         <!-- Dashboard items will be injected here -->
       </div>
 
       <!-- Settings Page -->
       <div id="settings-page" class="settings-page" style="display:none;">
         <div class="settings-page-shell">
-	          <div class="settings-page-topbar">
-	            <div>
-	              <div class="settings-page-title">Settings</div>
-	              <div class="settings-page-subtitle">Local-only configuration for this machine</div>
-	            </div>
-	            <div class="settings-page-actions">
-	              <button id="settings-close" class="btn btn-secondary btn-sm">Back</button>
-	              <button id="settings-save" class="btn btn-primary btn-sm">Save</button>
-	            </div>
-	          </div>
+          <div class="settings-page-topbar">
+            <div>
+              <div class="settings-page-title">Settings</div>
+              <div class="settings-page-subtitle">Local-only configuration for this machine</div>
+            </div>
+            <div class="settings-page-actions">
+              <button id="settings-close" class="btn btn-secondary btn-sm">Back</button>
+              <button id="settings-save" class="btn btn-primary btn-sm">Save</button>
+            </div>
+          </div>
 
-	          <div class="settings-services">
-	            <div class="settings-services-label">Configure a service:</div>
-	            <div class="settings-services-actions">
-	              <button type="button" class="btn btn-secondary btn-sm" onclick="window.openChannelSettings('imessage')">iMessage</button>
-	              <button type="button" class="btn btn-secondary btn-sm" onclick="window.openChannelSettings('whatsapp')">WhatsApp</button>
-	              <button type="button" class="btn btn-secondary btn-sm" onclick="window.openChannelSettings('email')">Email</button>
-	              <button type="button" class="btn btn-secondary btn-sm" onclick="window.openChannelSettings('bridge')">Bridge</button>
-	              <button type="button" class="btn btn-secondary btn-sm" onclick="window.openChannelSettings('notes')">Notes</button>
-	            </div>
-	          </div>
+          <div class="settings-services">
+            <div class="settings-services-label">Configure a service:</div>
+            <div class="settings-services-actions">
+              <button type="button" class="btn btn-secondary btn-sm"
+                data-open-channel-settings="imessage">iMessage</button>
+              <button type="button" class="btn btn-secondary btn-sm"
+                data-open-channel-settings="whatsapp">WhatsApp</button>
+              <button type="button" class="btn btn-secondary btn-sm" data-open-channel-settings="email">Email</button>
+              <button type="button" class="btn btn-secondary btn-sm"
+                data-open-channel-settings="linkedin">LinkedIn</button>
+              <button type="button" class="btn btn-secondary btn-sm" data-open-channel-settings="bridge">Bridge</button>
+              <button type="button" class="btn btn-secondary btn-sm" data-open-channel-settings="notes">Notes</button>
+            </div>
+          </div>
 
-	          <div id="settings-filter-bar" class="settings-filter-bar" style="display:none;">
-	            <div id="settings-filter-label" class="settings-filter-label">Configuring</div>
-	            <button id="settings-show-all" class="btn btn-ghost btn-sm">General Settings</button>
-	          </div>
+          <div id="settings-filter-bar" class="settings-filter-bar" style="display:none;">
+            <div id="settings-filter-label" class="settings-filter-label">Configuring</div>
+            <button id="settings-show-all" class="btn btn-ghost btn-sm">General Settings</button>
+          </div>
 
           <div id="settings-modal-scroll" class="settings-page-scroll">
             <div id="settings-channel-mail" style="margin-top: 0.5rem;">
-              <div style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">Email (IMAP / Gmail)</div>
+              <div
+                style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">
+                Email (IMAP / Gmail)</div>
 
               <div style="display:grid; grid-template-columns: 1fr 120px; gap: 10px;">
                 <div>
                   <label style="font-size:0.8rem; color:#666;">Host</label>
-                  <input id="settings-imap-host" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="imap.gmail.com">
+                  <input id="settings-imap-host"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;"
+                    placeholder="imap.gmail.com">
                 </div>
                 <div>
                   <label style="font-size:0.8rem; color:#666;">Port</label>
-                  <input id="settings-imap-port" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="993">
+                  <input id="settings-imap-port"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="993">
                 </div>
               </div>
 
@@ -141,40 +162,51 @@
 
               <div style="margin-top:10px;">
                 <label style="font-size:0.8rem; color:#666;">Username</label>
-                <input id="settings-imap-user" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="you@gmail.com">
+                <input id="settings-imap-user"
+                  style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;"
+                  placeholder="you@gmail.com">
               </div>
 
               <div style="margin-top:10px;">
                 <label style="font-size:0.8rem; color:#666;">Password (Gmail: App Password)</label>
-                <input id="settings-imap-pass" type="password" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="Leave blank to keep existing">
+                <input id="settings-imap-pass" type="password"
+                  style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;"
+                  placeholder="Leave blank to keep existing">
                 <div id="settings-imap-pass-hint" style="font-size:0.75rem; color:#999; margin-top:6px;">Not set</div>
               </div>
 
               <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top:10px;">
                 <div>
                   <label style="font-size:0.8rem; color:#666;">Mailbox</label>
-                  <input id="settings-imap-mailbox" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="INBOX">
+                  <input id="settings-imap-mailbox"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="INBOX">
                 </div>
                 <div>
                   <label style="font-size:0.8rem; color:#666;">Sent Mailbox (optional)</label>
-                  <input id="settings-imap-sent-mailbox" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="[Gmail]/Sent Mail">
+                  <input id="settings-imap-sent-mailbox"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;"
+                    placeholder="[Gmail]/Sent Mail">
                 </div>
               </div>
 
               <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top:10px;">
                 <div>
                   <label style="font-size:0.8rem; color:#666;">Fetch limit / run</label>
-                  <input id="settings-imap-limit" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="200">
+                  <input id="settings-imap-limit"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="200">
                 </div>
                 <div>
                   <label style="font-size:0.8rem; color:#666;">First-run lookback (days)</label>
-                  <input id="settings-imap-since-days" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="30">
+                  <input id="settings-imap-since-days"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="30">
                 </div>
               </div>
 
               <div style="margin-top:10px;">
                 <label style="font-size:0.8rem; color:#666;">Self emails (comma-separated, optional)</label>
-                <input id="settings-self-emails" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="me@domain.com, alias@domain.com">
+                <input id="settings-self-emails"
+                  style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;"
+                  placeholder="me@domain.com, alias@domain.com">
               </div>
 
               <div style="font-size:0.75rem; color:#999; margin-top:10px;">
@@ -182,26 +214,36 @@
               </div>
             </div>
 
-            <div id="settings-channel-gmail" style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
-              <div style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">Gmail (OAuth)</div>
+            <div id="settings-channel-gmail"
+              style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
+              <div
+                style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">
+                Gmail (OAuth)</div>
 
               <div style="margin-top:10px;">
                 <label style="font-size:0.8rem; color:#666;">OAuth Client ID</label>
-                <input id="settings-gmail-client-id" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="xxxx.apps.googleusercontent.com">
+                <input id="settings-gmail-client-id"
+                  style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;"
+                  placeholder="xxxx.apps.googleusercontent.com">
               </div>
 
               <div style="margin-top:10px;">
                 <label style="font-size:0.8rem; color:#666;">OAuth Client Secret</label>
-                <input id="settings-gmail-client-secret" type="password" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder="Leave blank to keep existing">
-                <div id="settings-gmail-client-secret-hint" style="font-size:0.75rem; color:#999; margin-top:6px;">Not set</div>
+                <input id="settings-gmail-client-secret" type="password"
+                  style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;"
+                  placeholder="Leave blank to keep existing">
+                <div id="settings-gmail-client-secret-hint" style="font-size:0.75rem; color:#999; margin-top:6px;">Not
+                  set</div>
               </div>
 
-              <div id="settings-gmail-status" style="font-size:0.85rem; color:#666; margin-top:10px;">Not connected</div>
+              <div id="settings-gmail-status" style="font-size:0.85rem; color:#666; margin-top:10px;">Not connected
+              </div>
 
               <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px;">
                 <div>
                   <label style="font-size:0.8rem; color:#666;">Sync scope</label>
-                  <select id="settings-gmail-scope" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                  <select id="settings-gmail-scope"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
                     <option value="inbox_sent">Inbox + Sent</option>
                     <option value="all_mail">All Mail (exclude Spam/Trash)</option>
                     <option value="custom">Custom query</option>
@@ -209,65 +251,107 @@
                 </div>
                 <div>
                   <label style="font-size:0.8rem; color:#666;">Custom query</label>
-                  <input id="settings-gmail-query" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" placeholder='e.g. label:finance OR from:foo@bar.com'>
+                  <input id="settings-gmail-query"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;"
+                    placeholder='e.g. label:finance OR from:foo@bar.com'>
                 </div>
               </div>
 
               <div style="display:flex; justify-content:flex-end; gap:10px; margin-top: 12px;">
-                <button id="settings-gmail-disconnect" class="btn btn-ghost" style="padding: 8px 12px;">Disconnect</button>
-                <button id="settings-gmail-connect" class="btn btn-primary" style="padding: 8px 12px;">Connect Gmail</button>
+                <button id="settings-gmail-disconnect" class="btn btn-ghost"
+                  style="padding: 8px 12px;">Disconnect</button>
+                <button id="settings-gmail-connect" class="btn btn-primary" style="padding: 8px 12px;">Connect
+                  Gmail</button>
               </div>
 
               <div style="font-size:0.75rem; color:#999; margin-top:10px;">
-                Redirect URI must be registered in Google Cloud Console (usually `http://localhost:3000/api/gmail/oauth-callback`).
+                Redirect URI must be registered in Google Cloud Console (usually
+                `http://localhost:3000/api/gmail/oauth-callback`).
               </div>
             </div>
 
-            <div id="settings-section-worker" style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
-              <div style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">Background Worker</div>
+            <div id="settings-section-worker"
+              style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
+              <div
+                style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">
+                Background Worker</div>
 
               <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                 <div id="settings-worker-interval-wrap">
                   <label style="font-size:0.8rem; color:#666;">Poll interval (seconds)</label>
-                  <input id="settings-worker-interval" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="60">
+                  <input id="settings-worker-interval"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="60">
                 </div>
                 <div id="settings-worker-gmail-wrap">
                   <label style="font-size:0.8rem; color:#666;">Gmail max / run</label>
-                  <input id="settings-worker-gmail-max" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="100">
+                  <input id="settings-worker-gmail-max"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="100">
                 </div>
               </div>
 
               <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top:10px;">
                 <div id="settings-worker-imessage-wrap">
                   <label style="font-size:0.8rem; color:#666;">iMessage max / run</label>
-                  <input id="settings-worker-imessage-max" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="1000">
+                  <input id="settings-worker-imessage-max"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="1000">
                 </div>
                 <div id="settings-worker-whatsapp-wrap">
                   <label style="font-size:0.8rem; color:#666;">WhatsApp max / run</label>
-                  <input id="settings-worker-whatsapp-max" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="500">
+                  <input id="settings-worker-whatsapp-max"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="500">
                 </div>
               </div>
 
               <div id="settings-channel-notes" style="margin-top:10px;">
                 <label style="font-size:0.8rem; color:#666;">Notes max / run (0 = unlimited)</label>
-                <input id="settings-worker-notes-max" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="0">
+                <input id="settings-worker-notes-max"
+                  style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="0">
               </div>
             </div>
 
-            <div id="settings-section-channel-bridge" style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
-              <div style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">Channel Bridge (Inbound)</div>
+            <div id="settings-section-channel-bridge"
+              style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
+              <div
+                style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">
+                Channel Bridge (Inbound)</div>
 
               <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                <div>
+                <div id="settings-bridge-telegram-wrap">
                   <label style="font-size:0.8rem; color:#666;">Telegram inbound mode</label>
-                  <select id="settings-bridge-telegram-mode" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                  <select id="settings-bridge-telegram-mode"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
                     <option value="draft_only">Draft only (recommended)</option>
                     <option value="disabled">Disabled</option>
                   </select>
                 </div>
-                <div>
+                <div id="settings-bridge-discord-wrap">
                   <label style="font-size:0.8rem; color:#666;">Discord inbound mode</label>
-                  <select id="settings-bridge-discord-mode" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                  <select id="settings-bridge-discord-mode"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                    <option value="draft_only">Draft only (recommended)</option>
+                    <option value="disabled">Disabled</option>
+                  </select>
+                </div>
+                <div id="settings-bridge-signal-wrap">
+                  <label style="font-size:0.8rem; color:#666;">Signal inbound mode</label>
+                  <select id="settings-bridge-signal-mode"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                    <option value="draft_only">Draft only (recommended)</option>
+                    <option value="disabled">Disabled</option>
+                  </select>
+                </div>
+                <div id="settings-bridge-viber-wrap">
+                  <label style="font-size:0.8rem; color:#666;">Viber inbound mode</label>
+                  <select id="settings-bridge-viber-mode"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                    <option value="draft_only">Draft only (recommended)</option>
+                    <option value="disabled">Disabled</option>
+                  </select>
+                </div>
+                <div id="settings-bridge-linkedin-wrap">
+                  <label style="font-size:0.8rem; color:#666;">LinkedIn inbound mode</label>
+                  <select id="settings-bridge-linkedin-mode"
+                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
                     <option value="draft_only">Draft only (recommended)</option>
                     <option value="disabled">Disabled</option>
                   </select>
@@ -280,7 +364,9 @@
             </div>
 
             <div id="settings-section-ui" style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
-              <div style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">Channel UI</div>
+              <div
+                style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">
+                Channel UI</div>
 
               <div style="display:grid; grid-template-columns: 1fr; gap: 12px;">
                 <div id="settings-channel-imessage" style="border:1px solid #eee; border-radius: 12px; padding: 12px;">
@@ -288,15 +374,18 @@
                   <div style="display:grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; align-items:end;">
                     <div>
                       <label style="font-size:0.8rem; color:#666;">Emoji</label>
-                      <input id="settings-ui-imessage-emoji" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                      <input id="settings-ui-imessage-emoji"
+                        style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
                     </div>
                     <div>
                       <label style="font-size:0.8rem; color:#666;">My bubble</label>
-                      <input id="settings-ui-imessage-me" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                      <input id="settings-ui-imessage-me" type="color"
+                        style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
                     </div>
                     <div>
                       <label style="font-size:0.8rem; color:#666;">Their bubble</label>
-                      <input id="settings-ui-imessage-contact" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                      <input id="settings-ui-imessage-contact" type="color"
+                        style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
                     </div>
                   </div>
                 </div>
@@ -306,15 +395,18 @@
                   <div style="display:grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; align-items:end;">
                     <div>
                       <label style="font-size:0.8rem; color:#666;">Emoji</label>
-                      <input id="settings-ui-whatsapp-emoji" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                      <input id="settings-ui-whatsapp-emoji"
+                        style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
                     </div>
                     <div>
                       <label style="font-size:0.8rem; color:#666;">My bubble</label>
-                      <input id="settings-ui-whatsapp-me" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                      <input id="settings-ui-whatsapp-me" type="color"
+                        style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
                     </div>
                     <div>
                       <label style="font-size:0.8rem; color:#666;">Their bubble</label>
-                      <input id="settings-ui-whatsapp-contact" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                      <input id="settings-ui-whatsapp-contact" type="color"
+                        style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
                     </div>
                   </div>
                 </div>
@@ -324,15 +416,39 @@
                   <div style="display:grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; align-items:end;">
                     <div>
                       <label style="font-size:0.8rem; color:#666;">Emoji</label>
-                      <input id="settings-ui-email-emoji" style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                      <input id="settings-ui-email-emoji"
+                        style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
                     </div>
                     <div>
                       <label style="font-size:0.8rem; color:#666;">My bubble</label>
-                      <input id="settings-ui-email-me" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                      <input id="settings-ui-email-me" type="color"
+                        style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
                     </div>
                     <div>
                       <label style="font-size:0.8rem; color:#666;">Their bubble</label>
-                      <input id="settings-ui-email-contact" type="color" style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                      <input id="settings-ui-email-contact" type="color"
+                        style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                    </div>
+                  </div>
+                </div>
+
+                <div id="settings-channel-linkedin" style="border:1px solid #eee; border-radius: 12px; padding: 12px;">
+                  <div style="font-weight:700; color:#444; margin-bottom:10px;">LinkedIn</div>
+                  <div style="display:grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; align-items:end;">
+                    <div>
+                      <label style="font-size:0.8rem; color:#666;">Emoji</label>
+                      <input id="settings-ui-linkedin-emoji"
+                        style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                    </div>
+                    <div>
+                      <label style="font-size:0.8rem; color:#666;">My bubble</label>
+                      <input id="settings-ui-linkedin-me" type="color"
+                        style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                    </div>
+                    <div>
+                      <label style="font-size:0.8rem; color:#666;">Their bubble</label>
+                      <input id="settings-ui-linkedin-contact" type="color"
+                        style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
                     </div>
                   </div>
                 </div>
@@ -362,7 +478,8 @@
         <div class="kyc-editor-header">
           <h3 class="kyc-editor-title">Profile</h3>
           <div class="kyc-editor-actions">
-            <button id="btn-deep-analyze" class="btn btn-secondary btn-sm" title="Run Deep Analysis with Ollama">✨ Analyze</button>
+            <button id="btn-deep-analyze" class="btn btn-secondary btn-sm" title="Run Deep Analysis with Ollama">✨
+              Analyze</button>
             <button class="btn btn-primary btn-sm" onclick="saveInlineProfile()">Save</button>
           </div>
         </div>

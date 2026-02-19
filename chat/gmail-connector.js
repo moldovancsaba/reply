@@ -289,6 +289,7 @@ async function syncGmail({ maxMessages = 100 } = {}) {
 
   const state = loadState();
   let messageIds = [];
+  let shouldRunInitialSync = !state.historyId;
 
   if (state.historyId) {
     try {
@@ -296,6 +297,7 @@ async function syncGmail({ maxMessages = 100 } = {}) {
         accessToken,
         `/history?startHistoryId=${encodeURIComponent(state.historyId)}&historyTypes=messageAdded`
       );
+      shouldRunInitialSync = false;
       const hist = Array.isArray(history.history) ? history.history : [];
       const ids = new Set();
       for (const h of hist) {
@@ -312,10 +314,11 @@ async function syncGmail({ maxMessages = 100 } = {}) {
       if (!msg.includes("404")) throw e;
       state.historyId = null;
       messageIds = [];
+      shouldRunInitialSync = true;
     }
   }
 
-  if (!state.historyId || messageIds.length === 0) {
+  if (shouldRunInitialSync) {
     // Initial sync: pull recent messages based on configured scope and set baseline historyId.
     const max = Math.min(maxMessages, 200);
     const ids = new Set();
@@ -336,7 +339,7 @@ async function syncGmail({ maxMessages = 100 } = {}) {
     }
 
     messageIds = Array.from(ids).slice(0, maxMessages);
-    state.historyId = String(profile.historyId || "");
+    state.historyId = String(profile.historyId || state.historyId || "");
   }
 
   updateMailStatus({ state: "running", message: `Fetching ${messageIds.length} Gmail messages…`, connector: "gmail", progress: 40 });

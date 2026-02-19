@@ -11,13 +11,16 @@ let messageOffset = 0;
 let hasMoreMessages = true;
 const MESSAGE_LIMIT = 30;
 const SEND_CAPABLE_CHANNELS = new Set(['imessage', 'whatsapp', 'email']);
-const DRAFT_ONLY_CHANNELS = new Set(['telegram', 'discord']);
+const DRAFT_ONLY_CHANNELS = new Set(['telegram', 'discord', 'signal', 'viber', 'linkedin']);
 
 function normalizeChannelKey(channel) {
     const raw = (channel ?? '').toString().toLowerCase();
     if (raw.includes('whatsapp')) return 'whatsapp';
     if (raw.includes('telegram')) return 'telegram';
     if (raw.includes('discord')) return 'discord';
+    if (raw.includes('signal')) return 'signal';
+    if (raw.includes('viber')) return 'viber';
+    if (raw.includes('linkedin')) return 'linkedin';
     if (raw.includes('mail') || raw.includes('email') || raw.includes('gmail') || raw.includes('imap')) return 'email';
     return 'imessage';
 }
@@ -42,6 +45,9 @@ function channelLabel(channel) {
     if (v === 'whatsapp') return 'WhatsApp';
     if (v === 'telegram') return 'Telegram';
     if (v === 'discord') return 'Discord';
+    if (v === 'signal') return 'Signal';
+    if (v === 'viber') return 'Viber';
+    if (v === 'linkedin') return 'LinkedIn';
     return 'iMessage';
 }
 
