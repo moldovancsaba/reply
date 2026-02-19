@@ -520,6 +520,10 @@ async function readJsonBody(req) {
   }
 }
 
+async function readTextBody(req) {
+  return await readRequestBody(req);
+}
+
 function analyzeContactInChild(handle) {
   const childScript = path.join(__dirname, "kyc-analyze-child.js");
   return new Promise((resolve, reject) => {
@@ -803,11 +807,11 @@ async function sendWhatsAppViaOpenClawCli(options) {
         const execErr = String(error?.message || "").trim();
         const shortErr = normalizeSendErrorMessage(
           parsedErr?.error ||
-            parsedErr?.message ||
-            parsedOut?.error ||
-            parsedOut?.message ||
-            (errText ? errText.split("\n").slice(-1)[0].trim() : "") ||
-            execErr,
+          parsedErr?.message ||
+          parsedOut?.error ||
+          parsedOut?.message ||
+          (errText ? errText.split("\n").slice(-1)[0].trim() : "") ||
+          execErr,
           "OpenClaw WhatsApp send failed."
         );
         const wrapped = new Error(shortErr);
@@ -1315,6 +1319,7 @@ const sensitiveRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 3
 const RATE_LIMITED_ROUTES = new Set([
   "/api/send-imessage",
   "/api/send-whatsapp",
+  "/api/send-linkedin",
   "/api/send-email",
   "/api/sync-imessage",
   "/api/sync-whatsapp",
@@ -1350,9 +1355,18 @@ const server = http.createServer(async (req, res) => {
 
   // --- CORS ---
   const origin = req.headers.origin || "";
-  const allowedOrigin = `http://localhost:${boundPort}`;
-  // Only allow same-origin requests (or no origin for non-browser clients)
-  if (origin && origin !== allowedOrigin && origin !== `http://127.0.0.1:${boundPort}`) {
+  const ALLOWED_CORS_ORIGINS = new Set([
+    `http://localhost:${boundPort}`,
+    `http://127.0.0.1:${boundPort}`,
+    "https://www.linkedin.com",
+    "https://linkedin.com",
+    "https://web.whatsapp.com" // Future proofing
+  ]);
+
+  const allowedOrigin = ALLOWED_CORS_ORIGINS.has(origin) ? origin : `http://localhost:${boundPort}`;
+
+  // Only allow allowed origins (or no origin for non-browser clients)
+  if (origin && !ALLOWED_CORS_ORIGINS.has(origin)) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "CORS: origin not allowed" }));
     return;
@@ -1785,6 +1799,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     try {
+      // payload is already read above
       const events = Array.isArray(payload)
         ? payload
         : (Array.isArray(payload?.events) ? payload.events : [payload]);
@@ -1883,6 +1898,111 @@ const server = http.createServer(async (req, res) => {
       total: events.length,
       events,
     });
+    return;
+  }
+  if (url.pathname === "/api/import/linkedin") {
+    if (req.method !== "POST") {
+      writeJson(res, 405, { error: "Method not allowed" });
+      return;
+    }
+
+    try {
+      if (!isHumanApproved(req) && !isLocalRequest(req)) {
+        writeJson(res, 403, { error: "Import requires local access or human approval." });
+        return;
+      }
+
+      const csvText = await readTextBody(req);
+      if (!csvText || csvText.length < 10) {
+        writeJson(res, 400, { error: "Empty or invalid CSV file." });
+        return;
+      }
+
+      const rows = parseLinkedInCSV(csvText);
+      if (rows.length === 0) {
+        writeJson(res, 400, { error: "No valid rows found in CSV." });
+        return;
+      }
+
+      console.log(`[Import] Parsed ${rows.length} rows from LinkedIn CSV.`);
+
+      let imported = 0;
+      let errors = 0;
+
+      // Map rows to InboundEvents
+      const events = [];
+      const myIdentity = "Me"; // Default if not found
+
+      for (const row of rows) {
+        // LinkedIn Export Header Format:
+        // FROM,TO,DATE,SUBJECT,CONTENT,DIRECTION,FOLDER
+        // DIRECTION is "INCOMING" or "OUTGOING"
+
+        const timestamp = safeDateMs(row.DATE) ? new Date(row.DATE).toISOString() : new Date().toISOString();
+        const direction = (row.DIRECTION || "").toUpperCase();
+
+        let sender = row.FROM || "Unknown";
+        let recipient = row.TO || "Me";
+
+        // Sanitize
+        if (sender === "LinkedIn Member") sender = "Unknown User";
+
+        // Determine Peer and flow
+        let peerHandle = "";
+        let peerName = "";
+        let flow = "inbound";
+
+        if (direction === "OUTGOING") {
+          flow = "outbound";
+          peerName = recipient;
+          peerHandle = "linkedin://" + recipient.replace(/\s+/g, "").toLowerCase(); // Best effort handle
+        } else {
+          flow = "inbound";
+          peerName = sender;
+          peerHandle = "linkedin://" + sender.replace(/\s+/g, "").toLowerCase();
+        }
+
+        // If we have a Profile URL in content or headers (not standard in CSV), we could use it.
+        // Standard CSV is limited. We use Name as handle for now.
+
+        if (!peerName || peerName === "Me") continue;
+
+        // Construct Event
+        events.push({
+          channel: "linkedin",
+          flow,
+          timestamp,
+          text: row.CONTENT || "",
+          peer: {
+            handle: peerHandle,
+            displayName: peerName,
+            isGroup: false // CSV doesn't specify
+          },
+          threadId: peerHandle, // Group by peer
+          dryRun: false
+        });
+      }
+
+      // Ingest in batches of 50
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < events.length; i += BATCH_SIZE) {
+        const batch = events.slice(i, i + BATCH_SIZE);
+        const results = await ingestInboundEvents(batch, { failFast: false });
+        imported += results.accepted;
+        errors += results.errors;
+      }
+
+      writeJson(res, 200, {
+        status: "ok",
+        count: imported,
+        errors,
+        message: `Imported ${imported} messages.`
+      });
+
+    } catch (e) {
+      console.error("Import error:", e);
+      writeJson(res, 500, { error: e.message });
+    }
     return;
   }
   if (url.pathname === "/api/channel-bridge/summary") {
@@ -2220,7 +2340,7 @@ end run
         );
         const hint = String(
           e?.hint ||
-            "Ensure OpenClaw CLI is installed, gateway is running, and WhatsApp Web is linked."
+          "Ensure OpenClaw CLI is installed, gateway is running, and WhatsApp Web is linked."
         );
         const fallbackEnabled = resolveWhatsAppDesktopFallbackOnOpenClawFailure(
           payload?.allowDesktopFallback
@@ -2689,6 +2809,79 @@ end focusCheck
     });
     return;
   }
+  if (url.pathname === "/api/send-linkedin") {
+    if (req.method !== "POST") {
+      writeJson(res, 405, { error: "Method not allowed" });
+      return;
+    }
+    const payload = await readJsonBody(req);
+    // Implement "Human Enter" check for security
+    if (!hasHumanEnterTrigger(payload)) {
+      denySensitiveRoute(req, res, {
+        route: "/api/send-linkedin",
+        action: "send-linkedin",
+        code: "human_enter_trigger_required",
+        message: "LinkedIn send requires explicit human Enter trigger from UI.",
+        hint: "Send from {reply} UI using Enter/Send button; trigger expires after 2 minutes.",
+        statusCode: 403,
+        dryRun: Boolean(payload?.dryRun),
+      });
+      return;
+    }
+
+    const recipient = (payload?.recipient || "").toString().trim();
+    const text = (payload?.text || "").toString();
+
+    if (!recipient || !text) {
+      writeJson(res, 400, { error: "Missing recipient or text" });
+      return;
+    }
+
+    // Logic: Copy text to clipboard and open LinkedIn messaging (or specific profile if possible).
+    // Note: LinkedIn URLs are tricky without a public profile URL.
+    // If the recipient looks like a LinkedIn handle (linkedin:...), we try to open messaging.
+    // Otherwise we just open the messaging inbox.
+
+    // Attempt to extract a profile handle if it exists (e.g. linkedin:some.one -> some.one)
+    // But direct messaging via URL is often restricted. Safe bet: Open messaging inbox.
+    const targetUrl = "https://www.linkedin.com/messaging/";
+
+    const appleScript = `
+      on run argv
+        set msg to item 1 of argv
+        set the clipboard to msg
+        tell application "Browser" to open location "${targetUrl}"
+        -- Fallback to default browser if "Browser" abstract fails (usually handled by 'open' command in shell, but here we use open location)
+        -- Actually, 'open' command is better for URLs.
+      end run
+    `;
+
+    // Use 'open' for URL and 'pbcopy' for clipboard to be more robust than complex AppleScript
+    // We execute them in parallel/sequence.
+
+    const child_process = require("child_process");
+
+    try {
+      // 1. Copy to clipboard
+      const proc = child_process.spawn("pbcopy");
+      proc.stdin.write(text);
+      proc.stdin.end();
+
+      // 2. Open URL
+      child_process.exec(`open "${targetUrl}"`);
+
+      contactStore.clearDraft(recipient);
+      writeJson(res, 200, {
+        status: "ok",
+        transport: "desktop_clipboard",
+        hint: "Message copied to clipboard. Paste in LinkedIn."
+      });
+    } catch (e) {
+      console.error("LinkedIn automation failed:", e);
+      writeJson(res, 500, { error: "Failed to run desktop automation: " + e.message });
+    }
+    return;
+  }
   if (url.pathname === "/api/send-email") {
     if (req.method !== "POST") {
       writeJson(res, 405, { error: "Method not allowed" });
@@ -3102,6 +3295,70 @@ end run
   res.end("Not found");
 });
 
+
+/**
+ * Simple CSV Parser for LinkedIn Archive
+ * Handles quoted fields and newlines within fields
+ * @param {string} text
+ * @returns {Array<Object>} rows
+ */
+function parseLinkedInCSV(text) {
+  const rows = [];
+  let row = [];
+  let currentToken = '';
+  let insideQuote = false;
+
+  // Normalize newlines
+  const input = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i];
+    const nextChar = input[i + 1];
+
+    if (insideQuote) {
+      if (char === '"' && nextChar === '"') {
+        currentToken += '"';
+        i++; // Skip escaped quote
+      } else if (char === '"') {
+        insideQuote = false;
+      } else {
+        currentToken += char;
+      }
+    } else {
+      if (char === '"') {
+        insideQuote = true;
+      } else if (char === ',') {
+        row.push(currentToken);
+        currentToken = '';
+      } else if (char === '\n') {
+        row.push(currentToken);
+        if (row.length > 1 || row[0] !== '') rows.push(row);
+        row = [];
+        currentToken = '';
+      } else {
+        currentToken += char;
+      }
+    }
+  }
+  // Push last row
+  if (currentToken || row.length > 0) {
+    row.push(currentToken);
+    rows.push(row);
+  }
+
+  // Extract Headers
+  if (rows.length < 2) return [];
+  const headers = rows[0].map(h => h.trim().toUpperCase());
+
+  return rows.slice(1).map(r => {
+    const obj = {};
+    headers.forEach((h, idx) => {
+      obj[h] = r[idx] || '';
+    });
+    return obj;
+  });
+}
+
 /**
  * Attempt to listen on the specified port. 
  * If the port is in use, try the next available port.
@@ -3129,3 +3386,4 @@ function tryListen(port) {
 
 applyOpenClawWhatsAppGuard(true);
 tryListen(PORT_MIN);
+

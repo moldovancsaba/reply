@@ -121,6 +121,18 @@ describe("security-policy", () => {
             const policy = { requireOperatorToken: true, operatorToken: "secret" };
             assert.strictEqual(hasValidOperatorToken(req, policy), false);
         });
+
+        it("accepts operator token from cookie when header is missing", () => {
+            const req = { headers: { cookie: "reply_operator_token=secret; foo=bar" } };
+            const policy = { requireOperatorToken: true, operatorToken: "secret" };
+            assert.strictEqual(hasValidOperatorToken(req, policy), true);
+        });
+
+        it("accepts encoded operator token from cookie", () => {
+            const req = { headers: { cookie: "reply_operator_token=s%40cret" } };
+            const policy = { requireOperatorToken: true, operatorToken: "s@cret" };
+            assert.strictEqual(hasValidOperatorToken(req, policy), true);
+        });
     });
 
     describe("isHumanApproved", () => {

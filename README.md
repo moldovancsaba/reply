@@ -26,6 +26,7 @@ npm install
     *   **Local Files:** `node ingest.js` (scans `knowledge/documents`)
     *   **Gmail Archive:** `node ingest.js --mbox /path/to/archive.mbox`
     *   **Apple Notes:** Click "Sync Notes" in the Web UI.
+    *   **LinkedIn Archive:** Click "Import Archive" on the LinkedIn Dashboard card to upload `messages.csv`.
     *   **Email Sync (live):** Click "Sync Email" in the Web UI. Configure IMAP or Gmail OAuth via Settings (gear icon).
 
 ## 🧠 Core Features
@@ -50,6 +51,7 @@ npm install
 *   [Coding Standards](docs/CODING_STANDARDS.md)
 *   [Human Final Decision Policy](docs/HUMAN_FINAL_DECISION_POLICY.md)
 *   [Developer Handover](docs/HANDOVER.md)
+*   [LinkedIn Import Handover](docs/HANDOVER_LINKEDIN_IMPORT.md)
 *   [Release Notes](docs/RELEASE_NOTES.md)
 
 ## 🛡️ Privacy First

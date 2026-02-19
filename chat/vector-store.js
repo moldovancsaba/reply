@@ -114,6 +114,23 @@ async function search(query, limit = 5) {
     }
 }
 
+function dedupeDocsByStableKey(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const out = [];
+    const seen = new Set();
+    for (const row of list) {
+        const doc = row && row.toJSON ? row.toJSON() : row;
+        if (!doc || typeof doc !== "object") continue;
+        const id = String(doc.id || "").trim();
+        const fallback = `${String(doc.path || "")}::${String(doc.text || "")}`;
+        const key = id || fallback;
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        out.push(doc);
+    }
+    return out;
+}
+
 /**
  * Retrieve all documents for a specific handle (by path prefix).
  * @param {string} pathPrefix - e.g. imessage://+36... or mailto:user@...
@@ -127,15 +144,15 @@ async function getHistory(pathPrefix) {
             .where(`path LIKE '${pathPrefix}%'`)
             .execute();
 
-        if (Array.isArray(results)) return results;
+        if (Array.isArray(results)) return dedupeDocsByStableKey(results);
 
         const out = [];
         for await (const batch of results) {
             for (const row of batch) {
-                out.push(row.toJSON ? row.toJSON() : row);
+                out.push(row);
             }
         }
-        return out;
+        return dedupeDocsByStableKey(out);
     } catch (e) {
         console.error("History fetch error:", e.message);
         return [];

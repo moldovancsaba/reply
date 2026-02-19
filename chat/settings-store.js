@@ -3,6 +3,7 @@ const path = require("path");
 
 const SETTINGS_PATH = path.join(__dirname, "data", "settings.json");
 const CHANNEL_BRIDGE_MODES = new Set(["disabled", "draft_only"]);
+const CHANNEL_BRIDGE_CHANNELS = ["telegram", "discord", "signal", "viber", "linkedin"];
 
 function normalizeChannelBridgeMode(value, fallback = "disabled") {
   const v = String(value || "").trim().toLowerCase();
@@ -12,23 +13,19 @@ function normalizeChannelBridgeMode(value, fallback = "disabled") {
 
 function withDefaults(settings) {
   const s = settings && typeof settings === "object" ? settings : {};
+  const bridgeChannels = {};
+  for (const channel of CHANNEL_BRIDGE_CHANNELS) {
+    bridgeChannels[channel] = {
+      inboundMode: normalizeChannelBridgeMode(
+        s?.channelBridge?.channels?.[channel]?.inboundMode,
+        "draft_only"
+      ),
+    };
+  }
   return {
     ...s,
     channelBridge: {
-      channels: {
-        telegram: {
-          inboundMode: normalizeChannelBridgeMode(
-            s?.channelBridge?.channels?.telegram?.inboundMode,
-            "draft_only"
-          ),
-        },
-        discord: {
-          inboundMode: normalizeChannelBridgeMode(
-            s?.channelBridge?.channels?.discord?.inboundMode,
-            "draft_only"
-          ),
-        },
-      },
+      channels: bridgeChannels,
     },
     gmail: {
       ...(s?.gmail || {}),
@@ -63,6 +60,11 @@ function withDefaults(settings) {
           emoji: (s?.ui?.channels?.email?.emoji || "📧").toString(),
           bubbleMe: (s?.ui?.channels?.email?.bubbleMe || "#5e5ce6").toString(),
           bubbleContact: (s?.ui?.channels?.email?.bubbleContact || "#262628").toString(),
+        },
+        linkedin: {
+          emoji: (s?.ui?.channels?.linkedin?.emoji || "🟦").toString(),
+          bubbleMe: (s?.ui?.channels?.linkedin?.bubbleMe || "#0077b5").toString(),
+          bubbleContact: (s?.ui?.channels?.linkedin?.bubbleContact || "#262628").toString(),
         },
       },
     },
@@ -173,6 +175,7 @@ function isGmailConfigured(settings = null) {
 
 module.exports = {
   SETTINGS_PATH,
+  CHANNEL_BRIDGE_CHANNELS,
   withDefaults,
   readSettings,
   writeSettings,

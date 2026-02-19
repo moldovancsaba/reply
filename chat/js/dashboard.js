@@ -5,51 +5,76 @@
 
 import { fetchSystemHealth, fetchTriageLogs, fetchBridgeSummary, triggerSync } from './api.js';
 
+function wireDashboardActions(root) {
+  if (!root) return;
+
+  root.querySelectorAll('[data-dashboard-open-settings]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const channel = (btn.getAttribute('data-dashboard-open-settings') || '').trim();
+      if (!channel) return;
+      if (typeof window.openChannelSettings === 'function') window.openChannelSettings(channel);
+    });
+  });
+
+  root.querySelectorAll('[data-dashboard-sync]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const source = (btn.getAttribute('data-dashboard-sync') || '').trim();
+      if (!source) return;
+      handleSync(source, btn);
+    });
+  });
+
+  const retryBtn = root.querySelector('[data-dashboard-retry]');
+  if (retryBtn) {
+    retryBtn.addEventListener('click', () => renderDashboard());
+  }
+}
+
 /**
  * Render the dashboard with system health cards
  * Shows system status, sync status for each source, and recent triage log
  */
 export async function renderDashboard() {
-    const dashboard = document.getElementById('dashboard');
-    if (!dashboard) return;
+  const dashboard = document.getElementById('dashboard');
+  if (!dashboard) return;
 
-    // Show loading state
-    dashboard.innerHTML = '<div style="padding:40px; text-align:center; color:#666;">Loading dashboard...</div>';
+  // Show loading state
+  dashboard.innerHTML = '<div style="padding:40px; text-align:center; color:#666;">Loading dashboard...</div>';
 
-    try {
-        // Fetch dashboard data
-        const [health, logs, bridgeData] = await Promise.all([
-            fetchSystemHealth(),
-            fetchTriageLogs(10),
-            fetchBridgeSummary(300)
-        ]);
+  try {
+    // Fetch dashboard data
+    const [health, logs, bridgeData] = await Promise.all([
+      fetchSystemHealth(),
+      fetchTriageLogs(10),
+      fetchBridgeSummary(300)
+    ]);
 
-        // Calculate uptime
-        const uptimeHrs = (health.uptime / 3600).toFixed(1);
+    // Calculate uptime
+    const uptimeHrs = (health.uptime / 3600).toFixed(1);
 
-        // Get sync data for each source
-        const imessageSync = health.channels?.imessage || {};
-        const whatsappSync = health.channels?.whatsapp || {};
-        const notesSync = health.channels?.notes || {};
-        const mailSync = health.channels?.mail || {};
-        const bridgeSummary = bridgeData?.summary || {};
-        const bridgeCounts = bridgeSummary?.counts || {};
-        const bridgeIngested = Number(bridgeCounts?.ingested) || 0;
-        const bridgeDuplicates = Number(bridgeCounts?.duplicate) || 0;
-        const bridgeErrors = Number(bridgeCounts?.error) || 0;
-        const bridgeLast = bridgeSummary?.lastEventAt || null;
-        const telegramMode = bridgeSummary?.rollout?.telegram || 'draft_only';
-        const discordMode = bridgeSummary?.rollout?.discord || 'draft_only';
+    // Get sync data for each source
+    const imessageSync = health.channels?.imessage || {};
+    const whatsappSync = health.channels?.whatsapp || {};
+    const notesSync = health.channels?.notes || {};
+    const mailSync = health.channels?.mail || {};
+    const bridgeSummary = bridgeData?.summary || {};
+    const bridgeCounts = bridgeSummary?.counts || {};
+    const bridgeIngested = Number(bridgeCounts?.ingested) || 0;
+    const bridgeDuplicates = Number(bridgeCounts?.duplicate) || 0;
+    const bridgeErrors = Number(bridgeCounts?.error) || 0;
+    const bridgeLast = bridgeSummary?.lastEventAt || null;
+    const bridgeRollout = bridgeSummary?.rollout || {};
+    const modeOf = (channel) => bridgeRollout?.[channel] || 'draft_only';
 
-        // Format last sync times
-        const formatLastSync = (timestamp) => {
-            if (!timestamp) return 'Never';
-            const date = new Date(timestamp);
-            return date.toLocaleString();
-        };
+    // Format last sync times
+    const formatLastSync = (timestamp) => {
+      if (!timestamp) return 'Never';
+      const date = new Date(timestamp);
+      return date.toLocaleString();
+    };
 
-        // Render dashboard HTML
-        dashboard.innerHTML = `
+    // Render dashboard HTML
+    dashboard.innerHTML = `
       <div class="health-card">
         <h4>System Status</h4>
         <div class="health-value">Online</div>
@@ -61,10 +86,10 @@ export async function renderDashboard() {
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <h4>iMessage Sync</h4>
           <div style="display:flex; gap:6px; align-items:center;">
-            <button class="btn-icon" onclick="window.openChannelSettings('imessage')" title="Configure iMessage">
+            <button type="button" class="btn-icon" data-dashboard-open-settings="imessage" title="Configure iMessage">
               ⚙️
             </button>
-            <button class="btn-icon" onclick="window.handleSync('imessage')" title="Sync iMessage">
+            <button type="button" class="btn-icon" data-dashboard-sync="imessage" title="Sync iMessage">
               <img src="/public/imessage.svg" alt="iMessage" class="platform-icon platform-icon--sm">
             </button>
           </div>
@@ -80,10 +105,10 @@ export async function renderDashboard() {
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <h4>WhatsApp Sync</h4>
           <div style="display:flex; gap:6px; align-items:center;">
-            <button class="btn-icon" onclick="window.openChannelSettings('whatsapp')" title="Configure WhatsApp">
+            <button type="button" class="btn-icon" data-dashboard-open-settings="whatsapp" title="Configure WhatsApp">
               ⚙️
             </button>
-            <button class="btn-icon" onclick="window.handleSync('whatsapp')" title="Sync WhatsApp">
+            <button type="button" class="btn-icon" data-dashboard-sync="whatsapp" title="Sync WhatsApp">
               <img src="/public/whatsapp.svg" alt="WhatsApp" class="platform-icon platform-icon--sm">
             </button>
           </div>
@@ -99,10 +124,10 @@ export async function renderDashboard() {
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <h4>Notes Sync</h4>
           <div style="display:flex; gap:6px; align-items:center;">
-            <button class="btn-icon" onclick="window.openChannelSettings('notes')" title="Configure Notes">
+            <button type="button" class="btn-icon" data-dashboard-open-settings="notes" title="Configure Notes">
               ⚙️
             </button>
-            <button class="btn-icon" onclick="window.handleSync('notes')" title="Sync Notes">
+            <button type="button" class="btn-icon" data-dashboard-sync="notes" title="Sync Notes">
               📝
             </button>
           </div>
@@ -116,12 +141,43 @@ export async function renderDashboard() {
 
       <div class="health-card">
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <h4>Email Sync</h4>
+          <h4>LinkedIn</h4>
           <div style="display:flex; gap:6px; align-items:center;">
-            <button class="btn-icon" onclick="window.openChannelSettings('email')" title="Configure Email">
+            <button type="button" class="btn-icon" data-dashboard-copy-script="linkedin" title="Copy Inbound Script to Clipboard">
+              📋
+            </button>
+            <button type="button" class="btn-icon" data-dashboard-open-settings="linkedin" title="Configure LinkedIn">
               ⚙️
             </button>
-            <button class="btn-icon" onclick="window.handleSync('mail')" title="Sync Email (Apple Mail or IMAP)">
+            <div title="Inbound via Bridge / Outbound via Desktop Automation" style="cursor:help;">
+               <img src="/public/linkedin.svg" alt="LinkedIn" class="platform-icon platform-icon--sm" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzAwNzdiNSI+PHBhdGggZD0iTTE5IDNoLTZhMiAyIDAgMCAwLTIgMnYxNGgyVjVoNnYxNGgyVjVhMiAyIDAgMCAwLTItMnpmLTkgMTJ2Mmgydi0yaC0yem0tNS0yYTItMiAwIDAgMC0yIDJ2MTRoMlY1aC0yem0yIDZ2Mmgydi0yaC0yeiIvPjwvc3ZnPg=='">
+            </div>
+          </div>
+        </div>
+        <div class="health-value">${(bridgeSummary.channels?.linkedin?.ingested || 0)}</div>
+        <div class="health-status-tag ${modeOf('linkedin') === 'draft_only' ? 'tag-online' : ''}">
+          ${modeOf('linkedin') === 'draft_only' ? '● Messages Scanned' : '● Disabled'}
+        </div>
+        <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
+          Source: Chrome Extension
+        </div>
+        <div style="font-size:0.8rem; color:#888; margin-top:0.5rem; display:flex; gap:10px; align-items:center;">
+            <span style="flex:1;">Last Sync: ${formatLastSync(bridgeSummary.channels?.linkedin?.lastAt)}</span>
+            <button type="button" onclick="document.getElementById('linkedin-import-input').click()" style="padding:2px 8px; font-size:0.75rem; cursor:pointer;" title="Import messages.csv from Data Archive">
+                📥 Import Archive
+            </button>
+            <input type="file" id="linkedin-import-input" style="display:none;" accept=".csv" onchange="handleLinkedInImport(this)">
+        </div>
+      </div>
+
+      <div class="health-card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h4>Email Sync</h4>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button type="button" class="btn-icon" data-dashboard-open-settings="email" title="Configure Email">
+              ⚙️
+            </button>
+            <button type="button" class="btn-icon" data-dashboard-sync="mail" title="Sync Email (Apple Mail or IMAP)">
               <img src="/public/mail.svg" alt="Email" class="platform-icon platform-icon--sm">
             </button>
           </div>
@@ -139,7 +195,7 @@ export async function renderDashboard() {
       <div class="health-card">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <h4>Channel Bridge</h4>
-          <button class="btn-icon" onclick="window.openChannelSettings('bridge')" title="Configure Bridge rollout">
+          <button type="button" class="btn-icon" data-dashboard-open-settings="bridge" title="Configure Bridge rollout">
             ⚙️
           </button>
         </div>
@@ -154,7 +210,9 @@ export async function renderDashboard() {
           </div>
         </div>
         <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
-          Telegram: ${telegramMode} | Discord: ${discordMode}
+          Telegram: ${modeOf('telegram')} | Discord: ${modeOf('discord')}<br>
+          Signal: ${modeOf('signal')} | Viber: ${modeOf('viber')}<br>
+          LinkedIn: ${modeOf('linkedin')}
         </div>
         <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
           Last event: ${formatLastSync(bridgeLast)}
@@ -174,43 +232,103 @@ export async function renderDashboard() {
         </div>
       </div>
     `;
-    } catch (error) {
-        console.error('Failed to render dashboard:', error);
-        dashboard.innerHTML = `
+  } catch (error) {
+    console.error('Failed to render dashboard:', error);
+    dashboard.innerHTML = `
       <div style="padding:40px; text-align:center; color:#d32f2f;">
         <h3>Failed to load dashboard</h3>
         <p>${error.message}</p>
-        <button onclick="window.renderDashboard()" style="margin-top:1rem; padding:0.5rem 1rem; cursor:pointer;">
+        <button type="button" data-dashboard-retry style="margin-top:1rem; padding:0.5rem 1rem; cursor:pointer;">
           Retry
         </button>
       </div>
     `;
-    }
+  }
+
+  wireDashboardActions(dashboard);
 }
 
 /**
  * Handle sync button click
  * @param {string} source - Source to sync ('imessage', 'whatsapp', 'notes')
+ * @param {HTMLButtonElement|null} triggerButton - Invoking button for local loading state
  */
-export async function handleSync(source) {
-    try {
-        const button = event.target;
-        button.disabled = true;
-        button.textContent = '⏳';
-
-        await triggerSync(source);
-
-        button.textContent = '✅';
-        setTimeout(() => {
-            renderDashboard(); // Refresh dashboard
-        }, 1000);
-    } catch (error) {
-        console.error(`Sync failed for ${source}:`, error);
-        alert(`Sync failed: ${error.message}`);
-        event.target.disabled = false;
+export async function handleSync(source, triggerButton = null) {
+  const button = triggerButton || null;
+  const originalHtml = button ? button.innerHTML : '';
+  try {
+    if (button) {
+      button.disabled = true;
+      button.textContent = '⏳';
     }
+
+    await triggerSync(source);
+
+    if (button) button.textContent = '✅';
+    setTimeout(() => {
+      renderDashboard(); // Refresh dashboard
+    }, 1000);
+  } catch (error) {
+    console.error(`Sync failed for ${source}:`, error);
+    alert(`Sync failed: ${error.message}`);
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = originalHtml;
+    }
+  }
+}
+
+
+/**
+ * Handle LinkedIn Archive Import
+ * @param {HTMLInputElement} input
+ */
+export async function handleLinkedInImport(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  if (!confirm(`Import ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)?\nThis will ingest all messages into the history.`)) {
+    input.value = '';
+    return;
+  }
+
+  const btn = input.previousElementSibling;
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ Uploading...';
+  btn.disabled = true;
+
+  try {
+    const text = await file.text();
+    const res = await fetch('/api/import/linkedin', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/csv',
+        'X-Reply-Human-Approval': 'confirmed' // Pre-approve local import
+      },
+      body: text
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err);
+    }
+
+    const result = await res.json();
+    alert(`Import Complete!\n\nProcessed: ${result.count}\nErrors: ${result.errors}`);
+    renderDashboard();
+  } catch (error) {
+    console.error('Import failed:', error);
+    alert(`Import failed: ${error.message}`);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+    input.value = '';
+  }
 }
 
 // Export to window for onclick handlers
 window.renderDashboard = renderDashboard;
 window.handleSync = handleSync;
+window.handleLinkedInImport = handleLinkedInImport;
+
+// End of dashboard.js

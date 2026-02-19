@@ -31,4 +31,7 @@
 * `🎤 Mic`, `✨ Magic`, `💡 Suggest` are **feed-only** controls (hidden on Dashboard).
 
 ## CLI Gotchas
-* When using `gh issue comment --body "..."` in `zsh`, **backticks execute**. Use `--body-file` or single quotes.
+## Dashboard / JS Gotchas
+* **Template Literals in Strings:** Embedding code with `${}` inside a backtick string in `dashboard.js` (e.g. for a "Copy Script" feature) triggers immediate interpolation errors if the variables don't exist in the dashboard's scope. Always escape them as `\${` if they are meant to be part of the string content.
+* **Extension vs UserScript:** Chrome Extensions are more robust for local-host communication (no specific Tampermonkey `@connect` prompts needed once permissions are set in manifest).
+
