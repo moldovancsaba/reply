@@ -20,7 +20,10 @@ Bridge ingress is controlled per channel in settings:
   "channelBridge": {
     "channels": {
       "telegram": { "inboundMode": "draft_only" },
-      "discord": { "inboundMode": "draft_only" }
+      "discord": { "inboundMode": "draft_only" },
+      "signal": { "inboundMode": "draft_only" },
+      "viber": { "inboundMode": "draft_only" },
+      "linkedin": { "inboundMode": "draft_only" }
     }
   }
 }
@@ -29,6 +32,13 @@ Bridge ingress is controlled per channel in settings:
 Modes:
 - `draft_only`: inbound ingest allowed
 - `disabled`: inbound ingest blocked (`403`, `code=channel_bridge_disabled`)
+
+Current bridge-managed channels:
+- `telegram`
+- `discord`
+- `signal`
+- `viber`
+- `linkedin`
 
 ### Required headers
 
@@ -93,7 +103,7 @@ For batch requests:
 `/api/channel-bridge/summary` returns:
 - recent count totals (`ingested`, `duplicate`, `error`, `other`, `total`)
 - per-channel counters
-- rollout modes (`telegram`, `discord`)
+- rollout modes (`telegram`, `discord`, `signal`, `viber`, `linkedin`)
 - last event timestamp and last error timestamp
 
 ## Local sidecar CLI helper
@@ -111,8 +121,28 @@ Dry-run:
 npm run channel-bridge:ingest -- --event '{"channel":"discord","peer":{"handle":"alice#1234"},"text":"draft check"}' --dry-run
 ```
 
+```bash
+npm run channel-bridge:ingest -- --event '{"channel":"signal","peer":{"handle":"+15555550123"},"text":"hello from signal"}' --dry-run
+```
+
 Batch mode:
 
 ```bash
 cat events.ndjson | npm run channel-bridge:ingest -- --batch
 ```
+
+## Outbound Safety
+
+Bridge channels are inbound + draft-only in `{reply}`. Outbound send remains blocked in the composer for:
+- Telegram
+- Discord
+- Signal
+- Viber
+- LinkedIn
+
+LinkedIn should remain draft-only unless you have an official compliant integration path.
+
+## Implementation Reference
+
+For reusable rollout and hardening steps (human-enter gating, OpenClaw DM guard, validation matrix), use:
+- `docs/CHANNEL_INTEGRATION_CASE_STUDY.md`

@@ -23,6 +23,15 @@ function withApproval(payload, source) {
     };
 }
 
+function normalizeErrorText(raw, fallback = '') {
+    let text = String(raw || '').trim();
+    while (/^error:\s*/i.test(text)) {
+        text = text.replace(/^error:\s*/i, '').trim();
+    }
+    text = text.replace(/\s+/g, ' ').trim();
+    return text || fallback;
+}
+
 /**
  * Fetch paginated list of conversations/contacts
  * @param {number} offset - Starting index for pagination
@@ -108,23 +117,46 @@ export async function sendMessage(handle, text, channel = 'imessage') {
     if (!endpoint) {
         throw new Error(`Outbound send is disabled for channel "${ch}" (draft-only or unsupported).`);
     }
-    const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: buildSecurityHeaders(),
-        body: JSON.stringify(withApproval({ recipient: handle, text }, 'ui-send-message'))
-    });
+    let res;
+    try {
+        const sendTrigger = {
+            kind: 'human_enter',
+            at: new Date().toISOString(),
+        };
+        const sendPayload = { recipient: handle, text, trigger: sendTrigger };
+        if (ch === 'whatsapp') {
+            sendPayload.transport = 'openclaw_cli';
+            sendPayload.allowDesktopFallback = false;
+        }
+        res = await fetch(endpoint, {
+            method: 'POST',
+            headers: buildSecurityHeaders(),
+            body: JSON.stringify(withApproval(sendPayload, 'ui-send-message'))
+        });
+    } catch (err) {
+        const raw = String(err?.message || err || '').toLowerCase();
+        if (raw.includes('load failed') || raw.includes('failed to fetch') || raw.includes('networkerror')) {
+            throw new Error('Reply server is not reachable at http://localhost:3000. Launch "Launch Reply.command" and retry.');
+        }
+        throw err;
+    }
     if (!res.ok) {
         let detail = '';
         try {
             const raw = await res.text();
             try {
                 const j = JSON.parse(raw);
-                detail = j?.error || j?.message || j?.hint || raw;
+                const errorText = normalizeErrorText(j?.error || j?.message);
+                const hintText = normalizeErrorText(j?.hint);
+                detail = [errorText, hintText].filter(Boolean).join(' ');
+                if (!detail) detail = normalizeErrorText(raw);
             } catch {
-                detail = raw;
+                detail = normalizeErrorText(raw);
             }
         } catch { }
-        const msg = detail ? `Failed to send message: ${detail}` : `Failed to send message: ${res.status} ${res.statusText}`;
+        const msg = detail
+            ? `Failed to send message: ${detail}`
+            : `Failed to send message: ${res.status} ${res.statusText}`;
         throw new Error(msg);
     }
     return await res.json();

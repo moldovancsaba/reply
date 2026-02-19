@@ -32,13 +32,20 @@ npm install
 *   **Unified Knowledge Base:** Stores vectors of your notes and emails locally.
 *   **Hybrid Search:** Combines semantic understanding (Vector) with exact keyword matching (FTS) for 100% retrieval accuracy.
 *   **Context-Aware Chat:** Ask questions about your own data; the bot cites sources.
-*   **Draft-First Omnichannel:** External channels (e.g. Telegram/Discord) ingest inbound events through a local bridge while outbound remains human-controlled.
+*   **Draft-First Omnichannel:** External channels (Telegram, Discord, Signal, Viber, LinkedIn) ingest inbound events through a local bridge while outbound stays human-controlled.
+
+## Channel Policy (Current)
+*   **Send-enabled:** iMessage, WhatsApp, Email
+*   **Draft-only via Channel Bridge:** Telegram, Discord, Signal, Viber, LinkedIn
+*   **OpenClaw note:** On this machine, `openclaw message send` currently rejects `signal`, `viber`, and `linkedin` as unknown channels, so these remain inbound/draft-only in `{reply}`.
+*   **LinkedIn compliance:** Automated LinkedIn messaging is high ToS risk; keep LinkedIn in draft-only mode unless you have an official compliant integration path.
 
 ## 📚 Documentation
 *   [Architecture Overview](docs/ARCHITECTURE.md)
 *   [App Navigation + File Map](docs/APP_NAVIGATION.md)
 *   [Ingestion Guide](docs/INGESTION.md)
 *   [Channel Bridge Contract](docs/CHANNEL_BRIDGE.md)
+*   [Channel Integration Case Study](docs/CHANNEL_INTEGRATION_CASE_STUDY.md)
 *   [Learnings & Decisions](docs/LEARNINGS.md)
 *   [Coding Standards](docs/CODING_STANDARDS.md)
 *   [Human Final Decision Policy](docs/HUMAN_FINAL_DECISION_POLICY.md)
