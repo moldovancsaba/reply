@@ -6,12 +6,50 @@ import { createPlatformValueNode, resolvePlatformTarget } from './platform-icons
 
 async function fetchJson(url, options) {
   const res = await fetch(url, options);
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    let detail = '';
+    try {
+      const raw = await res.text();
+      try {
+        const parsed = JSON.parse(raw);
+        detail = [parsed?.error, parsed?.message, parsed?.hint]
+          .map((v) => String(v || '').trim())
+          .filter(Boolean)
+          .join(' ');
+      } catch {
+        detail = String(raw || '').trim();
+      }
+    } catch {
+      detail = '';
+    }
+    throw new Error(detail || `${res.status} ${res.statusText}`);
+  }
   return await res.json();
 }
 
 function el(id) {
   return document.getElementById(id);
+}
+
+function buildSecurityHeaders(overrides = null) {
+  const headers = { 'X-Reply-Human-Approval': 'confirmed' };
+  if (overrides && typeof overrides === 'object') {
+    Object.assign(headers, overrides);
+  }
+  const token = (window.localStorage && window.localStorage.getItem('replyOperatorToken')) || window.REPLY_OPERATOR_TOKEN;
+  if (token) headers['X-Reply-Operator-Token'] = token;
+  return headers;
+}
+
+function withApproval(payload, source) {
+  return {
+    ...(payload || {}),
+    approval: {
+      confirmed: true,
+      source: source || 'ui',
+      at: new Date().toISOString(),
+    },
+  };
 }
 
 function setVisible(element, visible) {
@@ -147,8 +185,8 @@ function renderNotes(notes) {
         if (!next) return;
         await fetchJson('/api/update-note', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ handle, id: n.id, text: next }),
+          headers: buildSecurityHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(withApproval({ handle, id: n.id, text: next }, 'ui-update-note')),
         });
         await loadKYCData(handle);
       };
@@ -294,8 +332,8 @@ function renderSuggestions(handle, pendingSuggestions) {
     accept.onclick = async () => {
       await fetchJson('/api/accept-suggestion', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ handle, id: s.id }),
+        headers: buildSecurityHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(withApproval({ handle, id: s.id }, 'ui-accept-suggestion')),
       });
       await loadKYCData(handle);
     };
@@ -306,8 +344,8 @@ function renderSuggestions(handle, pendingSuggestions) {
     decline.onclick = async () => {
       await fetchJson('/api/decline-suggestion', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ handle, id: s.id }),
+        headers: buildSecurityHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(withApproval({ handle, id: s.id }, 'ui-decline-suggestion')),
       });
       await loadKYCData(handle);
     };
@@ -432,8 +470,8 @@ export async function saveInlineProfile() {
 
   const result = await fetchJson('/api/kyc', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    headers: buildSecurityHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(withApproval(payload, 'ui-save-kyc')),
   });
 
   if (result?.status !== 'ok') throw new Error(result?.error || 'Failed to save');
@@ -477,8 +515,8 @@ export async function addNote() {
 
   await fetchJson('/api/add-note', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ handle, text }),
+    headers: buildSecurityHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(withApproval({ handle, text }, 'ui-add-note')),
   });
 
   input.value = '';
@@ -488,7 +526,10 @@ export async function addNote() {
 export async function deleteNote(id) {
   const handle = el('kyc-handle-input')?.value?.trim();
   if (!handle || !id) return;
-  await fetchJson(`/api/delete-note?handle=${encodeURIComponent(handle)}&id=${encodeURIComponent(id)}`);
+  await fetchJson(`/api/delete-note?handle=${encodeURIComponent(handle)}&id=${encodeURIComponent(id)}`, {
+    method: 'GET',
+    headers: buildSecurityHeaders(),
+  });
   await loadKYCData(handle);
 }
 
@@ -498,20 +539,10 @@ export function dismissKYC() {
 }
 
 async function analyzeContact(handle) {
-  const headers = { 'Content-Type': 'application/json', 'X-Reply-Human-Approval': 'confirmed' };
-  const token = (window.localStorage && window.localStorage.getItem('replyOperatorToken')) || window.REPLY_OPERATOR_TOKEN;
-  if (token) headers['X-Reply-Operator-Token'] = token;
   await fetchJson('/api/analyze-contact', {
     method: 'POST',
-    headers,
-    body: JSON.stringify({
-      handle,
-      approval: {
-        confirmed: true,
-        source: 'ui-analyze-contact',
-        at: new Date().toISOString(),
-      },
-    }),
+    headers: buildSecurityHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(withApproval({ handle }, 'ui-analyze-contact')),
   });
   await loadKYCData(handle);
 }

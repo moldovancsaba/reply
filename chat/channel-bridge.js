@@ -14,6 +14,7 @@ const SUPPORTED_CHANNELS = new Set([
   "instagram",
   "linkedin",
   "signal",
+  "viber",
   "sms",
 ]);
 
@@ -25,6 +26,7 @@ const CHANNEL_ALIASES = {
   imap: "email",
   wa: "whatsapp",
   tg: "telegram",
+  vb: "viber",
 };
 
 const DOC_ID_EXISTS_CACHE = new Set();
@@ -213,7 +215,7 @@ function normalizeHandleForChannel(channel, value) {
   if (!handle) return "";
 
   handle = handle
-    .replace(/^(imessage:\/\/|whatsapp:\/\/|mailto:|telegram:\/\/|discord:\/\/)/i, "")
+    .replace(/^(imessage:\/\/|whatsapp:\/\/|mailto:|telegram:\/\/|discord:\/\/|signal:\/\/|viber:\/\/|linkedin:\/\/|messenger:\/\/|instagram:\/\/|sms:\/\/)/i, "")
     .trim();
 
   if (channel === "email") {
@@ -375,6 +377,8 @@ function sourceForChannel(channel) {
       return "LinkedIn";
     case "signal":
       return "Signal";
+    case "viber":
+      return "Viber";
     case "sms":
       return "SMS";
     default:

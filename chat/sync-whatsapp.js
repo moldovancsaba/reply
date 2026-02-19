@@ -83,11 +83,11 @@ async function syncWhatsApp() {
         WHERE m.ZMESSAGEDATE > ?
         AND m.ZTEXT IS NOT NULL 
         ORDER BY m.ZMESSAGEDATE ASC
-        LIMIT ${batchLimit}
+        LIMIT ?
     `;
 
     return new Promise((resolve, reject) => {
-        db.all(query, [state.lastDate], async (err, rows) => {
+        db.all(query, [state.lastDate, batchLimit], async (err, rows) => {
             if (err) {
                 console.error("WhatsApp Sync Error:", err);
                 updateStatus({ state: "error", message: err.message });
