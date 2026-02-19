@@ -176,18 +176,24 @@ async function lidsForPhones(phoneDigitsList) {
             new Promise((resolve, reject) => {
                 db.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows || [])));
             });
+        const buildInQuery = (baseSql, values) => {
+            const safeValues = Array.isArray(values) ? values : [];
+            if (safeValues.length === 0) return { sql: baseSql + "NULL)", params: [] };
+            const placeholders = safeValues.map(() => "?").join(",");
+            return { sql: baseSql + placeholders + ")", params: safeValues };
+        };
 
         const out = new Map();
         const CHUNK = 400;
         for (let i = 0; i < phones.length; i += CHUNK) {
             const chunk = phones.slice(i, i + CHUNK);
             const jids = chunk.map(p => `${p}@s.whatsapp.net`);
-            const placeholders = jids.map(() => "?").join(",");
-            debugLog("WA query chunk:", jids.length);
-            const rows = await all(
-                `SELECT ZCONTACTJID, ZCONTACTIDENTIFIER FROM ZWACHATSESSION WHERE ZCONTACTJID IN (${placeholders})`,
+            const query = buildInQuery(
+                "SELECT ZCONTACTJID, ZCONTACTIDENTIFIER FROM ZWACHATSESSION WHERE ZCONTACTJID IN (",
                 jids
             );
+            debugLog("WA query chunk:", jids.length);
+            const rows = await all(query.sql, query.params);
             debugLog("WA rows:", rows.length);
             for (const r of rows) {
                 const jid = String(r?.ZCONTACTJID || "");

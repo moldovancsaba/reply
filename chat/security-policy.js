@@ -56,14 +56,46 @@ function isLocalRequest(req) {
   return isLoopbackIp(ip);
 }
 
+function parseCookieMap(req) {
+  const raw = String(req?.headers?.cookie || "");
+  if (!raw) return {};
+
+  const out = {};
+  const entries = raw.split(";");
+  for (const entry of entries) {
+    const idx = entry.indexOf("=");
+    if (idx <= 0) continue;
+    const name = entry.slice(0, idx).trim();
+    if (!name) continue;
+    const valueRaw = entry.slice(idx + 1).trim();
+    try {
+      out[name] = decodeURIComponent(valueRaw);
+    } catch {
+      out[name] = valueRaw;
+    }
+  }
+  return out;
+}
+
+function timingSafeMatch(expected, actual) {
+  const lhs = String(expected || "");
+  const rhs = String(actual || "");
+  if (!lhs || !rhs) return false;
+  if (lhs.length !== rhs.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(lhs), Buffer.from(rhs));
+}
+
 function hasValidOperatorToken(req, policy) {
   if (!policy?.requireOperatorToken) return true;
   const expected = String(policy?.operatorToken || "");
   if (!expected) return false;
-  const actual = String(req?.headers?.["x-reply-operator-token"] || "");
-  if (!actual) return false;
-  if (expected.length !== actual.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
+
+  const headerToken = String(req?.headers?.["x-reply-operator-token"] || "").trim();
+  if (timingSafeMatch(expected, headerToken)) return true;
+
+  const cookies = parseCookieMap(req);
+  const cookieToken = String(cookies.reply_operator_token || "");
+  return timingSafeMatch(expected, cookieToken);
 }
 
 function isHumanApproved(req, payload) {

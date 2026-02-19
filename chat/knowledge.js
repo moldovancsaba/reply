@@ -14,7 +14,7 @@ async function getSnippets(query, max = 5) {
 
   try {
     // Vector store search returns [{ text, source, path, score, ... }]
-    const results = await search(query, limit = max);
+    const results = await search(query, max);
     return results.map(r => ({
       text: r.text,
       source: r.source,

@@ -258,4 +258,16 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
   - `node --check chat/server.js` => pass
   - API policy check:
     - missing trigger => `403 human_enter_trigger_required`
-    - valid trigger + dry-run => `200` with `transport=openclaw_cli`
+
+## Active Session Update (2026-02-19, LinkedIn Bridge & Robustness)
+- **LinkedIn Inbound:**
+  - **Chrome Extension (Recommended):** Created `chat/chrome-extension/`. Connects to local server to sync LinkedIn messages.
+  - **Port Failover:** Extension now scans ports `3000, 3001, 3002, 3003` to find the active server.
+  - **UserScript (Alternative):** `js/linkedin-bridge.user.js` updated with same port failover logic.
+  - **Manual Script Removed:** Removed embedded script from `dashboard.js` to prevent syntax crashes and encourage extension use.
+- **Dashboard Stability:**
+  - Fixed `dashboard.js` crash caused by unescaped template literals in the embedded script string.
+  - Removed "Copy Script" button; manual ingestion now purely via Extension/UserScript.
+- **SSOT:**
+  - Work tracks against `mvp-factory-control#220` ({reply}: LinkedIn channel enablement).
+

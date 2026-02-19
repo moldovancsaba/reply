@@ -111,6 +111,7 @@ export async function sendMessage(handle, text, channel = 'imessage') {
     const endpointByChannel = {
         imessage: '/api/send-imessage',
         whatsapp: '/api/send-whatsapp',
+        linkedin: '/api/send-linkedin',
         email: '/api/send-email',
     };
     const endpoint = endpointByChannel[ch];
