@@ -2,6 +2,19 @@
 
 Completed work only. The [GitHub Project Board](https://github.com/users/moldovancsaba/projects/1) is the source of truth for delivered items.
 
+## 2026-02-19 — OpenClaw WhatsApp Guardrail Integration + Channel Case Study
+*   **OpenClaw guard enforced in runtime:** `{reply}` now applies WhatsApp OpenClaw safety guard at server startup and before OpenClaw sends, forcing DM policy to `disabled`, group policy to `allowlist`, and resetting `whatsapp-allowFrom` to empty.
+*   **Deterministic policy loading:** `chat/server.js` now loads `chat/.env` via absolute path, preventing launch-directory drift from silently bypassing WhatsApp transport policy flags.
+*   **Manual human trigger enforced end-to-end:** UI WhatsApp sends now always include explicit `human_enter` trigger metadata and request `openclaw_cli` transport with desktop fallback disabled.
+*   **Operational playbook documented:** added `docs/CHANNEL_INTEGRATION_CASE_STUDY.md` as the canonical implementation template for future channel integrations under human-final-decision controls.
+
+## 2026-02-18 — WhatsApp/OpenClaw Hardening + KYC Save Security Fix
+*   **WhatsApp: OpenClaw fallback hardening:** `/api/send-whatsapp` now retries once via Desktop automation when OpenClaw fails with listener/gateway/session/login errors.
+*   **WhatsApp: Cleaner error output:** Send errors are normalized to avoid nested `Error: Error: ...` text, and server responses include actionable hints.
+*   **Email: Duplicate prevention fix:** Gmail incremental sync no longer reruns initial full sync when history returns no new events; this prevents repeated re-ingest of old messages.
+*   **Threads/Counts: Dedupe-aware read path:** History retrieval now dedupes by stable key (`id`, fallback `path::text`) so thread totals and sidebar counts align with unique messages.
+*   **KYC: Profile save reliability restored:** KYC write actions now include security approval/token headers required by hardened sensitive-route authorization, fixing profile save failures after policy rollout.
+
 ## 2026-02-18 — Settings Page + Gmail Reliability
 *   **UX: Settings as a full page:** Replaced the modal with a dedicated Settings page (Dashboard-sized).
 *   **UX: Clear separation of General vs Service settings:** General Settings shows connectors + global worker interval; per-service settings are accessed via card cogs.
@@ -35,7 +48,7 @@ Completed work only. The [GitHub Project Board](https://github.com/users/moldova
 - **macOS Startup Integration**: Added `launchd` support via `com.reply.worker.plist` for "always-on" background intelligence.
 - **Improved KYC & Drafting**: Background processes are now consolidated and throttled for high efficiency.
 - **{reply} web UI + Intelligence**: Message counts in sidebar, per-message timestamps in thread, real Mic dictation (SpeechRecognition), KYC-aware Suggest drafts, and a polished KYC pane (profile edit, channels, AI suggestions accept/decline, notes CRUD, and name propagation to feed + sidebar).
-- **Channel-aware Composer**: Added a channel dropdown in the composer; default channel follows the most recent inbound message. iMessage/email send normally; WhatsApp sends via Desktop automation with clipboard fallback on failure.
+- **Channel-aware Composer**: Added a channel dropdown in the composer; default channel follows the most recent inbound message. iMessage/email send normally; WhatsApp sends via Desktop automation with clipboard fallback on failure. Telegram/Discord/Signal/Viber/LinkedIn are draft-only.
 
 ## 2026-02-16 — Hybrid Search & Apple Notes Integration
 *   **Feature: Hybrid Search:** Implemented combined Semantic (Vector) and Lexical (Keyword) search using LanceDB for 100% retrieval accuracy.

@@ -10,7 +10,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config(); // Load environment variables
+require("dotenv").config({ path: path.join(__dirname, ".env") }); // Load chat/.env deterministically
 
 const { generateReply, extractKYC } = require('./reply-engine.js');
 const { getSnippets } = require("./knowledge.js");
@@ -30,6 +30,7 @@ const {
   isImapConfigured,
   isGmailConfigured,
   withDefaults,
+  CHANNEL_BRIDGE_CHANNELS,
   getChannelBridgeInboundMode,
 } = require("./settings-store.js");
 const { buildAuthUrl, connectGmailFromCallback, disconnectGmail } = require("./gmail-connector.js");
@@ -49,6 +50,7 @@ const {
   appendSecurityAudit,
   resolveClientIp,
 } = require("./security-policy.js");
+const { enforceOpenClawWhatsAppGuard } = require("./openclaw-guard.js");
 
 // Default to port 3000 if not specified in environment variables.
 const PORT_MIN = parseInt(process.env.PORT || "3000", 10);
@@ -59,6 +61,8 @@ let gmailOauthState = null;
 let boundPort = PORT_MIN;
 const analysisInFlightByHandle = new Map();
 const securityPolicy = getSecurityPolicy(process.env);
+const OPERATOR_TOKEN_COOKIE_NAME = "reply_operator_token";
+const BRIDGE_MANAGED_CHANNELS = new Set(CHANNEL_BRIDGE_CHANNELS);
 
 // Conversation list helpers
 const conversationsIndexCache = {
@@ -73,6 +77,33 @@ const CONVERSATION_STATS_TTL_MS = 60 * 1000;
 const CONVERSATION_PREVIEW_SAMPLE_ROWS = 200;
 
 let docsTablePromise = null;
+let openClawGuardLastCheckAtMs = 0;
+let openClawGuardLastResult = null;
+
+function applyOpenClawWhatsAppGuard(force = false) {
+  const now = Date.now();
+  if (!force && now - openClawGuardLastCheckAtMs < 30_000) {
+    return openClawGuardLastResult;
+  }
+  openClawGuardLastCheckAtMs = now;
+  try {
+    const result = enforceOpenClawWhatsAppGuard();
+    openClawGuardLastResult = result;
+    if (!result?.ok) {
+      console.warn("OpenClaw WhatsApp guard not enforced:", result?.reason || "unknown reason");
+    } else if (result.changed) {
+      console.log("OpenClaw WhatsApp guard enforced.");
+    }
+  } catch (error) {
+    openClawGuardLastResult = {
+      ok: false,
+      changed: false,
+      reason: String(error?.message || error || "unknown error"),
+    };
+    console.warn("OpenClaw WhatsApp guard failed:", openClawGuardLastResult.reason);
+  }
+  return openClawGuardLastResult;
+}
 
 function invalidateConversationCaches() {
   conversationsIndexCache.items = [];
@@ -158,13 +189,16 @@ function inferSourceFromChannel(channel) {
   if (c === "imessage") return "iMessage";
   if (c === "telegram") return "Telegram";
   if (c === "discord") return "Discord";
+  if (c === "signal") return "Signal";
+  if (c === "viber") return "Viber";
+  if (c === "linkedin") return "LinkedIn";
   return null;
 }
 
 function getBridgePolicyForChannel(channel, settingsSnapshot = null) {
   const key = String(channel || "").trim().toLowerCase();
   if (!key) return null;
-  if (key !== "telegram" && key !== "discord") return null;
+  if (!BRIDGE_MANAGED_CHANNELS.has(key)) return null;
   const inboundMode = getChannelBridgeInboundMode(settingsSnapshot, key);
   return {
     managed: true,
@@ -212,17 +246,19 @@ function buildChannelBridgeSummary(options = {}) {
     sampleSize: events.length,
     counts,
     channels,
-    rollout: {
-      telegram: getChannelBridgeInboundMode(settings, "telegram"),
-      discord: getChannelBridgeInboundMode(settings, "discord"),
-    },
+    rollout: Object.fromEntries(
+      CHANNEL_BRIDGE_CHANNELS.map((channel) => [
+        channel,
+        getChannelBridgeInboundMode(settings, channel),
+      ])
+    ),
     lastEventAt,
     lastErrorAt,
   };
 }
 
 function stripPathScheme(p) {
-  return String(p || "").replace(/^(imessage:\/\/|whatsapp:\/\/|mailto:|telegram:\/\/|discord:\/\/)/i, "").trim();
+  return String(p || "").replace(/^(imessage:\/\/|whatsapp:\/\/|mailto:|telegram:\/\/|discord:\/\/|signal:\/\/|viber:\/\/|linkedin:\/\/)/i, "").trim();
 }
 
 async function collectRows(results) {
@@ -294,7 +330,7 @@ async function getConversationStatsForHandle(handle, contact) {
     return cached.stats;
   }
 
-  const table = await getDocsTable();
+  const { getHistory } = require("./vector-store.js");
   const handles = contactStore.getAllHandles(handle);
 
   // Add WhatsApp @lid aliases for known phone JIDs so older ingested messages remain discoverable.
@@ -311,22 +347,14 @@ async function getConversationStatsForHandle(handle, contact) {
   let best = { time: 0, preview: null, previewDate: null, channel: null, source: null, latestHandle: null, path: null };
 
   for (const prefix of prefixes) {
-    const filter = `path LIKE '${escapeSqlString(prefix)}%'`;
-    const count = await table.countRows(filter);
-    totalCount += Number.isFinite(Number(count)) ? Number(count) : 0;
-    if (!count) continue;
+    const rows = await getHistory(prefix);
+    totalCount += Array.isArray(rows) ? rows.length : 0;
+    if (!Array.isArray(rows) || rows.length === 0) continue;
 
-    const offset = Math.max(0, Number(count) - CONVERSATION_PREVIEW_SAMPLE_ROWS);
-    const results = await table
-      .query()
-      .where(filter)
-      .offset(offset)
-      .limit(CONVERSATION_PREVIEW_SAMPLE_ROWS)
-      .select(["text", "source", "path"])
-      .execute();
-
-    const rows = await collectRows(results);
-    for (const r of rows) {
+    const sample = rows.length > CONVERSATION_PREVIEW_SAMPLE_ROWS
+      ? rows.slice(-CONVERSATION_PREVIEW_SAMPLE_ROWS)
+      : rows;
+    for (const r of sample) {
       const dt = extractDateFromText(r?.text || "");
       const t = dt ? dt.getTime() : 0;
       if (!t) continue;
@@ -367,6 +395,22 @@ async function getConversationStatsForHandle(handle, contact) {
 function writeJson(res, statusCode, payload) {
   res.writeHead(statusCode, { "Content-Type": "application/json" });
   res.end(JSON.stringify(payload));
+}
+
+function setOperatorTokenCookie(req, res) {
+  if (!securityPolicy.requireOperatorToken) return;
+  if (!isLocalRequest(req)) return;
+  const token = String(securityPolicy.operatorToken || "").trim();
+  if (!token) return;
+
+  const cookie = [
+    `${OPERATOR_TOKEN_COOKIE_NAME}=${encodeURIComponent(token)}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Strict",
+    "Max-Age=43200",
+  ].join("; ");
+  res.setHeader("Set-Cookie", cookie);
 }
 
 function auditSecurityDecision(req, params) {
@@ -551,6 +595,9 @@ function pathPrefixesForHandle(handle) {
     out.push(`whatsapp://${v}`);
     out.push(`telegram://${v}`);
     out.push(`discord://${v}`);
+    out.push(`signal://${v}`);
+    out.push(`viber://${v}`);
+    out.push(`linkedin://${v}`);
   }
   return out;
 }
@@ -577,9 +624,11 @@ function channelFromDoc(doc) {
   if (p.startsWith("imessage://") || s.includes("imessage")) return "imessage";
   if (p.startsWith("telegram://") || s.includes("telegram")) return "telegram";
   if (p.startsWith("discord://") || s.includes("discord")) return "discord";
+  if (p.startsWith("signal://") || s.includes("signal")) return "signal";
+  if (p.startsWith("viber://") || s.includes("viber")) return "viber";
+  if (p.startsWith("linkedin://") || s.includes("linkedin")) return "linkedin";
   if (s.includes("messenger")) return "messenger";
   if (s.includes("instagram")) return "instagram";
-  if (s.includes("linkedin")) return "linkedin";
   return "imessage";
 }
 
@@ -599,6 +648,184 @@ function normalizePhone(phone) {
   const digits = cleaned.replace(/\D/g, "");
   if (digits.length < 6) return null;
   return digits; // Use digits-only key to match across formatting
+}
+
+function resolveWhatsAppSendTransport(rawTransport) {
+  const value =
+    rawTransport !== undefined && rawTransport !== null
+      ? rawTransport
+      : process.env.REPLY_WHATSAPP_SEND_TRANSPORT;
+  const normalized = String(value || "desktop").trim().toLowerCase();
+  if (normalized === "openclaw" || normalized === "openclaw_cli" || normalized === "web") {
+    return "openclaw_cli";
+  }
+  return "desktop";
+}
+
+function resolveWhatsAppOpenClawSendEnabled() {
+  const v = String(process.env.REPLY_WHATSAPP_ALLOW_OPENCLAW_SEND ?? "false")
+    .trim()
+    .toLowerCase();
+  return ["1", "true", "yes", "on"].includes(v);
+}
+
+function isManualUiWhatsAppSend(payload) {
+  const source = String(payload?.approval?.source || "")
+    .trim()
+    .toLowerCase();
+  return source === "ui-send-message" || source === "ui-send-whatsapp-manual";
+}
+
+function hasHumanEnterTrigger(payload) {
+  const kind = String(payload?.trigger?.kind || "")
+    .trim()
+    .toLowerCase();
+  if (kind !== "human_enter") return false;
+  const at = String(payload?.trigger?.at || "").trim();
+  if (!at) return false;
+  const t = Date.parse(at);
+  if (!Number.isFinite(t)) return false;
+  // Trigger expires quickly to reduce replay risk from stale payloads.
+  return Math.abs(Date.now() - t) <= 120000;
+}
+
+function resolveOpenClawBinary() {
+  const configured = String(process.env.OPENCLAW_BIN || "").trim();
+  return configured || "openclaw";
+}
+
+function parseJsonSafe(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeSendErrorMessage(rawMessage, fallbackMessage) {
+  let text = String(rawMessage || "").trim();
+  while (/^error:\s*/i.test(text)) {
+    text = text.replace(/^error:\s*/i, "").trim();
+  }
+  text = text.replace(/\s+/g, " ").trim();
+  if (text) return text;
+  return String(fallbackMessage || "Request failed.");
+}
+
+function resolveWhatsAppDesktopFallbackOnOpenClawFailure(rawValue) {
+  if (typeof rawValue === "boolean") return rawValue;
+  const envValue = String(
+    process.env.REPLY_WHATSAPP_DESKTOP_FALLBACK_ON_OPENCLAW_FAILURE ?? "true"
+  )
+    .trim()
+    .toLowerCase();
+  return ["1", "true", "yes", "on"].includes(envValue);
+}
+
+function isOpenClawDesktopFallbackEligible(errorObj) {
+  const s = [
+    errorObj?.message,
+    errorObj?.hint,
+    errorObj?.raw?.stderr,
+    errorObj?.raw?.stdout,
+  ]
+    .map((v) => String(v || ""))
+    .join("\n")
+    .toLowerCase();
+
+  return [
+    "no active whatsapp web listener",
+    "start the gateway",
+    "openclaw gateway",
+    "gateway is running",
+    "login --channel whatsapp",
+    "no whatsapp web session found",
+    "scan the qr",
+    "not linked",
+    "enoent",
+    "command not found",
+  ].some((pattern) => s.includes(pattern));
+}
+
+function buildOpenClawWhatsAppHint(rawErrorText, execErrorText, shortErrorText) {
+  const s = `${rawErrorText || ""}\n${execErrorText || ""}\n${shortErrorText || ""}`.toLowerCase();
+  if (s.includes("enoent")) {
+    return "Install OpenClaw CLI or set OPENCLAW_BIN to the openclaw executable path.";
+  }
+  if (s.includes("no active whatsapp web listener")) {
+    return "Start OpenClaw gateway and link WhatsApp first (example: `openclaw channels login --channel whatsapp --account default`).";
+  }
+  if (s.includes("gateway is running") || s.includes("start the gateway")) {
+    return "Start OpenClaw gateway, then retry (example: `openclaw gateway`).";
+  }
+  if (
+    s.includes("not linked") ||
+    s.includes("scan the qr") ||
+    s.includes("login --channel whatsapp") ||
+    s.includes("no whatsapp web session found")
+  ) {
+    return "Link WhatsApp in OpenClaw first (example: `openclaw channels login --channel whatsapp`), then retry.";
+  }
+  return "Ensure OpenClaw CLI is installed, gateway is running, and WhatsApp Web is linked.";
+}
+
+async function sendWhatsAppViaOpenClawCli(options) {
+  // Re-apply guard before each OpenClaw send to prevent accidental DM pairing prompts.
+  applyOpenClawWhatsAppGuard(false);
+
+  const recipient = String(options?.recipient || "").trim();
+  const text = String(options?.text || "");
+  const dryRun = Boolean(options?.dryRun);
+  const bin = resolveOpenClawBinary();
+  const args = [
+    "message",
+    "send",
+    "--channel",
+    "whatsapp",
+    "--target",
+    recipient,
+    "--message",
+    text,
+    "--json",
+  ];
+  if (dryRun) args.push("--dry-run");
+
+  return await new Promise((resolve, reject) => {
+    execFile(bin, args, { maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+      const outText = String(stdout || "").trim();
+      const errText = String(stderr || "").trim();
+      const parsedOut = parseJsonSafe(outText);
+      const parsedErr = parseJsonSafe(errText);
+
+      if (error) {
+        const execErr = String(error?.message || "").trim();
+        const shortErr = normalizeSendErrorMessage(
+          parsedErr?.error ||
+            parsedErr?.message ||
+            parsedOut?.error ||
+            parsedOut?.message ||
+            (errText ? errText.split("\n").slice(-1)[0].trim() : "") ||
+            execErr,
+          "OpenClaw WhatsApp send failed."
+        );
+        const wrapped = new Error(shortErr);
+        wrapped.hint = buildOpenClawWhatsAppHint(errText, execErr, shortErr);
+        wrapped.raw = {
+          stdout: outText,
+          stderr: errText,
+        };
+        reject(wrapped);
+        return;
+      }
+
+      resolve({
+        parsed: parsedOut,
+        raw: outText,
+      });
+    });
+  });
 }
 
 const WA_DB_PATH = path.join(
@@ -650,6 +877,15 @@ const whatsAppIdResolver = (() => {
     });
   }
 
+  function buildInQuery(baseSql, values) {
+    const safeValues = Array.isArray(values) ? values : [];
+    if (safeValues.length === 0) {
+      return { sql: baseSql + "NULL)", params: [] };
+    }
+    const placeholders = safeValues.map(() => "?").join(",");
+    return { sql: baseSql + placeholders + ")", params: safeValues };
+  }
+
   function normalizeWhatsAppContactJid(contactJid) {
     if (!contactJid) return null;
     const v = String(contactJid).trim();
@@ -680,15 +916,14 @@ const whatsAppIdResolver = (() => {
     for (let i = 0; i < missing.length; i += CHUNK) {
       const chunk = missing.slice(i, i + CHUNK);
       const ids = chunk.map((lid) => `${lid}@lid`);
-      const placeholders = ids.map(() => "?").join(",");
+      const query = buildInQuery(
+        "SELECT ZCONTACTIDENTIFIER, ZCONTACTJID, ZPARTNERNAME FROM ZWACHATSESSION WHERE ZCONTACTIDENTIFIER IN (",
+        ids
+      );
 
       let rows = [];
       try {
-        rows = await all(
-          db,
-          `SELECT ZCONTACTIDENTIFIER, ZCONTACTJID, ZPARTNERNAME FROM ZWACHATSESSION WHERE ZCONTACTIDENTIFIER IN (${placeholders})`,
-          ids
-        );
+        rows = await all(db, query.sql, query.params);
       } catch (e) {
         console.warn("WhatsApp lid mapping query failed:", e?.message || e);
         break;
@@ -746,15 +981,14 @@ const whatsAppIdResolver = (() => {
     for (let i = 0; i < missing.length; i += CHUNK) {
       const chunk = missing.slice(i, i + CHUNK);
       const jids = chunk.map((p) => `${p}@s.whatsapp.net`);
-      const placeholders = jids.map(() => "?").join(",");
+      const query = buildInQuery(
+        "SELECT ZCONTACTJID, ZCONTACTIDENTIFIER FROM ZWACHATSESSION WHERE ZCONTACTJID IN (",
+        jids
+      );
 
       let rows = [];
       try {
-        rows = await all(
-          db,
-          `SELECT ZCONTACTJID, ZCONTACTIDENTIFIER FROM ZWACHATSESSION WHERE ZCONTACTJID IN (${placeholders})`,
-          jids
-        );
+        rows = await all(db, query.sql, query.params);
       } catch (e) {
         console.warn("WhatsApp phone mapping query failed:", e?.message || e);
         break;
@@ -1139,6 +1373,7 @@ const server = http.createServer(async (req, res) => {
   res.setHeader("Content-Security-Policy", CSP_HEADER);
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
+  setOperatorTokenCookie(req, res);
 
   // --- Rate Limiting (sensitive routes only) ---
   if (RATE_LIMITED_ROUTES.has(pathname) && req.method === "POST") {
@@ -1401,7 +1636,7 @@ const server = http.createServer(async (req, res) => {
           next.channelBridge = { ...(current.channelBridge || {}), channels: { ...(current.channelBridge?.channels || {}) } };
           const channels = channelBridge.channels || {};
           if (channels && typeof channels === "object") {
-            for (const key of ["telegram", "discord"]) {
+            for (const key of CHANNEL_BRIDGE_CHANNELS) {
               if (!channels[key] || typeof channels[key] !== "object") continue;
               const mode = String(channels[key].inboundMode || "").trim().toLowerCase();
               if (!next.channelBridge.channels[key]) next.channelBridge.channels[key] = {};
@@ -1911,13 +2146,36 @@ end run
       writeJson(res, 405, { error: "Method not allowed" });
       return;
     }
-    const { execFile } = require("child_process");
     const payload = await readJsonBody(req);
     if (!authorizeSensitiveRoute(req, res, {
       route: "/api/send-whatsapp",
       action: "send-whatsapp",
       payload,
     })) {
+      return;
+    }
+    if (!isManualUiWhatsAppSend(payload)) {
+      denySensitiveRoute(req, res, {
+        route: "/api/send-whatsapp",
+        action: "send-whatsapp",
+        code: "manual_ui_send_required",
+        message: "WhatsApp send is restricted to manual UI sends from {reply}.",
+        hint: "Use the {reply} UI Send button after human review/approval.",
+        statusCode: 403,
+        dryRun: Boolean(payload?.dryRun),
+      });
+      return;
+    }
+    if (!hasHumanEnterTrigger(payload)) {
+      denySensitiveRoute(req, res, {
+        route: "/api/send-whatsapp",
+        action: "send-whatsapp",
+        code: "human_enter_trigger_required",
+        message: "WhatsApp send requires explicit human Enter trigger from UI.",
+        hint: "Send from {reply} UI using Enter/Send button; trigger expires after 2 minutes.",
+        statusCode: 403,
+        dryRun: Boolean(payload?.dryRun),
+      });
       return;
     }
     const recipientRaw = (payload?.recipient || "").toString().trim();
@@ -1932,6 +2190,63 @@ end run
     // WhatsApp search works best with digits/+; keep user formatting but remove extra whitespace.
     const recipient = recipientRaw.replace(/\s+/g, "");
     const text = textRaw.replace(/\r\n/g, "\n");
+    const requestedTransport = resolveWhatsAppSendTransport(payload?.transport);
+    if (requestedTransport === "openclaw_cli" && !resolveWhatsAppOpenClawSendEnabled()) {
+      writeJson(res, 403, {
+        error: "OpenClaw WhatsApp outbound is disabled by policy.",
+        code: "openclaw_whatsapp_send_disabled",
+        hint: "Use Desktop send path in {reply}; keep OpenClaw for inbound/draft assistance only.",
+        transport: "openclaw_cli_blocked",
+      });
+      return;
+    }
+    let transport = requestedTransport;
+    let openclawFallback = null;
+
+    if (requestedTransport === "openclaw_cli") {
+      try {
+        const result = await sendWhatsAppViaOpenClawCli({ recipient, text, dryRun });
+        contactStore.clearDraft(recipientRaw);
+        writeJson(res, 200, {
+          status: "ok",
+          transport: requestedTransport,
+          result: result.parsed || result.raw || "ok",
+        });
+        return;
+      } catch (e) {
+        const shortErr = normalizeSendErrorMessage(
+          e?.message,
+          "OpenClaw WhatsApp send failed."
+        );
+        const hint = String(
+          e?.hint ||
+            "Ensure OpenClaw CLI is installed, gateway is running, and WhatsApp Web is linked."
+        );
+        const fallbackEnabled = resolveWhatsAppDesktopFallbackOnOpenClawFailure(
+          payload?.allowDesktopFallback
+        );
+        const fallbackEligible = isOpenClawDesktopFallbackEligible(e);
+        if (!fallbackEnabled || !fallbackEligible) {
+          console.error("Send WhatsApp (OpenClaw) error:", shortErr);
+          writeJson(res, 500, {
+            error: shortErr,
+            hint,
+            transport: requestedTransport,
+          });
+          return;
+        }
+        console.warn(
+          "Send WhatsApp (OpenClaw) failed; retrying with desktop automation:",
+          shortErr
+        );
+        transport = "desktop_fallback";
+        openclawFallback = {
+          from: requestedTransport,
+          reason: shortErr,
+          hint,
+        };
+      }
+    }
 
     const appCandidates = [
       process.env.WHATSAPP_APP_NAME,
@@ -2327,10 +2642,10 @@ end focusCheck
         const execErr = (error?.message || "").toString().trim();
         const shortErr = (() => {
           const m = rawErr.match(/execution error: ([^\n\r]+)/i);
-          if (m && m[1]) return m[1].trim();
-          if (rawErr) return rawErr.split("\n").slice(-1)[0].trim();
+          if (m && m[1]) return normalizeSendErrorMessage(m[1], "WhatsApp automation failed.");
+          if (rawErr) return normalizeSendErrorMessage(rawErr.split("\n").slice(-1)[0], "WhatsApp automation failed.");
           if (execErr.includes("Command failed:")) return "WhatsApp automation failed (osascript).";
-          return execErr || "WhatsApp automation failed.";
+          return normalizeSendErrorMessage(execErr, "WhatsApp automation failed.");
         })();
         const hint = (() => {
           const s = `${rawErr}\n${execErr}\n${shortErr}`.toLowerCase();
@@ -2359,11 +2674,18 @@ end focusCheck
         writeJson(res, 500, {
           error: shortErr,
           hint,
+          transport,
+          fallback: openclawFallback,
         });
         return;
       }
       contactStore.clearDraft(recipientRaw);
-      writeJson(res, 200, { status: "ok", result: (stdout || "").trim() });
+      writeJson(res, 200, {
+        status: "ok",
+        result: (stdout || "").trim(),
+        transport,
+        fallback: openclawFallback,
+      });
     });
     return;
   }
@@ -2805,4 +3127,5 @@ function tryListen(port) {
   server.listen(port, "127.0.0.1");
 }
 
+applyOpenClawWhatsAppGuard(true);
 tryListen(PORT_MIN);

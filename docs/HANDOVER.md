@@ -15,13 +15,19 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
   - Never maintain local ideabank/tasklist/roadmap files in this repo.
 
 ## Current Priorities (Board)
+- P0 Done: `mvp-factory-control#196` — `{reply}: Stabilize WhatsApp Desktop send (⌘N flow)` *(closed 2026-02-18)*
+- P1 In Progress: `mvp-factory-control#197` — `{reply}: Conversation list indexing (order/search/counts) cleanup`
 - P1 In Progress: `mvp-factory-control#202` — `{reply}: Implement omnichannel routing + human-gated NBA orchestration`
-- P1 In Progress: `mvp-factory-control#199` — `{reply}: Adopt OpenClaw security policy + approvals baseline`
-- P0 Ready: `mvp-factory-control#196` — `{reply}: Stabilize WhatsApp Desktop send (⌘N flow)`
-- P1 Ready: `mvp-factory-control#197` — `{reply}: Conversation list indexing (order/search/counts) cleanup`
-- P1 Backlog: `mvp-factory-control#201` — `{reply}: Implement secure digital-me memory index + retrieval controls`
-- P2 Backlog: `mvp-factory-control#200` — `{reply}: Build channel-aware KYC provenance model (OpenClaw-inspired)`
-- P2 Idea Bank: `mvp-factory-control#195` — `{reply}: Manage multiple mailboxes`
+- P1 Backlog: `mvp-factory-control#211` — `{reply}: Decompose server.js into route modules` *(audit Q1)*
+- P1 Backlog: `mvp-factory-control#212` — `{reply}: Add CI pipeline (GitHub Actions lint + test)` *(audit Q9)*
+- P1 Backlog: `mvp-factory-control#214` — `{reply}: Add loading states and error toast notifications` *(audit U3/U4)*
+- P2 Backlog: `mvp-factory-control#213` — `{reply}: Replace string-interpolated SQL with parameterized queries` *(audit S9)*
+- P2 Backlog: `mvp-factory-control#215` — `{reply}: First-run onboarding wizard` *(audit U5)*
+- P2 Backlog: `mvp-factory-control#216` — `{reply}: Mobile responsiveness and accessibility improvements` *(audit U6/U7)*
+- P2 Backlog: `mvp-factory-control#217` — `{reply}: Local analytics instrumentation` *(audit B1/B2)*
+- P2 Backlog: `mvp-factory-control#218` — `{reply}: Data export CLI for portability` *(audit B6)*
+- P2 Backlog: `mvp-factory-control#219` — `{reply}: Version strategy and changelog` *(audit B5)*
+- P1 Done: `mvp-factory-control#199` — `{reply}: Adopt OpenClaw security policy + approvals baseline` *(closed 2026-02-18)*
 
 ## Docs Index
 - `README.md` — quickstart
@@ -30,6 +36,7 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
 - `docs/INGESTION.md` — sync/ingestion details
 - `docs/PROJECT_MANAGEMENT.md` — board rules/fields
 - `docs/HUMAN_FINAL_DECISION_POLICY.md` — mandatory human-in-the-loop policy
+- `docs/CHANNEL_INTEGRATION_CASE_STUDY.md` — reusable channel hardening blueprint (OpenClaw WhatsApp reference)
 - `docs/RELEASE_NOTES.md` — shipped changes only
 
 ## Key Runtime Files
@@ -57,10 +64,15 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
 - `gh issue comment --body "..."` in `zsh`: backticks execute; prefer single quotes or `--body-file`.
 - WhatsApp direct send requires WhatsApp Desktop running + macOS Accessibility permission (UI automation).
 - WhatsApp UI automation is still flaky across WhatsApp builds/UI states; keep it defensive and validate on the real UI (tracked in `mvp-factory-control#196`).
+- Desktop launcher (`/Users/moldovancsaba/Desktop/Launch Reply.command`) now runs in dumb-safe mode: always kills existing listeners on `3000` + `18789` before starting fresh.
 
 ## Recent Shipped (2026-02-18)
 - Email dashboard: `/api/system-health` now counts ingested email docs from LanceDB using `source IN ('Gmail','IMAP','Mail','mbox')`, fixing the “Email Sync = 0” mismatch.
 - Gmail Settings: configurable Gmail sync scope (Inbox+Sent / All Mail / Custom query).
+- WhatsApp send hardening: OpenClaw send failures caused by missing listener/gateway/session now auto-fallback to Desktop automation for one retry.
+- KYC save hardening: profile/note/suggestion write actions now include required approval/token metadata in UI calls, fixing save failures after security policy enforcement.
+- Email duplicate fix: Gmail incremental sync no longer re-runs full initial sync when history returns no new events (prevents duplicated old messages).
+- Count alignment: history reads are dedupe-aware, and conversation counts now reflect deduped thread history.
 
 ## Active Session Update (2026-02-18, 70% handover trigger)
 - Added policy doc: `docs/HUMAN_FINAL_DECISION_POLICY.md` (human final decision + deny-by-default control model).
@@ -152,31 +164,98 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
     - `/api/conversations?q=batch3` and `/api/conversations?q=rollout_check` include `bridgePolicy` with `inboundMode=draft_only`.
   - Security audit (with env sourced) now reports `critical=0 warn=0`.
 
+## Active Session Update (2026-02-18, channel expansion + docs sync)
+- Expanded draft-only bridge-managed channels beyond Telegram/Discord:
+  - Added `signal`, `viber`, `linkedin` to bridge rollout defaults in `chat/settings-store.js`.
+  - `/api/settings` channel-bridge save path now persists inbound modes for all 5 bridge channels.
+  - Server bridge policy visibility now applies to all 5 bridge channels in `/api/conversations`.
+  - Dashboard bridge card now shows rollout status for Telegram/Discord/Signal/Viber/LinkedIn.
+  - Settings UI Bridge section now exposes inbound mode toggles for all 5 channels.
+- Expanded channel normalization + retrieval:
+  - `chat/channel-bridge.js` now accepts `viber` events and strips additional channel schemes.
+  - `chat/server.js` now recognizes `signal://`, `viber://`, `linkedin://` in path parsing and source inference.
+  - `pathPrefixesForHandle` now includes `signal://`, `viber://`, `linkedin://` to improve thread lookup consistency.
+- Composer policy updated:
+  - Channel picker now includes `Signal`, `Viber`, `LinkedIn` as Draft only.
+  - Send remains enabled only for `iMessage`, `WhatsApp`, `Email`.
+  - Draft-only enforcement now includes Telegram/Discord/Signal/Viber/LinkedIn.
+- OpenClaw transport reality check on this machine:
+  - `openclaw message send --channel signal|viber|linkedin` currently returns `Unknown channel`.
+  - Therefore these channels remain inbound/draft-only in `{reply}` for now.
+- Documentation refreshed to match behavior:
+  - `README.md`, `docs/USER_GUIDE.md`, `docs/APP_NAVIGATION.md`, `docs/CHANNEL_BRIDGE.md`, `docs/RELEASE_NOTES.md`, and this handover doc.
+
+## Active Session Update (2026-02-18, global audit)
+
+### What was done (commits on `main`)
+- `cd0d7b2` — **Phase 1 security hardening:**
+  - Removed `chat/.env` from Git tracking (secrets exposure fix). ⚠️ **Rotate GOOGLE_API_KEY and REPLY_OPERATOR_TOKEN — they were in Git history.**
+  - `isLocalRequest()` in `chat/security-policy.js` now uses raw socket address, ignoring spoofable `X-Forwarded-For`.
+  - Installed ESLint 9 + flat config (`chat/eslint.config.mjs`). `npm run lint` and `npm run lint:fix` added.
+  - Fixed real bug: `runAppleScript()` was called but never defined in `chat/sync-notes.js` — would crash Apple Notes sync.
+  - Moved stale Swift stubs + project-management JSON to `archive/`. Temp dirs added to `.gitignore`.
+- `6384996` — **CORS, CSP, rate limiting:**
+  - CORS: same-origin enforcement (localhost only), preflight `OPTIONS` handling.
+  - CSP: 11-directive Content-Security-Policy + `X-Frame-Options: DENY` + `X-Content-Type-Options: nosniff` on every response.
+  - Rate limiter: 30 req/min per IP on 12 sensitive routes (429 with `Retry-After`). New module: `chat/rate-limiter.js`.
+- `9961ccb` — **Test framework:**
+  - Node.js built-in `node:test` (zero new dependencies). `npm test` runs all tests.
+  - `chat/test/security-policy.test.js` (20 tests) + `chat/test/rate-limiter.test.js` (6 tests). **26 pass, 0 fail.**
+
+### SSOT updates
+- Closed `mvp-factory-control#199` as Done with full completion comment.
+- Created 9 new audit issues in `mvp-factory-control` (#211–#219), all added to Project Board 1.
+- ⚠️ **Board fields (Product/Type/Priority/Status) for #211–#219 were NOT set** — the `gh project item-edit` CLI hung due to GitHub API rate limiting. Next agent must set these fields manually via the board UI or retry the CLI after the rate limit resets.
+
+### Verification state
+- `node chat/security-audit.js` → `critical=0 warn=0 info=5` ✅
+- `npm test` → 26 pass, 0 fail ✅
+- CORS blocking confirmed via curl ✅
+- Security headers confirmed on all responses ✅
+
 ## Current Status / Known Issues (SSOT)
-- `{reply}: Implement omnichannel routing + human-gated NBA orchestration` — https://github.com/moldovancsaba/mvp-factory-control/issues/202
-  - Status: In Progress.
-  - Current step: minimal Telegram/Discord-capable inbound sidecar contract implemented (`/api/channel-bridge/inbound`, draft-only inbound flow); next is full OpenClaw sidecar wiring + channel rollout controls.
-- `{reply}: Adopt OpenClaw security policy + approvals baseline` — https://github.com/moldovancsaba/mvp-factory-control/issues/199
-  - Status: In Progress.
-  - Current step: route-level approval gates + security audit/fix CLI + operator token runtime enforcement are in place.
-  - Remaining hardening: propagate operator-token handling through all operator environments and keep periodic audit checks green.
-- `{reply}: Stabilize WhatsApp Desktop send (⌘N flow)` — https://github.com/moldovancsaba/mvp-factory-control/issues/196
-  - Status: still flaky depending on WhatsApp UI state (popovers, wrong focus, WhatsApp vs WhatsApp Beta).
-  - Safety: automation remains defensive to avoid sending the recipient as a message.
-- `{reply}: Conversation list indexing (order/search/counts) cleanup` — https://github.com/moldovancsaba/mvp-factory-control/issues/197
-  - Bug: `/api/conversations` currently runs in `meta.mode = fallback` because the “db index” helpers (e.g. `getConversationsIndexFresh`, query matching) are not wired; server-side `q=` filtering is effectively disabled.
-  - Note: WIP branch `codex/wip-conversations-index` exists in `moldovancsaba/reply` (commit `788e3f3`) with a partial conversations index cache + sidebar `q=` wiring (use only if you want to continue that approach).
+- `mvp-factory-control#196` — WhatsApp Desktop send still flaky (UI automation). Status: In Progress.
+- `mvp-factory-control#197` — `/api/conversations` runs in `meta.mode = fallback`; server-side `q=` filtering disabled. WIP branch `codex/wip-conversations-index` (commit `788e3f3`) exists. Status: In Progress.
+- `mvp-factory-control#202` — Omnichannel routing + NBA orchestration. Status: In Progress.
+- `mvp-factory-control#211` — Decompose `server.js` into route modules. Status: Backlog. **Recommended next P1 task.**
+- `mvp-factory-control#212` — CI pipeline (GitHub Actions). Status: Backlog. **Quick win — do before #211.**
+- `mvp-factory-control#213` — Parameterized SQL. Status: Backlog.
+- `mvp-factory-control#214–#219` — UX + business value items. Status: Backlog.
+- ⚠️ Board fields for #211–#219 not yet set (rate limit issue). Set via https://github.com/users/moldovancsaba/projects/1
 
 ## Quick Verification (dev)
-- Security baseline:
-  - `cd /Users/moldovancsaba/Projects/reply && /opt/homebrew/bin/node chat/security-audit.js`
-  - `cd /Users/moldovancsaba/Projects/reply && /opt/homebrew/bin/node chat/security-audit.js --fix`
-- Channel bridge CLI:
-  - `cd /Users/moldovancsaba/Projects/reply/chat && /opt/homebrew/bin/node channel-bridge-sidecar.js --help`
-  - `cd /Users/moldovancsaba/Projects/reply/chat && /opt/homebrew/bin/node channel-bridge-sidecar.js --event '{"channel":"telegram","peer":{"handle":"@qa"},"text":"hello"}' --dry-run`
-- Email count:
-  - `GET /api/system-health` → expect `channels.mail.processed > 0` after Gmail/IMAP/Mail sync.
-- Contacts list mode:
-  - `GET /api/conversations?offset=0&limit=10` → currently expects `meta.mode = fallback` until #197 is completed.
-- WhatsApp send (safe):
-  - `POST /api/send-whatsapp` with `{"recipient":"+3670...","text":"...","dryRun":true}` should return `ok` without sending.
+- Security baseline: `cd /Users/moldovancsaba/Projects/reply && node chat/security-audit.js`
+- Tests: `cd /Users/moldovancsaba/Projects/reply/chat && npm test`
+- Lint: `cd /Users/moldovancsaba/Projects/reply/chat && npm run lint`
+- Channel bridge CLI: `node chat/channel-bridge-sidecar.js --event '{"channel":"telegram","peer":{"handle":"@qa"},"text":"hello"}' --dry-run`
+- Contacts list: `GET /api/conversations?offset=0&limit=10` → expects `meta.mode = fallback` until #197 done.
+- WhatsApp send (safe): `POST /api/send-whatsapp` with `{"recipient":"+3670...","text":"...","dryRun":true}`
+
+## Next Agent Recommendations (priority order)
+1. **Set board fields for #211–#219** — visit https://github.com/users/moldovancsaba/projects/1 and set Product=reply, Type, Priority, Status=Backlog for each.
+2. **Add CI pipeline** (`mvp-factory-control#212`) — create `.github/workflows/ci.yml` running `npm run lint` + `npm test` on push/PR. Fast win, ~30 min.
+3. **Parameterized SQL** (`mvp-factory-control#213`) — grep for string-interpolated SQL in `server.js` WhatsApp ID resolution and replace with `?` placeholders.
+4. **Decompose server.js** (`mvp-factory-control#211`) — biggest refactor. Do #212 + #213 first so CI catches regressions.
+5. **Rotate secrets** — `GOOGLE_API_KEY` and `REPLY_OPERATOR_TOKEN` were committed in Git history. Must be rotated.
+
+## Active Session Update (2026-02-19, OpenClaw WhatsApp integration pattern)
+- Added reusable case study doc: `docs/CHANNEL_INTEGRATION_CASE_STUDY.md`.
+- Wired OpenClaw WhatsApp guard into runtime in `chat/server.js`:
+  - applied once at startup
+  - re-applied before each `openclaw_cli` WhatsApp send
+- Guard behavior (`chat/openclaw-guard.js`):
+  - forces `dmPolicy=disabled` (global + default account)
+  - forces `groupPolicy=allowlist` (global + default account)
+  - empties `~/.openclaw/credentials/whatsapp-allowFrom.json`
+- Made env loading deterministic: `chat/server.js` now loads `chat/.env` via `__dirname`.
+- Updated UI WhatsApp send payload in `chat/js/api.js`:
+  - always sends `trigger: { kind: "human_enter", at: ... }`
+  - enforces `transport: "openclaw_cli"` and `allowDesktopFallback=false` for WhatsApp sends.
+- Updated default config in `chat/.env` and `chat/.env.example` to OpenClaw send mode.
+- Validations run:
+  - `node chat/security-audit.js` => `critical=0 warn=0`
+  - `node chat/security-audit.js --fix` => `critical=0 warn=0`
+  - `node --check chat/server.js` => pass
+  - API policy check:
+    - missing trigger => `403 human_enter_trigger_required`
+    - valid trigger + dry-run => `200` with `transport=openclaw_cli`
