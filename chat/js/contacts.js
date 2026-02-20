@@ -16,14 +16,7 @@ let conversationsQuery = '';
 function formatBridgePolicyBadge(policy) {
     if (!policy || !policy.managed) return '';
     const key = String(policy.channel || '').toLowerCase();
-    const channelLabelByKey = {
-        telegram: 'Telegram',
-        discord: 'Discord',
-        signal: 'Signal',
-        viber: 'Viber',
-        linkedin: 'LinkedIn',
-    };
-    const channelLabel = channelLabelByKey[key] || key || 'Bridge';
+    const channelLabel = key === 'telegram' ? 'Telegram' : (key === 'discord' ? 'Discord' : key || 'Bridge');
     const mode = String(policy.inboundMode || '').trim().toLowerCase() || 'unknown';
     return `${channelLabel} ${mode}`;
 }
@@ -76,8 +69,7 @@ export async function loadConversations(append = false) {
             if (contact.status && contact.status !== 'open') {
                 statusDot.classList.add(contact.status);
             } else {
-                // Keep width reserved so all rows stay left-aligned.
-                statusDot.classList.add('status-dot--hidden');
+                statusDot.style.display = 'none'; // Clean look for normal contacts
             }
 
             // Contact info

@@ -3,7 +3,7 @@
  * Renders system health dashboard with sync status and triage log
  */
 
-import { fetchSystemHealth, fetchTriageLogs, fetchBridgeSummary, triggerSync } from './api.js';
+import { fetchSystemHealth, fetchTriageLogs, fetchBridgeSummary, triggerSync, buildSecurityHeaders } from './api.js';
 
 function wireDashboardActions(root) {
   if (!root) return;
@@ -163,7 +163,7 @@ export async function renderDashboard() {
         </div>
         <div style="font-size:0.8rem; color:#888; margin-top:0.5rem; display:flex; gap:10px; align-items:center;">
             <span style="flex:1;">Last Sync: ${formatLastSync(bridgeSummary.channels?.linkedin?.lastAt)}</span>
-            <button type="button" onclick="document.getElementById('linkedin-import-input').click()" style="padding:2px 8px; font-size:0.75rem; cursor:pointer;" title="Import messages.csv from Data Archive">
+            <button type="button" onclick="document.getElementById('linkedin-import-input').click()" style="padding:2px 8px; font-size:0.75rem; cursor:pointer;" title="Import messages.csv or Connections.csv from Data Archive">
                 📥 Import Archive
             </button>
             <input type="file" id="linkedin-import-input" style="display:none;" accept=".csv" onchange="handleLinkedInImport(this)">
@@ -221,28 +221,71 @@ export async function renderDashboard() {
 
       <div class="health-card" style="grid-column: 1 / -1;">
         <h4>Recent Triage Log</h4>
-        <div class="triage-log">
-          ${logs.length > 0 ? logs.map(log => `
-            <div class="triage-entry">
-              <span class="triage-time">${new Date(log.timestamp).toLocaleTimeString()}</span>
-              <span class="triage-action">${log.action}</span>
-              <span class="triage-contact">${log.contact || 'N/A'}</span>
-            </div>
-          `).join('') : '<div style="color:#888; padding:1rem;">No recent activity</div>'}
+        <div id="dashboard-triage-log" class="triage-log">
+          <!-- Triage entries will be injected safely via JS -->
         </div>
       </div>
     `;
   } catch (error) {
     console.error('Failed to render dashboard:', error);
-    dashboard.innerHTML = `
-      <div style="padding:40px; text-align:center; color:#d32f2f;">
-        <h3>Failed to load dashboard</h3>
-        <p>${error.message}</p>
-        <button type="button" data-dashboard-retry style="margin-top:1rem; padding:0.5rem 1rem; cursor:pointer;">
-          Retry
-        </button>
-      </div>
-    `;
+    dashboard.innerHTML = '';
+    const errorContainer = document.createElement('div');
+    errorContainer.style.padding = '40px';
+    errorContainer.style.textAlign = 'center';
+    errorContainer.style.color = '#d32f2f';
+
+    const errorTitle = document.createElement('h3');
+    errorTitle.textContent = 'Failed to load dashboard';
+    errorContainer.appendChild(errorTitle);
+
+    const errorMsg = document.createElement('p');
+    errorMsg.textContent = error.message;
+    errorContainer.appendChild(errorMsg);
+
+    const retryBtn = document.createElement('button');
+    retryBtn.type = 'button';
+    retryBtn.className = 'btn btn-secondary';
+    retryBtn.style.marginTop = '1rem';
+    retryBtn.textContent = 'Retry';
+    retryBtn.onclick = () => renderDashboard();
+    errorContainer.appendChild(retryBtn);
+
+    dashboard.appendChild(errorContainer);
+    return;
+  }
+
+  // Safe injection of triage logs
+  const triageContainer = dashboard.querySelector('#dashboard-triage-log');
+  if (triageContainer) {
+    if (logs.length > 0) {
+      logs.forEach(log => {
+        const entry = document.createElement('div');
+        entry.className = 'triage-entry';
+
+        const time = document.createElement('span');
+        time.className = 'triage-time';
+        time.textContent = new Date(log.timestamp).toLocaleTimeString();
+        entry.appendChild(time);
+
+        const action = document.createElement('span');
+        action.className = 'triage-action';
+        action.textContent = log.action;
+        entry.appendChild(action);
+
+        const contact = document.createElement('span');
+        contact.className = 'triage-contact';
+        contact.textContent = log.contact || 'N/A';
+        entry.appendChild(contact);
+
+        triageContainer.appendChild(entry);
+      });
+    } else {
+      const empty = document.createElement('div');
+      empty.style.color = '#888';
+      empty.style.padding = '1rem';
+      empty.textContent = 'No recent activity';
+      triageContainer.appendChild(empty);
+    }
   }
 
   wireDashboardActions(dashboard);
@@ -301,10 +344,7 @@ export async function handleLinkedInImport(input) {
     const text = await file.text();
     const res = await fetch('/api/import/linkedin', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'text/csv',
-        'X-Reply-Human-Approval': 'confirmed' // Pre-approve local import
-      },
+      headers: buildSecurityHeaders(),
       body: text
     });
 

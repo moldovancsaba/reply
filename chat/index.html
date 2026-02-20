@@ -7,6 +7,8 @@
   <title>{reply}</title>
   <link rel="stylesheet" href="css/global.css">
   <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
 </head>
 
 <body>
@@ -14,25 +16,15 @@
     <!-- PANE A: SIDEBAR -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <div class="sidebar-nav-actions">
-          <button type="button" class="sidebar-nav-btn" data-nav-action="dashboard" title="Go to Dashboard"
-            aria-label="Go to Dashboard">
-            <svg class="sidebar-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="3" y="3" width="8" height="8" rx="1.5"></rect>
-              <rect x="13" y="3" width="8" height="5" rx="1.5"></rect>
-              <rect x="13" y="10" width="8" height="11" rx="1.5"></rect>
-              <rect x="3" y="13" width="8" height="8" rx="1.5"></rect>
-            </svg>
-          </button>
-          <button type="button" class="sidebar-nav-btn" data-nav-action="settings" title="Settings"
-            aria-label="Settings">
-            <svg class="sidebar-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="12" r="3"></circle>
-              <path
-                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.33 1V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-.33-1A1.65 1.65 0 0 0 8.6 19a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1-.33H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1-.33A1.65 1.65 0 0 0 4.6 8.6a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6 1.65 1.65 0 0 0 .33-1V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 .33 1 1.65 1.65 0 0 0 .6.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 .6 1 1.65 1.65 0 0 0 1 .33H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1 .33 1.65 1.65 0 0 0-.51.34z">
-              </path>
-            </svg>
-          </button>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <span id="btn-dash" class="material-symbols-outlined"
+            style="font-size: 28px; color: var(--text-primary); cursor: pointer;" title="Go to Dashboard">
+            flip_camera_android
+          </span>
+          <span id="btn-settings" class="material-symbols-outlined"
+            style="font-size: 24px; color: var(--text-primary); cursor: pointer;" title="Settings">
+            settings
+          </span>
         </div>
         <div id="sync-status" title="Sync Status">
           <span class="status-dot active"></span>
@@ -45,14 +37,6 @@
       </div>
       <div id="contact-list" class="contact-list">
         <!-- Contact Items will be injected here -->
-        <div class="contact-item active">
-          <span class="status-dot">🟠</span>
-          <div class="contact-info">
-            <div class="contact-name">Agneta</div>
-            <div class="contact-preview">Draft ready: "Let's meet tomorrow..."</div>
-          </div>
-          <span class="channel-icon">💬</span>
-        </div>
       </div>
     </aside>
 
@@ -61,7 +45,7 @@
       <header class="chat-header">
         <div style="display:flex; align-items:center; gap:12px;">
           <div id="active-contact-name-chat" style="font-weight: 700; font-size: 1.1rem;">Select a contact</div>
-          <select id="status-select"
+          <select id="status-select" onchange="updateManualStatus()"
             style="font-size:0.8rem; border-radius:12px; border:1px solid #ddd; padding:2px 8px; cursor:pointer; display:none;">
             <option value="open">🟢 Active</option>
             <option value="draft">🟠 Draft Ready</option>
@@ -84,20 +68,17 @@
             <option value="email">Email</option>
             <option value="telegram">Telegram (Draft only)</option>
             <option value="discord">Discord (Draft only)</option>
-            <option value="signal">Signal (Draft only)</option>
-            <option value="viber">Viber (Draft only)</option>
-            <option value="linkedin">LinkedIn (Draft only)</option>
           </select>
           <button id="btn-send" class="btn btn-primary">Send</button>
         </div>
         <div id="channel-policy-hint" class="channel-policy-hint" style="display:none;"></div>
       </div>
 
-      <div id="messages" class="messages-container" style="display:none;">
+      <div id="messages" class="messages-container">
         <!-- Messages will be injected here -->
       </div>
 
-      <div id="dashboard" class="dashboard">
+      <div id="dashboard" class="dashboard" style="display:none;">
         <!-- Dashboard items will be injected here -->
       </div>
 
@@ -119,14 +100,15 @@
             <div class="settings-services-label">Configure a service:</div>
             <div class="settings-services-actions">
               <button type="button" class="btn btn-secondary btn-sm"
-                data-open-channel-settings="imessage">iMessage</button>
+                onclick="window.openChannelSettings('imessage')">iMessage</button>
               <button type="button" class="btn btn-secondary btn-sm"
-                data-open-channel-settings="whatsapp">WhatsApp</button>
-              <button type="button" class="btn btn-secondary btn-sm" data-open-channel-settings="email">Email</button>
+                onclick="window.openChannelSettings('whatsapp')">WhatsApp</button>
               <button type="button" class="btn btn-secondary btn-sm"
-                data-open-channel-settings="linkedin">LinkedIn</button>
-              <button type="button" class="btn btn-secondary btn-sm" data-open-channel-settings="bridge">Bridge</button>
-              <button type="button" class="btn btn-secondary btn-sm" data-open-channel-settings="notes">Notes</button>
+                onclick="window.openChannelSettings('email')">Email</button>
+              <button type="button" class="btn btn-secondary btn-sm"
+                onclick="window.openChannelSettings('bridge')">Bridge</button>
+              <button type="button" class="btn btn-secondary btn-sm"
+                onclick="window.openChannelSettings('notes')">Notes</button>
             </div>
           </div>
 
@@ -316,7 +298,7 @@
                 Channel Bridge (Inbound)</div>
 
               <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                <div id="settings-bridge-telegram-wrap">
+                <div>
                   <label style="font-size:0.8rem; color:#666;">Telegram inbound mode</label>
                   <select id="settings-bridge-telegram-mode"
                     style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
@@ -324,33 +306,9 @@
                     <option value="disabled">Disabled</option>
                   </select>
                 </div>
-                <div id="settings-bridge-discord-wrap">
+                <div>
                   <label style="font-size:0.8rem; color:#666;">Discord inbound mode</label>
                   <select id="settings-bridge-discord-mode"
-                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
-                    <option value="draft_only">Draft only (recommended)</option>
-                    <option value="disabled">Disabled</option>
-                  </select>
-                </div>
-                <div id="settings-bridge-signal-wrap">
-                  <label style="font-size:0.8rem; color:#666;">Signal inbound mode</label>
-                  <select id="settings-bridge-signal-mode"
-                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
-                    <option value="draft_only">Draft only (recommended)</option>
-                    <option value="disabled">Disabled</option>
-                  </select>
-                </div>
-                <div id="settings-bridge-viber-wrap">
-                  <label style="font-size:0.8rem; color:#666;">Viber inbound mode</label>
-                  <select id="settings-bridge-viber-mode"
-                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
-                    <option value="draft_only">Draft only (recommended)</option>
-                    <option value="disabled">Disabled</option>
-                  </select>
-                </div>
-                <div id="settings-bridge-linkedin-wrap">
-                  <label style="font-size:0.8rem; color:#666;">LinkedIn inbound mode</label>
-                  <select id="settings-bridge-linkedin-mode"
                     style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
                     <option value="draft_only">Draft only (recommended)</option>
                     <option value="disabled">Disabled</option>
@@ -427,27 +385,6 @@
                     <div>
                       <label style="font-size:0.8rem; color:#666;">Their bubble</label>
                       <input id="settings-ui-email-contact" type="color"
-                        style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
-                    </div>
-                  </div>
-                </div>
-
-                <div id="settings-channel-linkedin" style="border:1px solid #eee; border-radius: 12px; padding: 12px;">
-                  <div style="font-weight:700; color:#444; margin-bottom:10px;">LinkedIn</div>
-                  <div style="display:grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; align-items:end;">
-                    <div>
-                      <label style="font-size:0.8rem; color:#666;">Emoji</label>
-                      <input id="settings-ui-linkedin-emoji"
-                        style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
-                    </div>
-                    <div>
-                      <label style="font-size:0.8rem; color:#666;">My bubble</label>
-                      <input id="settings-ui-linkedin-me" type="color"
-                        style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
-                    </div>
-                    <div>
-                      <label style="font-size:0.8rem; color:#666;">Their bubble</label>
-                      <input id="settings-ui-linkedin-contact" type="color"
                         style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
                     </div>
                   </div>

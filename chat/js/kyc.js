@@ -436,7 +436,9 @@ export async function loadKYCData(handle) {
   renderHandlePreview(handle);
 
   try {
-    const data = await fetchJson(`/api/kyc?handle=${encodeURIComponent(handle)}`);
+    const data = await fetchJson(`/api/kyc?handle=${encodeURIComponent(handle)}`, {
+      headers: buildSecurityHeaders()
+    });
     if (nameInput) nameInput.value = data.displayName || '';
     if (roleInput) roleInput.value = data.profession || '';
     if (relInput) relInput.value = data.relationship || '';
