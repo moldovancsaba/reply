@@ -25,6 +25,10 @@
             style="font-size: 24px; color: var(--text-primary); cursor: pointer;" title="Settings">
             settings
           </span>
+          <span id="btn-training" class="material-symbols-outlined"
+            style="font-size: 24px; color: var(--text-primary); cursor: pointer;" title="Agent Training">
+            model_training
+          </span>
         </div>
         <div id="sync-status" title="Sync Status">
           <span class="status-dot active"></span>
@@ -80,6 +84,26 @@
 
       <div id="dashboard" class="dashboard" style="display:none;">
         <!-- Dashboard items will be injected here -->
+      </div>
+
+      <!-- Agent Training Page -->
+      <div id="training-page" class="settings-page" style="display:none; overflow-y:auto;">
+        <div class="settings-page-shell"
+          style="max-width: 800px; margin: 0 auto; height:100%; display:flex; flex-direction:column;">
+          <div class="settings-page-topbar">
+            <div>
+              <div class="settings-page-title">Agent Training</div>
+              <div class="settings-page-subtitle">Review, refine, and manage golden examples for your generative persona
+              </div>
+            </div>
+            <div class="settings-page-actions">
+              <button id="training-close" class="btn btn-secondary btn-sm">Close</button>
+            </div>
+          </div>
+          <div id="training-list-container" style="flex:1; overflow-y:auto; padding-top: 20px;">
+            <div style="font-size:0.9rem; color:var(--text-secondary); text-align:center;">Loading examples...</div>
+          </div>
+        </div>
       </div>
 
       <!-- Settings Page -->

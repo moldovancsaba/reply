@@ -115,6 +115,26 @@ function escapeSqlString(value) {
   return String(value ?? "").replace(/'/g, "''");
 }
 
+/**
+ * Automatically annotate a sent message as a golden example.
+ */
+async function autoAnnotateSentMessage(channel, handle, text) {
+  try {
+    const { addDocuments } = require("./vector-store.js");
+    const dateStr = new Date().toLocaleString();
+    const formatted = `[${dateStr}] Me: ${text}`;
+    await addDocuments([{
+      id: `urn:reply:manual:${Date.now()}`,
+      text: formatted,
+      source: channel,
+      path: `${channel}://${handle}`,
+      is_annotated: true
+    }]);
+  } catch (e) {
+    console.error("Auto-annotation failed:", e.message);
+  }
+}
+
 async function getDocsTable() {
   if (docsTablePromise) return docsTablePromise;
   docsTablePromise = (async () => {
@@ -1336,9 +1356,9 @@ const RATE_LIMITED_ROUTES = new Set([
 const CSP_HEADER = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-eval'",           // unsafe-eval needed for some JS templates/workers
-  "style-src 'self' 'unsafe-inline'",         // inline styles needed for dynamic UI
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", // allow Google Fonts
   "img-src 'self' data: blob: https://www.gravatar.com",
-  "font-src 'self'",
+  "font-src 'self' https://fonts.gstatic.com", // allow Google Fonts
   "connect-src 'self' ws: wss:",              // Allow WebSockets
   "media-src 'self' blob:",
   "object-src 'none'",
@@ -1538,6 +1558,60 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       res.writeHead(500);
       res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // --- Training & Annotations ---
+  if (url.pathname === "/api/training/annotations") {
+    if (req.method === "GET") {
+      try {
+        const { getGoldenExamples, getPendingSuggestions } = require("./vector-store.js");
+        const goldens = await getGoldenExamples(200);
+        const pending = await getPendingSuggestions(50);
+        writeJson(res, 200, { annotations: goldens, pending });
+      } catch (e) {
+        writeJson(res, 500, { error: e.message });
+      }
+      return;
+    }
+    if (req.method === "DELETE") {
+      const payload = await readJsonBody(req);
+      if (!authorizeSensitiveRoute(req, res, { route: "/api/training/annotations", action: "delete-annotation", payload })) return;
+      try {
+        if (payload.id) {
+          const { deleteDocument } = require("./vector-store.js");
+          await deleteDocument(payload.id);
+        }
+        writeJson(res, 200, { status: "ok" });
+      } catch (e) {
+        writeJson(res, 500, { error: e.message });
+      }
+      return;
+    }
+  }
+
+  if (url.pathname === "/api/messages/annotate" && req.method === "POST") {
+    const payload = await readJsonBody(req);
+    if (!authorizeSensitiveRoute(req, res, { route: "/api/messages/annotate", action: "annotate-message", payload })) return;
+    try {
+      const { annotateDocument, addDocuments } = require("./vector-store.js");
+      if (payload.id && (payload.is_annotated === false || payload.is_annotated === undefined)) {
+        // This is moving a suggestion to goldens
+        await annotateDocument(payload.id, true);
+      } else if (payload.text) {
+        // Adding a fresh golden
+        await addDocuments([{
+          id: `urn:reply:manual:${Date.now()}`,
+          text: payload.text,
+          source: payload.source || "manual",
+          path: payload.path || "manual://gui",
+          is_annotated: true
+        }]);
+      }
+      writeJson(res, 200, { status: "ok" });
+    } catch (e) {
+      writeJson(res, 500, { error: e.message });
     }
     return;
   }
@@ -2258,6 +2332,7 @@ end run
         return;
       }
       contactStore.clearDraft(recipient);
+      autoAnnotateSentMessage("imessage", recipient, text);
       writeJson(res, 200, { status: "ok" });
     });
     return;
@@ -2801,6 +2876,7 @@ end focusCheck
         return;
       }
       contactStore.clearDraft(recipientRaw);
+      autoAnnotateSentMessage("whatsapp", recipientRaw, text);
       writeJson(res, 200, {
         status: "ok",
         result: (stdout || "").trim(),
@@ -2911,6 +2987,7 @@ end focusCheck
         const { sendGmail } = require("./gmail-connector.js");
         await sendGmail({ to: recipient, subject: "Follow-up from {reply}", text });
         contactStore.clearDraft(recipient);
+        autoAnnotateSentMessage("email", recipient, text);
         writeJson(res, 200, { status: "ok", provider: "gmail" });
         return;
       }

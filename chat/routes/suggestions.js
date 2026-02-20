@@ -5,27 +5,27 @@ const contactStore = require("../contact-store.js");
 
 // Helper functions from server.js
 function writeJson(res, statusCode, payload) {
-    res.writeHead(statusCode, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(payload));
+  res.writeHead(statusCode, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(payload));
 }
 
 function readRequestBody(req) {
-    return new Promise((resolve, reject) => {
-        let body = "";
-        req.on("data", (chunk) => (body += chunk));
-        req.on("end", () => resolve(body));
-        req.on("error", reject);
-    });
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk) => (body += chunk));
+    req.on("end", () => resolve(body));
+    req.on("error", reject);
+  });
 }
 
 async function readJsonBody(req) {
-    const body = await readRequestBody(req);
-    if (!body) return {};
-    try {
-        return JSON.parse(body);
-    } catch {
-        return {};
-    }
+  const body = await readRequestBody(req);
+  if (!body) return {};
+  try {
+    return JSON.parse(body);
+  } catch {
+    return {};
+  }
 }
 
 function pathPrefixesForHandle(handle) {
@@ -67,15 +67,15 @@ function stripMessagePrefix(text) {
 }
 
 function normalizePhone(phone) {
-    if (!phone) return null;
-    const raw = String(phone).trim();
-    if (!raw) return null;
-    // Remove punctuation/spaces, keep only digits and a leading "+"
-    let cleaned = raw.replace(/[^\d+]/g, "");
-    if (cleaned.startsWith("00")) cleaned = `+${cleaned.slice(2)}`;
-    const digits = cleaned.replace(/\D/g, "");
-    if (digits.length < 6) return null;
-    return digits; // Use digits-only key to match across formatting
+  if (!phone) return null;
+  const raw = String(phone).trim();
+  if (!raw) return null;
+  // Remove punctuation/spaces, keep only digits and a leading "+"
+  let cleaned = raw.replace(/[^\d+]/g, "");
+  if (cleaned.startsWith("00")) cleaned = `+${cleaned.slice(2)}`;
+  const digits = cleaned.replace(/\D/g, "");
+  if (digits.length < 6) return null;
+  return digits; // Use digits-only key to match across formatting
 }
 
 
@@ -104,7 +104,7 @@ async function serveSuggest(req, res) {
 
     if (!message) {
       const handles = contactStore.getAllHandles(handle);
-      
+
       const prefixes = handles.flatMap((h) => pathPrefixesForHandle(h));
       const historyBatches = await Promise.all(prefixes.map((p) => getHistory(p)));
       const docs = historyBatches.flat();
@@ -130,6 +130,17 @@ async function serveSuggest(req, res) {
     const snippets = await getSnippets(message, 3);
     const goldenExamples = await getGoldenExamples(5);
     const suggestion = await generateReply(message, snippets, handle, goldenExamples);
+
+    // Save as pending suggestion
+    const { addDocuments } = require("../vector-store.js");
+    addDocuments([{
+      id: `urn:reply:suggestion:${Date.now()}`,
+      text: suggestion,
+      source: "agent_suggestion",
+      path: `suggestion://${handle}`,
+      is_annotated: false
+    }]).catch(e => console.error("Failed to save suggestion:", e.message));
+
     writeJson(res, 200, { suggestion });
   } catch (e) {
     console.error("Suggest error:", e);
@@ -161,6 +172,16 @@ async function serveSuggestReply(req, res) {
   // Generate a suggested reply using the local LLM.
   const suggestion = await generateReply(message, snippets, recipient, goldenExamples);
 
+  // Save as pending suggestion
+  const { addDocuments } = require("../vector-store.js");
+  addDocuments([{
+    id: `urn:reply:suggestion:${Date.now()}`,
+    text: suggestion,
+    source: "agent_suggestion",
+    path: `suggestion://${recipient}`,
+    is_annotated: false
+  }]).catch(e => console.error("Failed to save suggestion:", e.message));
+
   // Identify contact for UI display
   const contact = contactStore.findContact(recipient);
 
@@ -176,6 +197,6 @@ async function serveSuggestReply(req, res) {
 }
 
 module.exports = {
-    serveSuggest,
-    serveSuggestReply,
+  serveSuggest,
+  serveSuggestReply,
 };
