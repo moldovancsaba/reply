@@ -9,6 +9,7 @@ import { getSettings, buildSecurityHeaders } from './api.js';
 import './dashboard.js';
 import './kyc.js';
 import { applyReplyUiSettings } from './settings.js';
+import { openTrainingPage, closeTrainingPage } from './training.js';
 
 // Global state
 window.currentHandle = null;
@@ -44,6 +45,12 @@ function setupEventListeners() {
 
   const btnSettings = document.getElementById('btn-settings');
   if (btnSettings) btnSettings.onclick = () => { if (typeof window.openSettings === 'function') window.openSettings(); };
+
+  const btnTraining = document.getElementById('btn-training');
+  if (btnTraining) btnTraining.onclick = openTrainingPage;
+
+  const btnTrainingClose = document.getElementById('training-close');
+  if (btnTrainingClose) btnTrainingClose.onclick = closeTrainingPage;
 
   document.querySelectorAll('.sidebar-nav-btn[data-nav-action]').forEach((btn) => {
     btn.addEventListener('click', () => {
