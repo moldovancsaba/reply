@@ -2,6 +2,10 @@ const lancedb = require("@lancedb/lancedb");
 const path = require("path");
 const fs = require("fs");
 
+function escapeSqlString(value) {
+    return String(value ?? "").replace(/'/g, "''");
+}
+
 // Singleton for the embedding pipeline to avoid reloading the model.
 let pipelineInstance = null;
 
@@ -61,6 +65,7 @@ async function addDocuments(docs) {
             text: doc.text,
             source: doc.source,
             path: doc.path,
+            is_annotated: !!doc.is_annotated, // Apply incoming boolean or default to false
             vector
         });
     }
@@ -141,7 +146,7 @@ async function getHistory(pathPrefix) {
         const table = await db.openTable(TABLE_NAME);
         // We use LanceDB's filtering to get all exact matches for a path prefix.
         const results = await table.query()
-            .where(`path LIKE '${pathPrefix}%'`)
+            .where(`path LIKE '${escapeSqlString(pathPrefix)}%'`)
             .execute();
 
         if (Array.isArray(results)) return dedupeDocsByStableKey(results);
@@ -178,4 +183,90 @@ async function getSnippets(identifier, limit = 5) {
         .slice(0, limit);
 }
 
-module.exports = { addDocuments, search, getHistory, getSnippets, connect };
+module.exports = { addDocuments, search, getHistory, getSnippets, connect, annotateDocument, getGoldenExamples, getPendingSuggestions, deleteDocument };
+
+/**
+ * Mark a document as a 'golden standard' example for RAG prompting.
+ * @param {string} id 
+ * @param {boolean} isAnnotated 
+ */
+async function annotateDocument(id, isAnnotated) {
+    const db = await connect();
+    try {
+        const table = await db.openTable(TABLE_NAME);
+
+        // Before updating, ensure the column exists by retrieving the record and re-upserting if needed, or simply using update.
+        // LanceDB allows sql-like updates.
+        await table.update({
+            where: `id = '${escapeSqlString(id)}'`,
+            values: { is_annotated: isAnnotated }
+        });
+    } catch (e) {
+        // If the schema is locked and we can't update a missing column, we read, delete, and re-insert.
+        console.warn("Fast update failed, falling back to read-delete-insert for annotation:", e.message);
+        try {
+            const table = await db.openTable(TABLE_NAME);
+            const results = await table.query().where(`id = '${escapeSqlString(id)}'`).limit(1).toArray();
+            if (results.length > 0) {
+                const rawDoc = results[0];
+                const doc = rawDoc.toJSON ? rawDoc.toJSON() : rawDoc;
+                await table.delete(`id = '${escapeSqlString(id)}'`);
+                await table.add([{ ...doc, is_annotated: isAnnotated }]);
+            }
+        } catch (err) {
+            console.error("Failed to annotate document:", err.message);
+        }
+    }
+}
+
+async function getGoldenExamples(limit = 10) {
+    const db = await connect();
+    try {
+        const table = await db.openTable(TABLE_NAME);
+        // Many databases store booleans as 1 or true. LanceDB supports both.
+        const results = await table.query()
+            .where(`is_annotated = true`)
+            .limit(limit)
+            .toArray();
+
+        return dedupeDocsByStableKey(results).map(d => ({
+            id: d.id,
+            source: d.source,
+            text: d.text,
+            date: d.date || d.text.match(/\[(.*?)\]/)?.[1] || "Unknown"
+        }));
+    } catch (e) {
+        // Table might not exist or column might not be defined if no annotations exist yet.
+        return [];
+    }
+}
+
+async function getPendingSuggestions(limit = 20) {
+    const db = await connect();
+    try {
+        const table = await db.openTable(TABLE_NAME);
+        const results = await table.query()
+            .where(`source = 'agent_suggestion' AND (is_annotated = false OR is_annotated IS NULL)`)
+            .limit(limit)
+            .toArray();
+
+        return dedupeDocsByStableKey(results).map(d => ({
+            id: d.id,
+            source: d.source,
+            text: d.text,
+            date: d.date || "Unknown"
+        }));
+    } catch (e) {
+        return [];
+    }
+}
+
+async function deleteDocument(id) {
+    const db = await connect();
+    try {
+        const table = await db.openTable(TABLE_NAME);
+        await table.delete(`id = '${escapeSqlString(id)}'`);
+    } catch (e) {
+        console.error("Failed to delete document:", e.message);
+    }
+}

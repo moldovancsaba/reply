@@ -298,29 +298,32 @@ async function loadIntoForm() {
   gmailHasRefreshToken = !!gmail.hasRefreshToken;
   refreshGmailButtons();
 
-  el('settings-worker-interval').value = worker.pollIntervalSeconds ? String(worker.pollIntervalSeconds) : '60';
-  el('settings-worker-imessage-max').value = worker.quantities?.imessage !== undefined ? String(worker.quantities.imessage) : '1000';
-  el('settings-worker-whatsapp-max').value = worker.quantities?.whatsapp !== undefined ? String(worker.quantities.whatsapp) : '500';
-  el('settings-worker-gmail-max').value = worker.quantities?.gmail !== undefined ? String(worker.quantities.gmail) : '100';
-  el('settings-worker-notes-max').value = worker.quantities?.notes !== undefined ? String(worker.quantities.notes) : '0';
-  el('settings-bridge-telegram-mode').value = bridgeChannels?.telegram?.inboundMode || 'draft_only';
-  el('settings-bridge-discord-mode').value = bridgeChannels?.discord?.inboundMode || 'draft_only';
-  el('settings-bridge-signal-mode').value = bridgeChannels?.signal?.inboundMode || 'draft_only';
-  el('settings-bridge-viber-mode').value = bridgeChannels?.viber?.inboundMode || 'draft_only';
-  el('settings-bridge-linkedin-mode').value = bridgeChannels?.linkedin?.inboundMode || 'draft_only';
+  const setVal = (id, val) => { const e = el(id); if (e) e.value = val; };
 
-  el('settings-ui-imessage-emoji').value = channels?.imessage?.emoji || '💬';
-  el('settings-ui-imessage-me').value = channels?.imessage?.bubbleMe || '#0a84ff';
-  el('settings-ui-imessage-contact').value = channels?.imessage?.bubbleContact || '#262628';
-  el('settings-ui-whatsapp-emoji').value = channels?.whatsapp?.emoji || '🟢';
-  el('settings-ui-whatsapp-me').value = channels?.whatsapp?.bubbleMe || '#25D366';
-  el('settings-ui-whatsapp-contact').value = channels?.whatsapp?.bubbleContact || '#262628';
-  el('settings-ui-email-emoji').value = channels?.email?.emoji || '📧';
-  el('settings-ui-email-me').value = channels?.email?.bubbleMe || '#5e5ce6';
-  el('settings-ui-email-contact').value = channels?.email?.bubbleContact || '#262628';
-  el('settings-ui-linkedin-emoji').value = channels?.linkedin?.emoji || '🟦';
-  el('settings-ui-linkedin-me').value = channels?.linkedin?.bubbleMe || '#0077b5';
-  el('settings-ui-linkedin-contact').value = channels?.linkedin?.bubbleContact || '#262628';
+  setVal('settings-worker-interval', worker.pollIntervalSeconds ? String(worker.pollIntervalSeconds) : '60');
+  setVal('settings-worker-imessage-max', worker.quantities?.imessage !== undefined ? String(worker.quantities.imessage) : '1000');
+  setVal('settings-worker-whatsapp-max', worker.quantities?.whatsapp !== undefined ? String(worker.quantities.whatsapp) : '500');
+  setVal('settings-worker-gmail-max', worker.quantities?.gmail !== undefined ? String(worker.quantities.gmail) : '100');
+  setVal('settings-worker-notes-max', worker.quantities?.notes !== undefined ? String(worker.quantities.notes) : '0');
+
+  setVal('settings-bridge-telegram-mode', bridgeChannels?.telegram?.inboundMode || 'draft_only');
+  setVal('settings-bridge-discord-mode', bridgeChannels?.discord?.inboundMode || 'draft_only');
+  setVal('settings-bridge-signal-mode', bridgeChannels?.signal?.inboundMode || 'draft_only');
+  setVal('settings-bridge-viber-mode', bridgeChannels?.viber?.inboundMode || 'draft_only');
+  setVal('settings-bridge-linkedin-mode', bridgeChannels?.linkedin?.inboundMode || 'draft_only');
+
+  setVal('settings-ui-imessage-emoji', channels?.imessage?.emoji || '💬');
+  setVal('settings-ui-imessage-me', channels?.imessage?.bubbleMe || '#0a84ff');
+  setVal('settings-ui-imessage-contact', channels?.imessage?.bubbleContact || '#262628');
+  setVal('settings-ui-whatsapp-emoji', channels?.whatsapp?.emoji || '🟢');
+  setVal('settings-ui-whatsapp-me', channels?.whatsapp?.bubbleMe || '#25D366');
+  setVal('settings-ui-whatsapp-contact', channels?.whatsapp?.bubbleContact || '#262628');
+  setVal('settings-ui-email-emoji', channels?.email?.emoji || '📧');
+  setVal('settings-ui-email-me', channels?.email?.bubbleMe || '#5e5ce6');
+  setVal('settings-ui-email-contact', channels?.email?.bubbleContact || '#262628');
+  setVal('settings-ui-linkedin-emoji', channels?.linkedin?.emoji || '🟦');
+  setVal('settings-ui-linkedin-me', channels?.linkedin?.bubbleMe || '#0077b5');
+  setVal('settings-ui-linkedin-contact', channels?.linkedin?.bubbleContact || '#262628');
 
   applyReplyUiSettings(data);
 }
@@ -373,37 +376,37 @@ async function onSave() {
             inboundMode: el('settings-bridge-discord-mode').value || 'draft_only',
           },
           signal: {
-            inboundMode: el('settings-bridge-signal-mode').value || 'draft_only',
+            inboundMode: el('settings-bridge-signal-mode')?.value || 'draft_only',
           },
           viber: {
-            inboundMode: el('settings-bridge-viber-mode').value || 'draft_only',
+            inboundMode: el('settings-bridge-viber-mode')?.value || 'draft_only',
           },
           linkedin: {
-            inboundMode: el('settings-bridge-linkedin-mode').value || 'draft_only',
+            inboundMode: el('settings-bridge-linkedin-mode')?.value || 'draft_only',
           },
         }
       },
       ui: {
         channels: {
           imessage: {
-            emoji: el('settings-ui-imessage-emoji').value,
-            bubbleMe: el('settings-ui-imessage-me').value,
-            bubbleContact: el('settings-ui-imessage-contact').value,
+            emoji: el('settings-ui-imessage-emoji')?.value || '💬',
+            bubbleMe: el('settings-ui-imessage-me')?.value || '#0a84ff',
+            bubbleContact: el('settings-ui-imessage-contact')?.value || '#262628',
           },
           whatsapp: {
-            emoji: el('settings-ui-whatsapp-emoji').value,
-            bubbleMe: el('settings-ui-whatsapp-me').value,
-            bubbleContact: el('settings-ui-whatsapp-contact').value,
+            emoji: el('settings-ui-whatsapp-emoji')?.value || '🟢',
+            bubbleMe: el('settings-ui-whatsapp-me')?.value || '#25D366',
+            bubbleContact: el('settings-ui-whatsapp-contact')?.value || '#262628',
           },
           email: {
-            emoji: el('settings-ui-email-emoji').value,
-            bubbleMe: el('settings-ui-email-me').value,
-            bubbleContact: el('settings-ui-email-contact').value,
+            emoji: el('settings-ui-email-emoji')?.value || '📧',
+            bubbleMe: el('settings-ui-email-me')?.value || '#5e5ce6',
+            bubbleContact: el('settings-ui-email-contact')?.value || '#262628',
           },
           linkedin: {
-            emoji: el('settings-ui-linkedin-emoji').value,
-            bubbleMe: el('settings-ui-linkedin-me').value,
-            bubbleContact: el('settings-ui-linkedin-contact').value,
+            emoji: el('settings-ui-linkedin-emoji')?.value || '🟦',
+            bubbleMe: el('settings-ui-linkedin-me')?.value || '#0077b5',
+            bubbleContact: el('settings-ui-linkedin-contact')?.value || '#262628',
           },
         }
       },
