@@ -281,11 +281,11 @@ async function poll() {
         FROM message m
         LEFT JOIN handle h ON m.handle_id = h.rowid
         WHERE m.text IS NOT NULL 
-          AND datetime(m.date / 1000000000 + 978307200, 'unixepoch') > datetime('now', '-${MESSAGE_LOOKBACK_SECONDS} seconds')
+          AND datetime(m.date / 1000000000 + 978307200, 'unixepoch') > datetime('now', '-' || ? || ' seconds')
         ORDER BY m.date DESC
     `;
 
-    db.all(query, [], async (err, rows) => {
+    db.all(query, [MESSAGE_LOOKBACK_SECONDS], async (err, rows) => {
         if (err) {
             console.error("SQL Query Error:", err.message);
             db.close();

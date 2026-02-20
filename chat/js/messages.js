@@ -11,16 +11,13 @@ let messageOffset = 0;
 let hasMoreMessages = true;
 const MESSAGE_LIMIT = 30;
 const SEND_CAPABLE_CHANNELS = new Set(['imessage', 'whatsapp', 'email']);
-const DRAFT_ONLY_CHANNELS = new Set(['telegram', 'discord', 'signal', 'viber', 'linkedin']);
+const DRAFT_ONLY_CHANNELS = new Set(['telegram', 'discord']);
 
 function normalizeChannelKey(channel) {
     const raw = (channel ?? '').toString().toLowerCase();
     if (raw.includes('whatsapp')) return 'whatsapp';
     if (raw.includes('telegram')) return 'telegram';
     if (raw.includes('discord')) return 'discord';
-    if (raw.includes('signal')) return 'signal';
-    if (raw.includes('viber')) return 'viber';
-    if (raw.includes('linkedin')) return 'linkedin';
     if (raw.includes('mail') || raw.includes('email') || raw.includes('gmail') || raw.includes('imap')) return 'email';
     return 'imessage';
 }
@@ -45,9 +42,6 @@ function channelLabel(channel) {
     if (v === 'whatsapp') return 'WhatsApp';
     if (v === 'telegram') return 'Telegram';
     if (v === 'discord') return 'Discord';
-    if (v === 'signal') return 'Signal';
-    if (v === 'viber') return 'Viber';
-    if (v === 'linkedin') return 'LinkedIn';
     return 'iMessage';
 }
 
@@ -182,6 +176,44 @@ export async function loadMessages(handle, append = false) {
                 const time = document.createElement('span');
                 time.textContent = date.toLocaleString();
                 info.appendChild(time);
+
+                // Annotation Star Button
+                const starBtn = document.createElement('span');
+                starBtn.className = 'material-symbols-outlined msg-star-btn';
+                starBtn.style.fontSize = '16px';
+                starBtn.style.cursor = 'pointer';
+                starBtn.style.marginLeft = '6px';
+                starBtn.style.color = msg.is_annotated ? '#fbbc04' : '#ccc';
+                starBtn.style.transition = 'color 0.2s';
+                starBtn.textContent = msg.is_annotated ? 'star' : 'star_border';
+                starBtn.title = msg.is_annotated ? 'Remove Golden Example' : 'Mark as Golden Example';
+
+                starBtn.onclick = async (e) => {
+                    e.stopPropagation();
+                    const nextState = !(starBtn.textContent === 'star');
+
+                    // Optimistic UI update
+                    starBtn.textContent = nextState ? 'star' : 'star_border';
+                    starBtn.style.color = nextState ? '#fbbc04' : '#ccc';
+                    starBtn.title = nextState ? 'Remove Golden Example' : 'Mark as Golden Example';
+
+                    try {
+                        const { buildSecurityHeaders } = await import('./api.js');
+                        const res = await fetch('/api/messages/annotate', {
+                            method: 'POST',
+                            headers: buildSecurityHeaders(),
+                            body: JSON.stringify({ id: msg.id || msg._id, is_annotated: nextState })
+                        });
+                        if (!res.ok) throw new Error('Failed to update annotation');
+                    } catch (err) {
+                        console.error('Annotation failed:', err);
+                        // Revert UI on failure
+                        starBtn.textContent = !nextState ? 'star' : 'star_border';
+                        starBtn.style.color = !nextState ? '#fbbc04' : '#ccc';
+                    }
+                };
+                info.appendChild(starBtn);
+
                 const src = (msg.source || '').toString();
                 const ch = (msg.channel || '').toString();
                 info.title = [ch ? `Channel: ${ch}` : null, src ? `Source: ${src}` : null].filter(Boolean).join('\n');
@@ -222,14 +254,23 @@ export async function loadMessages(handle, append = false) {
 
     } catch (error) {
         console.error('Failed to load messages:', error);
-        messagesEl.innerHTML = `
-      <div style="padding:40px; text-align:center; color:#d32f2f;">
-        <p>Failed to load messages</p>
-        <button onclick="window.loadMessages('${handle}')" style="margin-top:1rem; padding:0.5rem 1rem; cursor:pointer;">
-          Retry
-        </button>
-      </div>
-    `;
+        messagesEl.innerHTML = '';
+        const errorContainer = document.createElement('div');
+        errorContainer.style.padding = '40px';
+        errorContainer.style.textAlign = 'center';
+        errorContainer.style.color = '#d32f2f';
+
+        const errorMsg = document.createElement('p');
+        errorMsg.textContent = 'Failed to load messages';
+        errorContainer.appendChild(errorMsg);
+
+        const retryBtn = document.createElement('button');
+        retryBtn.className = 'btn btn-secondary mt-md';
+        retryBtn.textContent = 'Retry';
+        retryBtn.onclick = () => window.loadMessages(handle);
+        errorContainer.appendChild(retryBtn);
+
+        messagesEl.appendChild(errorContainer);
     }
 }
 

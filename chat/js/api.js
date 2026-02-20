@@ -5,7 +5,7 @@
 
 const API_BASE = '';
 
-function buildSecurityHeaders() {
+export function buildSecurityHeaders() {
     const headers = { 'Content-Type': 'application/json', 'X-Reply-Human-Approval': 'confirmed' };
     const token = (window.localStorage && window.localStorage.getItem('replyOperatorToken')) || window.REPLY_OPERATOR_TOKEN;
     if (token) headers['X-Reply-Operator-Token'] = token;
@@ -44,7 +44,7 @@ export async function fetchConversations(offset = 0, limit = 20, query = '') {
     const url = q
         ? `${API_BASE}/api/conversations?offset=${offset}&limit=${limit}&q=${encodeURIComponent(q)}`
         : `${API_BASE}/api/conversations?offset=${offset}&limit=${limit}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: buildSecurityHeaders() });
     if (!res.ok) throw new Error(`Failed to fetch conversations: ${res.statusText}`);
     return await res.json();
 }
@@ -57,7 +57,9 @@ export async function fetchConversations(offset = 0, limit = 20, query = '') {
  * @returns {Promise<Array>} Array of message objects
  */
 export async function fetchMessages(handle, offset = 0, limit = 30) {
-    const res = await fetch(`${API_BASE}/api/thread?handle=${encodeURIComponent(handle)}&offset=${offset}&limit=${limit}`);
+    const res = await fetch(`${API_BASE}/api/thread?handle=${encodeURIComponent(handle)}&offset=${offset}&limit=${limit}`, {
+        headers: buildSecurityHeaders(),
+    });
     if (!res.ok) throw new Error(`Failed to fetch messages: ${res.statusText}`);
     const data = await res.json();
     return data.messages || [];
@@ -68,7 +70,9 @@ export async function fetchMessages(handle, offset = 0, limit = 30) {
  * @returns {Promise<Object>} System health data
  */
 export async function fetchSystemHealth() {
-    const res = await fetch(`${API_BASE}/api/system-health`);
+    const res = await fetch(`${API_BASE}/api/system-health`, {
+        headers: buildSecurityHeaders(),
+    });
     if (!res.ok) throw new Error(`Failed to fetch system health: ${res.statusText}`);
     return await res.json();
 }
@@ -79,7 +83,9 @@ export async function fetchSystemHealth() {
  * @returns {Promise<Array>} Triage log entries
  */
 export async function fetchTriageLogs(limit = 10) {
-    const res = await fetch(`${API_BASE}/api/triage-log?limit=${limit}`);
+    const res = await fetch(`${API_BASE}/api/triage-log?limit=${limit}`, {
+        headers: buildSecurityHeaders(),
+    });
     if (!res.ok) throw new Error(`Failed to fetch triage logs: ${res.statusText}`);
     const data = await res.json();
     return data.logs || [];
@@ -87,14 +93,18 @@ export async function fetchTriageLogs(limit = 10) {
 
 export async function fetchBridgeEvents(limit = 20) {
     const n = Math.max(1, Math.min(Number(limit) || 20, 500));
-    const res = await fetch(`${API_BASE}/api/channel-bridge/events?limit=${n}`);
+    const res = await fetch(`${API_BASE}/api/channel-bridge/events?limit=${n}`, {
+        headers: buildSecurityHeaders(),
+    });
     if (!res.ok) throw new Error(`Failed to fetch channel bridge events: ${res.statusText}`);
     return await res.json();
 }
 
 export async function fetchBridgeSummary(limit = 200) {
     const n = Math.max(1, Math.min(Number(limit) || 200, 2000));
-    const res = await fetch(`${API_BASE}/api/channel-bridge/summary?limit=${n}`);
+    const res = await fetch(`${API_BASE}/api/channel-bridge/summary?limit=${n}`, {
+        headers: buildSecurityHeaders(),
+    });
     if (!res.ok) throw new Error(`Failed to fetch channel bridge summary: ${res.statusText}`);
     return await res.json();
 }
@@ -169,7 +179,9 @@ export async function sendMessage(handle, text, channel = 'imessage') {
  * @returns {Promise<Object>} KYC profile data
  */
 export async function loadKYC(handle) {
-    const res = await fetch(`${API_BASE}/api/kyc?handle=${encodeURIComponent(handle)}`);
+    const res = await fetch(`${API_BASE}/api/kyc?handle=${encodeURIComponent(handle)}`, {
+        headers: buildSecurityHeaders(),
+    });
     if (!res.ok) throw new Error(`Failed to load KYC: ${res.statusText}`);
     return await res.json();
 }
@@ -211,7 +223,9 @@ export async function triggerSync(source) {
  * @returns {Promise<Object>}
  */
 export async function getSettings() {
-    const res = await fetch(`${API_BASE}/api/settings`);
+    const res = await fetch(`${API_BASE}/api/settings`, {
+        headers: buildSecurityHeaders(),
+    });
     if (res.status === 404) {
         throw new Error('Settings API not available (this server build is missing /api/settings).');
     }
@@ -238,7 +252,9 @@ export async function saveSettings(data) {
 }
 
 export async function getGmailAuthUrl() {
-    const res = await fetch(`${API_BASE}/api/gmail/auth-url`);
+    const res = await fetch(`${API_BASE}/api/gmail/auth-url`, {
+        headers: buildSecurityHeaders(),
+    });
     if (res.status === 404) throw new Error('Gmail API not available (restart the server).');
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error || `Failed to start Gmail auth: ${res.status} ${res.statusText}`);

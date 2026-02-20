@@ -5,7 +5,7 @@
 
 import { loadConversations, selectContact, setConversationsQuery } from './contacts.js';
 import { handleSendMessage } from './messages.js';
-import { getSettings } from './api.js';
+import { getSettings, buildSecurityHeaders } from './api.js';
 import './dashboard.js';
 import './kyc.js';
 import { applyReplyUiSettings } from './settings.js';
@@ -39,6 +39,12 @@ async function init() {
 }
 
 function setupEventListeners() {
+  const btnDash = document.getElementById('btn-dash');
+  if (btnDash) btnDash.onclick = () => { if (typeof window.selectContact === 'function') window.selectContact(null); };
+
+  const btnSettings = document.getElementById('btn-settings');
+  if (btnSettings) btnSettings.onclick = () => { if (typeof window.openSettings === 'function') window.openSettings(); };
+
   document.querySelectorAll('.sidebar-nav-btn[data-nav-action]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const action = (btn.getAttribute('data-nav-action') || '').trim();
@@ -81,7 +87,7 @@ function setupEventListeners() {
     try {
       await fetch('/api/update-status', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildSecurityHeaders(),
         body: JSON.stringify({ handle, status }),
       });
     } catch (error) {
@@ -118,7 +124,7 @@ function setupEventListeners() {
           try {
             const res = await fetch('/api/suggest', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: buildSecurityHeaders(),
               body: JSON.stringify({ handle }),
             });
             const data = await res.json();

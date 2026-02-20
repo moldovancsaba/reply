@@ -5,7 +5,7 @@ const { getContext } = require('./context-engine.js');
 const ollama = new Ollama();
 const MODEL = "qwen2.5:7b";
 
-async function generateReply(message, contextSnippets = [], recipient = null) {
+async function generateReply(message, contextSnippets = [], recipient = null, goldenExamples = []) {
   if (!message || typeof message !== "string") {
     return "Please provide a message to reply to.";
   }
@@ -18,9 +18,17 @@ async function generateReply(message, contextSnippets = [], recipient = null) {
     .map((s) => `[Source: ${s.path}]\n${s.text}`)
     .join("\n\n---\n\n");
 
+  // 3. Construct Golden Examples
+  let goldenText = "";
+  if (goldenExamples && goldenExamples.length > 0) {
+    goldenText = "\nHere are GOLDEN EXAMPLES of how you should talk and structure your messages. Mimic this short, concise style perfectly:\n\n" +
+      goldenExamples.map((g, i) => `Example ${i + 1}:\n"${g.text}"`).join("\n\n");
+  }
+
   const prompt = `${styleInstructions}
 ${identityContext || ""}
 ${history || ""}
+${goldenText}
 
 The Identity Context and Local Intelligence (if present) are the most reliable source of facts.
 Prioritize them above the general knowledge snippets if there is any conflict.
