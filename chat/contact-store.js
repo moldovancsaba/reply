@@ -101,7 +101,9 @@ class ContactStore {
     save() {
         try {
             // Use internal property to avoid triggering load() recursively
-            fs.writeFileSync(DATA_FILE, JSON.stringify(this._contacts, null, 2), { mode: 0o600 });
+            const tmpFile = `${DATA_FILE}.${Date.now()}.tmp`;
+            fs.writeFileSync(tmpFile, JSON.stringify(this._contacts, null, 2), { mode: 0o600 });
+            fs.renameSync(tmpFile, DATA_FILE);
             try {
                 fs.chmodSync(DATA_FILE, 0o600);
             } catch {
@@ -204,7 +206,7 @@ class ContactStore {
      * @param {string} handle 
      * @param {object} data 
      */
-    updateContact(handle, data) {
+    updateContact(handle, data, skipSave = false) {
         this.load();
         let contact = this.findContact(handle);
         if (!contact) {
@@ -219,7 +221,7 @@ class ContactStore {
         }
 
         Object.assign(contact, data);
-        this.save();
+        if (!skipSave) this.save();
         return contact;
     }
 

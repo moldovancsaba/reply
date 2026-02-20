@@ -56,47 +56,6 @@
         height: 52px;
       }
 
-      .sidebar-nav-actions {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-      }
-
-      .sidebar-nav-btn {
-        width: 32px;
-        height: 32px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 10px;
-        background: rgba(255, 255, 255, 0.04);
-        color: var(--text-primary);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        padding: 0;
-        transition: background-color 0.15s ease, border-color 0.15s ease;
-      }
-
-      .sidebar-nav-btn:hover {
-        background: rgba(255, 255, 255, 0.1);
-        border-color: rgba(255, 255, 255, 0.22);
-      }
-
-      .sidebar-nav-btn:focus-visible {
-        outline: 2px solid rgba(10, 132, 255, 0.85);
-        outline-offset: 1px;
-      }
-
-      .sidebar-nav-icon {
-        width: 18px;
-        height: 18px;
-        stroke: currentColor;
-        fill: none;
-        stroke-width: 1.8;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-      }
-
       .sidebar-search {
         padding: 10px 12px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -183,26 +142,7 @@
         border-radius: 50%;
         margin-right: 10px;
         flex-shrink: 0;
-        background-color: rgba(255, 255, 255, 0.26);
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-      }
-
-      .status-dot.active,
-      .status-dot.open {
-        background-color: var(--success);
-      }
-
-      .status-dot.draft {
-        background-color: var(--warning);
-      }
-
-      .status-dot.closed {
-        background-color: #64d2ff;
-      }
-
-      .status-dot--hidden {
-        opacity: 0;
-        box-shadow: none;
       }
 
       .channel-icon {
@@ -613,18 +553,6 @@
         background-color: #5865f2;
       }
 
-      .message-bubble.me.channel-signal {
-        background-color: #3a76f0;
-      }
-
-      .message-bubble.me.channel-viber {
-        background-color: #665cac;
-      }
-
-      .message-bubble.me.channel-linkedin {
-        background-color: #0a66c2;
-      }
-
       .message-bubble.contact {
         background-color: #262628;
         /* iMessage Dark Gray */
@@ -654,18 +582,6 @@
 
       .message-bubble.contact.channel-discord {
         background-color: #2f3349;
-      }
-
-      .message-bubble.contact.channel-signal {
-        background-color: #23324b;
-      }
-
-      .message-bubble.contact.channel-viber {
-        background-color: #3a3359;
-      }
-
-      .message-bubble.contact.channel-linkedin {
-        background-color: #183d63;
       }
 
       .message-time {

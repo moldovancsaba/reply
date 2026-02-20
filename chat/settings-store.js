@@ -123,11 +123,7 @@ function withDefaults(settings) {
           bubbleMe: (s?.ui?.channels?.email?.bubbleMe || "#5e5ce6").toString(),
           bubbleContact: (s?.ui?.channels?.email?.bubbleContact || "#262628").toString(),
         },
-        whatsapp: {
-          emoji: (s?.ui?.channels?.whatsapp?.emoji || "🟢").toString(),
-          bubbleMe: (s?.ui?.channels?.whatsapp?.bubbleMe || "#25D366").toString(),
-          bubbleContact: (s?.ui?.channels?.whatsapp?.bubbleContact || "#262628").toString(),
-        },
+
         linkedin: {
           emoji: (s?.ui?.channels?.linkedin?.emoji || "🟦").toString(),
           bubbleMe: (s?.ui?.channels?.linkedin?.bubbleMe || "#0077b5").toString(),
