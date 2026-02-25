@@ -56,3 +56,7 @@ npm install
 
 ## 🛡️ Privacy First
 All ingested data remains on your device. Core functionality runs locally (Ollama + LanceDB). Optional connectors (e.g. Gmail OAuth) use external provider APIs only when you configure them.
+
+## 📌 Project Management (SSOT)
+The internal project management single source of truth (SSOT) is exclusively the GitHub Project Board. All issues MUST be created in the `moldovancsaba/mvp-factory-control` repository.
+**Do NOT use local `task.md`, `ROADMAP.md`, or `IDEABANK.md` files in this repository.** All tasks must be recorded on the GitHub board.

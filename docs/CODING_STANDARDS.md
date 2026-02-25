@@ -20,8 +20,9 @@
 *   **Safety:** Avoid duplicate global or module-level declarations.
 
 ## Git & Project Management
-*   **Single Source of Truth:** [GitHub Project Board](https://github.com/users/moldovancsaba/projects/1).
-*   **Commit Messages:** Descriptive and linked to issue numbers (e.g., "feat(#172): implement hybrid search").
+*   **Single Source of Truth (SSOT):** The [GitHub Project Board](https://github.com/users/moldovancsaba/projects/1) and the `moldovancsaba/mvp-factory-control` repository are the ONLY places to track issues and tasks.
+*   **NO local task files:** Never use local `task.md`, `ROADMAP.md`, `IDEABANK.md`, etc. All tasks MUST be migrated to the GitHub project board.
+*   **Commit Messages:** Descriptive and linked to issue numbers in the SSOT repo (e.g., "feat(#172): implement hybrid search").
 *   **PR/Merge:** All features must pass verification (UAT) before closing issues.
 
 ## Testing & Verification

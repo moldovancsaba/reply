@@ -6,10 +6,10 @@
 import { loadConversations, selectContact, setConversationsQuery } from './contacts.js';
 import { handleSendMessage } from './messages.js';
 import { getSettings, buildSecurityHeaders } from './api.js';
-import './dashboard.js';
-import './kyc.js';
-import { applyReplyUiSettings } from './settings.js';
-import { openTrainingPage, closeTrainingPage } from './training.js';
+import './dashboard.js?v=2.1';
+import './kyc.js?v=2.1';
+import { applyReplyUiSettings } from './settings.js?v=2.1';
+import { openTrainingPage, closeTrainingPage } from './training.js?v=2.1';
 
 // Global state
 window.currentHandle = null;

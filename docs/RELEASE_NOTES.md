@@ -1,6 +1,34 @@
 # Reply — Release Notes
 
 Completed work only. The [GitHub Project Board](https://github.com/users/moldovancsaba/projects/1) is the source of truth for delivered items.
+ 
+## [0.2.0] - 2026-02-25
+### Added
+- **"Holy Grail" Personal AI Pipeline**: Built an end-to-end local generation pipeline that automatically mimics the user's communication style (tone, sentence length, vocabulary, emojis).
+- **Automated Persona Extraction**: Analyzes random outbound message pairs using `llama3.2:3b` to yield a strict `system_persona.txt` set of rules.
+- **Dynamic RAG Drafting**: Injects top 4 retrieved past "Me" messages directly into local `gemma2:2b` drafts for real-time mimicking.
+- **Local LLM Migration**: Fully migrated off Gemini to `ollama`, resolving all rate-limit issues while enforcing absolute privacy.
+- **Automated Continuous Learning Loop**: An hourly background loop syncs new WhatsApp and iMessage texts to LanceDB, enriching RAG memory without manual clicks.
+
+## [0.1.3] - 2026-02-23
+### Added
+- **LinkedIn Messaging Integration**: Promoted LinkedIn to a first-class channel with "Send LinkedIn" support (clipboard fallback flow).
+- **Unified Bridge Persistence**: All inbound bridge events are now persisted to SQLite (`chat.db`), ensuring consistent mixed-channel chat history.
+- **Learning from Action**: Sent LinkedIn messages are automatically saved as "Golden Examples" in LanceDB to reinforce stylistic mimicry.
+- **LinkedIn Professional Styling**: Added LinkedIn-consistent brand colors for message bubbles in the chat feed.
+
+## [0.1.2] - 2026-02-23
+### Added
+- **LinkedIn Own Posts Ingestion**: New `ingest-linkedin-posts.js` script to ingest LinkedIn archive data (`Shares.csv`) into the vector store.
+- **Golden Examples mimicking**: The generator now injects "Golden Examples" (annotated or ingested posts/sent items) into the LLM prompt for superior stylistic mimicry.
+- **Dynamic Context Assembly**: Updated `context-engine.js` to unify historical interactions and stylistic anchors.
+
+## [0.1.1] - 2026-02-21
+### Added
+*   **Email: Dynamic Subject Support:** Replies now dynamically reuse the most recent subject from thread history (found via `vector-store.js` + `getLatestSubject`). Falls back to a clean empty subject if no history exists, replacing the hardcoded default.
+*   **UX: "Pleasant Viewing" engine:** Implemented a robust `message-cleaner.js` utility that strips `<style>` and `<script>` blocks from HTML emails. Solving the "CSS clutter" issue where raw email styles would bleed into the app UI.
+*   **UX: Structured subject/body display:** `js/message-formatter.js` now renders emails with distinct, styled Subject and Body sections for better readability.
+*   **Attachments: MVP detection:** Gmail and IMAP sync engines now detect attachments during ingestion and store metadata in the message text. These are rendered as interactive download placeholders/placeholders in the chat bubbles.
 
 ## 2026-02-19 — OpenClaw WhatsApp Guardrail Integration + Channel Case Study
 *   **OpenClaw guard enforced in runtime:** `{reply}` now applies WhatsApp OpenClaw safety guard at server startup and before OpenClaw sends, forcing DM policy to `disabled`, group policy to `allowlist`, and resetting `whatsapp-allowFrom` to empty.

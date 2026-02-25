@@ -5,12 +5,13 @@
 
 import { fetchMessages, sendMessage } from './api.js';
 import { appendLinkedText, createPlatformIcon, resolvePlatformTarget } from './platform-icons.js';
+import { formatPleasant } from './message-formatter.js';
 
 // State
 let messageOffset = 0;
 let hasMoreMessages = true;
 const MESSAGE_LIMIT = 30;
-const SEND_CAPABLE_CHANNELS = new Set(['imessage', 'whatsapp', 'email']);
+const SEND_CAPABLE_CHANNELS = new Set(['imessage', 'whatsapp', 'email', 'linkedin']);
 const DRAFT_ONLY_CHANNELS = new Set(['telegram', 'discord']);
 
 function normalizeChannelKey(channel) {
@@ -19,6 +20,7 @@ function normalizeChannelKey(channel) {
     if (raw.includes('telegram')) return 'telegram';
     if (raw.includes('discord')) return 'discord';
     if (raw.includes('mail') || raw.includes('email') || raw.includes('gmail') || raw.includes('imap')) return 'email';
+    if (raw.includes('linkedin')) return 'linkedin';
     return 'imessage';
 }
 
@@ -42,6 +44,7 @@ function channelLabel(channel) {
     if (v === 'whatsapp') return 'WhatsApp';
     if (v === 'telegram') return 'Telegram';
     if (v === 'discord') return 'Discord';
+    if (v === 'linkedin') return 'LinkedIn';
     return 'iMessage';
 }
 
@@ -72,6 +75,11 @@ function setSendButtonForChannel(channel) {
     }
     if (v === 'whatsapp') {
         btn.textContent = 'Send WhatsApp';
+        btn.disabled = false;
+        return;
+    }
+    if (v === 'linkedin') {
+        btn.textContent = 'Send LinkedIn';
         btn.disabled = false;
         return;
     }
@@ -151,7 +159,7 @@ export async function loadMessages(handle, append = false) {
         const loadMoreWrap = messagesEl.querySelector('.load-more-messages-wrap');
         if (loadMoreWrap) loadMoreWrap.remove();
 
-        // Render messages (server returns newest-first; we keep newest at top)
+        // Render messages
         messages.forEach(msg => {
             const bubble = document.createElement('div');
             const isFromMe = !!(msg.is_from_me ?? (msg.role === 'me'));
@@ -160,7 +168,9 @@ export async function loadMessages(handle, append = false) {
 
             const text = document.createElement('div');
             text.className = 'message-text';
-            appendLinkedText(text, msg.text || '', { channelHint: msg.channel || msg.source || '' });
+
+            // Use rich formatting for all messages (Markdown/HTML support)
+            text.innerHTML = formatPleasant(msg.text || '', { channel: channelKey });
             bubble.appendChild(text);
 
             const date = msg.date ? new Date(msg.date) : null;
@@ -299,40 +309,84 @@ export async function handleSendMessage() {
             return;
         }
 
-        // Send message
-        const result = await sendMessage(currentHandle, text, channel);
+        // Guard: if the current contact's handle is a non-iMessage URI (e.g. linkedin://)
+        // attempt to find a valid phone/email for iMessage.
+        let targetHandle = currentHandle;
+        if (channel === 'imessage' && (currentHandle || '').match(/^([a-z]+):\/\//i) && !(currentHandle || '').match(/^imessage:\/\//i)) {
+            const normalizedHandle = String(currentHandle).toLowerCase();
+            const currentContact = (window.conversations || []).find(c =>
+                String(c.handle).toLowerCase() === normalizedHandle ||
+                (c.latestHandle && String(c.latestHandle).toLowerCase() === normalizedHandle)
+            );
 
-        if (result.status === 'ok') {
-            // Clear input
-            chatInput.value = '';
-            try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
+            console.log(`[iMessage] Attempting to resolve iMessage handle for: ${currentHandle}`, { contactFound: !!currentContact });
 
-            // Optimistically add message to UI
-            const bubble = document.createElement('div');
-            bubble.className = `message-bubble me channel-${normalizeChannelKey(channel)}`;
-
-            const textEl = document.createElement('div');
-            textEl.className = 'message-text';
-            appendLinkedText(textEl, text, { channelHint: channel });
-            bubble.appendChild(textEl);
-
-            const info = document.createElement('div');
-            info.className = 'message-info';
-            info.classList.add('message-info--with-icon');
-            const platform = resolvePlatformTarget(text, { channelHint: channel }).platform;
-            const icon = createPlatformIcon(platform, channel || 'message');
-            icon.classList.add('platform-icon--sm');
-            info.appendChild(icon);
-            const time = document.createElement('span');
-            time.textContent = new Date().toLocaleString();
-            info.appendChild(time);
-            bubble.appendChild(info);
-
-            messagesEl.prepend(bubble);
-            messagesEl.scrollTop = 0;
-        } else {
-            alert('Send failed: ' + (result.error || 'Unknown error'));
+            if (currentContact && currentContact.channels) {
+                const phone = (currentContact.channels.phone || [])[0];
+                const email = (currentContact.channels.email || [])[0];
+                if (phone) {
+                    targetHandle = phone;
+                    console.log(`[iMessage] Resolved to phone: ${targetHandle}`);
+                } else if (email) {
+                    targetHandle = email;
+                    console.log(`[iMessage] Resolved to email: ${targetHandle}`);
+                } else {
+                    const scheme = (currentHandle.match(/^([a-z]+):\/\//i) || [])[1] || 'unknown';
+                    alert(`Cannot send iMessage to this contact.\nThis contact's handle is a ${scheme}:// URI and no phone/email is known.\n\nSwitch to ${scheme} or add a phone number/email to their profile.`);
+                    return;
+                }
+            } else {
+                const scheme = (currentHandle.match(/^([a-z]+):\/\//i) || [])[1] || 'unknown';
+                alert(`Cannot send iMessage to this contact.\nThis contact's handle is a ${scheme}:// URI.\n\nSwitch to ${scheme} or pick a phone number / email address.`);
+                return;
+            }
         }
+
+        console.log(`[SendMessage] channel=${channel}, targetHandle=${targetHandle}, textLen=${text.length}`);
+        // Send message
+        const result = await sendMessage(targetHandle, text, channel);
+        console.log(`[SendMessage] Result status: ${result?.status}`);
+
+        if (result?.status !== 'ok') {
+            alert(`Failed to send message via ${channel}: ${result?.error || 'unknown error'}`);
+            return;
+        }
+
+        // Clear input
+        chatInput.value = '';
+        // Refresh contact list to move current contact to top
+        if (typeof window.loadConversations === 'function') {
+            await window.loadConversations();
+        }
+        // Load messages for the actual target handle (phone/email) if it differs
+        const loadHandle = targetHandle !== currentHandle ? targetHandle : currentHandle;
+        await loadMessages(loadHandle);
+        try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
+
+        // Optimistically add message to UI
+        const bubble = document.createElement('div');
+        bubble.className = `message-bubble me channel-${normalizeChannelKey(channel)}`;
+
+        const textEl = document.createElement('div');
+        textEl.className = 'message-text';
+        appendLinkedText(textEl, text, { channelHint: channel });
+        bubble.appendChild(textEl);
+
+        const info = document.createElement('div');
+        info.className = 'message-info';
+        info.classList.add('message-info--with-icon');
+        const platform = resolvePlatformTarget(text, { channelHint: channel }).platform;
+        const icon = createPlatformIcon(platform, channel || 'message');
+        icon.classList.add('platform-icon--sm');
+        info.appendChild(icon);
+        const time = document.createElement('span');
+        time.textContent = new Date().toLocaleString();
+        info.appendChild(time);
+        bubble.appendChild(info);
+
+        messagesEl.prepend(bubble);
+        messagesEl.scrollTop = 0;
+
     } catch (error) {
         console.error('Failed to send message:', error);
         // WhatsApp send is best-effort; offer clipboard fallback.

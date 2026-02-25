@@ -78,6 +78,19 @@ export async function fetchSystemHealth() {
 }
 
 /**
+ * Fetch OpenClaw gateway status via proxy
+ * @returns {Promise<Object>} OpenClaw status data
+ */
+export async function fetchOpenClawStatus() {
+    const res = await fetch(`${API_BASE}/api/openclaw/status`, {
+        headers: buildSecurityHeaders(),
+    });
+    // We don't throw on error here because many errors are expected (gateway offline)
+    // and handled gracefully by the UI via JSON content.
+    return await res.json();
+}
+
+/**
  * Fetch triage log entries for dashboard
  * @param {number} limit - Number of entries to fetch
  * @returns {Promise<Array>} Triage log entries

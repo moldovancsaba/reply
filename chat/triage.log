@@ -1,2 +1,217 @@
 {"timestamp":"2026-02-17T08:35:08.205Z","ruleId":"meeting-requests","action":"log","tag":"Scheduling","sender":"test-sender","preview":"We need to schedule a meeting regarding the newsle..."}
 {"timestamp":"2026-02-18T12:45:39.625Z","ruleId":"meeting-requests","action":"log","tag":"Scheduling","sender":"+36706010707","preview":"Szeretettel meghívlak titeket 2026.02.18.-án szerd..."}
+{"timestamp":"2026-02-24T06:59:14.506Z","ruleId":"meeting-requests","action":"log","tag":"Scheduling","sender":"linkedin://edwingarcia","preview":"calendly.com/japanese-royal/interview  Please let ..."}
+{"timestamp":"2026-02-24T06:59:16.334Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"yes sure..."}
+{"timestamp":"2026-02-24T06:59:18.793Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://edwingarcia","preview":"Can we have a call tomorrow?..."}
+{"timestamp":"2026-02-24T06:59:20.767Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"yes do it ❤️..."}
+{"timestamp":"2026-02-24T06:59:22.564Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://edwingarcia","preview":"Sure. well, last year, I think we didn't have a ca..."}
+{"timestamp":"2026-02-24T06:59:24.339Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"May I have your short comment with your thoughts a..."}
+{"timestamp":"2026-02-24T06:59:26.120Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Lovely, I just did..."}
+{"timestamp":"2026-02-24T06:59:27.935Z","ruleId":"meeting-requests","action":"log","tag":"Scheduling","sender":"linkedin://edwingarcia","preview":"Our manager will interview with you and discuss mo..."}
+{"timestamp":"2026-02-24T06:59:29.786Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://edwingarcia","preview":"calendly.com/japanese-royal/interview..."}
+{"timestamp":"2026-02-24T06:59:31.617Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://edwingarcia","preview":"Feel free to ask questions..."}
+{"timestamp":"2026-02-24T06:59:33.723Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://edwingarcia","preview":"Our manager will interview with you and he is in C..."}
+{"timestamp":"2026-02-24T06:59:35.734Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"What time zone are you in?..."}
+{"timestamp":"2026-02-24T06:59:37.624Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"I have a dozen questions in general..."}
+{"timestamp":"2026-02-24T06:59:39.951Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Let me check the doc, give me a minute or two..."}
+{"timestamp":"2026-02-24T06:59:42.118Z","ruleId":"meeting-requests","action":"log","tag":"Scheduling","sender":"linkedin://edwingarcia","preview":"Can we schedule a call to discuss more details of ..."}
+{"timestamp":"2026-02-24T06:59:44.883Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://edwingarcia","preview":"This is our first project's overview: https://docs..."}
+{"timestamp":"2026-02-24T06:59:46.969Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://edwingarcia","preview":"Now blockchain is becoming trend all over the worl..."}
+{"timestamp":"2026-02-24T06:59:48.927Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://edwingarcia","preview":"👍..."}
+{"timestamp":"2026-02-24T06:59:50.953Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Especially on smart contracts..."}
+{"timestamp":"2026-02-24T06:59:53.283Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"I did..."}
+{"timestamp":"2026-02-24T06:59:55.259Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://edwingarcia","preview":"I reviewed your profile and you have good manageme..."}
+{"timestamp":"2026-02-24T06:59:57.097Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Howdy Edwin, Thanks for the connection! How may I ..."}
+{"timestamp":"2026-02-24T06:59:58.966Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Thanks Christof..."}
+{"timestamp":"2026-02-24T07:00:01.236Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"May I have your short comment with your thoughts a..."}
+{"timestamp":"2026-02-24T07:00:03.209Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"ha tudod hogy milyen üzleti folyamatokat szeretnél..."}
+{"timestamp":"2026-02-24T07:00:05.091Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://péterpechál","preview":"Ami nekem most a célom lenne, hogy KKV ügyfeleknek..."}
+{"timestamp":"2026-02-24T07:00:06.938Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"én ezzel a második résszel foglalkozom..."}
+{"timestamp":"2026-02-24T07:00:08.797Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://péterpechál","preview":"Köszönöm, érdekes téma. Jelenleg elég aktívan fogl..."}
+{"timestamp":"2026-02-24T07:00:10.629Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Megnézed a kedvemért ezt a postot? Örülnék egy lik..."}
+{"timestamp":"2026-02-24T07:00:12.397Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Szia Péter! Hogyan tudok segíteni ?..."}
+{"timestamp":"2026-02-24T07:00:14.167Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"ha pedig írok mindig más 5-10 embernek a network-ö..."}
+{"timestamp":"2026-02-24T07:00:15.961Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"egyfajta Cherry-picking :D..."}
+{"timestamp":"2026-02-24T07:00:17.799Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Mert azt gondolom, hogy érdekes számodra és másokn..."}
+{"timestamp":"2026-02-24T07:00:19.984Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Megnézed a kedvemért ezt a postot? Örülnék egy lik..."}
+{"timestamp":"2026-02-24T07:00:21.755Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"HR területen dolgozol ahogy látom. Az mindig jól j..."}
+{"timestamp":"2026-02-24T07:00:23.630Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Szia Balázs, köszönöm a kapcsolatot. Hogy tudok se..."}
+{"timestamp":"2026-02-24T07:00:25.442Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"és mi a véleményed az Agent munkatársakról?..."}
+{"timestamp":"2026-02-24T07:00:27.243Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://erzsébetbasics","preview":"Kedves Csaba, megnéztem az ajánlott postot, likeol..."}
+{"timestamp":"2026-02-24T07:00:29.008Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Megnézed a kedvemért ezt a postot? Örülnék egy lik..."}
+{"timestamp":"2026-02-24T07:00:30.818Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Szia Erzsébet, Köszönöm! Várom a későbbi jelentkez..."}
+{"timestamp":"2026-02-24T07:00:32.602Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://erzsébetbasics","preview":"Kedves Csaba,   Köszönjük érdeklődését a Technical..."}
+{"timestamp":"2026-02-24T07:00:34.468Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"https://www.linkedin.com/feed/update/urn:li:activi..."}
+{"timestamp":"2026-02-24T07:00:36.306Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://attilajoó","preview":"Boldog születésnapot! 🙂..."}
+{"timestamp":"2026-02-24T07:00:38.422Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://attilajoó","preview":"A sales nem az én világom, és nem is vagyok benne ..."}
+{"timestamp":"2026-02-24T07:00:40.149Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"viszont a cég már több mint 7 éves..."}
+{"timestamp":"2026-02-24T07:00:42.031Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"mennyire lehet sales ahol van alap és ahhoz jön a ..."}
+{"timestamp":"2026-02-24T07:00:43.878Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://attilajoó","preview":"Legyen benne perspektíva, előre lépési lehetőség. ..."}
+{"timestamp":"2026-02-24T07:00:45.675Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"mik a feltételek?..."}
+{"timestamp":"2026-02-24T07:00:47.463Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://attilajoó","preview":"Még megvan az állás, de nem stabil, szóval nyitott..."}
+{"timestamp":"2026-02-24T07:00:49.215Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"most akkor munkát keresel?..."}
+{"timestamp":"2026-02-24T07:00:51.024Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://attilajoó","preview":"Nem is akar menni vagy jobbnak látjátok, hogy nem ..."}
+{"timestamp":"2026-02-24T07:00:52.920Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"szociális kapcsolatokban csak, a középső távoktatá..."}
+{"timestamp":"2026-02-24T07:00:54.819Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://attilajoó","preview":"A hétköznapokban ez mennyire érződik? Suli megy ne..."}
+{"timestamp":"2026-02-24T07:00:57.012Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"De ettől függetlenül zajlik az élet..."}
+{"timestamp":"2026-02-24T07:00:58.748Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Hát nálunk a 3 lányból a két nagyobbat diagnosztiz..."}
+{"timestamp":"2026-02-24T07:01:00.501Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://attilajoó","preview":"Képzeld, a kisebbik fiam cukor beteg lett. 🫣 kemé..."}
+{"timestamp":"2026-02-24T07:01:02.339Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://attilajoó","preview":"Én is remélem. A munkámra nem nagyon volt panasz, ..."}
+{"timestamp":"2026-02-24T07:01:04.084Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"hááát remélem nem dobnak ki!!! hogy vagytok?..."}
+{"timestamp":"2026-02-24T07:01:05.864Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://attilajoó","preview":"Azt a fülest kaptam, hogy itt az Agrár Kamaránál á..."}
+{"timestamp":"2026-02-24T07:01:07.806Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Hát szia..."}
+{"timestamp":"2026-02-24T07:01:10.388Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://attilajoó","preview":"Ez az applikacio a világ legnagyobb értelmetlenség..."}
+{"timestamp":"2026-02-24T07:01:12.273Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"I need you to help me to win my bet to have 10+ re..."}
+{"timestamp":"2026-02-24T07:01:14.064Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"What are your brief thoughts and comments? May I a..."}
+{"timestamp":"2026-02-24T07:01:16.175Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://olegkarakash","preview":"Happy birthday Csaba!..."}
+{"timestamp":"2026-02-24T07:01:17.957Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"👍..."}
+{"timestamp":"2026-02-24T07:01:19.672Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://olegkarakash","preview":"done..."}
+{"timestamp":"2026-02-24T07:01:21.407Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"moldovancsaba@gmail.com (that's always the basic w..."}
+{"timestamp":"2026-02-24T07:01:23.130Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://olegkarakash","preview":"Sure, please remind me your email, so I can share ..."}
+{"timestamp":"2026-02-24T07:01:24.839Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Is there any chance to have a paper, demo or a Qui..."}
+{"timestamp":"2026-02-24T07:01:26.621Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://olegkarakash","preview":"Oh, I didn't even expect you reply 😂   Here are s..."}
+{"timestamp":"2026-02-24T07:01:28.350Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Yep! Budapest 😍 What are the new projects?..."}
+{"timestamp":"2026-02-24T07:01:30.127Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://olegkarakash","preview":"Hi Csaba,   Nice to hear from you! Things are goin..."}
+{"timestamp":"2026-02-24T07:01:31.886Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Hi Oleg, Long time no see!  Thank you so much! How..."}
+{"timestamp":"2026-02-24T07:01:34.042Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://olegkarakash","preview":"Wishing you a very happy birthday, Csaba!..."}
+{"timestamp":"2026-02-24T07:01:35.859Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"What are your brief thoughts and comments? May I a..."}
+{"timestamp":"2026-02-24T07:01:37.643Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://jessegoodman","preview":"Wishing you a very happy birthday!..."}
+{"timestamp":"2026-02-24T07:01:39.791Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Thank you ;-)) On 07/08/15 01:54pm, Jesse Goodman ..."}
+{"timestamp":"2026-02-24T07:01:41.558Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://jessegoodman","preview":"Happy Birthday Csaba!   Jesse  Sent via LinkedIn C..."}
+{"timestamp":"2026-02-24T07:01:43.392Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"What are your brief thoughts and comments? May I a..."}
+{"timestamp":"2026-02-24T07:01:45.182Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Wishing you a very happy birthday!..."}
+{"timestamp":"2026-02-24T07:01:46.996Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Örülök, hogy minden OK Nálad...."}
+{"timestamp":"2026-02-24T07:01:48.941Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Nálunk a babázás már inkább izgulás amíg valamelyi..."}
+{"timestamp":"2026-02-24T07:01:50.761Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Köszi, jól vagyunk, mostanság babázunk. 🙂  Ti hog..."}
+{"timestamp":"2026-02-24T07:01:52.921Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Szia! Nagyon szívesen! 🙂..."}
+{"timestamp":"2026-02-24T07:01:54.832Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Halihó! Nagyon köszönöm! Hogy vagytok mostanság?..."}
+{"timestamp":"2026-02-24T07:01:56.852Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Wishing you a very happy birthday!..."}
+{"timestamp":"2026-02-24T07:01:58.617Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Köszi!..."}
+{"timestamp":"2026-02-24T07:02:00.410Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Gép elől ma küldöm..."}
+{"timestamp":"2026-02-24T07:02:02.195Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Szia, A media cégek listáját (azt a párat, amiről ..."}
+{"timestamp":"2026-02-24T07:02:04.052Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"👍..."}
+{"timestamp":"2026-02-24T07:02:06.091Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Ide tudsz írni: g.kalnai@samsung.com..."}
+{"timestamp":"2026-02-24T07:02:08.150Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Bármikor mesterem..."}
+{"timestamp":"2026-02-24T07:02:10.158Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"+36706010707..."}
+{"timestamp":"2026-02-24T07:02:12.480Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Nagyon szívessen! :)  Tudunk valamikor beszélni?  ..."}
+{"timestamp":"2026-02-24T07:02:14.289Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Nagyon drága vagy! Köszönöm! Hogy vagy mostanában?..."}
+{"timestamp":"2026-02-24T07:02:16.051Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Boldog szülinapot!..."}
+{"timestamp":"2026-02-24T07:02:17.886Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"👍..."}
+{"timestamp":"2026-02-24T07:02:19.632Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Köszike!..."}
+{"timestamp":"2026-02-24T07:02:21.457Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Congrats on the new job! :)..."}
+{"timestamp":"2026-02-24T07:02:23.219Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Sok sikert! 👏🏻😀..."}
+{"timestamp":"2026-02-24T07:02:25.005Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Nagyon Drága vagy, köszönöm..."}
+{"timestamp":"2026-02-24T07:02:26.815Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Thanks a lot. I am so excited. It's a great new ch..."}
+{"timestamp":"2026-02-24T07:02:28.549Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Congrats on the new role! Hope you're doing well. ..."}
+{"timestamp":"2026-02-24T07:02:30.717Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Yep! 😀..."}
+{"timestamp":"2026-02-24T07:02:32.455Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Oroszlan :D..."}
+{"timestamp":"2026-02-24T07:02:34.336Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Köszönöm szépen! 😀..."}
+{"timestamp":"2026-02-24T07:02:36.239Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Nagyon boldog Szülinapot mester ;)..."}
+{"timestamp":"2026-02-24T07:02:38.114Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Koszonom :D..."}
+{"timestamp":"2026-02-24T07:02:40.053Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Boldog szülinapot! 🍰🎂🍭🍾..."}
+{"timestamp":"2026-02-24T07:02:42.215Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Ez csak termeszetes :D..."}
+{"timestamp":"2026-02-24T07:02:44.068Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Thanks for endorsing me for Marketing Strategy!..."}
+{"timestamp":"2026-02-24T07:02:45.946Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"👍🏻😀..."}
+{"timestamp":"2026-02-24T07:02:47.848Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Brüsszelben tolom a Big datát, de itt nincs olyan ..."}
+{"timestamp":"2026-02-24T07:02:50.092Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://györgykálnai","preview":"Nincs mit. :) Most Izraelben elek a csaladommal. V..."}
+{"timestamp":"2026-02-24T07:02:51.933Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Szia Gyuri, köszönöm a minősítést :) mi a helyzet ..."}
+{"timestamp":"2026-02-24T07:02:53.792Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"What are your brief thoughts and comments? May I a..."}
+{"timestamp":"2026-02-24T07:02:55.846Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://sunild","preview":"Wish you very happy birthday Csaba 🎂🎉💐..."}
+{"timestamp":"2026-02-24T07:02:58.770Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://sunild","preview":"Okay Thank you ☺️..."}
+{"timestamp":"2026-02-24T07:03:00.528Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"As of today by default companies do not provide re..."}
+{"timestamp":"2026-02-24T07:03:02.334Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://sunild","preview":"Sure thank you, any contact who will help for work..."}
+{"timestamp":"2026-02-24T07:03:04.141Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"🥹..."}
+{"timestamp":"2026-02-24T07:03:05.885Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Unfortunately, we cannot accept application outsid..."}
+{"timestamp":"2026-02-24T07:03:07.658Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://sunild","preview":"I can pay the sponsorship expenses. Once I got int..."}
+{"timestamp":"2026-02-24T07:03:10.119Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://sunild","preview":"Thank you!..."}
+{"timestamp":"2026-02-24T07:03:11.970Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Unfortunately we do not provide sponsorship for vi..."}
+{"timestamp":"2026-02-24T07:03:13.784Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://sunild","preview":"Thank you..."}
+{"timestamp":"2026-02-24T07:03:15.526Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://sunild","preview":"But I’m looking for opportunity in the Europian Un..."}
+{"timestamp":"2026-02-24T07:03:17.266Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://sunild","preview":"Now in the Indian..."}
+{"timestamp":"2026-02-24T07:03:19.063Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://sunild","preview":"I’m from India and I been in the United Kingdom fo..."}
+{"timestamp":"2026-02-24T07:03:20.896Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://sunild","preview":"Thank you for contacting me...."}
+{"timestamp":"2026-02-24T07:03:22.745Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://sunild","preview":"Good afternoon..."}
+{"timestamp":"2026-02-24T07:03:24.524Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://sunild","preview":"Hi Csaba..."}
+{"timestamp":"2026-02-24T07:03:26.269Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Hi Sunil D.,  Do you live in Budapest?  Thanks, Cs..."}
+{"timestamp":"2026-02-24T07:03:28.591Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"https://www.linkedin.com/feed/update/urn:li:activi..."}
+{"timestamp":"2026-02-24T07:03:30.362Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"köszönöm ❤️..."}
+{"timestamp":"2026-02-24T07:03:32.100Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://kittiszéphegyi","preview":"Nagyon boldog születésnapot kívánok!..."}
+{"timestamp":"2026-02-24T07:03:33.832Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Szia Kitti, köszönöm a jelölést, miben segíthetek ..."}
+{"timestamp":"2026-02-24T07:03:35.589Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"What are your brief thoughts and comments? May I a..."}
+{"timestamp":"2026-02-24T07:03:37.303Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://dominikseisser","preview":"Wishing you a very happy birthday Csaba!..."}
+{"timestamp":"2026-02-24T07:03:39.051Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"so keep in touch whenever I get a charger cable :D..."}
+{"timestamp":"2026-02-24T07:03:41.124Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://dominikseisser","preview":"Sure! Haha had same problem today..."}
+{"timestamp":"2026-02-24T07:03:42.906Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"left my charger at home :P..."}
+{"timestamp":"2026-02-24T07:03:44.618Z","ruleId":"meeting-requests","action":"log","tag":"Scheduling","sender":"linkedin://csabazoltanmoldovan","preview":"My phone went out of power and I stuck in meetings..."}
+{"timestamp":"2026-02-24T07:03:46.819Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://dominikseisser","preview":"Hey that’s great!   Definitely, look forward to a ..."}
+{"timestamp":"2026-02-24T07:03:48.613Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Would be great to have a beer next time ! I spent ..."}
+{"timestamp":"2026-02-24T07:03:50.354Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"How is London?..."}
+{"timestamp":"2026-02-24T07:03:52.156Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"So it could be double impact for Her..."}
+{"timestamp":"2026-02-24T07:03:53.995Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Just to update you I working for the market leader..."}
+{"timestamp":"2026-02-24T07:03:55.753Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Of course..."}
+{"timestamp":"2026-02-24T07:03:57.914Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Great..."}
+{"timestamp":"2026-02-24T07:04:00.032Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Wow..."}
+{"timestamp":"2026-02-24T07:04:02.120Z","ruleId":"urgent-keywords","action":"notify","tag":"High Priority","sender":"linkedin://dominikseisser","preview":"Hey Csaba!   How are you doing? Absolutely gorgeou..."}
+{"timestamp":"2026-02-24T07:04:03.951Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"https://www.linkedin.com/feed/update/urn:li:activi..."}
+{"timestamp":"2026-02-24T07:04:06.165Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://tamasdohany","preview":"https://iamdtms.medium.com/a-j%C3%B6v%C5%91-ai-pro..."}
+{"timestamp":"2026-02-24T07:04:08.034Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"❤️..."}
+{"timestamp":"2026-02-24T07:04:10.176Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://tamasdohany","preview":"Thank you, but it's not my style. 🙃..."}
+{"timestamp":"2026-02-24T07:04:11.972Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"I know, but right now this is an open job. ❤️..."}
+{"timestamp":"2026-02-24T07:04:13.788Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://tamasdohany","preview":"Actually I'm not get what can I do as a graphic op..."}
+{"timestamp":"2026-02-24T07:04:15.635Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"I am looking for a graphic operator for a company ..."}
+{"timestamp":"2026-02-24T07:04:17.428Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://tamasdohany","preview":"Hey Csaba, we didn't speak since Abimato. Probably..."}
+{"timestamp":"2026-02-24T07:04:19.223Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"What are your brief thoughts and comments? May I a..."}
+{"timestamp":"2026-02-24T07:04:21.038Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://faroukjibrilokpanachi","preview":"Good evening. Hope you good. Haven't heard from yo..."}
+{"timestamp":"2026-02-24T07:04:22.837Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://faroukjibrilokpanachi","preview":"Good evening. Hope you are doing great.   Still ha..."}
+{"timestamp":"2026-02-24T07:04:25.462Z","ruleId":"meeting-requests","action":"log","tag":"Scheduling","sender":"linkedin://faroukjibrilokpanachi","preview":"Hi Zoltan. I suspected your tight schedule as much..."}
+{"timestamp":"2026-02-24T07:04:28.084Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Hi Farouk, sorry it was a hectic few days! Lets se..."}
+{"timestamp":"2026-02-24T07:04:30.251Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://faroukjibrilokpanachi","preview":"Good Morning.   Hope this meets you well. I sent y..."}
+{"timestamp":"2026-02-24T07:04:32.571Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://faroukjibrilokpanachi","preview":"Good morning Mr Moldovan,   Based on our discussio..."}
+{"timestamp":"2026-02-24T07:04:34.937Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Great! Thank you so much, I believe this opportuni..."}
+{"timestamp":"2026-02-24T07:04:36.803Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://faroukjibrilokpanachi","preview":"Good evening Mr Zoltan,   Thanks for reaching out...."}
+{"timestamp":"2026-02-24T07:04:38.600Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Hey Farouk, I’m hoping you can help me out with so..."}
+{"timestamp":"2026-02-24T07:04:40.459Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"What are your brief thoughts and comments? May I a..."}
+{"timestamp":"2026-02-24T07:04:42.695Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://polinadolishna","preview":"Hey Csaba I took a quick look at what you're build..."}
+{"timestamp":"2026-02-24T07:04:44.601Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://polinadolishna","preview":"Hi Csaba, thanks for connecting. Looking forward t..."}
+{"timestamp":"2026-02-24T07:04:47.024Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"What are your brief thoughts and comments?  May I ..."}
+{"timestamp":"2026-02-24T07:04:49.052Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://savanmevcha","preview":"Hi Csaba,  Thanks for connecting!  At Minddeft, we..."}
+{"timestamp":"2026-02-24T07:04:51.028Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"What are your brief thoughts and comments? May I a..."}
+{"timestamp":"2026-02-24T07:04:53.055Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://remareyes","preview":"Csaba I wanted to make sure you didn’t miss out on..."}
+{"timestamp":"2026-02-24T07:04:55.151Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://remareyes","preview":"Hey Csaba, I see you are following Apollo.io's—jus..."}
+{"timestamp":"2026-02-24T07:04:57.316Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"May I have your short comment with your thoughts a..."}
+{"timestamp":"2026-02-24T07:04:59.453Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://himanshupandey","preview":"Hello Mr. Csaba,  I hope you are in the best of he..."}
+{"timestamp":"2026-02-24T07:05:01.406Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://himanshupandey","preview":"Hello Mr. Csaba,  Thank you for your response. We ..."}
+{"timestamp":"2026-02-24T07:05:03.361Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Let me know why me?..."}
+{"timestamp":"2026-02-24T07:05:05.244Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://himanshupandey","preview":"Hello Mr. Csaba,  I hope you are in the best of he..."}
+{"timestamp":"2026-02-24T07:05:07.745Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://himanshupandey","preview":"Hello Mr. Csaba,  Thank you so much for connecting..."}
+{"timestamp":"2026-02-24T07:05:10.077Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"how can I help you?..."}
+{"timestamp":"2026-02-24T07:05:11.880Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://himanshupandey","preview":"Hello Mr. Csaba,  I hope you're well! I'm Himanshu..."}
+{"timestamp":"2026-02-24T07:05:13.700Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"May I have your short comment with your thoughts a..."}
+{"timestamp":"2026-02-24T07:05:15.478Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"❤️..."}
+{"timestamp":"2026-02-24T07:05:17.252Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://deepakotwani","preview":"Hi Mr. Csaba, I hope you are doing well.  I haven'..."}
+{"timestamp":"2026-02-24T07:05:19.063Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://deepakotwani","preview":"I understand your concern, we can surly work upon ..."}
+{"timestamp":"2026-02-24T07:05:21.045Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"I do not need that much honorary. Let’s make it sm..."}
+{"timestamp":"2026-02-24T07:05:23.327Z","ruleId":"meeting-requests","action":"log","tag":"Scheduling","sender":"linkedin://deepakotwani","preview":"Sure, I'm reaching out to present an exciting oppo..."}
+{"timestamp":"2026-02-24T07:05:25.488Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"You can send it here 😍..."}
+{"timestamp":"2026-02-24T07:05:28.334Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://deepakotwani","preview":"Hello Mr. Csaba,   Thank you for connecting!  We f..."}
+{"timestamp":"2026-02-24T07:05:30.452Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Why? Give me good points to understand the reason ..."}
+{"timestamp":"2026-02-24T07:05:32.694Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://deepakotwani","preview":"Hi Mr. Csaba,  I’m Deepak from a group of leading ..."}
+{"timestamp":"2026-02-24T07:05:34.932Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"May I have your short comment with your thoughts a..."}
+{"timestamp":"2026-02-24T07:05:36.909Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"👍..."}
+{"timestamp":"2026-02-24T07:05:39.029Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://yevheniisukhov","preview":"Hi Csaba,  That’s great to hear we often collabora..."}
+{"timestamp":"2026-02-24T07:05:41.168Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"As I work together with a lot of startups I always..."}
+{"timestamp":"2026-02-24T07:05:43.473Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"I saw that your company provides services for star..."}
+{"timestamp":"2026-02-24T07:05:46.204Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://yevheniisukhov","preview":"Hello Csaba, nice to e-meet you!  Could I ask if y..."}
+{"timestamp":"2026-02-24T07:05:48.648Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"May I have your short comment with your thoughts a..."}
+{"timestamp":"2026-02-24T07:05:52.059Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://oluwaseyiadeoti","preview":"Thanks a lot..."}
+{"timestamp":"2026-02-24T07:05:54.040Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"I do not have anything now, but send me your CV an..."}
+{"timestamp":"2026-02-24T07:05:56.076Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://oluwaseyiadeoti","preview":"Sorry for bothering you..i did work for you around..."}
+{"timestamp":"2026-02-24T07:05:58.917Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://oluwaseyiadeoti","preview":"Hi, Csaba Zoltan..."}
+{"timestamp":"2026-02-24T07:06:04.031Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Hi Oluwaseyi , How can I help you?..."}
+{"timestamp":"2026-02-24T07:06:12.434Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"May I have your short comment with your thoughts a..."}
+{"timestamp":"2026-02-24T07:06:15.163Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://mikelmull","preview":"Are you still exploring LinkedIn automation tools,..."}
+{"timestamp":"2026-02-24T07:06:19.207Z","ruleId":"meeting-requests","action":"log","tag":"Scheduling","sender":"linkedin://mikelmull","preview":"Just helped another sales leader book 18 meetings ..."}
+{"timestamp":"2026-02-24T07:06:21.409Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://mikelmull","preview":"Would you like to see a quick demo of how our AI h..."}
+{"timestamp":"2026-02-24T07:06:23.772Z","ruleId":"meeting-requests","action":"log","tag":"Scheduling","sender":"linkedin://mikelmull","preview":"Unlike Apollo (data provider) and RogerRoger (basi..."}
+{"timestamp":"2026-02-24T07:06:29.410Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Compare your service to Apollo and Rogerroger so t..."}
+{"timestamp":"2026-02-24T07:06:32.532Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://mikelmull","preview":"Even if the AI will say Its ME..."}

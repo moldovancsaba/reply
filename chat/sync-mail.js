@@ -1,10 +1,12 @@
 const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const { addDocuments } = require('./vector-store.js');
 const contactStore = require('./contact-store.js');
 
 const statusManager = require('./status-manager.js');
+const { cleanMessageText } = require('./message-cleaner.js');
 
 const MAX_BUFFER = 1024 * 1024 * 100; // 100MB for large mailboxes
 
@@ -55,6 +57,12 @@ async function syncMail() {
         try {
             const { withDefaults, readSettings } = require('./settings-store.js');
             const settings = withDefaults(readSettings());
+            console.log("[Debug] Gmail Config:", {
+                clientId: settings.gmail?.clientId,
+                hasClientSecret: !!settings.gmail?.clientSecret,
+                hasRefreshToken: !!settings.gmail?.refreshToken,
+                clientSecretHint: settings.gmail?.clientSecret?.slice(-4),
+            });
             const maxMessages = Math.max(1, Math.min(Number(settings?.worker?.quantities?.gmail) || 100, 500));
             return await syncGmail({ maxMessages });
         } catch {
@@ -127,7 +135,7 @@ async function syncMail() {
             // 2. Prepare Vector Document
             docs.push({
                 id: `mail-${Buffer.from(date + subject + cleanHandle).toString('base64').slice(0, 16)}`,
-                text: `[${date}] ${direction === 'me' ? 'Me' : cleanHandle}: Subject: ${subject}\n\n${body.slice(0, 1000)}`,
+                text: `[${date}] ${direction === 'me' ? 'Me' : cleanHandle}: Subject: ${subject}\n\n${cleanMessageText(body).slice(0, 1000)}`,
                 source: 'Mail',
                 path: `mailto:${cleanHandle}`
             });

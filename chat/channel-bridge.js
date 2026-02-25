@@ -3,6 +3,9 @@ const fs = require("fs");
 const path = require("path");
 const { addDocuments, connect } = require("./vector-store.js");
 const contactStore = require("./contact-store.js");
+const { saveMessages } = require("./message-store.js");
+const triageEngine = require("./triage-engine.js");
+const { normalizeLinkedInHandle } = require("./linkedin-utils.js");
 
 const SUPPORTED_CHANNELS = new Set([
   "imessage",
@@ -34,6 +37,7 @@ const DOC_ID_EXISTS_CACHE_MAX = 5000;
 const inflightByDocId = new Map();
 const DATA_DIR = path.join(__dirname, "data");
 const SEEN_DOC_IDS_PATH = path.join(DATA_DIR, "channel_bridge_seen.json");
+const BRIDGE_SYNC_STATE_PATH = path.join(DATA_DIR, "channel_bridge_sync.json");
 const BRIDGE_EVENTS_LOG_PATH = path.join(DATA_DIR, "channel_bridge_events.jsonl");
 const SEEN_DOC_IDS_MAX = 100000;
 const SEEN_DOC_IDS_TRIM_TARGET = 80000;
@@ -89,9 +93,28 @@ function persistSeenDocIds() {
   }
 }
 
+function trimBridgeEventLogIfNeeded() {
+  try {
+    if (!fs.existsSync(BRIDGE_EVENTS_LOG_PATH)) return;
+    const stats = fs.statSync(BRIDGE_EVENTS_LOG_PATH);
+    const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB limit
+    if (stats.size > MAX_LOG_SIZE) {
+      console.log("[Bridge] Trimming event log...");
+      const content = fs.readFileSync(BRIDGE_EVENTS_LOG_PATH, "utf8");
+      const lines = content.split("\n").filter(Boolean);
+      // Keep last 1000 lines
+      const kept = lines.slice(-1000);
+      fs.writeFileSync(BRIDGE_EVENTS_LOG_PATH, kept.join("\n") + "\n", { mode: 0o600 });
+    }
+  } catch (e) {
+    console.warn("[Bridge] Log trim failed:", e.message);
+  }
+}
+
 function appendBridgeEvent(record) {
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+    trimBridgeEventLogIfNeeded();
     const line = `${JSON.stringify({ at: new Date().toISOString(), ...(record || {}) })}\n`;
     fs.appendFileSync(BRIDGE_EVENTS_LOG_PATH, line, { encoding: "utf8", mode: 0o600 });
     fs.chmodSync(BRIDGE_EVENTS_LOG_PATH, 0o600);
@@ -100,8 +123,31 @@ function appendBridgeEvent(record) {
   }
 }
 
+function recordChannelSync(channel) {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+    let state = {};
+    if (fs.existsSync(BRIDGE_SYNC_STATE_PATH)) {
+      state = JSON.parse(fs.readFileSync(BRIDGE_SYNC_STATE_PATH, "utf8"));
+    }
+    state[channel] = new Date().toISOString();
+    fs.writeFileSync(BRIDGE_SYNC_STATE_PATH, JSON.stringify(state, null, 2), { mode: 0o600 });
+  } catch (e) {
+    console.warn("[Bridge] Failed to record channel sync:", e.message);
+  }
+}
+
+function readChannelSyncState() {
+  try {
+    if (!fs.existsSync(BRIDGE_SYNC_STATE_PATH)) return {};
+    return JSON.parse(fs.readFileSync(BRIDGE_SYNC_STATE_PATH, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
 function readBridgeEventLog(limit = 50) {
-  const max = Math.max(1, Math.min(Number(limit) || 50, 500));
+  const max = Math.max(1, Math.min(Number(limit) || 50, 5000));
   try {
     if (!fs.existsSync(BRIDGE_EVENTS_LOG_PATH)) return [];
     const raw = fs.readFileSync(BRIDGE_EVENTS_LOG_PATH, "utf8");
@@ -232,6 +278,10 @@ function normalizeHandleForChannel(channel, value) {
 
   if (channel === "telegram") {
     return handle.replace(/^@+/, "").trim().toLowerCase();
+  }
+
+  if (channel === "linkedin") {
+    return normalizeLinkedInHandle(handle);
   }
 
   return handle;
@@ -403,9 +453,9 @@ function toVectorDoc(event) {
   const attachmentTail =
     event.attachments.length > 0
       ? `\n[attachments] ${event.attachments
-          .map((a) => a.name || a.url || a.id)
-          .filter(Boolean)
-          .join(" | ")}`
+        .map((a) => a.name || a.url || a.id)
+        .filter(Boolean)
+        .join(" | ")}`
       : "";
 
   return {
@@ -474,6 +524,7 @@ async function ingestInboundEvent(rawEvent) {
 
   const exists = await docExists(doc.id);
   if (exists) {
+    recordChannelSync(event.channel);
     const out = asDuplicate();
     appendBridgeEvent({
       status: "duplicate",
@@ -489,10 +540,29 @@ async function ingestInboundEvent(rawEvent) {
   const ingestPromise = (async () => {
     await addDocuments([doc]);
     rememberDocId(doc.id);
+
+    // 2. Save to unified chat.db
+    await saveMessages([{
+      id: doc.id,
+      text: event.text,
+      source: doc.source,
+      handle: event.peer.handle,
+      timestamp: event.timestamp,
+      path: doc.path
+    }]);
+
     contactStore.updateLastContacted(event.peer.handle, event.timestamp, {
       channel: event.channel,
     });
     maybeUpdateDisplayName(event.peer.handle, event.peer.displayName);
+    recordChannelSync(event.channel);
+
+    // 3. Triage Evaluation
+    try {
+      triageEngine.evaluate(event.text, pathForEvent(event));
+    } catch (e) {
+      console.warn("[Bridge] Triage failed:", e.message);
+    }
   })();
   inflightByDocId.set(doc.id, ingestPromise);
 
@@ -567,4 +637,5 @@ module.exports = {
   ingestInboundEvents,
   BRIDGE_EVENTS_LOG_PATH,
   readBridgeEventLog,
+  readChannelSyncState,
 };

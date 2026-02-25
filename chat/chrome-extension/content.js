@@ -83,35 +83,59 @@ async function sendToLocal(payload) {
     }
 }
 
+// Normalization Utility (mirrors backend linkedin-utils.js)
+function normalizeLinkedInHandle(input) {
+    if (!input) return "";
+    let clean = String(input)
+        .replace(/^(imessage:\/\/|whatsapp:\/\/|mailto:|telegram:\/\/|discord:\/\/|signal:\/\/|viber:\/\/|linkedin:\/\/|messenger:\/\/|instagram:\/\/|sms:\/\/)/i, "")
+        .trim();
+    if (clean.includes("linkedin.com/in/")) {
+        clean = clean.split("linkedin.com/in/")[1].split("/")[0].split("?")[0];
+    }
+    let normalized = clean
+        .toLowerCase()
+        .replace(/\s+/g, "")
+        .replace(/[^\w-]/g, "");
+    return normalized ? `linkedin://${normalized}` : "";
+}
+
 function scrapeVisibleMessages() {
-    const threadEl = document.querySelector(".msg-s-message-list-content");
+    // Current LinkedIn messaging list container
+    const threadEl = document.querySelector(".msg-s-message-list-content") ||
+        document.querySelector(".msg-s-message-list");
     if (!threadEl) return null;
 
-    const headerEl = document.querySelector(".msg-entity-lockup__entity-title");
+    // Active conversation partner
+    const headerEl = document.querySelector(".msg-entity-lockup__entity-title") ||
+        document.querySelector(".msg-thread__title");
     const partnerName = headerEl ? headerEl.innerText.trim() : "Unknown LinkedIn User";
-    const partnerHandle = partnerName;
+
+    // Use unified handle normalization
+    const partnerHandle = normalizeLinkedInHandle(partnerName);
+    if (!partnerHandle) return null;
 
     const messages = [];
     const msgElements = threadEl.querySelectorAll(".msg-s-event-listitem");
 
     msgElements.forEach(el => {
         let msgId = el.getAttribute("data-urn") || el.getAttribute("id");
-        const contentEl = el.querySelector(".msg-s-event__content");
+        const contentEl = el.querySelector(".msg-s-event__content") || el.querySelector(".msg-s-event-listitem__body");
         if (!contentEl) return;
 
-        const senderEl = el.querySelector(".msg-s-message-group__name");
+        const senderEl = el.querySelector(".msg-s-message-group__name") || el.querySelector(".msg-s-event-listitem__name");
         const senderName = senderEl ? senderEl.innerText.trim() : "Unknown";
         const text = contentEl.innerText.trim();
 
         const isMine = el.classList.contains("msg-s-message-group--is-mine") ||
-            senderName === "You" ||
-            senderName === "Me";
+            senderName.toLowerCase() === "you" ||
+            senderName.toLowerCase() === "me";
 
         const timeEl = el.querySelector("time");
-        const timeText = timeEl ? timeEl.innerText : "";
+        const timeText = timeEl ? timeEl.innerText.trim() : "";
 
         if (!msgId) {
-            msgId = `li-${partnerHandle}-${timeText}-${text.substring(0, 20)}`.replace(/\s+/g, '-');
+            // Fallback stable ID
+            msgId = `li-${partnerHandle}-${timeText}-${text.substring(0, 30)}`.replace(/[^a-zA-Z0-9]/g, '-');
         }
 
         if (SEEN_IDS.has(msgId)) return;

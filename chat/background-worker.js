@@ -234,7 +234,24 @@ async function runAutoDeepAnalyzeSweepOnce() {
     }
 
     writeAutoScanCursor({ index: idx });
+
+    // Update progress status
+    try {
+        statusManager.update('kyc', {
+            state: 'running',
+            index: idx,
+            total: sorted.length,
+            lastHandle: String(pick.handle),
+            message: `Analyzing contact ${idx + 1}/${sorted.length}: ${pick.displayName || pick.handle}`
+        });
+    } catch { }
+
     await maybeRunDeepAnalysis(String(pick.handle), 'auto-scan');
+
+    // Final idle state update
+    try {
+        statusManager.update('kyc', { state: 'idle', lastSync: new Date().toISOString() });
+    } catch { }
 }
 
 async function poll() {

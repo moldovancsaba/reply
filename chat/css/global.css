@@ -5,24 +5,36 @@
 
 :root {
   /* Color Palette - Industry Standard Dark Mode */
-  --bg-app: #0f0f10;       /* Deepest background (app container) */
-  --bg-sidebar: #161618;   /* Sidebar background */
-  --bg-card: #2c2c2e;      /* Card/Element background */
-  --bg-input: #1c1c1e;     /* Input fields */
-  --bg-hover: #3a3a3c;     /* Hover states */
-  
+  --bg-app: #0f0f10;
+  /* Deepest background (app container) */
+  --bg-sidebar: #161618;
+  /* Sidebar background */
+  --bg-card: #2c2c2e;
+  /* Card/Element background */
+  --bg-input: #1c1c1e;
+  /* Input fields */
+  --bg-hover: #3a3a3c;
+  /* Hover states */
+
   /* Text Colors */
-  --text-primary: #ffffff;      /* High emphasis */
-  --text-secondary: #ebebf599;  /* Medium emphasis (60%) */
-  --text-tertiary: #ebebf54d;   /* Low emphasis (30%) */
+  --text-primary: #ffffff;
+  /* High emphasis */
+  --text-secondary: #ebebf599;
+  /* Medium emphasis (60%) */
+  --text-tertiary: #ebebf54d;
+  /* Low emphasis (30%) */
   --text-placeholder: #ebebf54d;
 
   /* Accents */
-  --primary: #0a84ff;      /* iOS Blue Dark Mode */
+  --primary: #0a84ff;
+  /* iOS Blue Dark Mode */
   --primary-hover: #0077ed;
-  --danger: #ff453a;       /* iOS Red Dark Mode */
-  --success: #30d158;      /* iOS Green Dark Mode */
-  --warning: #ffd60a;      /* iOS Yellow Dark Mode */
+  --danger: #ff453a;
+  /* iOS Red Dark Mode */
+  --success: #30d158;
+  /* iOS Green Dark Mode */
+  --warning: #ffd60a;
+  /* iOS Yellow Dark Mode */
 
   /* Channel bubble colors (overridden by Settings) */
   --bubble-me-imessage: var(--primary);
@@ -49,9 +61,27 @@
   --radius-lg: 14px;
   --radius-full: 9999px;
 
+  /* Extended Text Colors */
+  --text-muted: #888;
+  /* For less prominent text */
+  --text-hint: #999;
+  /* For hints and placeholders */
+
+  /* Input/Form Specific */
+  --input-border: var(--border);
+  /* Form field borders */
+  --input-border-focus: var(--primary);
+
+  /* Additional Spacing */
+  --space-2xs: 2px;
+
+  /* Additional Radii */
+  --radius-input: 8px;
+  /* Standard input radius */
+
   /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 6px rgba(0,0,0,0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
 
   /* Layout */
   --sidebar-width: 280px;
@@ -77,7 +107,8 @@ body {
 /* Layout Utilities */
 .app-container {
   display: grid;
-  grid-template-columns: var(--sidebar-width) 1fr var(--kyc-width); /* Sidebar | Chat | KYC */
+  grid-template-columns: var(--sidebar-width) 1fr var(--kyc-width);
+  /* Sidebar | Chat | KYC */
   height: 100vh;
   width: 100vw;
   background-color: var(--bg-app);
@@ -168,4 +199,25 @@ body {
 .btn-icon-sm {
   width: 32px;
   height: 32px;
+}
+
+/* Animations */
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.contact-list-sentinel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 1rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.contact-list-sentinel .material-symbols-outlined {
+  animation: spin 1s linear infinite;
 }

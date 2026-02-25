@@ -1,0 +1,584 @@
+/* 
+ * {reply} - Component Utility Classes
+ * Built on global.css design tokens
+ */
+
+/* ============================================
+   Settings Form Components
+   ============================================ */
+
+.settings-field {
+    margin-top: var(--space-sm);
+}
+
+.settings-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    display: block;
+    margin-bottom: var(--space-xs);
+}
+
+.settings-input {
+    width: 100%;
+    padding: var(--space-sm);
+    border: 1px solid var(--input-border, var(--border));
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.9rem;
+}
+
+.settings-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
+}
+
+.settings-input::placeholder {
+    color: var(--text-placeholder);
+}
+
+.settings-hint {
+    font-size: 0.75rem;
+    color: var(--text-hint, #999);
+    margin-top: 6px;
+}
+
+.settings-section-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-muted, #888);
+    text-transform: uppercase;
+    margin-bottom: 15px;
+    letter-spacing: 0.05em;
+}
+
+.settings-checkbox-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+/* ============================================
+   Health Card Components (Dashboard)
+   ============================================ */
+
+.health-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    min-height: 160px;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.health-card:hover {
+    border-color: var(--border-light);
+}
+
+.health-card h4 {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.health-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-md);
+}
+
+.health-card-icon {
+    font-size: 1.2rem;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.health-card-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.health-card-meta {
+    font-size: 0.8rem;
+    color: var(--text-muted, #888);
+    margin-top: var(--space-xs);
+    line-height: 1.4;
+}
+
+.health-card-meta-overflow {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.health-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 var(--space-sm) 0;
+    line-height: 1.1;
+}
+
+.health-status-tag {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    background: rgba(255, 255, 255, 0.05);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: auto;
+    /* Pushes meta to bottom if needed */
+    width: fit-content;
+}
+
+.health-status-tag.tag-online {
+    color: var(--success);
+    background: rgba(48, 209, 88, 0.1);
+}
+
+.health-status-tag.tag-offline {
+    color: var(--danger);
+    background: rgba(255, 69, 58, 0.1);
+}
+
+.health-status-tag.tag-warning {
+    color: var(--warning);
+    background: rgba(255, 214, 10, 0.1);
+}
+
+/* ============================================
+   KPI Display Components
+   ============================================ */
+
+.kpi-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.kpi-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* ============================================
+   Text Utility Classes
+   ============================================ */
+
+.text-xs {
+    font-size: 0.75rem;
+}
+
+.text-sm {
+    font-size: 0.8rem;
+}
+
+.text-base {
+    font-size: 0.9rem;
+}
+
+.text-lg {
+    font-size: 1.1rem;
+}
+
+.text-primary {
+    color: var(--text-primary);
+}
+
+.text-secondary {
+    color: var(--text-secondary);
+}
+
+.text-muted {
+    color: var(--text-muted, #888);
+}
+
+.text-hint {
+    color: var(--text-hint, #999);
+}
+
+/* ============================================
+   Spacing Utility Classes
+   ============================================ */
+
+.mt-xs {
+    margin-top: var(--space-xs);
+}
+
+.mt-sm {
+    margin-top: var(--space-sm);
+}
+
+.mt-md {
+    margin-top: var(--space-md);
+}
+
+.mt-lg {
+    margin-top: var(--space-lg);
+}
+
+.mb-xs {
+    margin-bottom: var(--space-xs);
+}
+
+.mb-sm {
+    margin-bottom: var(--space-sm);
+}
+
+.mb-md {
+    margin-bottom: var(--space-md);
+}
+
+.mb-lg {
+    margin-bottom: var(--space-lg);
+}
+
+/* ============================================
+   Layout Utility Classes
+   ============================================ */
+
+.flex {
+    display: flex;
+}
+
+.flex-col {
+    flex-direction: column;
+}
+
+.items-center {
+    align-items: center;
+}
+
+.justify-between {
+    justify-content: space-between;
+}
+
+.gap-xs {
+    gap: var(--space-xs);
+}
+
+.gap-sm {
+    gap: var(--space-sm);
+}
+
+.gap-md {
+    gap: var(--space-md);
+}
+
+/* Layout Grid Utilities */
+.grid {
+    display: grid;
+}
+
+.grid-cols-2 {
+    grid-template-columns: 1fr 1fr;
+}
+
+.grid-cols-3 {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+/* ============================================
+   Border Utility Classes
+   ============================================ */
+
+.border {
+    border: 1px solid var(--border);
+}
+
+.border-light {
+    border: 1px solid var(--border-light);
+}
+
+.rounded-sm {
+    border-radius: var(--radius-sm);
+}
+
+.rounded-md {
+    border-radius: var(--radius-md);
+}
+
+.rounded-lg {
+    border-radius: var(--radius-lg);
+}
+
+/* ============================================
+   Settings Page Layout
+   ============================================ */
+
+.settings-section {
+    margin-top: var(--space-sm);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: var(--space-lg);
+    margin-bottom: var(--space-lg);
+}
+
+.settings-section:last-child {
+    border-bottom: none;
+}
+
+.settings-grid {
+    display: grid;
+    gap: var(--space-sm);
+}
+
+.settings-grid-2 {
+    grid-template-columns: 1fr 1fr;
+}
+
+.settings-grid-3 {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+.settings-checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.settings-button-group {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+}
+
+/* ============================================
+   Training Page Styles
+   ============================================ */
+.training-section-header {
+    padding: 10px 20px;
+    margin: 0;
+    background: var(--bg-hover);
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+}
+
+.training-item {
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.training-textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-family: inherit;
+    resize: vertical;
+}
+
+.training-textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.training-meta {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 5px;
+}
+
+.training-content {
+    font-size: 0.95rem;
+    margin-bottom: 10px;
+    white-space: pre-wrap;
+    padding: 10px;
+    background: var(--bg-hover);
+    border-radius: var(--radius-sm);
+}
+
+.btn-danger-outline {
+    color: var(--danger);
+    border-color: var(--danger);
+    background: transparent;
+}
+
+.btn-danger-outline:hover {
+    background: rgba(255, 69, 58, 0.1);
+}
+
+/* ============================================
+   Settings Complex Components
+   ============================================ */
+.settings-card {
+    border: 1px solid var(--border-light, #eee);
+    border-radius: var(--radius-lg, 12px);
+    padding: var(--space-md, 12px);
+}
+
+.settings-card-title {
+    font-weight: 700;
+    color: var(--text-primary, #444);
+    margin-bottom: var(--space-md, 10px);
+}
+
+.settings-color-input {
+    height: 40px;
+    padding: 0;
+}
+
+/* Additional Base Utilities */
+.mt-0 {
+    margin-top: 0;
+}
+
+.pt-md {
+    padding-top: var(--space-md);
+}
+
+.mx-sm {
+    margin-left: var(--space-sm);
+    margin-right: var(--space-sm);
+}
+
+.items-end {
+    align-items: flex-end;
+}
+
+.ml-lg {
+    margin-left: 1.2rem;
+}
+
+/* ============================================
+   Health Card Components
+   ============================================ */
+.health-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    border: 1px solid var(--border);
+}
+
+.health-card h4 {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.health-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: var(--space-sm) 0;
+}
+
+.health-status-tag {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.05);
+    display: inline-block;
+}
+
+.health-status-tag.tag-online {
+    color: var(--success);
+    background: rgba(48, 209, 88, 0.1);
+}
+
+.health-card-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.health-card-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.health-card-meta {
+    font-size: 0.8rem;
+    color: var(--text-muted, #888);
+    margin-top: var(--space-xs);
+}
+
+.health-card-meta-overflow {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ============================================
+   KPI Display Components
+   ============================================ */
+.kpi-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.kpi-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* ============================================
+   Training Page Styles
+   ============================================ */
+.training-section-header {
+    padding: 10px 20px;
+    margin: 0;
+    background: var(--bg-hover);
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+}
+
+.training-item {
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.training-textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-family: inherit;
+    resize: vertical;
+}
+
+.training-textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.training-meta {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 5px;
+}
+
+.training-content {
+    font-size: 0.95rem;
+    margin-bottom: 10px;
+    white-space: pre-wrap;
+    padding: 10px;
+    background: var(--bg-hover);
+    border-radius: var(--radius-sm);
+}

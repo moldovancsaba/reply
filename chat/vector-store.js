@@ -9,7 +9,7 @@ function escapeSqlString(value) {
 // Singleton for the embedding pipeline to avoid reloading the model.
 let pipelineInstance = null;
 
-const DB_PATH = process.env.REPLY_LANCEDB_URI || path.join(__dirname, "../knowledge/lancedb");
+const DB_PATH = process.env.REPLY_KNOWLEDGE_DB_PATH || process.env.REPLY_LANCEDB_URI || path.join(__dirname, "../knowledge/lancedb");
 const TABLE_NAME = "documents";
 
 /**
@@ -183,7 +183,34 @@ async function getSnippets(identifier, limit = 5) {
         .slice(0, limit);
 }
 
-module.exports = { addDocuments, search, getHistory, getSnippets, connect, annotateDocument, getGoldenExamples, getPendingSuggestions, deleteDocument };
+/**
+ * Retrieve the latest subject for a specific email address from history.
+ * @param {string} email 
+ * @returns {Promise<string|null>}
+ */
+async function getLatestSubject(email) {
+    if (!email || !email.includes("@")) return null;
+    const prefix = `mailto:${email}`;
+    const docs = await getHistory(prefix);
+    if (!docs || docs.length === 0) return null;
+
+    // Sort by date and find the first one with a Subject: header
+    const sorted = docs
+        .map(d => ({
+            ...d,
+            date: d.text.match(/\[(.*?)\]/)?.[1] || "Unknown"
+        }))
+        .filter(d => d.date !== "Unknown")
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    for (const doc of sorted) {
+        const match = doc.text.match(/Subject: (.*?)(?:\n|$)/);
+        if (match && match[1]) return match[1].trim();
+    }
+    return null;
+}
+
+module.exports = { addDocuments, search, getHistory, getSnippets, getLatestSubject, connect, annotateDocument, getGoldenExamples, getPendingSuggestions, deleteDocument };
 
 /**
  * Mark a document as a 'golden standard' example for RAG prompting.

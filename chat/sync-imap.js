@@ -5,6 +5,7 @@ const { ImapFlow } = require('imapflow');
 const { addDocuments } = require('./vector-store.js');
 const contactStore = require('./contact-store.js');
 const statusManager = require('./status-manager.js');
+const { cleanMessageText } = require('./message-cleaner.js');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const STATE_FILE = path.join(DATA_DIR, 'imap_sync_state.json');
@@ -169,9 +170,21 @@ async function syncMailbox(client, mailboxName, opts) {
       if (!counterparty) continue;
 
       const text = (parsed?.text || '').toString().trim()
-        || (parsed?.html || '').toString().replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+        || cleanMessageText(parsed?.html || '')
         || '';
       if (!text) continue;
+
+      // Detect attachments
+      const attachments = (parsed?.attachments || []).map(att => ({
+        name: att.filename,
+        size: att.size,
+        contentType: att.contentType
+      }));
+
+      let finalText = text;
+      if (attachments.length > 0) {
+        finalText += `\n\n[ATTACHMENTS: ${JSON.stringify(attachments)}]`;
+      }
 
       // Update contact store last contacted.
       try {
@@ -183,7 +196,7 @@ async function syncMailbox(client, mailboxName, opts) {
 
       docs.push({
         id: `imap-${key}-${uid}`,
-        text: `[${date}] ${isFromMe ? 'Me' : counterparty}: ${safeSubject}${body}`,
+        text: `[${date}] ${isFromMe ? 'Me' : counterparty}: ${safeSubject}${finalText}`,
         source: 'IMAP',
         path: `mailto:${counterparty}`,
       });

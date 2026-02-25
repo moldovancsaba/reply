@@ -1,496 +1,321 @@
-const fs = require('fs');
+const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
 
-const DATA_FILE = path.join(__dirname, 'data', 'contacts.json');
+const DB_PATH = process.env.REPLY_CONTACTS_DB_PATH || path.join(__dirname, 'data', 'contacts.db');
 
 class ContactStore {
     constructor() {
         this._contacts = [];
         this._lastMtimeMs = null;
-        this.load();
+        this._db = new sqlite3.Database(DB_PATH);
+        this._readyPromise = this._initDb();
+    }
+
+    async _initDb() {
+        return new Promise((resolve) => {
+            this._db.serialize(() => {
+                this._db.run("PRAGMA journal_mode = WAL");
+                this._db.run("PRAGMA busy_timeout = 5000");
+                this._db.run(`CREATE TABLE IF NOT EXISTS contacts (
+                    id TEXT PRIMARY KEY,
+                    displayName TEXT,
+                    handle TEXT UNIQUE,
+                    lastContacted TEXT,
+                    lastChannel TEXT,
+                    profession TEXT,
+                    relationship TEXT,
+                    draft TEXT,
+                    status TEXT,
+                    lastMtimeMs INTEGER
+                )`);
+                this._db.run(`CREATE TABLE IF NOT EXISTS contact_channels (
+                    contact_id TEXT,
+                    type TEXT,
+                    value TEXT,
+                    PRIMARY KEY (contact_id, type, value)
+                )`);
+                this._db.run(`CREATE TABLE IF NOT EXISTS contact_notes (
+                    id TEXT PRIMARY KEY,
+                    contact_id TEXT,
+                    text TEXT,
+                    timestamp TEXT
+                )`);
+                this._db.run(`CREATE TABLE IF NOT EXISTS contact_suggestions (
+                    id TEXT PRIMARY KEY,
+                    contact_id TEXT,
+                    type TEXT,
+                    content TEXT,
+                    timestamp TEXT,
+                    status TEXT
+                )`);
+                this.refresh().then(resolve);
+            });
+        });
+    }
+
+    async waitUntilReady() {
+        return this._readyPromise;
     }
 
     get contacts() {
-        this.load();
         return this._contacts;
     }
 
-    set contacts(val) {
-        this._contacts = val;
+    async refresh() {
+        return new Promise((resolve, reject) => {
+            this._db.all("SELECT * FROM contacts", (err, rows) => {
+                if (err) return reject(err);
+
+                this._db.all("SELECT * FROM contact_channels", (err, channels) => {
+                    if (err) return reject(err);
+                    this._db.all("SELECT * FROM contact_notes", (err, notes) => {
+                        if (err) return reject(err);
+                        this._db.all("SELECT * FROM contact_suggestions", (err, sugs) => {
+                            if (err) return reject(err);
+
+                            const hydrated = (rows || []).map(c => {
+                                const contact = { ...c };
+                                contact.channels = { phone: [], email: [] };
+                                if (channels) {
+                                    channels.filter(ch => ch.contact_id === c.id).forEach(ch => {
+                                        if (!contact.channels[ch.type]) contact.channels[ch.type] = [];
+                                        contact.channels[ch.type].push(ch.value);
+                                    });
+                                }
+                                contact.notes = (notes || []).filter(n => n.contact_id === c.id);
+                                contact.pendingSuggestions = (sugs || []).filter(s => s.contact_id === c.id && s.status === 'pending');
+                                contact.rejectedSuggestions = (sugs || []).filter(s => s.contact_id === c.id && s.status === 'rejected').map(s => s.content);
+                                return contact;
+                            });
+
+                            this._contacts = hydrated;
+                            resolve(hydrated);
+                        });
+                    });
+                });
+            });
+        });
     }
 
-    load() {
-        try {
-            if (fs.existsSync(DATA_FILE)) {
-                const stat = fs.statSync(DATA_FILE);
-                if (this._lastMtimeMs !== null && stat.mtimeMs === this._lastMtimeMs) {
-                    return; // No changes on disk
-                }
-                this._lastMtimeMs = stat.mtimeMs;
-                const raw = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-                // Deduplicate by handle on load
-                const merged = {};
-                raw.forEach(c => {
-                    if (!c.handle && !c.displayName) return;
+    async saveContact(contact) {
+        return this.saveContacts([contact]);
+    }
 
-                    // Migration: Convert string notes to array
-                    if (c.notes && typeof c.notes === 'string') {
-                        c.notes = [{
-                            id: 'note-' + Date.now() + Math.random().toString(36).substr(2, 5),
-                            text: c.notes,
-                            timestamp: c.lastContacted || new Date().toISOString()
-                        }];
-                    } else if (!c.notes) {
-                        c.notes = [];
+    async saveContacts(contacts) {
+        if (!contacts || contacts.length === 0) return;
+        return new Promise((resolve, reject) => {
+            this._db.serialize(() => {
+                this._db.run("BEGIN TRANSACTION");
+                let hasError = false;
+                const handleError = (err) => {
+                    if (err) {
+                        hasError = true;
+                        console.error("Database error in transaction:", err.message);
                     }
+                };
 
-                    const key = (c.handle || c.displayName).toLowerCase().trim();
-                    if (!merged[key]) {
-                        merged[key] = c;
-                    } else {
-                        // Intelligent merge: preserve existing values if new ones are empty
-                        const existing = merged[key];
-                        if (!existing.profession && c.profession) existing.profession = c.profession;
-                        if (!existing.relationship && c.relationship) existing.relationship = c.relationship;
+                contacts.forEach(contact => {
+                    this._db.run(`
+                        INSERT INTO contacts (id, displayName, handle, lastContacted, lastChannel, profession, relationship, draft, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(handle) DO UPDATE SET
+                            displayName = COALESCE(NULLIF(?, ''), displayName),
+                            lastContacted = COALESCE(?, lastContacted),
+                            lastChannel = COALESCE(NULLIF(?, ''), lastChannel),
+                            profession = COALESCE(NULLIF(?, ''), profession),
+                            relationship = COALESCE(NULLIF(?, ''), relationship),
+                            draft = COALESCE(NULLIF(?, ''), draft),
+                            status = COALESCE(NULLIF(?, ''), status)
+                    `,
+                        [
+                            contact.id, contact.displayName, contact.handle, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status,
+                            contact.displayName, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status
+                        ],
+                        handleError
+                    );
 
-                        // Merge notes arrays
-                        if (c.notes && Array.isArray(c.notes)) {
-                            if (!existing.notes) existing.notes = [];
-                            c.notes.forEach(newNote => {
-                                if (!existing.notes.some(en => en.text === newNote.text)) {
-                                    existing.notes.push(newNote);
-                                }
-                            });
-                        }
-
-                        if (c.draft && !existing.draft) existing.draft = c.draft;
-                        if (c.status === 'draft' && existing.status !== 'draft') existing.status = 'draft';
-                        if ((!existing.lastContacted || new Date(c.lastContacted) > new Date(existing.lastContacted)) && c.lastContacted) {
-                            existing.lastContacted = c.lastContacted;
-                        }
-                        // Merge channels
-                        if (c.channels) {
-                            if (!existing.channels) existing.channels = { phone: [], email: [] };
-                            if (c.channels.phone) {
-                                c.channels.phone.forEach(p => { if (!existing.channels.phone.includes(p)) existing.channels.phone.push(p); });
+                    if (contact.channels) {
+                        this._db.run("DELETE FROM contact_channels WHERE contact_id = ?", [contact.id], handleError);
+                        Object.keys(contact.channels).forEach(type => {
+                            const values = contact.channels[type];
+                            if (Array.isArray(values)) {
+                                values.forEach(v => {
+                                    this._db.run("INSERT OR REPLACE INTO contact_channels (contact_id, type, value) VALUES (?, ?, ?)",
+                                        [contact.id, type, v],
+                                        handleError
+                                    );
+                                });
                             }
-                            if (c.channels.email) {
-                                c.channels.email.forEach(e => { if (!existing.channels.email.includes(e)) existing.channels.email.push(e); });
-                            }
-                        }
+                        });
                     }
                 });
-                this._contacts = Object.values(merged);
-                // Also save if we found duplicates to clean the file (use _contacts to avoid getter loop)
-                if (raw.length > this._contacts.length) {
-                    console.log(`Deduplicated contacts: ${raw.length} -> ${this._contacts.length}`);
-                    this.save();
+
+                if (hasError) {
+                    this._db.run("ROLLBACK", () => {
+                        reject(new Error("Transaction failed and was rolled back"));
+                    });
+                    return;
                 }
-            } else {
-                this._lastMtimeMs = null;
-            }
-        } catch (err) {
-            console.error("Error loading contacts:", err);
-            // DO NOT wipe _contacts if load fails to prevent wiping the file on next save
-            if (!this._contacts || this._contacts.length === 0) {
-                this._contacts = [];
-            }
-        }
+
+                this._db.run("COMMIT", (err) => {
+                    if (err) {
+                        console.error("COMMIT failed:", err.message);
+                        this._db.run("ROLLBACK");
+                        return reject(err);
+                    }
+                    this.refresh().then(resolve).catch(reject);
+                });
+            });
+        });
     }
 
-    save() {
-        try {
-            // Use internal property to avoid triggering load() recursively
-            const tmpFile = `${DATA_FILE}.${Date.now()}.tmp`;
-            fs.writeFileSync(tmpFile, JSON.stringify(this._contacts, null, 2), { mode: 0o600 });
-            fs.renameSync(tmpFile, DATA_FILE);
-            try {
-                fs.chmodSync(DATA_FILE, 0o600);
-            } catch {
-                // Best-effort hardening: keep normal writes working even if chmod fails.
-            }
-        } catch (err) {
-            console.error("Error saving contacts:", err);
-        }
-    }
-
-    /**
-     * Find a contact by name, alias, or email.
-     * @param {string} identifier 
-     * @returns {object|null}
-     */
     findContact(identifier) {
         if (!identifier) return null;
-        this.load(); // Reload to get latest from other processes
         const search = identifier.toLowerCase().trim();
 
-        return this.contacts.find(c => {
-            // 1. Check Handle (Exact)
+        return this._contacts.find(c => {
             if (c.handle && c.handle.toLowerCase() === search) return true;
-
-            // 2. Check Display Name (Exact)
             if (c.displayName && c.displayName.toLowerCase() === search) return true;
-
-            // 3. Check Aliases (Exact)
-            if (c.aliases && c.aliases.some(a => a.toLowerCase() === search)) return true;
-
-            // 4. Check Channels (Exact)
             if (c.channels) {
-                if (c.channels.email && c.channels.email.some(e => e.toLowerCase() === search)) return true;
-                if (c.channels.phone && c.channels.phone.some(p => p.toLowerCase() === search)) return true;
-                // Basic handle check inside channels as well
-                if (c.channels.phone && c.channels.phone.some(p => p.replace(/\s+/g, '').includes(search.replace(/\s+/g, '')))) return true;
+                for (const type in c.channels) {
+                    const values = c.channels[type];
+                    if (Array.isArray(values) && values.some(v => v.toLowerCase() === search)) return true;
+                }
             }
-
             return false;
         });
     }
 
-    /**
-     * Get a contact by exact handle match (case-insensitive).
-     * Prefer this when you already have a normalized handle string.
-     * @param {string} handle
-     * @returns {object|null}
-     */
     getByHandle(handle) {
         if (!handle) return null;
-        this.load();
         const search = String(handle).toLowerCase().trim();
-        return this.contacts.find(c => c.handle && c.handle.toLowerCase().trim() === search) || null;
+        return this._contacts.find(c => c.handle && c.handle.toLowerCase().trim() === search) || null;
     }
 
-    /**
-     * Update the last contacted timestamp for a contact.
-     * @param {string} identifier handle or name
-     * @param {Date|string} timestamp 
-     * @param {object} meta Optional metadata (e.g. { channel: 'whatsapp' })
-     */
-    updateLastContacted(identifier, timestamp, meta = {}) {
-        if (!identifier) return;
-        this.load();
-        const search = identifier.toLowerCase().trim();
-        const channel = (meta?.channel || meta?.lastChannel || "").toString().trim().toLowerCase();
+    async updateContact(handle, data) {
+        await this.waitUntilReady();
+        // Force refresh to ensure we have the latest ground-truth before updating
+        await this.refresh();
 
-        // Try exact handle match first to avoid findContact's broader search logic
-        let contact = this.contacts.find(c => c.handle && c.handle.toLowerCase() === search);
-
-        if (!contact) {
-            contact = this.findContact(identifier);
-        }
-
-        const date = new Date(timestamp);
-
-        if (!contact) {
-            // Auto-create contact for new handle
-            const isEmail = identifier.includes('@');
-            contact = {
-                id: 'id-' + Math.random().toString(36).substr(2, 9),
-                displayName: identifier,
-                handle: identifier,
-                channels: isEmail ? { email: [identifier] } : { phone: [identifier] },
-                lastContacted: date.toISOString(),
-                ...(channel ? { lastChannel: channel } : {})
-            };
-            this.contacts.push(contact);
-        }
-
-        if (!contact.lastContacted || date > new Date(contact.lastContacted)) {
-            contact.lastContacted = date.toISOString();
-            if (channel) contact.lastChannel = channel;
-        }
-        this.save();
-    }
-
-    /**
-     * Update an existing contact with new data.
-     * @param {string} handle 
-     * @param {object} data 
-     */
-    updateContact(handle, data, skipSave = false) {
-        this.load();
         let contact = this.findContact(handle);
         if (!contact) {
-            // Create new contact if it doesn't exist
             contact = {
-                id: Date.now().toString(),
+                id: 'id-' + Math.random().toString(36).substr(2, 9),
                 handle: handle,
                 displayName: handle,
-                lastContacted: new Date().toISOString()
+                lastContacted: new Date().toISOString(),
+                status: 'open',
+                channels: { phone: [], email: [] }
             };
-            this.contacts.push(contact);
+            if (handle.includes('@')) contact.channels.email.push(handle);
+            else if (/^\+?\d+$/.test(handle)) contact.channels.phone.push(handle);
+            this._contacts.push(contact);
         }
-
         Object.assign(contact, data);
-        if (!skipSave) this.save();
+        await this.saveContact(contact);
         return contact;
     }
 
-    setDraft(handle, text) {
-        this.load();
+    async updateLastContacted(handle, timestamp, meta = {}) {
+        await this.updateLastContactedBatch([{ handle, timestamp, meta }]);
+    }
+
+    async updateLastContactedBatch(updates) {
+        await this.waitUntilReady();
+        const toSaveMap = new Map();
+        for (const update of updates) {
+            const { handle, timestamp, meta } = update;
+            if (!handle) continue;
+
+            let contact = this.findContact(handle);
+            const date = new Date(timestamp);
+            const channel = meta.channel || meta.lastChannel || "";
+
+            if (!contact) {
+                contact = toSaveMap.get(handle);
+                if (!contact) {
+                    contact = {
+                        id: 'id-' + Math.random().toString(36).substr(2, 9),
+                        handle: handle,
+                        displayName: handle,
+                        lastContacted: date.toISOString(),
+                        lastChannel: channel,
+                        status: 'open',
+                        channels: { phone: [], email: [] }
+                    };
+                    if (handle.includes('@')) contact.channels.email.push(handle);
+                    else if (/^\+?\d+$/.test(handle)) contact.channels.phone.push(handle);
+
+                    this._contacts.push(contact);
+                    toSaveMap.set(handle, contact);
+                }
+            }
+
+            if (date > new Date(contact.lastContacted || 0)) {
+                contact.lastContacted = date.toISOString();
+                if (channel) contact.lastChannel = channel;
+                toSaveMap.set(handle, contact);
+            }
+        }
+
+        const toSave = Array.from(toSaveMap.values());
+        if (toSave.length > 0) {
+            await this.saveContacts(toSave);
+        }
+    }
+
+    async setDraft(handle, text) {
+        await this.waitUntilReady();
         const contact = this.findContact(handle);
         if (contact) {
             contact.draft = text;
             contact.status = text ? "draft" : "open";
-            this.save();
+            await this.saveContact(contact);
         }
     }
 
-    clearDraft(handle) {
-        this.setDraft(handle, null);
+    async clearDraft(handle) {
+        await this.setDraft(handle, null);
     }
 
-    setPendingKYC(handle, suggestions) {
-        this.load();
+    async addNote(handle, text) {
         const contact = this.findContact(handle);
         if (contact) {
-            contact.pendingKYC = suggestions;
-            this.save();
+            const noteId = 'note-' + Date.now() + Math.random().toString(36).substr(2, 5);
+            return new Promise((resolve, reject) => {
+                this._db.run("INSERT INTO contact_notes (id, contact_id, text, timestamp) VALUES (?, ?, ?, ?)",
+                    noteId, contact.id, text, new Date().toISOString(), (err) => {
+                        if (err) return reject(err);
+                        this.refresh().then(resolve).catch(reject);
+                    });
+            });
         }
     }
 
-    clearPendingKYC(handle) {
-        const contact = this.findContact(handle);
-        if (contact) {
-            delete contact.pendingKYC;
-            this.save();
-        }
+    async deleteNote(handle, noteId) {
+        return new Promise((resolve, reject) => {
+            this._db.run("DELETE FROM contact_notes WHERE id = ?", noteId, (err) => {
+                if (err) return reject(err);
+                this.refresh().then(resolve).catch(reject);
+            });
+        });
     }
 
     getAllHandles(identifier) {
-        this.load();
         const contact = this.findContact(identifier);
         if (!contact) return [identifier];
-
         const handles = new Set();
         if (contact.handle) handles.add(contact.handle);
         if (contact.channels) {
-            if (contact.channels.phone) contact.channels.phone.forEach(h => handles.add(h));
-            if (contact.channels.email) contact.channels.email.forEach(h => handles.add(h));
+            for (const type in contact.channels) {
+                const values = contact.channels[type];
+                if (Array.isArray(values)) values.forEach(h => handles.add(h));
+            }
         }
         return Array.from(handles);
     }
 
-    /**
-     * Add a timestamped note to a contact.
-     * @param {string} handle 
-     * @param {string} text 
-     */
-    addNote(handle, text) {
-        this.load();
-        const contact = this.findContact(handle);
-        if (contact) {
-            if (!contact.notes || !Array.isArray(contact.notes)) contact.notes = [];
-            contact.notes.push({
-                id: 'note-' + Date.now() + Math.random().toString(36).substr(2, 5),
-                kind: 'note',
-                value: text,
-                text: text,
-                source: 'user',
-                timestamp: new Date().toISOString()
-            });
-            this.save();
-        }
-    }
-
-    /**
-     * Delete a specific note by ID.
-     * @param {string} handle 
-     * @param {string} noteId 
-     */
-    deleteNote(handle, noteId) {
-        this.load();
-        const contact = this.findContact(handle);
-        if (contact && contact.notes) {
-            contact.notes = contact.notes.filter(n => n.id !== noteId);
-            this.save();
-        }
-    }
-
-    /**
-     * Update a specific note's text.
-     * @param {string} handle
-     * @param {string} noteId
-     * @param {string} text
-     * @returns {object|null} updated note or null if not found
-     */
-    updateNote(handle, noteId, text) {
-        this.load();
-        const contact = this.findContact(handle);
-        if (!contact || !Array.isArray(contact.notes)) return null;
-        const note = contact.notes.find(n => n.id === noteId);
-        if (!note) return null;
-        const nextText = String(text ?? '');
-        note.text = nextText;
-        if (note.value !== undefined) note.value = nextText;
-        note.editedAt = new Date().toISOString();
-        this.save();
-        return note;
-    }
-
-    /**
-     * Add a pending suggestion to the contact.
-     * @param {string} handle 
-     * @param {string} type 'links', 'emails', 'phones', 'notes'
-     * @param {string} content 
-     */
-    addSuggestion(handle, type, content) {
-        this.load();
-        const contact = this.findContact(handle);
-        if (!contact) return;
-
-        // Initialize suggestions array if needed
-        if (!contact.pendingSuggestions) contact.pendingSuggestions = [];
-        if (!contact.rejectedSuggestions) contact.rejectedSuggestions = [];
-
-        // Check if already rejected
-        if (contact.rejectedSuggestions.includes(content)) return;
-
-        // Check if already exists in notes (simple text check)
-        if (contact.notes && contact.notes.some(n => (n.text && n.text.includes(content)) || (n.value && String(n.value).includes(content)))) return;
-
-        // Check if already exists in channels (for structured suggestions)
-        if (type === 'emails' && contact.channels?.email && contact.channels.email.some(e => String(e).toLowerCase() === String(content).toLowerCase())) return;
-        if (type === 'phones' && contact.channels?.phone && contact.channels.phone.some(p => String(p).replace(/\s+/g, '') === String(content).replace(/\s+/g, ''))) return;
-
-        // Check if already pending
-        if (contact.pendingSuggestions.some(s => s.content === content)) return;
-
-        contact.pendingSuggestions.push({
-            id: 'sugg-' + Date.now() + Math.random().toString(36).substr(2, 5),
-            type: type,
-            content: content,
-            timestamp: new Date().toISOString()
-        });
-        this.save();
-    }
-
-    /**
-     * Add a typed entry to Local Intelligence (notes log).
-     * @param {string} handle
-     * @param {string} kind 'note'|'link'|'email'|'phone'|'address'|'hashtag'
-     * @param {string} content
-     * @param {object} meta
-     */
-    addLocalIntelligence(handle, kind, content, meta = {}) {
-        this.load();
-        const contact = this.findContact(handle);
-        if (!contact) return;
-        if (!contact.notes || !Array.isArray(contact.notes)) contact.notes = [];
-
-        const value = String(content ?? '').trim();
-        if (!value) return;
-
-        // Dedupe by kind+value
-        const k = String(kind || 'note').toLowerCase();
-        if (contact.notes.some(n => String(n.kind || 'note').toLowerCase() === k && String(n.value || n.text || '').trim() === value)) {
-            return;
-        }
-
-        contact.notes.push({
-            id: 'note-' + Date.now() + Math.random().toString(36).substr(2, 5),
-            kind: k,
-            value,
-            text: value,
-            timestamp: new Date().toISOString(),
-            ...(meta && typeof meta === 'object' ? meta : {}),
-        });
-        this.save();
-    }
-
-    /**
-     * Accept a suggestion: remove from pending, add to notes/profile.
-     */
-    acceptSuggestion(handle, suggestionId) {
-        this.load();
-        const contact = this.findContact(handle);
-        if (!contact || !contact.pendingSuggestions) return;
-
-        const suggestionIndex = contact.pendingSuggestions.findIndex(s => s.id === suggestionId);
-        if (suggestionIndex === -1) return;
-
-        const suggestion = contact.pendingSuggestions[suggestionIndex];
-
-        // Remove from pending
-        contact.pendingSuggestions.splice(suggestionIndex, 1);
-
-        // Add to permanent record based on type
-        if (suggestion.type === "emails" || suggestion.type === "phones") {
-            if (!contact.channels) contact.channels = { phone: [], email: [] };
-            if (!contact.channels.phone) contact.channels.phone = [];
-            if (!contact.channels.email) contact.channels.email = [];
-
-            if (suggestion.type === "emails") {
-                const email = String(suggestion.content).trim();
-                if (email && !contact.channels.email.some(e => String(e).toLowerCase() === email.toLowerCase())) {
-                    contact.channels.email.push(email);
-                }
-                this.addLocalIntelligence(handle, 'email', email, { source: 'ai' });
-            }
-
-            if (suggestion.type === "phones") {
-                const phone = String(suggestion.content).trim();
-                const norm = phone.replace(/\s+/g, '');
-                if (phone && !contact.channels.phone.some(p => String(p).replace(/\s+/g, '') === norm)) {
-                    contact.channels.phone.push(phone);
-                }
-                this.addLocalIntelligence(handle, 'phone', phone, { source: 'ai' });
-            }
-        } else {
-            const type = String(suggestion.type || 'notes').toLowerCase();
-            if (type === 'links') this.addLocalIntelligence(handle, 'link', suggestion.content, { source: 'ai' });
-            else if (type === 'addresses') this.addLocalIntelligence(handle, 'address', suggestion.content, { source: 'ai' });
-            else if (type === 'hashtags') this.addLocalIntelligence(handle, 'hashtag', suggestion.content, { source: 'ai' });
-            else this.addLocalIntelligence(handle, 'note', suggestion.content, { source: 'ai' });
-        }
-
-        this.save();
-        return contact;
-    }
-
-    /**
-     * Decline a suggestion: remove from pending, add to rejected list.
-     */
-    declineSuggestion(handle, suggestionId) {
-        this.load();
-        const contact = this.findContact(handle);
-        if (!contact || !contact.pendingSuggestions) return;
-
-        const suggestionIndex = contact.pendingSuggestions.findIndex(s => s.id === suggestionId);
-        if (suggestionIndex === -1) return;
-
-        const suggestion = contact.pendingSuggestions[suggestionIndex];
-
-        // Remove from pending
-        contact.pendingSuggestions.splice(suggestionIndex, 1);
-
-        // Add content to rejected list to prevent re-suggestion
-        if (!contact.rejectedSuggestions) contact.rejectedSuggestions = [];
-        contact.rejectedSuggestions.push(suggestion.content);
-
-        this.save();
-        return contact;
-    }
-
-    /**
-     * Manually override the contact status.
-     * @param {string} handle 
-     * @param {string} status 'open', 'draft', or 'closed'
-     */
-    updateStatus(handle, status) {
-        this.load();
-        const contact = this.findContact(handle);
-        if (contact) {
-            contact.status = status;
-            // If setting back to active/open, we might want to preserve the draft or clear it?
-            // User said "change status from orange back to green", usually implies they won't use that draft.
-            this.save();
-        }
-    }
-
-    /**
-     * Get formatted context for the LLM.
-     * @param {string} identifier 
-     */
     getProfileContext(identifier) {
         const contact = this.findContact(identifier);
         if (!contact) return "";
@@ -499,66 +324,128 @@ class ContactStore {
         context += `You are talking to: ${contact.displayName}\n`;
         if (contact.profession) context += `Profession: ${contact.profession}\n`;
         if (contact.relationship) context += `Relationship: ${contact.relationship}\n`;
-        if (contact.intro) context += `Intro: ${contact.intro}\n`;
-        if (contact.channels) {
-            const phones = Array.isArray(contact.channels.phone) ? contact.channels.phone : [];
-            const emails = Array.isArray(contact.channels.email) ? contact.channels.email : [];
-            if (phones.length || emails.length) {
-                context += `Channels:\n`;
-                if (phones.length) context += `- Phones: ${phones.join(', ')}\n`;
-                if (emails.length) context += `- Emails: ${emails.join(', ')}\n`;
-            }
-        }
-        if (contact.notes && Array.isArray(contact.notes)) {
-            const weight = (n) => {
-                const src = String(n?.source || '').toLowerCase();
-                if (src === 'user') return 3;
-                if (src === 'ai') return 2; // accepted AI suggestions
-                return 1;
-            };
-            const sorted = [...contact.notes].sort((a, b) => {
-                const wa = weight(a);
-                const wb = weight(b);
-                if (wa !== wb) return wb - wa;
-                return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
-            });
-            const top = sorted.slice(0, 30);
-            context += `Local Intelligence (VERY HIGH PRIORITY; user-added first, then accepted AI; showing ${top.length}${sorted.length > top.length ? ` of ${sorted.length}` : ""}):\n`;
-            top.forEach(n => {
-                const kind = String(n.kind || 'note').toLowerCase();
-                const src = String(n.source || '').toLowerCase();
-                const label = kind === 'link' ? 'LINK'
-                    : (kind === 'email' ? 'EMAIL'
-                        : (kind === 'phone' ? 'PHONE'
-                            : (kind === 'address' ? 'ADDRESS'
-                                : (kind === 'hashtag' ? 'HASHTAG' : 'NOTE'))));
-                const source = src === 'user' ? 'user' : (src === 'ai' ? 'ai-accepted' : (src ? src : ''));
-                const val = (n.value ?? n.text ?? '').toString().trim();
-                if (!val) return;
-                context += `- ${source ? `(${source}) ` : ''}[${label}] ${val}\n`;
-            });
-        }
 
+        if (contact.notes && contact.notes.length) {
+            context += `Notes:\n`;
+            contact.notes.forEach(n => context += `- ${n.text}\n`);
+        }
         return context;
     }
-    /**
-     * Get aggregate statistics about the contact database.
-     */
-    getStats() {
-        this.load();
+
+    async setPendingKYC(handle, suggestions) {
+        const contact = this.findContact(handle);
+        if (contact) {
+            contact.pendingKYC = suggestions;
+            await this.saveContact(contact);
+        }
+    }
+
+    async clearPendingKYC(handle) {
+        const contact = this.findContact(handle);
+        if (contact) {
+            delete contact.pendingKYC;
+            await this.saveContact(contact);
+        }
+    }
+
+    async updateStatus(handle, status) {
+        const contact = this.findContact(handle);
+        if (contact) {
+            contact.status = status;
+            await this.saveContact(contact);
+        }
+    }
+
+    async updateNote(handle, noteId, text) {
+        return new Promise((resolve, reject) => {
+            this._db.run("UPDATE contact_notes SET text = ? WHERE id = ?", text, noteId, (err) => {
+                if (err) return reject(err);
+                this.refresh().then(resolve).catch(reject);
+            });
+        });
+    }
+
+    async addSuggestion(handle, type, content) {
+        const contact = this.findContact(handle);
+        if (!contact) return;
+        if (contact.pendingSuggestions && contact.pendingSuggestions.some(s => s.content === content)) return;
+        if (contact.rejectedSuggestions && contact.rejectedSuggestions.includes(content)) return;
+
+        return new Promise((resolve, reject) => {
+            const id = 'sugg-' + Date.now() + Math.random().toString(36).substr(2, 5);
+            this._db.run("INSERT INTO contact_suggestions (id, contact_id, type, content, timestamp, status) VALUES (?, ?, ?, ?, ?, ?)",
+                id, contact.id, type, content, new Date().toISOString(), 'pending', (err) => {
+                    if (err) return reject(err);
+                    this.refresh().then(resolve).catch(reject);
+                });
+        });
+    }
+
+    async acceptSuggestion(handle, suggestionId) {
+        return new Promise((resolve, reject) => {
+            this._db.run("UPDATE contact_suggestions SET status = 'accepted' WHERE id = ?", suggestionId, (err) => {
+                if (err) return reject(err);
+                this.refresh().then(resolve).catch(reject);
+            });
+        });
+    }
+
+    async declineSuggestion(handle, suggestionId) {
+        return new Promise((resolve, reject) => {
+            this._db.run("UPDATE contact_suggestions SET status = 'rejected' WHERE id = ?", suggestionId, (err) => {
+                if (err) return reject(err);
+                this.refresh().then(resolve).catch(reject);
+            });
+        });
+    }
+
+    async getStats() {
         const stats = {
-            total: this.contacts.length,
+            total: this._contacts.length,
             draft: 0,
             active: 0,
-            resolved: 0
+            resolved: 0,
+            byChannel: {
+                linkedin: 0,
+                email: 0,
+                whatsapp: 0,
+                imessage: 0,
+                apple_contacts: 0
+            }
         };
 
-        this.contacts.forEach(c => {
+        this._contacts.forEach(c => {
             if (c.status === 'draft') stats.draft++;
             else if (c.status === 'closed') stats.resolved++;
             else stats.active++;
-        });
 
+            let hasInboundChannel = false;
+            if (c.channels) {
+                if ((c.channels.linkedin && c.channels.linkedin.length > 0) ||
+                    (c.handle && c.handle.startsWith('linkedin://'))) {
+                    stats.byChannel.linkedin++;
+                    hasInboundChannel = true;
+                }
+                if (c.channels.email && c.channels.email.length > 0) {
+                    stats.byChannel.email++;
+                    hasInboundChannel = true;
+                }
+                // Check both 'whatsapp' and 'phone' keys
+                if ((c.channels.whatsapp && c.channels.whatsapp.length > 0) ||
+                    (c.channels.phone && c.channels.phone.length > 0)) {
+                    stats.byChannel.whatsapp++;
+                    hasInboundChannel = true;
+                }
+                if (c.channels.imessage && c.channels.imessage.length > 0) {
+                    stats.byChannel.imessage++;
+                    hasInboundChannel = true;
+                }
+            }
+
+            if (!hasInboundChannel) {
+                stats.byChannel.apple_contacts++;
+            }
+        });
         return stats;
     }
 }

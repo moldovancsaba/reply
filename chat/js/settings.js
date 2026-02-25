@@ -203,24 +203,16 @@ function applySettingsFilter(filterKey) {
   if (currentSettingsFilter === 'linkedin') {
     setNodeVisible(mailSection, false);
     setNodeVisible(gmailSection, false);
-    setNodeVisible(uiSection, true); // Show UI section for LinkedIn
-    setNodeVisible(bridgeSection, true); // Show bridge section
+    setNodeVisible(uiSection, false); // Section itself is hidden as we show the channel block
+    setNodeVisible(bridgeSection, false);
 
-    // Worker section hidden for LinkedIn as it has no worker settings
     setNodeVisible(workerSection, false);
+    setNodeVisible(el('settings-worker-interval-wrap'), false);
 
-    // UI - only LinkedIn
     setNodeVisible(el('settings-channel-imessage'), false);
     setNodeVisible(el('settings-channel-whatsapp'), false);
     setNodeVisible(el('settings-channel-email'), false);
     setNodeVisible(el('settings-channel-linkedin'), true);
-
-    // Bridge - only LinkedIn
-    setNodeVisible(bridgeTel, false);
-    setNodeVisible(bridgeDis, false);
-    setNodeVisible(bridgeSig, false);
-    setNodeVisible(bridgeVib, false);
-    setNodeVisible(bridgeLin, true);
     return;
   }
 
@@ -266,6 +258,18 @@ async function loadIntoForm() {
   const bridgeChannels = channelBridge?.channels || {};
   const ui = data?.ui || {};
   const channels = ui?.channels || {};
+  const global = data?.global || {};
+
+  el('settings-global-google-api-key').value = '';
+  el('settings-global-google-api-key-hint').textContent = global.hasGoogleApiKey ? `Saved: ${maskHint(global.googleApiKeyHint)}` : 'Not set';
+  el('settings-global-operator-token').value = '';
+  el('settings-global-operator-token-hint').textContent = global.hasOperatorToken ? `Saved: ${maskHint(global.operatorTokenHint)}` : 'Not set';
+
+  el('settings-global-require-token').checked = global.requireOperatorToken !== false;
+  el('settings-global-local-writes').checked = global.localWritesOnly !== false;
+  el('settings-global-require-approval').checked = global.requireHumanApproval !== false;
+  el('settings-global-desktop-fallback').checked = global.desktopFallback === true;
+  el('settings-global-whatsapp-transport').value = global.whatsappTransport || 'openclaw_cli';
 
   el('settings-imap-host').value = imap.host || '';
   el('settings-imap-port').value = imap.port ? String(imap.port) : '993';
@@ -349,6 +353,15 @@ async function onSave() {
         limit: Number(el('settings-imap-limit').value) || 200,
         sinceDays: Number(el('settings-imap-since-days').value) || 30,
         selfEmails: el('settings-self-emails').value.trim(),
+      },
+      global: {
+        googleApiKey: el('settings-global-google-api-key').value,
+        operatorToken: el('settings-global-operator-token').value,
+        requireOperatorToken: el('settings-global-require-token').checked,
+        localWritesOnly: el('settings-global-local-writes').checked,
+        requireHumanApproval: el('settings-global-require-approval').checked,
+        desktopFallback: el('settings-global-desktop-fallback').checked,
+        whatsappTransport: el('settings-global-whatsapp-transport').value,
       },
       gmail: {
         clientId: el('settings-gmail-client-id').value.trim(),

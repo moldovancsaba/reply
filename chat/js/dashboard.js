@@ -3,7 +3,7 @@
  * Renders system health dashboard with sync status and triage log
  */
 
-import { fetchSystemHealth, fetchTriageLogs, fetchBridgeSummary, triggerSync, buildSecurityHeaders } from './api.js';
+import { fetchSystemHealth, fetchTriageLogs, fetchBridgeSummary, fetchOpenClawStatus, triggerSync, buildSecurityHeaders } from './api.js';
 
 function wireDashboardActions(root) {
   if (!root) return;
@@ -31,6 +31,67 @@ function wireDashboardActions(root) {
 }
 
 /**
+ * Renders a health card with consistent styling
+ * @param {Object} config - Card configuration
+ * @param {string} config.title - Card title
+ * @param {number|string} config.value - Main KPI value
+ * @param {string} config.statusText - Status text to display
+ * @param {string} [config.statusClass] - Optional status class (e.g., 'online' or 'tag-online')
+ * @param {Object} [config.meta] - Metadata lines
+ * @param {Object} [config.actions] - Action buttons configuration
+ * @param {string} [config.icon] - Header icon (emoji or svg path)
+ * @returns {string} HTML string for the card
+ */
+function renderHealthCard(config) {
+  const {
+    title,
+    value,
+    statusText,
+    statusClass = '',
+    meta = [],
+    actions = [],
+    icon = ''
+  } = config;
+
+  const actionsHtml = actions.length > 0 ? `
+    <div class="health-card-actions">
+      ${actions.map(action => {
+    if (action.type === 'settings') {
+      return `<button type="button" class="btn-icon" data-dashboard-open-settings="${action.channel}" title="${action.title || 'Configure'}">⚙️</button>`;
+    }
+    if (action.type === 'sync') {
+      return `<button type="button" class="btn-icon" data-dashboard-sync="${action.channel}" title="${action.title || 'Sync'}">
+            ${action.icon ? `<img src="${action.icon}" alt="${action.channel}" class="platform-icon platform-icon--sm">` : action.emoji || '🔄'}
+          </button>`;
+    }
+    return '';
+  }).join('')}
+    </div>
+  ` : '';
+
+  const metaHtml = meta.map(m => {
+    const overflowClass = m.overflow ? 'health-card-meta-overflow' : '';
+    return `<div class="health-card-meta ${overflowClass}" ${m.title ? `title="${m.title}"` : ''}>${m.text}</div>`;
+  }).join('');
+
+  const iconHtml = icon ? (icon.includes('.svg') || icon.includes('.png') || icon.includes('/')
+    ? `<img src="${icon}" alt="${title}" class="platform-icon platform-icon--sm">`
+    : `<span class="health-card-icon">${icon}</span>`) : '';
+
+  return `
+    <div class="health-card">
+      <div class="health-card-header">
+        <h4>${iconHtml}<span>${title}</span></h4>
+        ${actionsHtml}
+      </div>
+      <div class="health-value">${value}</div>
+      <div class="health-status-tag ${statusClass}">${statusText}</div>
+      ${metaHtml}
+    </div>
+  `;
+}
+
+/**
  * Render the dashboard with system health cards
  * Shows system status, sync status for each source, and recent triage log
  */
@@ -43,10 +104,11 @@ export async function renderDashboard() {
 
   try {
     // Fetch dashboard data
-    const [health, logs, bridgeData] = await Promise.all([
+    const [health, logs, bridgeData, openClawStatus] = await Promise.all([
       fetchSystemHealth(),
       fetchTriageLogs(10),
-      fetchBridgeSummary(300)
+      fetchBridgeSummary(5000),
+      fetchOpenClawStatus()
     ]);
 
     // Calculate uptime
@@ -57,6 +119,8 @@ export async function renderDashboard() {
     const whatsappSync = health.channels?.whatsapp || {};
     const notesSync = health.channels?.notes || {};
     const mailSync = health.channels?.mail || {};
+    const kycSync = health.channels?.kyc || {};
+    const contactSync = health.channels?.contacts || {};
     const bridgeSummary = bridgeData?.summary || {};
     const bridgeCounts = bridgeSummary?.counts || {};
     const bridgeIngested = Number(bridgeCounts?.ingested) || 0;
@@ -65,6 +129,9 @@ export async function renderDashboard() {
     const bridgeLast = bridgeSummary?.lastEventAt || null;
     const bridgeRollout = bridgeSummary?.rollout || {};
     const modeOf = (channel) => bridgeRollout?.[channel] || 'draft_only';
+
+    const linkedinMessagesSync = health.channels?.linkedin_messages || {};
+    const linkedinPostsSync = health.channels?.linkedin_posts || {};
 
     // Format last sync times
     const formatLastSync = (timestamp) => {
@@ -75,157 +142,190 @@ export async function renderDashboard() {
 
     // Render dashboard HTML
     dashboard.innerHTML = `
-      <div class="health-card">
-        <h4>System Status</h4>
-        <div class="health-value">Online</div>
-        <div class="health-status-tag tag-online">● Server Running</div>
-        <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">Uptime: ${uptimeHrs} hours</div>
-      </div>
+      ${renderHealthCard({
+      title: 'OpenClaw Health',
+      icon: '🛡️',
+      value: openClawStatus.status === 'online' ? (openClawStatus.version || 'Connected') : 'Offline',
+      statusText: openClawStatus.status === 'online' ? '● Gateway Running' : `● ${openClawStatus.error || 'Gateway Unreachable'}`,
+      statusClass: openClawStatus.status === 'online' ? 'tag-online' : 'tag-offline',
+      meta: [
+        { text: `Channels: ${openClawStatus.channels ? openClawStatus.channels.length : 0} linked` },
+        { text: `Last Heartbeat: ${formatLastSync(openClawStatus.timestamp || new Date())}` }
+      ],
+      actions: [
+        { type: 'settings', channel: 'whatsapp', title: 'OpenClaw Settings' }
+      ]
+    })
+      }
 
-      <div class="health-card">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <h4>iMessage Sync</h4>
-          <div style="display:flex; gap:6px; align-items:center;">
-            <button type="button" class="btn-icon" data-dashboard-open-settings="imessage" title="Configure iMessage">
-              ⚙️
-            </button>
-            <button type="button" class="btn-icon" data-dashboard-sync="imessage" title="Sync iMessage">
-              <img src="/public/imessage.svg" alt="iMessage" class="platform-icon platform-icon--sm">
-            </button>
-          </div>
-        </div>
-        <div class="health-value">${imessageSync.processed || 0}</div>
-        <div class="health-status-tag">● Messages Scanned</div>
-        <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
-          Last Sync: ${formatLastSync(imessageSync.lastSync)}
-        </div>
-      </div>
+      ${renderHealthCard({
+        title: 'System Status',
+        icon: '🖥️',
+        value: 'Online',
+        statusText: '● Server Running',
+        statusClass: 'tag-online',
+        meta: [
+          { text: `<span>Uptime: ${uptimeHrs}h</span>&nbsp;&nbsp;<span>Contacts: ${health.stats?.total || 0}</span>` }
+        ]
+      })
+      }
+      
+      ${renderHealthCard({
+        title: 'iMessage Sync',
+        icon: '/public/imessage.svg',
+        value: imessageSync.processed || 0,
+        statusText: '● Messages Scanned',
+        meta: [{ text: `Last Sync: ${formatLastSync(imessageSync.lastSync)}` }],
+        actions: [
+          { type: 'settings', channel: 'imessage', title: 'Configure iMessage' },
+          { type: 'sync', channel: 'imessage', icon: '/public/imessage.svg', title: 'Sync iMessage' }
+        ]
+      })
+      }
+      
+      ${renderHealthCard({
+        title: 'WhatsApp Sync',
+        icon: '/public/whatsapp.svg',
+        value: whatsappSync.processed || 0,
+        statusText: '● Messages Scanned',
+        meta: [{ text: `Last Sync: ${formatLastSync(whatsappSync.lastSync)}` }],
+        actions: [
+          { type: 'settings', channel: 'whatsapp', title: 'Configure WhatsApp' },
+          { type: 'sync', channel: 'whatsapp', icon: '/public/whatsapp.svg', title: 'Sync WhatsApp' }
+        ]
+      })
+      }
+      
+      ${renderHealthCard({
+        title: 'LinkedIn Messages',
+        icon: '/public/linkedin.svg',
+        value: linkedinMessagesSync.processed || 0,
+        statusText: '● Messages Scanned',
+        meta: [{ text: `Last Sync: ${formatLastSync(linkedinMessagesSync.lastAt)}` }],
+        actions: [
+          { type: 'settings', channel: 'linkedin', title: 'Configure LinkedIn Messages' },
+          { type: 'sync', channel: 'linkedin', icon: '/public/linkedin.svg', title: 'Sync LinkedIn Messages (via Sidecar)' }
+        ]
+      })
+      }
+      
+      ${renderHealthCard({
+        title: 'Email Sync',
+        icon: '/public/mail.svg',
+        value: mailSync.processed || 0,
+        statusText: mailSync.connected ? `● ${mailSync.provider === 'gmail' ? 'Gmail' : 'IMAP'} Connected` : '● Disconnected',
+        statusClass: mailSync.connected ? 'tag-online' : 'tag-offline',
+        meta: [
+          { overflow: true, title: mailSync.account || '', text: mailSync.account || 'No account set' },
+          { text: `Last Sync: ${formatLastSync(mailSync.lastAt)}` }
+        ],
+        actions: [
+          { type: 'settings', channel: 'mail', title: 'Configure Email' },
+          { type: 'sync', channel: 'mail', icon: '/public/mail.svg', title: 'Sync Email' }
+        ]
+      })
+      }
+      
+      ${renderHealthCard({
+        title: 'LinkedIn Posts',
+        icon: '/public/linkedin.svg',
+        value: linkedinPostsSync.processed || 0,
+        statusText: '● Posts Scanned',
+        meta: [{ text: `Last Sync: ${formatLastSync(linkedinPostsSync.lastAt)}` }],
+        actions: [
+          { type: 'settings', channel: 'linkedin-posts', title: 'Configure LinkedIn Posts' },
+          { type: 'sync', channel: 'linkedin-posts', icon: '/public/linkedin.svg', title: 'Sync LinkedIn Posts (Import Archive)' }
+        ]
+      })
+      }
+      
+      ${renderHealthCard({
+        title: 'Notes Sync',
+        icon: '📝',
+        value: notesSync.processed || 0,
+        statusText: '● Notes Scanned',
+        meta: [{ text: `Last Sync: ${formatLastSync(notesSync.lastSync)}` }],
+        actions: [
+          { type: 'settings', channel: 'notes', title: 'Configure Notes' },
+          { type: 'sync', channel: 'notes', emoji: '📝', title: 'Sync Notes' }
+        ]
+      })
+      }
+      
+      ${renderHealthCard({
+        title: 'Contacts Sync',
+        icon: '👤',
+        value: health.stats?.total || 0,
+        statusText: '● Contacts in Database',
+        meta: [
+          { text: `Sources: LI: ${health.stats?.byChannel?.linkedin || 0} | WA: ${health.stats?.byChannel?.whatsapp || 0} | Apple: ${health.stats?.byChannel?.apple_contacts || 0}` },
+          { text: `Last Sync: ${formatLastSync(contactSync.lastSync)}` }
+        ],
+        actions: [
+          { type: 'sync', channel: 'contacts', emoji: '👤', title: 'Sync Contacts from Apple Contacts' }
+        ]
+      })
+      }
+      
+      ${renderHealthCard({
+        title: 'Contact Intelligence',
+        icon: '🧠',
+        value: kycSync.index != null ? kycSync.index + 1 : 0,
+        statusText: kycSync.state === 'running' ? '● Analyzing Contacts...' : '● Idle',
+        statusClass: kycSync.state === 'running' ? 'tag-online' : '',
+        meta: [
+          { text: `Progress: ${kycSync.index != null && kycSync.total ? Math.round((kycSync.index / kycSync.total) * 100) : 0}% (${kycSync.index != null ? kycSync.index + 1 : 0} / ${kycSync.total || 0})` },
+          { overflow: true, title: kycSync.message || '', text: kycSync.message || 'Waiting for next sweep...' },
+          { text: `Last Pulse: ${formatLastSync(kycSync.timestamp)}` }
+        ],
+        actions: [
+          { type: 'sync', channel: 'kyc', emoji: '🧠', title: 'Run Intelligence Sweep' }
+        ]
+      })
+      }
 
-      <div class="health-card">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <h4>WhatsApp Sync</h4>
-          <div style="display:flex; gap:6px; align-items:center;">
-            <button type="button" class="btn-icon" data-dashboard-open-settings="whatsapp" title="Configure WhatsApp">
-              ⚙️
-            </button>
-            <button type="button" class="btn-icon" data-dashboard-sync="whatsapp" title="Sync WhatsApp">
-              <img src="/public/whatsapp.svg" alt="WhatsApp" class="platform-icon platform-icon--sm">
-            </button>
-          </div>
-        </div>
-        <div class="health-value">${whatsappSync.processed || 0}</div>
-        <div class="health-status-tag">● Messages Scanned</div>
-        <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
-          Last Sync: ${formatLastSync(whatsappSync.lastSync)}
-        </div>
-      </div>
+  <div class="health-card" style="grid-column: 1 / -1;">
+    <div class="health-card-header">
+      <h4><span class="health-card-icon">📋</span><span>Recent Triage Log</span></h4>
+    </div>
+    <div id="dashboard-triage-log" class="triage-log">
+      <!-- Triage entries will be injected safely via JS -->
+    </div>
+  </div>
+  `;
+    // Safe injection of triage logs
+    const triageContainer = dashboard.querySelector('#dashboard-triage-log');
+    if (triageContainer) {
+      if (logs.length > 0) {
+        logs.forEach(log => {
+          const entry = document.createElement('div');
+          entry.className = 'triage-entry';
 
-      <div class="health-card">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <h4>Notes Sync</h4>
-          <div style="display:flex; gap:6px; align-items:center;">
-            <button type="button" class="btn-icon" data-dashboard-open-settings="notes" title="Configure Notes">
-              ⚙️
-            </button>
-            <button type="button" class="btn-icon" data-dashboard-sync="notes" title="Sync Notes">
-              📝
-            </button>
-          </div>
-        </div>
-        <div class="health-value">${notesSync.processed || 0}</div>
-        <div class="health-status-tag">● Notes Scanned</div>
-        <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
-          Last Sync: ${formatLastSync(notesSync.lastSync)}
-        </div>
-      </div>
+          const time = document.createElement('span');
+          time.className = 'triage-time';
+          time.textContent = new Date(log.timestamp).toLocaleTimeString();
+          entry.appendChild(time);
 
-      <div class="health-card">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <h4>LinkedIn</h4>
-          <div style="display:flex; gap:6px; align-items:center;">
-            <button type="button" class="btn-icon" data-dashboard-copy-script="linkedin" title="Copy Inbound Script to Clipboard">
-              📋
-            </button>
-            <button type="button" class="btn-icon" data-dashboard-open-settings="linkedin" title="Configure LinkedIn">
-              ⚙️
-            </button>
-            <div title="Inbound via Bridge / Outbound via Desktop Automation" style="cursor:help;">
-               <img src="/public/linkedin.svg" alt="LinkedIn" class="platform-icon platform-icon--sm" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzAwNzdiNSI+PHBhdGggZD0iTTE5IDNoLTZhMiAyIDAgMCAwLTIgMnYxNGgyVjVoNnYxNGgyVjVhMiAyIDAgMCAwLTItMnpmLTkgMTJ2Mmgydi0yaC0yem0tNS0yYTItMiAwIDAgMC0yIDJ2MTRoMlY1aC0yem0yIDZ2Mmgydi0yaC0yeiIvPjwvc3ZnPg=='">
-            </div>
-          </div>
-        </div>
-        <div class="health-value">${(bridgeSummary.channels?.linkedin?.ingested || 0)}</div>
-        <div class="health-status-tag ${modeOf('linkedin') === 'draft_only' ? 'tag-online' : ''}">
-          ${modeOf('linkedin') === 'draft_only' ? '● Messages Scanned' : '● Disabled'}
-        </div>
-        <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
-          Source: Chrome Extension
-        </div>
-        <div style="font-size:0.8rem; color:#888; margin-top:0.5rem; display:flex; gap:10px; align-items:center;">
-            <span style="flex:1;">Last Sync: ${formatLastSync(bridgeSummary.channels?.linkedin?.lastAt)}</span>
-            <button type="button" onclick="document.getElementById('linkedin-import-input').click()" style="padding:2px 8px; font-size:0.75rem; cursor:pointer;" title="Import messages.csv or Connections.csv from Data Archive">
-                📥 Import Archive
-            </button>
-            <input type="file" id="linkedin-import-input" style="display:none;" accept=".csv" onchange="handleLinkedInImport(this)">
-        </div>
-      </div>
+          const action = document.createElement('span');
+          action.className = 'triage-action';
+          action.textContent = log.action;
+          entry.appendChild(action);
 
-      <div class="health-card">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <h4>Email Sync</h4>
-          <div style="display:flex; gap:6px; align-items:center;">
-            <button type="button" class="btn-icon" data-dashboard-open-settings="email" title="Configure Email">
-              ⚙️
-            </button>
-            <button type="button" class="btn-icon" data-dashboard-sync="mail" title="Sync Email (Apple Mail or IMAP)">
-              <img src="/public/mail.svg" alt="Email" class="platform-icon platform-icon--sm">
-            </button>
-          </div>
-        </div>
-        <div class="health-value">${mailSync.processed || 0}</div>
-        <div class="health-status-tag">● Emails Scanned</div>
-        <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
-          ${mailSync.connected && mailSync.account ? `Connected as: ${mailSync.account}` : 'Not connected'}
-        </div>
-        <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
-          Last Sync: ${formatLastSync(mailSync.lastSync)}
-        </div>
-      </div>
+          const contact = document.createElement('span');
+          contact.className = 'triage-contact';
+          contact.textContent = log.contact || 'N/A';
+          entry.appendChild(contact);
 
-      <div class="health-card">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <h4>Channel Bridge</h4>
-          <button type="button" class="btn-icon" data-dashboard-open-settings="bridge" title="Configure Bridge rollout">
-            ⚙️
-          </button>
-        </div>
-        <div style="display:flex; gap:12px; align-items:flex-end;">
-          <div>
-            <div class="health-value">${bridgeIngested}</div>
-            <div class="health-status-tag">● Ingested (recent)</div>
-          </div>
-          <div style="font-size:0.85rem; color:#999;">
-            <div>Duplicates: ${bridgeDuplicates}</div>
-            <div>Errors: ${bridgeErrors}</div>
-          </div>
-        </div>
-        <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
-          Telegram: ${modeOf('telegram')} | Discord: ${modeOf('discord')}<br>
-          Signal: ${modeOf('signal')} | Viber: ${modeOf('viber')}<br>
-          LinkedIn: ${modeOf('linkedin')}
-        </div>
-        <div style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
-          Last event: ${formatLastSync(bridgeLast)}
-        </div>
-      </div>
-
-      <div class="health-card" style="grid-column: 1 / -1;">
-        <h4>Recent Triage Log</h4>
-        <div id="dashboard-triage-log" class="triage-log">
-          <!-- Triage entries will be injected safely via JS -->
-        </div>
-      </div>
-    `;
+          triageContainer.appendChild(entry);
+        });
+      } else {
+        const empty = document.createElement('div');
+        empty.style.color = '#888';
+        empty.style.padding = '1rem';
+        empty.textContent = 'No recent activity';
+        triageContainer.appendChild(empty);
+      }
+    }
   } catch (error) {
     console.error('Failed to render dashboard:', error);
     dashboard.innerHTML = '';
@@ -254,40 +354,6 @@ export async function renderDashboard() {
     return;
   }
 
-  // Safe injection of triage logs
-  const triageContainer = dashboard.querySelector('#dashboard-triage-log');
-  if (triageContainer) {
-    if (logs.length > 0) {
-      logs.forEach(log => {
-        const entry = document.createElement('div');
-        entry.className = 'triage-entry';
-
-        const time = document.createElement('span');
-        time.className = 'triage-time';
-        time.textContent = new Date(log.timestamp).toLocaleTimeString();
-        entry.appendChild(time);
-
-        const action = document.createElement('span');
-        action.className = 'triage-action';
-        action.textContent = log.action;
-        entry.appendChild(action);
-
-        const contact = document.createElement('span');
-        contact.className = 'triage-contact';
-        contact.textContent = log.contact || 'N/A';
-        entry.appendChild(contact);
-
-        triageContainer.appendChild(entry);
-      });
-    } else {
-      const empty = document.createElement('div');
-      empty.style.color = '#888';
-      empty.style.padding = '1rem';
-      empty.textContent = 'No recent activity';
-      triageContainer.appendChild(empty);
-    }
-  }
-
   wireDashboardActions(dashboard);
 }
 
@@ -312,8 +378,8 @@ export async function handleSync(source, triggerButton = null) {
       renderDashboard(); // Refresh dashboard
     }, 1000);
   } catch (error) {
-    console.error(`Sync failed for ${source}:`, error);
-    alert(`Sync failed: ${error.message}`);
+    console.error(`Sync failed for ${source}: `, error);
+    alert(`Sync failed: ${error.message} `);
     if (button) {
       button.disabled = false;
       button.innerHTML = originalHtml;
@@ -330,7 +396,7 @@ export async function handleLinkedInImport(input) {
   const file = input.files[0];
   if (!file) return;
 
-  if (!confirm(`Import ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)?\nThis will ingest all messages into the history.`)) {
+  if (!confirm(`Import ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)?\nThis will ingest the LinkedIn data into your workspace.`)) {
     input.value = '';
     return;
   }
@@ -354,11 +420,11 @@ export async function handleLinkedInImport(input) {
     }
 
     const result = await res.json();
-    alert(`Import Complete!\n\nProcessed: ${result.count}\nErrors: ${result.errors}`);
+    alert(`Import Complete!\n\nProcessed: ${result.count} \nErrors: ${result.errors} `);
     renderDashboard();
   } catch (error) {
     console.error('Import failed:', error);
-    alert(`Import failed: ${error.message}`);
+    alert(`Import failed: ${error.message} `);
   } finally {
     btn.textContent = originalText;
     btn.disabled = false;

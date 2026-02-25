@@ -435,22 +435,45 @@ export async function loadKYCData(handle) {
   if (handleInput) handleInput.value = handle;
   renderHandlePreview(handle);
 
+  // Loading state
+  if (nameInput) nameInput.placeholder = 'Loading...';
+  if (roleInput) roleInput.placeholder = 'Loading...';
+  if (relInput) relInput.placeholder = 'Loading...';
+
   try {
     const data = await fetchJson(`/api/kyc?handle=${encodeURIComponent(handle)}`, {
       headers: buildSecurityHeaders()
     });
-    if (nameInput) nameInput.value = data.displayName || '';
-    if (roleInput) roleInput.value = data.profession || '';
-    if (relInput) relInput.value = data.relationship || '';
+    if (nameInput) {
+      nameInput.value = data.displayName || '';
+      nameInput.placeholder = 'Display Name';
+    }
+    if (roleInput) {
+      roleInput.value = data.profession || '';
+      roleInput.placeholder = 'Profession / Role';
+    }
+    if (relInput) {
+      relInput.value = data.relationship || '';
+      relInput.placeholder = 'Relationship';
+    }
     renderNotes(data.notes);
     renderChannels(data.channels);
     renderSuggestions(handle, data.pendingSuggestions);
     updateChannelOptionsFromKyc(handle, data.channels);
   } catch (e) {
     console.warn('Failed to load KYC:', e);
-    if (nameInput) nameInput.value = '';
-    if (roleInput) roleInput.value = '';
-    if (relInput) relInput.value = '';
+    if (nameInput) {
+      nameInput.value = '';
+      nameInput.placeholder = 'Display Name';
+    }
+    if (roleInput) {
+      roleInput.value = '';
+      roleInput.placeholder = 'Profession / Role';
+    }
+    if (relInput) {
+      relInput.value = '';
+      relInput.placeholder = 'Relationship';
+    }
     renderHandlePreview(handle);
     renderNotes([]);
     renderChannels(null);
@@ -459,52 +482,65 @@ export async function loadKYCData(handle) {
   }
 }
 
-export async function saveInlineProfile() {
-  const handle = el('kyc-handle-input')?.value?.trim();
-  if (!handle) return;
-
-  const payload = {
-    handle,
-    displayName: el('kyc-name-input')?.value?.trim() || '',
-    profession: el('kyc-role-input')?.value?.trim() || '',
-    relationship: el('kyc-rel-input')?.value?.trim() || '',
-  };
-
-  const result = await fetchJson('/api/kyc', {
-    method: 'POST',
-    headers: buildSecurityHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify(withApproval(payload, 'ui-save-kyc')),
-  });
-
-  if (result?.status !== 'ok') throw new Error(result?.error || 'Failed to save');
-
-  const display = payload.displayName || handle;
-
-  const header = document.getElementById('active-contact-name-chat');
-  if (header) header.textContent = display;
-
-  const escapeAttrValue = (value) => String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  const selector = `.sidebar-item[data-handle="${escapeAttrValue(handle)}"]`;
-
-  // Update sidebar item label immediately (best-effort)
-  const nameEl = document.querySelector(`${selector} .contact-name`);
-  if (nameEl) nameEl.textContent = display;
-
-  // Update in-memory cache used by contacts.js
-  if (Array.isArray(window.conversations)) {
-    const contact = window.conversations.find((c) => c && c.handle === handle);
-    if (contact) contact.displayName = display;
+export async function saveInlineProfile(btn = null) {
+  const originalText = btn ? btn.textContent : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Saving...';
   }
 
-  // Refresh from server so sidebar ordering/preview stays correct
-  if (typeof window.loadConversations === 'function') {
-    try {
-      await window.loadConversations(false);
-      // Restore active highlight
-      const activeItem = document.querySelector(selector);
-      if (activeItem) activeItem.classList.add('active');
-    } catch (e) {
-      console.warn('Failed to refresh conversations after save:', e);
+  try {
+    const handle = el('kyc-handle-input')?.value?.trim();
+    if (!handle) return;
+
+    const payload = {
+      handle,
+      displayName: el('kyc-name-input')?.value?.trim() || '',
+      profession: el('kyc-role-input')?.value?.trim() || '',
+      relationship: el('kyc-rel-input')?.value?.trim() || '',
+    };
+
+    const result = await fetchJson('/api/kyc', {
+      method: 'POST',
+      headers: buildSecurityHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(withApproval(payload, 'ui-save-kyc')),
+    });
+
+    if (result?.status !== 'ok') throw new Error(result?.error || 'Failed to save');
+
+    const display = payload.displayName || handle;
+
+    const header = document.getElementById('active-contact-name-chat');
+    if (header) header.textContent = display;
+
+    const escapeAttrValue = (value) => String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const selector = `.sidebar-item[data-handle="${escapeAttrValue(handle)}"]`;
+
+    // Update sidebar item label immediately (best-effort)
+    const nameEl = document.querySelector(`${selector} .contact-name`);
+    if (nameEl) nameEl.textContent = display;
+
+    // Update in-memory cache used by contacts.js
+    if (Array.isArray(window.conversations)) {
+      const contact = window.conversations.find((c) => c && c.handle === handle);
+      if (contact) contact.displayName = display;
+    }
+
+    // Refresh from server so sidebar ordering/preview stays correct
+    if (typeof window.loadConversations === 'function') {
+      try {
+        await window.loadConversations(false);
+        // Restore active highlight
+        const activeItem = document.querySelector(selector);
+        if (activeItem) activeItem.classList.add('active');
+      } catch (e) {
+        console.warn('Failed to refresh conversations after save:', e);
+      }
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText;
     }
   }
 }
@@ -549,18 +585,84 @@ async function analyzeContact(handle) {
   await loadKYCData(handle);
 }
 
-// Export to window for inline handlers in chat/index.html
-window.loadKYCData = loadKYCData;
-window.saveInlineProfile = async () => {
+export async function saveProfile(btn = null) {
+  const originalText = btn ? btn.textContent : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Saving...';
+  }
+
   try {
-    await saveInlineProfile();
+    const handle = el('prof-handle')?.value?.trim();
+    if (!handle) return;
+
+    const payload = {
+      handle,
+      displayName: el('prof-name')?.value?.trim() || '',
+      profession: el('prof-role')?.value?.trim() || '',
+      relationship: el('prof-rel')?.value?.trim() || '',
+    };
+
+    const result = await fetchJson('/api/kyc', {
+      method: 'POST',
+      headers: buildSecurityHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(withApproval(payload, 'ui-save-profile-modal')),
+    });
+
+    if (result?.status !== 'ok') throw new Error(result?.error || 'Failed to save');
+
+    // Close modal and refresh UI
+    closeProfileModal();
+    await loadKYCData(handle);
+
+    // Refresh sidebar
+    if (typeof window.loadConversations === 'function') {
+      try {
+        await window.loadConversations(false);
+      } catch (e) {
+        console.warn('Failed to refresh conversations after save:', e);
+      }
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+}
+
+export function closeProfileModal() {
+  const modal = el('profile-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+// Exposure to global scope for HTML onclick handlers
+window.saveInlineProfile = async (btn) => {
+  try {
+    console.log('[KYC] saveInlineProfile() triggered', { btn: !!btn });
+    await saveInlineProfile(btn);
+    console.log('[KYC] saveInlineProfile() success');
   } catch (e) {
-    console.error('Save profile failed:', e);
+    console.error('[KYC] saveInlineProfile() ERROR:', e);
     alert(`Save failed: ${e.message}`);
   }
 };
+
+window.saveProfile = async (btn) => {
+  try {
+    console.log('[KYC] saveProfile() triggered', { btn: !!btn });
+    await saveProfile(btn);
+    console.log('[KYC] saveProfile() success');
+  } catch (e) {
+    console.error('[KYC] saveProfile() ERROR:', e);
+    alert(`Save failed: ${e.message}`);
+  }
+};
+
+window.closeProfileModal = closeProfileModal;
 window.addNote = () => addNote().catch((e) => console.error('Add note failed:', e));
 window.deleteNote = (id) => deleteNote(id).catch((e) => console.error('Delete note failed:', e));
+window.loadKYCData = loadKYCData;
 window.dismissKYC = dismissKYC;
 window.acceptKYC = dismissKYC;
 window.editKYC = dismissKYC;

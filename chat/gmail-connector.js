@@ -56,9 +56,12 @@ function base64UrlDecodeToString(b64url) {
 }
 
 function stripHtml(html) {
-  return String(html || "")
-    .replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
+  if (!html) return "";
+  return String(html)
+    .replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, "") // Remove style blocks content
+    .replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, "") // Remove script blocks content
+    .replace(/<[^>]*>/g, " ") // Remove tags
+    .replace(/\s+/g, " ") // Collapse whitespace
     .trim();
 }
 
@@ -102,17 +105,29 @@ function parseGmailAuthErrorMessage(text) {
   return s.slice(0, 300);
 }
 
-async function tokenRequest(params) {
-  const res = await fetch(GOOGLE_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(params),
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`Token request failed: ${res.status} ${parseGmailAuthErrorMessage(text)}`);
+async function tokenRequest(params, retries = 3) {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const res = await fetch(GOOGLE_TOKEN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(params),
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(`Token request failed: ${res.status} ${parseGmailAuthErrorMessage(text)}`);
+      }
+      return JSON.parse(text);
+    } catch (e) {
+      const isDnsError = e?.cause?.code === 'ENOTFOUND' || e?.code === 'ENOTFOUND' || e.message.includes('getaddrinfo');
+      if (isDnsError && i < retries) {
+        console.warn(`[Gmail] DNS error for ${GOOGLE_TOKEN_URL}, retrying in 2s... (${i + 1}/${retries})`);
+        await new Promise(r => setTimeout(r, 2000));
+        continue;
+      }
+      throw e;
+    }
   }
-  return JSON.parse(text);
 }
 
 async function apiRequest(accessToken, pathname, options = {}) {
@@ -252,7 +267,23 @@ function extractTextFromPayload(payload) {
   if (!found?.data) return "";
 
   const decoded = base64UrlDecodeToString(found.data);
-  return found.type === "html" ? stripHtml(decoded) : decoded.trim();
+  let text = found.type === "html" ? stripHtml(decoded) : decoded.trim();
+
+  // Detect attachments
+  const attachments = [];
+  const findAttachments = (p) => {
+    if (p.filename && p.body?.attachmentId) {
+      attachments.push({ name: p.filename, id: p.body.attachmentId, size: p.body.size });
+    }
+    if (p.parts) p.parts.forEach(findAttachments);
+  };
+  findAttachments(payload);
+
+  if (attachments.length > 0) {
+    text += `\n\n[ATTACHMENTS: ${JSON.stringify(attachments)}]`;
+  }
+
+  return text;
 }
 
 async function fetchMessage(accessToken, id) {
@@ -416,7 +447,7 @@ async function sendGmail({ to, subject, text }) {
   const from = (profile.emailAddress || gmail.email || "").trim();
   if (!from) throw new Error("Failed to determine Gmail account email");
 
-  const safeSubject = (subject || "Follow-up from {reply}").replace(/\r|\n/g, " ").trim();
+  const safeSubject = (subject || "").replace(/\r|\n/g, " ").trim();
   const bodyText = String(text || "").replace(/\r\n/g, "\n");
 
   const raw = [

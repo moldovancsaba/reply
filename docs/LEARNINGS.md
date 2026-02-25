@@ -35,3 +35,9 @@
 * **Template Literals in Strings:** Embedding code with `${}` inside a backtick string in `dashboard.js` (e.g. for a "Copy Script" feature) triggers immediate interpolation errors if the variables don't exist in the dashboard's scope. Always escape them as `\${` if they are meant to be part of the string content.
 * **Extension vs UserScript:** Chrome Extensions are more robust for local-host communication (no specific Tampermonkey `@connect` prompts needed once permissions are set in manifest).
 
+
+## CSS / Cleaning
+* **CSS Bleeding:** Large HTML emails often contain global `<style>` blocks. If rendered directly in the chat bubble without stripping these blocks, they can break the entire app's UI layout. Robust stripping of `<style>` and `<script>` tags is mandatory for "Pleasant Viewing".
+
+## Document Metadata
+* **Metadata in Text:** For lightweight features (like attachment indicators), appending JSON-stringified metadata to the raw text field in LanceDB is a viable strategy to avoid immediate schema migrations while maintaining searchability.

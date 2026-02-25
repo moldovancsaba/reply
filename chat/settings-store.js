@@ -14,7 +14,13 @@ const ENCRYPTION_KEY = crypto.scryptSync(
   32
 );
 const IV_LENGTH = 16;
-const SENSITIVE_FIELDS = ["imap.pass", "gmail.clientSecret", "gmail.refreshToken"];
+const SENSITIVE_FIELDS = [
+  "imap.pass",
+  "gmail.clientSecret",
+  "gmail.refreshToken",
+  "global.googleApiKey",
+  "global.operatorToken"
+];
 
 function encrypt(text) {
   if (!text) return text;
@@ -84,8 +90,20 @@ function withDefaults(settings) {
       ),
     };
   }
+
+  const global = s?.global || {};
   return {
     ...s,
+    global: {
+      googleApiKey: (global.googleApiKey || "").toString(),
+      operatorToken: (global.operatorToken || "").toString(),
+      requireOperatorToken: global.requireOperatorToken !== false,
+      localWritesOnly: global.localWritesOnly !== false,
+      requireHumanApproval: global.requireHumanApproval !== false,
+      whatsappTransport: (global.whatsappTransport || "openclaw_cli").toString(),
+      allowOpenClaw: global.allowOpenClaw !== false,
+      desktopFallback: global.desktopFallback === true,
+    },
     channelBridge: {
       channels: bridgeChannels,
     },
@@ -152,6 +170,10 @@ function writeSettings(next) {
   const tmp = `${SETTINGS_PATH}.${Date.now()}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(encrypted, null, 2), { mode: 0o600 });
   fs.renameSync(tmp, SETTINGS_PATH);
+
+  // Sync to .env for compatibility with sidecars/cli
+  syncToEnv(next);
+
   try {
     fs.chmodSync(SETTINGS_PATH, 0o600);
   } catch {
@@ -212,6 +234,15 @@ function maskSettingsForClient(settings) {
       quantities: worker.quantities,
     },
     channelBridge: channelBridge,
+    global: {
+      ...cfg.global,
+      googleApiKey: undefined, // ensure raw value is NOT leaked
+      operatorToken: undefined,
+      hasGoogleApiKey: maskSecret(cfg.global.googleApiKey).has,
+      googleApiKeyHint: maskSecret(cfg.global.googleApiKey).hint,
+      hasOperatorToken: maskSecret(cfg.global.operatorToken).has,
+      operatorTokenHint: maskSecret(cfg.global.operatorToken).hint,
+    },
     ui: ui,
   };
 }
@@ -238,6 +269,58 @@ function isGmailConfigured(settings = null) {
   const s = settings || readSettings();
   const gmail = s?.gmail || {};
   return !!(gmail.clientId && gmail.clientSecret && gmail.refreshToken);
+}
+
+function syncToEnv(settings) {
+  try {
+    const cfg = withDefaults(settings);
+    const global = cfg.global || {};
+    const ENV_PATH = path.join(__dirname, ".env");
+
+    let content = "";
+    if (fs.existsSync(ENV_PATH)) {
+      content = fs.readFileSync(ENV_PATH, "utf8");
+    }
+
+    const mapping = {
+      "GOOGLE_API_KEY": decrypt(global.googleApiKey),
+      "REPLY_OPERATOR_TOKEN": decrypt(global.operatorToken),
+      "REPLY_SECURITY_REQUIRE_OPERATOR_TOKEN": global.requireOperatorToken,
+      "REPLY_SECURITY_LOCAL_WRITES_ONLY": global.localWritesOnly,
+      "REPLY_SECURITY_REQUIRE_HUMAN_APPROVAL": global.requireHumanApproval,
+      "REPLY_WHATSAPP_SEND_TRANSPORT": global.whatsappTransport,
+      "REPLY_WHATSAPP_ALLOW_OPENCLAW_SEND": global.allowOpenClaw,
+      "REPLY_WHATSAPP_DESKTOP_FALLBACK_ON_OPENCLAW_FAILURE": global.desktopFallback
+    };
+
+    let lines = content.split("\n");
+    const seen = new Set();
+
+    // Update existing lines
+    lines = lines.map(line => {
+      const match = line.match(/^([^=]+)=(.*)$/);
+      if (match) {
+        const key = match[1].trim();
+        if (mapping.hasOwnProperty(key)) {
+          seen.add(key);
+          return `${key}=${mapping[key]}`;
+        }
+      }
+      return line;
+    });
+
+    // Append missing lines
+    for (const [key, value] of Object.entries(mapping)) {
+      if (!seen.has(key) && value !== undefined && value !== "") {
+        lines.push(`${key}=${value}`);
+      }
+    }
+
+    fs.writeFileSync(ENV_PATH, lines.join("\n"), { mode: 0o600 });
+    console.log("[Settings] Synced global secrets to .env");
+  } catch (e) {
+    console.warn("[Settings] Failed to sync to .env:", e.message);
+  }
 }
 
 module.exports = {

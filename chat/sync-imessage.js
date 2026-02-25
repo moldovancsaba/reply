@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { withDefaults, readSettings } = require('./settings-store.js');
 
-const DB_PATH = path.join(__dirname, 'data', 'chat.db');
+const DB_PATH = process.env.REPLY_IMESSAGE_DB_PATH || path.join(__dirname, 'data', 'chat.db');
 const STATE_FILE = path.join(__dirname, 'data', 'sync_state.json');
 const statusManager = require('./status-manager.js');
 
@@ -111,7 +111,21 @@ async function sync() {
 
             try {
                 updateStatus({ state: "running", progress: 50, message: `Vectorizing ${docs.length} messages...` });
+
+                // 1. Vectorize for search
                 await addDocuments(docs);
+
+                // 2. Save to unified chat.db
+                const { saveMessages } = require('./message-store.js');
+                const unifiedDocs = rows.map(row => ({
+                    id: `msg-${row.ROWID}`,
+                    text: row.text,
+                    source: 'iMessage',
+                    handle: row.handle_id || 'unknown',
+                    timestamp: convertDate(row.date),
+                    path: `imessage://${row.handle_id || 'unknown'}`
+                }));
+                await saveMessages(unifiedDocs);
 
                 // Update LastContacted in the store
                 const contactStore = require('./contact-store.js');
