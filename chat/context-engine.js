@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { getSnippets } = require('./vector-store.js');
+const { getSnippets, getGoldenExamples } = require('./vector-store.js');
 
 const KNOWLEDGE_DIR = path.join(__dirname, '..', 'knowledge');
 const STYLE_PROFILE_PATH = path.join(KNOWLEDGE_DIR, 'style-profile.json');
@@ -31,6 +31,7 @@ async function getContext(recipient) {
     let styleInstructions = "";
     let history = "";
     let identityContext = "";
+    let goldenExamples = [];
 
     // 1. Get Identity Context (Who are we talking to?)
     if (recipient) {
@@ -89,10 +90,18 @@ ${historySnippets.map(s => `- [${s.date || 'Unknown Date'}] ${s.text.substring(0
         }
     }
 
+    // 3. Get Golden Examples for stylistic mimicry
+    try {
+        goldenExamples = await getGoldenExamples(5);
+    } catch (e) {
+        console.error("Error fetching golden examples:", e);
+    }
+
     return {
         styleInstructions,
         history,
-        identityContext
+        identityContext,
+        goldenExamples
     };
 }
 

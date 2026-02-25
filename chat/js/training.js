@@ -30,7 +30,7 @@ async function loadTrainingData() {
         const data = await res.json();
         renderTrainingData(data.annotations || [], data.pending || []);
     } catch (e) {
-        container.innerHTML = `<div style="color:red; text-align:center; padding: 20px;">Error loading data: ${e.message}</div>`;
+        container.innerHTML = `<div style="color:var(--danger); text-align:center; padding: 20px;">Error loading data: ${e.message}</div>`;
     }
 }
 
@@ -41,22 +41,22 @@ function renderTrainingData(annotations, pending) {
     // Render Pending
     if (pending.length > 0) {
         const pSection = document.createElement('div');
-        pSection.innerHTML = `<h3 style="padding: 10px 20px; margin: 0; background: var(--bg-hover); border-bottom: 1px solid var(--border);">Pending Suggestions to Review</h3>`;
+        pSection.innerHTML = `<h3 class="training-section-header">Pending Suggestions to Review</h3>`;
         container.appendChild(pSection);
 
         pending.forEach(item => {
             const div = document.createElement('div');
-            div.style.cssText = 'padding: 15px 20px; border-bottom: 1px solid var(--border);';
+            div.className = 'training-item';
             const safeText = escapeHtml(item.text);
             div.innerHTML = `
-                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 5px;">Generated: ${item.date}</div>
-                <div class="edit-area" style="margin-bottom: 10px;">
-                    <textarea class="training-textarea" style="width:100%; min-height:80px; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary); font-family:inherit;">${safeText}</textarea>
+                <div class="training-meta">Generated: ${item.date}</div>
+                <div class="edit-area mb-sm">
+                    <textarea class="training-textarea">${safeText}</textarea>
                 </div>
-                <div style="display: flex; gap: 10px; align-items: center;">
+                <div class="flex gap-md items-center">
                     <button class="btn btn-primary btn-sm accept-btn">Accept (Save as Golden)</button>
-                    <button class="btn btn-secondary btn-sm decline-btn" style="color: #d9534f; border-color: #d9534f;">Decline (Discard)</button>
-                    <span style="font-size:0.8rem; color:var(--text-secondary);">(Edit text before accepting to Refine it)</span>
+                    <button class="btn btn-secondary btn-sm decline-btn btn-danger-outline">Decline (Discard)</button>
+                    <span class="text-sm text-secondary">(Edit text before accepting to Refine it)</span>
                 </div>
             `;
             const textarea = div.querySelector('textarea');
@@ -68,7 +68,7 @@ function renderTrainingData(annotations, pending) {
 
     // Render Goldens
     const gSection = document.createElement('div');
-    gSection.innerHTML = `<h3 style="padding: 10px 20px; margin: 0; background: var(--bg-hover); border-bottom: 1px solid var(--border);">Active Golden Examples (${annotations.length})</h3>`;
+    gSection.innerHTML = `<h3 class="training-section-header">Active Golden Examples (${annotations.length})</h3>`;
     container.appendChild(gSection);
 
     if (annotations.length === 0 && pending.length === 0) {
@@ -78,10 +78,10 @@ function renderTrainingData(annotations, pending) {
 
     annotations.forEach(item => {
         const div = document.createElement('div');
-        div.style.cssText = 'padding: 15px 20px; border-bottom: 1px solid var(--border);';
+        div.className = 'training-item';
         div.innerHTML = `
-            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 5px;">${item.date} • ${item.source || 'manual'}</div>
-            <div style="font-size: 0.95rem; margin-bottom: 10px; white-space: pre-wrap; padding: 10px; background: var(--bg-hover); border-radius: 6px;">${escapeHtml(item.text)}</div>
+            <div class="training-meta">${item.date} • ${item.source || 'manual'}</div>
+            <div class="training-content">${escapeHtml(item.text)}</div>
             <button class="btn btn-secondary btn-sm remove-btn">Remove Golden Status</button>
         `;
         div.querySelector('.remove-btn').onclick = () => updateAnnotation(item.id, false);

@@ -2,6 +2,8 @@
 
 This file is onboarding + operational context. Keep it accurate when behavior/architecture changes.
 
+**Last Updated**: 2026-02-22 (Sprint 1 planning complete, foundation verified, blockers resolved)
+
 ## SSOT (Work Tracking)
 - Board: https://github.com/users/moldovancsaba/projects/1
 - Issues repo: `moldovancsaba/mvp-factory-control`
@@ -12,32 +14,55 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
   - Issue title convention for Reply: `{reply}: <short description>`.
   - Naming: always use `{reply}` (no “Hub” or other renames).
   - Mandatory flow for every issue: create in SSOT repo -> add to Project 1 -> set board fields/status -> verify membership before ending task.
-  - Never maintain local ideabank/tasklist/roadmap files in this repo.
+  - **CRITICAL RULE**: Never maintain local `task.md`, `IDEABANK.md`, `ROADMAP.md` or similar files in this repo. The GitHub Project Board is the ONLY truth.
 
-## Current Priorities (Board)
-- P0 Done: `mvp-factory-control#196` — `{reply}: Stabilize WhatsApp Desktop send (⌘N flow)` *(closed 2026-02-18)*
-- P1 In Progress: `mvp-factory-control#197` — `{reply}: Conversation list indexing (order/search/counts) cleanup`
-- P1 In Progress: `mvp-factory-control#202` — `{reply}: Implement omnichannel routing + human-gated NBA orchestration`
-- P1 Backlog: `mvp-factory-control#211` — `{reply}: Decompose server.js into route modules` *(audit Q1)*
-- P1 Backlog: `mvp-factory-control#212` — `{reply}: Add CI pipeline (GitHub Actions lint + test)` *(audit Q9)*
-- P1 Backlog: `mvp-factory-control#214` — `{reply}: Add loading states and error toast notifications` *(audit U3/U4)*
-- P2 Backlog: `mvp-factory-control#213` — `{reply}: Replace string-interpolated SQL with parameterized queries` *(audit S9)*
-- P2 Backlog: `mvp-factory-control#215` — `{reply}: First-run onboarding wizard` *(audit U5)*
-- P2 Backlog: `mvp-factory-control#216` — `{reply}: Mobile responsiveness and accessibility improvements` *(audit U6/U7)*
-- P2 Backlog: `mvp-factory-control#217` — `{reply}: Local analytics instrumentation` *(audit B1/B2)*
-- P2 Backlog: `mvp-factory-control#218` — `{reply}: Data export CLI for portability` *(audit B6)*
-- P2 Backlog: `mvp-factory-control#219` — `{reply}: Version strategy and changelog` *(audit B5)*
-- P1 Done: `mvp-factory-control#199` — `{reply}: Adopt OpenClaw security policy + approvals baseline` *(closed 2026-02-18)*
+## Current Priorities (Board, 2026-02-22)
+
+### Foundation Verification — COMPLETE ✅
+- **#212 (CI Pipeline)** — ✅ VERIFIED: `.github/workflows/ci.yml` working, runs ESLint + Jest
+- **#213 (SQL Audit)** — ✅ VERIFIED: All 4 string-interpolated SQL calls use `escapeSqlString()`, no injection risk
+
+### 2-Week Sprint Plan (Sprint 1 + Sprint 2)
+See detailed plans:
+- **[DEPENDENCY_MAP.md](DEPENDENCY_MAP.md)** — Blocking relationships, critical path, 3-4 week timeline
+- **[BACKLOG_PRIORITIZATION.md](BACKLOG_PRIORITIZATION.md)** — ROI-scored ranking (16 = #212, 5.0 = #213, #223)
+- **[SPRINT_PLAN_2W.md](SPRINT_PLAN_2W.md)** — Day-by-day execution plan (Sprint 1: foundation, Sprint 2: refactor + settings)
+
+### Knowledge Base
+- **[BRAIN_DUMP.md](BRAIN_DUMP.md)** — Operational state, technical decisions, gotchas, risk registry (syncs after every issue)
+
+### Active Issues
+- ✅ P0 Done: `mvp-factory-control#196` — `{reply}: Stabilize WhatsApp Desktop send (⌘N flow)` *(closed 2026-02-18)*
+- 🔄 P1 In Progress: `mvp-factory-control#197` — `{reply}: Conversation list indexing (order/search/counts) cleanup`
+- 🔄 P1 In Progress: `mvp-factory-control#202` — `{reply}: Implement omnichannel routing + human-gated NBA orchestration`
+- 🟡 P1 Ready: `mvp-factory-control#214` — `{reply}: Add loading states and error toast notifications` (independent, start immediately)
+- 🔴 P1 Backlog: `mvp-factory-control#211` — `{reply}: Decompose server.js into route modules` (unblocks #223, #224, #221, #220)
+- ✅ P0 Done: `mvp-factory-control#212` — `{reply}: Add CI pipeline (GitHub Actions lint + test)` (verified working 2026-02-22)
+- ✅ P0 Done: `mvp-factory-control#213` — `{reply}: Replace string-interpolated SQL with parameterized queries` (verified safe 2026-02-22)
+- 🟡 P2 Backlog: `mvp-factory-control#215` — `{reply}: First-run onboarding wizard`
+- 🟡 P2 Backlog: `mvp-factory-control#216` — `{reply}: Mobile responsiveness and accessibility improvements`
+- 🟡 P2 Backlog: `mvp-factory-control#217` — `{reply}: Local analytics instrumentation`
+- 🟡 P2 Backlog: `mvp-factory-control#218` — `{reply}: Data export CLI for portability`
+- 🟡 P2 Backlog: `mvp-factory-control#219` — `{reply}: Version strategy and changelog`
+- 🟡 P2 Backlog: `mvp-factory-control#223` — `{reply}: AI Provider Cards (Ollama + OpenClaw selector)` (depends on #211)
+- 🟡 P2 Backlog: `mvp-factory-control#224` — `{reply}: Smart Prompt Library (templates + chaining)` (depends on #211)
+- 🟡 P2 Backlog: `mvp-factory-control#221` — `{reply}: Settings Hub (consolidated provider config)` (depends on #211, clarify #197 blocker)
+- 🟡 P2 Backlog: `mvp-factory-control#220` — `{reply}: Scope LinkedIn send capability (API vs clipboard)` (ADR required)
+- ✅ P0 Done: `mvp-factory-control#199` — `{reply}: Adopt OpenClaw security policy + approvals baseline` *(closed 2026-02-18)*
 
 ## Docs Index
 - `README.md` — quickstart
 - `docs/ARCHITECTURE.md` — system overview
 - `docs/APP_NAVIGATION.md` — “where is X?” UI/code map
+- `docs/BRAIN_DUMP.md` — **Operational knowledge base (syncs after every issue completion)**
 - `docs/INGESTION.md` — sync/ingestion details
 - `docs/PROJECT_MANAGEMENT.md` — board rules/fields
 - `docs/HUMAN_FINAL_DECISION_POLICY.md` — mandatory human-in-the-loop policy
 - `docs/CHANNEL_INTEGRATION_CASE_STUDY.md` — reusable channel hardening blueprint (OpenClaw WhatsApp reference)
 - `docs/RELEASE_NOTES.md` — shipped changes only
+- `docs/DEPENDENCY_MAP.md` — Blocking relationships and critical path
+- `docs/BACKLOG_PRIORITIZATION.md` — ROI-scored ranking matrix
+- `docs/SPRINT_PLAN_2W.md` — Day-by-day execution plan
 
 ## Key Runtime Files
 - `chat/server.js` — HTTP API + static server

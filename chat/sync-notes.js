@@ -133,7 +133,21 @@ async function syncNotes(limit = null) {
     if (snippets.length > 0) {
         console.log(`Vectorizing ${snippets.length} notes...`);
         updateStatus({ state: "running", progress: 90, message: `Vectorizing ${snippets.length} snippets...` });
+
+        // 1. Vectorize for search
         await addDocuments(snippets);
+
+        // 2. Save to unified chat.db
+        const { saveMessages } = require('./message-store.js');
+        const unifiedDocs = snippets.map(s => ({
+            id: s.id,
+            text: s.text,
+            source: 'apple-notes',
+            handle: s.path, // Using note name as handle
+            timestamp: new Date().toISOString(), // Use current for sync time, or ideally modification date if available in s
+            path: s.path
+        }));
+        await saveMessages(unifiedDocs);
     }
 
     fs.writeFileSync(META_PATH, JSON.stringify(newCache, null, 2));

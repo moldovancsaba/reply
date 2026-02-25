@@ -40,6 +40,7 @@ function pathPrefixesForHandle(handle) {
     for (const v of variants) {
         out.push(`imessage://${v}`);
         out.push(`whatsapp://${v}`);
+        out.push(`linkedin://${v}`);
     }
     return out;
 }
@@ -203,7 +204,7 @@ async function lidsForPhones(phoneDigitsList) {
                 if (phone && lidDigits) out.set(normalizePhone(phone), lidDigits);
             }
         }
-        try { db.close(); } catch {}
+        try { db.close(); } catch { }
         return out;
     } catch (e) {
         console.warn("WhatsApp lid lookup failed:", e?.message || e);
@@ -330,15 +331,22 @@ RETURN ONLY JSON:
 { "notes": [] }`;
 
             let response = null;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout per chunk
+
             try {
+                console.log(`[KYC] Processing chunk ${chunks.indexOf(corpus) + 1}/${Math.min(chunks.length, maxChunks)} for ${handleId}...`);
                 response = await ollama.chat({
                     model: MODEL,
                     messages: [{ role: 'user', content: prompt }],
                     format: 'json'
-                });
+                }, { signal: controller.signal });
+                clearTimeout(timeout);
             } catch (e) {
+                clearTimeout(timeout);
                 llmFailed = true;
-                console.warn("KYC LLM extraction failed (skipping LLM step):", e?.message || e);
+                const errorMsg = e.name === 'AbortError' ? 'Timeout (60s)' : (e?.message || e);
+                console.warn(`[KYC] LLM extraction failed for chunk: ${errorMsg}`);
                 break;
             }
 
