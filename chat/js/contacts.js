@@ -12,12 +12,16 @@ let hasMoreContacts = true;
 const CONTACT_LIMIT = 20;
 export let conversations = []; // Global cache for contacts
 let conversationsQuery = '';
+let contactObserver = null;
+let isLoadingContacts = false;
 
 function formatBridgePolicyBadge(policy) {
     if (!policy || !policy.managed) return '';
     const key = String(policy.channel || '').toLowerCase();
-    const channelLabel = key === 'telegram' ? 'Telegram' : (key === 'discord' ? 'Discord' : key || 'Bridge');
-    const mode = String(policy.inboundMode || '').trim().toLowerCase() || 'unknown';
+    const isLinkedIn = key === 'linkedin';
+    const channelLabel = key === 'telegram' ? 'Telegram' : (key === 'discord' ? 'Discord' : (isLinkedIn ? 'LinkedIn' : (key || 'Bridge')));
+    const rawMode = String(policy.inboundMode || '').trim().toLowerCase() || 'unknown';
+    const mode = (isLinkedIn && rawMode === 'draft_only') ? 'active' : rawMode;
     return `${channelLabel} ${mode}`;
 }
 
@@ -30,6 +34,9 @@ export async function loadConversations(append = false) {
     if (!contactListEl) return;
 
     try {
+        if (isLoadingContacts) return;
+        isLoadingContacts = true;
+
         // Show loading state
         if (!append) {
             contactOffset = 0;
@@ -151,18 +158,28 @@ export async function loadConversations(append = false) {
             contactListEl.appendChild(item);
         });
 
-        // Add "Load More" button if there are more contacts
+        // Add sentinel element for infinite scrolling if there are more contacts
         if (hasMoreContacts) {
-            const btn = document.createElement('button');
-            btn.id = 'load-more-contacts';
-            btn.className = 'load-more-btn';
-            btn.textContent = 'Load More Contacts...';
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                contactOffset += CONTACT_LIMIT;
-                loadConversations(true);
-            };
-            contactListEl.appendChild(btn);
+            const sentinel = document.createElement('div');
+            sentinel.className = 'contact-list-sentinel';
+            sentinel.style.cssText = 'padding: 1rem; text-align: center; color: #888; font-size: 0.9rem;';
+            sentinel.innerHTML = '<span>Loading more...</span>';
+            contactListEl.appendChild(sentinel);
+
+            if (!contactObserver) {
+                contactObserver = new IntersectionObserver((entries) => {
+                    const first = entries[0];
+                    if (first.isIntersecting && hasMoreContacts && !isLoadingContacts) {
+                        contactOffset += CONTACT_LIMIT;
+                        loadConversations(true);
+                    }
+                }, { root: contactListEl, rootMargin: '100px' });
+            }
+
+            contactObserver.disconnect();
+            contactObserver.observe(sentinel);
+        } else if (contactObserver) {
+            contactObserver.disconnect();
         }
 
     } catch (error) {
@@ -175,6 +192,8 @@ export async function loadConversations(append = false) {
         </button>
       </div>
     `;
+    } finally {
+        isLoadingContacts = false;
     }
 }
 

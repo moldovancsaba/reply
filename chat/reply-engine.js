@@ -1,9 +1,25 @@
 const { Ollama } = require('ollama');
 const { getContext } = require('./context-engine.js');
+const { search } = require('./vector-store.js');
+const fs = require('fs');
+const path = require('path');
 
 // Using default localhost:11434
 const ollama = new Ollama();
-const MODEL = "qwen2.5:7b";
+const MODEL = "llama3.2:3b"; // Upgraded to the new primary model
+
+let cachedPersona = null;
+function getPersona() {
+  if (!cachedPersona) {
+    try {
+      const file = path.join(__dirname, 'data', 'system_persona.txt');
+      if (fs.existsSync(file)) {
+        cachedPersona = fs.readFileSync(file, 'utf8');
+      }
+    } catch (e) { }
+  }
+  return cachedPersona || "";
+}
 
 async function generateReply(message, contextSnippets = [], recipient = null, goldenExamples = []) {
   if (!message || typeof message !== "string") {
@@ -11,24 +27,47 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
   }
 
   // 1. Get Stylistic Context & System Instructions
-  const { styleInstructions, history, identityContext } = await getContext(recipient);
+  const context = await getContext(recipient);
+  const { styleInstructions, history, identityContext } = context;
+  const mergedGoldenExamples = [...(goldenExamples || []), ...(context.goldenExamples || [])];
 
-  // 2. Construct context string from snippets
+  // 2. Load the Holy Grail Persona
+  const persona = getPersona();
+
+  // 3. Dynamic RAG: Fetch examples of how Csaba writes about this topic
+  let ragExamplesText = "";
+  try {
+    const results = await search(message, 20);
+    const myMessages = results
+      .filter(r => r.text && r.text.includes('] Me: '))
+      .slice(0, 4); // Take top 4 examples
+
+    if (myMessages.length > 0) {
+      ragExamplesText = "\n\n### RAG Context (Use these past messages sent by me to perfectly mimic my tone & vocabulary):\n" +
+        myMessages.map(m => `- "${m.text.split('] Me: ')[1] || m.text}"`).join('\n');
+    }
+  } catch (e) {
+    console.error("reply-engine RAG fetch failed:", e.message);
+  }
+
+  // 4. Construct context string from snippets
   const contextText = contextSnippets
     .map((s) => `[Source: ${s.path}]\n${s.text}`)
     .join("\n\n---\n\n");
 
-  // 3. Construct Golden Examples
+  // 5. Construct Golden Examples
   let goldenText = "";
-  if (goldenExamples && goldenExamples.length > 0) {
+  if (mergedGoldenExamples && mergedGoldenExamples.length > 0) {
     goldenText = "\nHere are GOLDEN EXAMPLES of how you should talk and structure your messages. Mimic this short, concise style perfectly:\n\n" +
-      goldenExamples.map((g, i) => `Example ${i + 1}:\n"${g.text}"`).join("\n\n");
+      mergedGoldenExamples.map((g, i) => `Example ${i + 1}:\n"${g.text}"`).join("\n\n");
   }
 
-  const prompt = `${styleInstructions}
+  const prompt = `${persona}
+${styleInstructions || ""}
 ${identityContext || ""}
 ${history || ""}
 ${goldenText}
+${ragExamplesText}
 
 The Identity Context and Local Intelligence (if present) are the most reliable source of facts.
 Prioritize them above the general knowledge snippets if there is any conflict.

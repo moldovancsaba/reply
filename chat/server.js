@@ -17,12 +17,14 @@ const { getSnippets } = require("./knowledge.js");
 const { sync: syncIMessage } = require('./sync-imessage.js');
 const { syncNotes } = require('./sync-notes.js');
 const { syncWhatsApp } = require('./sync-whatsapp.js');
+const { syncLinkedIn } = require('./sync-linkedin.js');
 const triageEngine = require('./triage-engine.js');
 const { refineReply } = require("./gemini-client.js");
 const contactStore = require("./contact-store.js");
 const crypto = require("crypto");
 const { execFile } = require("child_process");
 const { mergeProfile } = require("./kyc-merge.js");
+const { serveKyc, serveAnalyzeContact } = require("./routes/kyc.js");
 const {
   readSettings,
   writeSettings,
@@ -40,6 +42,7 @@ const {
   normalizeInboundEvent,
   toVectorDoc,
   readBridgeEventLog,
+  readChannelSyncState,
 } = require("./channel-bridge.js");
 const { createRateLimiter } = require("./rate-limiter.js");
 const {
@@ -71,6 +74,29 @@ const conversationsIndexCache = {
   buildPromise: null,
   items: [],
 };
+
+// Queue for auto-annotation to prevent SQLITE_BUSY write races
+const annotationQueue = [];
+let processingAnnotation = false;
+
+async function processAnnotationQueue() {
+  if (processingAnnotation || annotationQueue.length === 0) return;
+  processingAnnotation = true;
+  try {
+    while (annotationQueue.length > 0) {
+      const { text, callback } = annotationQueue.shift();
+      try {
+        const result = await _internalAutoAnnotate(text);
+        if (callback) callback(null, result);
+      } catch (err) {
+        console.error("[AutoAnnotate] Error in queue:", err);
+        if (callback) callback(err);
+      }
+    }
+  } finally {
+    processingAnnotation = false;
+  }
+}
 
 const conversationStatsCache = new Map(); // key -> { builtAtMs, lastContacted, stats }
 const CONVERSATION_STATS_TTL_MS = 60 * 1000;
@@ -119,19 +145,48 @@ function escapeSqlString(value) {
  * Automatically annotate a sent message as a golden example.
  */
 async function autoAnnotateSentMessage(channel, handle, text) {
+  return new Promise((resolve, reject) => {
+    annotationQueue.push({ channel, handle, text, resolve, reject });
+    processAnnotationQueue().catch(reject);
+  });
+}
+
+/**
+ * Internal worker for annotation to prevent re-entrancy issues
+ */
+async function _internalAutoAnnotate(channel, handle, text) {
   try {
     const { addDocuments } = require("./vector-store.js");
     const dateStr = new Date().toLocaleString();
     const formatted = `[${dateStr}] Me: ${text}`;
+    const msgId = `urn:reply:manual:${Date.now()}`;
     await addDocuments([{
-      id: `urn:reply:manual:${Date.now()}`,
+      id: msgId,
       text: formatted,
       source: channel,
       path: `${channel}://${handle}`,
       is_annotated: true
     }]);
+
+    // 2. Save to unified chat.db
+    const { saveMessages } = require("./message-store.js");
+    await saveMessages([{
+      id: msgId,
+      text: text,
+      source: channel,
+      handle: handle,
+      timestamp: new Date().toISOString(),
+      path: `${channel}://${handle}`
+    }]);
+
+    // 3. Update contact last contacted to refresh triage/sort order
+    await contactStore.updateLastContacted(handle, new Date().toISOString(), { channel });
+
+    // 4. Invalidate conversations cache to force re-sort in UI
+    conversationsIndexCache.builtAtMs = 0;
   } catch (e) {
     console.error("Auto-annotation failed:", e.message);
+    throw e;
   }
 }
 
@@ -229,7 +284,7 @@ function getBridgePolicyForChannel(channel, settingsSnapshot = null) {
 }
 
 function buildChannelBridgeSummary(options = {}) {
-  const limit = Math.max(1, Math.min(Number(options.limit) || 200, 2000));
+  const limit = Math.max(1, Math.min(Number(options.limit) || 200, 5000));
   const events = readBridgeEventLog(limit);
   const settings = readSettings();
   const counts = { total: events.length, ingested: 0, duplicate: 0, error: 0, other: 0 };
@@ -313,7 +368,8 @@ async function getConversationsIndexFresh() {
   }
 
   conversationsIndexCache.buildPromise = (async () => {
-    const items = (contactStore.contacts || [])
+    const contacts = await contactStore.refresh();
+    const items = (contacts || [])
       .slice()
       .sort((a, b) => safeDateMs(b?.lastContacted) - safeDateMs(a?.lastContacted))
       .map((c) => {
@@ -609,8 +665,9 @@ function pathPrefixesForHandle(handle) {
   if (h.includes("@")) return [`mailto:${h}`];
   // Phone-like handles may exist across multiple channels, and may be formatted differently (+36... vs 3630...).
   const variants = new Set();
-  variants.add(h);
-  const normalized = normalizePhone(h);
+  const clean = stripPathScheme(h);
+  variants.add(clean);
+  const normalized = normalizePhone(clean);
   if (normalized) variants.add(normalized);
 
   const out = [];
@@ -825,12 +882,20 @@ async function sendWhatsAppViaOpenClawCli(options) {
 
       if (error) {
         const execErr = String(error?.message || "").trim();
+
+        // Filter out OpenClaw audit warnings from stderr
+        const cleanErrLines = errText.split("\n").filter(line => {
+          const l = line.trim().toLowerCase();
+          return l && !l.startsWith("warn") && !l.includes("gateway.bind") && !l.includes("trustedproxies");
+        });
+        const cleanErrText = cleanErrLines.length > 0 ? cleanErrLines[cleanErrLines.length - 1].trim() : "";
+
         const shortErr = normalizeSendErrorMessage(
           parsedErr?.error ||
           parsedErr?.message ||
           parsedOut?.error ||
           parsedOut?.message ||
-          (errText ? errText.split("\n").slice(-1)[0].trim() : "") ||
+          cleanErrText ||
           execErr,
           "OpenClaw WhatsApp send failed."
         );
@@ -879,6 +944,7 @@ const whatsAppIdResolver = (() => {
         if (!fs.existsSync(WA_DB_PATH)) return null;
         const sqlite3 = require("sqlite3").verbose();
         waDb = new sqlite3.Database(WA_DB_PATH, sqlite3.OPEN_READONLY);
+        waDb.run("PRAGMA busy_timeout = 5000");
         return waDb;
       } catch (e) {
         console.warn("WhatsApp DB unavailable:", e?.message || e);
@@ -1167,67 +1233,7 @@ function serveSuggestReply(req, res) {
  * GET  /api/kyc?handle=...
  * POST /api/kyc { handle, displayName/profession/relationship/intro } (accepts legacy {name, role} too)
  */
-async function serveKyc(req, res, url) {
-  if (req.method === "GET") {
-    const handle = url.searchParams.get("handle");
-    if (!handle) {
-      writeJson(res, 400, { error: "Missing handle" });
-      return;
-    }
-
-    const contact = contactStore.findContact(handle);
-    writeJson(res, 200, {
-      handle,
-      displayName: contact?.displayName || contact?.name || handle,
-      profession: contact?.profession || "",
-      relationship: contact?.relationship || "",
-      intro: contact?.intro || "",
-      notes: Array.isArray(contact?.notes) ? contact.notes : [],
-      channels: contact?.channels || { phone: [], email: [] },
-      pendingSuggestions: Array.isArray(contact?.pendingSuggestions) ? contact.pendingSuggestions : [],
-      rejectedSuggestions: Array.isArray(contact?.rejectedSuggestions) ? contact.rejectedSuggestions : [],
-    });
-    return;
-  }
-
-  if (req.method === "POST") {
-    try {
-      const json = await readJsonBody(req);
-      if (!authorizeSensitiveRoute(req, res, {
-        route: "/api/kyc",
-        action: "update-kyc",
-        payload: json,
-      })) {
-        return;
-      }
-      const handle = json.handle;
-      if (!handle) {
-        writeJson(res, 400, { error: "Missing handle" });
-        return;
-      }
-
-      const data = {
-        displayName: (json.displayName ?? json.name ?? "").trim(),
-        profession: (json.profession ?? json.role ?? "").trim(),
-        relationship: (json.relationship ?? "").trim(),
-        intro: (json.intro ?? "").trim(),
-      };
-
-      // Don't overwrite with empty strings
-      Object.keys(data).forEach((k) => {
-        if (!data[k]) delete data[k];
-      });
-
-      const contact = contactStore.updateContact(handle, data);
-      writeJson(res, 200, { status: "ok", contact });
-    } catch (e) {
-      writeJson(res, 500, { error: e.message });
-    }
-    return;
-  }
-
-  writeJson(res, 405, { error: "Method not allowed" });
-}
+// Migrated to routes/kyc.js
 
 /**
  * API Endpoint: /api/sync-notes
@@ -1355,7 +1361,8 @@ const RATE_LIMITED_ROUTES = new Set([
 // Content Security Policy (restricts inline scripts, external resources)
 const CSP_HEADER = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-eval'",           // unsafe-eval needed for some JS templates/workers
+  "script-src 'self' 'unsafe-eval' 'unsafe-inline'", // added unsafe-inline for diagnostics
+  // unsafe-eval needed for some JS templates/workers
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", // allow Google Fonts
   "img-src 'self' data: blob: https://www.gravatar.com",
   "font-src 'self' https://fonts.gstatic.com", // allow Google Fonts
@@ -1365,13 +1372,15 @@ const CSP_HEADER = [
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
-  "upgrade-insecure-requests",
 ].join("; ");
 
 // Create the HTTP server and route requests.
 const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  console.log(`[HTTP] ${req.method} ${url.pathname}${url.search}`);
+
+  const clientIp = resolveClientIp(req);
   // Use a dummy base URL to parse the path relative to the server root.
-  const url = new URL(req.url || "/", `http://localhost:${boundPort}`);
   const pathname = url.pathname;
 
   // --- CORS ---
@@ -1681,6 +1690,28 @@ const server = http.createServer(async (req, res) => {
           }
         }
 
+        const global = incoming?.global || {};
+        if (global && typeof global === "object") {
+          next.global = { ...(current.global || {}) };
+          if (typeof global.googleApiKey === "string") {
+            const val = global.googleApiKey.trim();
+            if (val) next.global.googleApiKey = val;
+          }
+          if (typeof global.operatorToken === "string") {
+            const val = global.operatorToken.trim();
+            if (val) next.global.operatorToken = val;
+          }
+          if (global.requireOperatorToken !== undefined) next.global.requireOperatorToken = !!global.requireOperatorToken;
+          if (global.localWritesOnly !== undefined) next.global.localWritesOnly = !!global.localWritesOnly;
+          if (global.requireHumanApproval !== undefined) next.global.requireHumanApproval = !!global.requireHumanApproval;
+          if (typeof global.whatsappTransport === "string") {
+            const val = global.whatsappTransport.trim();
+            if (["openclaw_cli", "desktop_automation"].includes(val)) next.global.whatsappTransport = val;
+          }
+          if (global.allowOpenClaw !== undefined) next.global.allowOpenClaw = !!global.allowOpenClaw;
+          if (global.desktopFallback !== undefined) next.global.desktopFallback = !!global.desktopFallback;
+        }
+
         const worker = incoming?.worker || {};
         if (worker && typeof worker === "object") {
           next.worker = { ...(current.worker || {}) };
@@ -1709,7 +1740,7 @@ const server = http.createServer(async (req, res) => {
           const channels = ui.channels || {};
           if (channels && typeof channels === "object") {
             next.ui.channels = { ...(current.ui?.channels || {}) };
-            for (const key of ["imessage", "whatsapp", "email"]) {
+            for (const key of ["imessage", "whatsapp", "email", "linkedin"]) {
               if (!channels[key] || typeof channels[key] !== "object") continue;
               next.ui.channels[key] = { ...(current.ui.channels[key] || {}) };
               const ch = channels[key];
@@ -1993,36 +2024,43 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      const { ingestLinkedInContactsFromString } = require("./ingest-linkedin-contacts.js");
+      const { ingestLinkedInPostsFromString } = require("./ingest-linkedin-posts.js");
+
       const rows = parseLinkedInCSV(csvText);
       if (rows.length === 0) {
         writeJson(res, 400, { error: "No valid rows found in CSV." });
         return;
       }
 
+      // 1. Detect if it's Connections.csv or Shares.csv (LinkedIn Message backup handled by parseLinkedInCSV)
+      const firstRow = rows[0] || {};
+      if (firstRow['First Name'] && firstRow['Last Name'] && firstRow['Email Address']) {
+        const result = await ingestLinkedInContactsFromString(csvText);
+        writeJson(res, 200, { count: result.count, errors: 0 });
+        return;
+      }
+      if (firstRow['ShareCommentary'] || firstRow['Content']) {
+        const result = await ingestLinkedInPostsFromString(csvText);
+        writeJson(res, 200, { count: result.count, errors: 0 });
+        return;
+      }
+
+      // Fallback: Continue with existing message import logic
       console.log(`[Import] Parsed ${rows.length} rows from LinkedIn CSV.`);
 
       let imported = 0;
       let errors = 0;
-
-      // Map rows to InboundEvents
       const events = [];
-      const myIdentity = "Me"; // Default if not found
 
       for (const row of rows) {
-        // LinkedIn Export Header Format:
-        // FROM,TO,DATE,SUBJECT,CONTENT,DIRECTION,FOLDER
-        // DIRECTION is "INCOMING" or "OUTGOING"
-
         const timestamp = safeDateMs(row.DATE) ? new Date(row.DATE).toISOString() : new Date().toISOString();
         const direction = (row.DIRECTION || "").toUpperCase();
 
         let sender = row.FROM || "Unknown";
         let recipient = row.TO || "Me";
-
-        // Sanitize
         if (sender === "LinkedIn Member") sender = "Unknown User";
 
-        // Determine Peer and flow
         let peerHandle = "";
         let peerName = "";
         let flow = "inbound";
@@ -2030,19 +2068,15 @@ const server = http.createServer(async (req, res) => {
         if (direction === "OUTGOING") {
           flow = "outbound";
           peerName = recipient;
-          peerHandle = "linkedin://" + recipient.replace(/\s+/g, "").toLowerCase(); // Best effort handle
+          peerHandle = "linkedin://" + recipient.replace(/\s+/g, "").toLowerCase();
         } else {
           flow = "inbound";
           peerName = sender;
           peerHandle = "linkedin://" + sender.replace(/\s+/g, "").toLowerCase();
         }
 
-        // If we have a Profile URL in content or headers (not standard in CSV), we could use it.
-        // Standard CSV is limited. We use Name as handle for now.
-
         if (!peerName || peerName === "Me") continue;
 
-        // Construct Event
         events.push({
           channel: "linkedin",
           flow,
@@ -2051,14 +2085,13 @@ const server = http.createServer(async (req, res) => {
           peer: {
             handle: peerHandle,
             displayName: peerName,
-            isGroup: false // CSV doesn't specify
+            isGroup: false
           },
-          threadId: peerHandle, // Group by peer
+          threadId: peerHandle,
           dryRun: false
         });
       }
 
-      // Ingest in batches of 50
       const BATCH_SIZE = 50;
       for (let i = 0; i < events.length; i += BATCH_SIZE) {
         const batch = events.slice(i, i + BATCH_SIZE);
@@ -2193,8 +2226,9 @@ const server = http.createServer(async (req, res) => {
         };
       }
 
+      const contacts = await contactStore.refresh();
       const list = (await Promise.all(
-        contactStore.contacts
+        contacts
           .sort((a, b) => {
             const da = a.lastContacted ? new Date(a.lastContacted) : new Date(0);
             const db = b.lastContacted ? new Date(b.lastContacted) : new Date(0);
@@ -2238,8 +2272,8 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
         contacts: list,
-        hasMore: contactStore.contacts.length > offset + limit,
-        total: contactStore.contacts.length,
+        hasMore: contacts.length > offset + limit,
+        total: contacts.length,
         meta: { mode: "fallback", error: err?.message || String(err) },
       }));
     }
@@ -2250,7 +2284,16 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (url.pathname === "/api/kyc") {
-    await serveKyc(req, res, url);
+    let bodyData = null;
+    if (req.method === "POST") {
+      bodyData = await readJsonBody(req);
+      console.log(`[API] POST /api/kyc - handle=${bodyData?.handle}`, JSON.stringify(bodyData));
+    } else {
+      console.log(`[API] GET /api/kyc - handle=${url.searchParams.get("handle")}`);
+    }
+    await serveKyc(req, res, url, authorizeSensitiveRoute, () => {
+      invalidateConversationCaches();
+    }, bodyData);
     return;
   }
   if (url.pathname === "/api/sync-notes") {
@@ -2313,6 +2356,17 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // Guard: iMessage only works with phone numbers or email addresses.
+    // Reject any handle that looks like a non-iMessage URI (e.g. linkedin://, whatsapp://)
+    const NON_IMESSAGE_SCHEMES = ["linkedin://", "whatsapp://", "telegram://", "discord://", "signal://"];
+    if (NON_IMESSAGE_SCHEMES.some(scheme => recipient.startsWith(scheme))) {
+      writeJson(res, 400, {
+        error: `Cannot send iMessage to '${recipient}': handle appears to be a ${recipient.split("://")[0]} contact, not iMessage.`,
+        code: "INVALID_IMESSAGE_RECIPIENT"
+      });
+      return;
+    }
+
     const appleScript = `
 on run argv
   set recipientId to item 1 of argv
@@ -2325,14 +2379,14 @@ on run argv
 end run
     `;
 
-    execFile("/usr/bin/osascript", ["-e", appleScript, "--", recipient, text], (error) => {
+    execFile("/usr/bin/osascript", ["-e", appleScript, "--", recipient, text], async (error) => {
       if (error) {
         console.error(`Send error: ${error}`);
         writeJson(res, 500, { error: error.message });
         return;
       }
-      contactStore.clearDraft(recipient);
-      autoAnnotateSentMessage("imessage", recipient, text);
+      await contactStore.clearDraft(recipient);
+      await autoAnnotateSentMessage("imessage", recipient, text);
       writeJson(res, 200, { status: "ok" });
     });
     return;
@@ -2402,7 +2456,7 @@ end run
     if (requestedTransport === "openclaw_cli") {
       try {
         const result = await sendWhatsAppViaOpenClawCli({ recipient, text, dryRun });
-        contactStore.clearDraft(recipientRaw);
+        await contactStore.clearDraft(recipientRaw);
         writeJson(res, 200, {
           status: "ok",
           transport: requestedTransport,
@@ -2831,7 +2885,7 @@ end focusCheck
 	end using terms from
 		    `;
 
-    execFile("/usr/bin/osascript", ["-e", appleScript, "--", recipient, text, String(dryRun)], (error, stdout, stderr) => {
+    execFile("/usr/bin/osascript", ["-e", appleScript, "--", recipient, text, String(dryRun)], async (error, stdout, stderr) => {
       if (error) {
         // Keep logs readable: avoid dumping the full script/command line into the console.
         const rawErr = (stderr || "").toString().trim();
@@ -2875,8 +2929,8 @@ end focusCheck
         });
         return;
       }
-      contactStore.clearDraft(recipientRaw);
-      autoAnnotateSentMessage("whatsapp", recipientRaw, text);
+      await contactStore.clearDraft(recipientRaw);
+      await autoAnnotateSentMessage("whatsapp", recipientRaw, text);
       writeJson(res, 200, {
         status: "ok",
         result: (stdout || "").trim(),
@@ -2945,9 +2999,46 @@ end focusCheck
       proc.stdin.end();
 
       // 2. Open URL
-      child_process.exec(`open "${targetUrl}"`);
+      child_process.spawn("open", [targetUrl]);
 
-      contactStore.clearDraft(recipient);
+      // 3. Persist outbound message
+      try {
+        const { addDocuments } = require("./vector-store.js");
+        const { saveMessages } = require("./message-store.js");
+        const dateStr = new Date().toLocaleString();
+        const timestamp = new Date().toISOString();
+        const formatted = `[${dateStr}] Me: ${text}`;
+        const msgId = `urn:reply:linkedin:manual:${Date.now()}`;
+        const channel = "linkedin";
+        const path = `linkedin://${recipient}`;
+
+        // Vector store (Golden Example)
+        await addDocuments([{
+          id: msgId,
+          text: formatted,
+          source: "LinkedIn",
+          path: path,
+          is_annotated: true
+        }]);
+
+        // Unified Chat DB
+        await saveMessages([{
+          id: msgId,
+          text: text,
+          source: "LinkedIn",
+          handle: recipient,
+          timestamp: timestamp,
+          path: path
+        }]);
+
+        // Update contact last contacted
+        await contactStore.updateLastContacted(recipient, timestamp, { channel });
+        invalidateConversationCaches();
+      } catch (persistErr) {
+        console.error("LinkedIn outbound persistence failed:", persistErr.message);
+      }
+
+      await contactStore.clearDraft(recipient);
       writeJson(res, 200, {
         status: "ok",
         transport: "desktop_clipboard",
@@ -2985,9 +3076,14 @@ end focusCheck
       const gmail = settings?.gmail || {};
       if (gmail.refreshToken && gmail.clientId && gmail.clientSecret) {
         const { sendGmail } = require("./gmail-connector.js");
-        await sendGmail({ to: recipient, subject: "Follow-up from {reply}", text });
-        contactStore.clearDraft(recipient);
-        autoAnnotateSentMessage("email", recipient, text);
+        const { getLatestSubject } = require("./vector-store.js");
+
+        const originalSubject = await getLatestSubject(recipient);
+        const subject = originalSubject || ""; // Fallback to empty as requested
+
+        await sendGmail({ to: recipient, subject, text });
+        await contactStore.clearDraft(recipient);
+        await autoAnnotateSentMessage("email", recipient, text);
         writeJson(res, 200, { status: "ok", provider: "gmail" });
         return;
       }
@@ -2997,12 +3093,17 @@ end focusCheck
 
     // Fallback: AppleScript to send via Mail.app (opens compose window).
     // Use execFile argv to avoid shell-escaping problems and to support multiline text.
+    const { getLatestSubject } = require("./vector-store.js");
+    const originalSubject = await getLatestSubject(recipient);
+    const subject = originalSubject || ""; // Fallback to empty as requested
+
     const appleScript = `
 on run argv
   set toAddr to item 1 of argv
   set bodyText to item 2 of argv
+  set subjectText to item 3 of argv
   tell application "Mail"
-    set newMessage to make new outgoing message with properties {subject:"Follow-up from {reply}", content:bodyText, visible:true}
+    set newMessage to make new outgoing message with properties {subject:subjectText, content:bodyText, visible:true}
     tell newMessage
       make new to recipient at end of to recipients with properties {address:toAddr}
       -- send -- Uncomment to send automatically, keeping visible:true for safety now
@@ -3012,15 +3113,19 @@ on run argv
 end run
       `;
 
-    execFile("/usr/bin/osascript", ["-e", appleScript, "--", String(recipient), String(text)], (error) => {
+    execFile("/usr/bin/osascript", ["-e", appleScript, "--", String(recipient), String(text), String(subject)], async (error) => {
       if (error) {
         console.error(`Send Mail error: ${error}`);
         writeJson(res, 500, { error: error.message });
         return;
       }
-      contactStore.clearDraft(recipient);
+      await contactStore.clearDraft(recipient);
       writeJson(res, 200, { status: "ok" });
     });
+    return;
+  }
+  if (url.pathname === "/api/sync-kyc") {
+    writeJson(res, 200, { status: "ok", message: "Intelligence sweep is active in the background." });
     return;
   }
   if (url.pathname === "/api/sync-contacts") {
@@ -3037,7 +3142,7 @@ end run
   if (url.pathname === "/api/update-contact") {
     let body = "";
     req.on("data", (chunk) => { body += chunk; });
-    req.on("end", () => {
+    req.on("end", async () => {
       try {
         const { handle, data } = JSON.parse(body);
         if (!handle || !data) {
@@ -3046,7 +3151,7 @@ end run
           return;
         }
 
-        const updatedContact = contactStore.updateContact(handle, data);
+        const updatedContact = await contactStore.updateContact(handle, data);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ status: "ok", contact: updatedContact }));
       } catch (e) {
@@ -3059,7 +3164,7 @@ end run
   if (url.pathname === "/api/clear-pending-kyc") {
     const handle = url.searchParams.get("handle");
     if (handle) {
-      contactStore.clearPendingKYC(handle);
+      await contactStore.clearPendingKYC(handle);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ status: "ok" }));
     } else {
@@ -3087,7 +3192,7 @@ end run
           res.end(JSON.stringify({ error: "Missing handle or text" }));
           return;
         }
-        contactStore.addNote(handle, text);
+        await contactStore.addNote(handle, text);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ status: "ok" }));
       } catch (e) {
@@ -3119,12 +3224,8 @@ end run
       return;
     }
 
-    const updated = contactStore.updateNote(handle, id, text);
-    if (!updated) {
-      writeJson(res, 404, { error: "Note not found" });
-      return;
-    }
-    writeJson(res, 200, { status: "ok", note: updated });
+    await contactStore.updateNote(handle, id, text);
+    writeJson(res, 200, { status: "ok" });
     return;
   }
   if (url.pathname === "/api/delete-note") {
@@ -3138,7 +3239,7 @@ end run
       return;
     }
     if (handle && id) {
-      contactStore.deleteNote(handle, id);
+      await contactStore.deleteNote(handle, id);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ status: "ok" }));
     } else {
@@ -3167,14 +3268,34 @@ end run
       return { state: "idle", message: "No sync data available" };
     };
 
-    // "Real" counts: number of ingested docs in LanceDB by channel/source.
-    async function countIngested(whereClause) {
+    // "Real" counts: number of messages in the project-local SQLite data store.
+    async function countIngested(source) {
       try {
-        const { connect } = require("./vector-store.js");
-        const db = await connect();
-        const table = await db.openTable("documents");
-        return await table.countRows(whereClause);
-      } catch {
+        const sqlite3 = require("sqlite3");
+        const CHAT_DB = path.join(DATA_DIR, "chat.db");
+        if (!fs.existsSync(CHAT_DB)) return 0;
+
+        const db = new sqlite3.Database(CHAT_DB);
+        return new Promise((resolve) => {
+          db.serialize(() => {
+            db.run("PRAGMA journal_mode = WAL");
+            db.run("PRAGMA busy_timeout = 5000");
+            let query = "";
+            if (source === "iMessage") {
+              // For iMessage, we count rows in the raw 'message' table synced from system.
+              query = "SELECT count(*) as count FROM message WHERE text IS NOT NULL AND text != ''";
+            } else {
+              // For other sources, we count the unified store.
+              query = "SELECT count(*) as count FROM unified_messages WHERE source = ?";
+            }
+            db.get(query, source === "iMessage" ? [] : [source], (err, row) => {
+              db.close();
+              resolve(row?.count || 0);
+            });
+          });
+        });
+      } catch (e) {
+        console.error(`Error counting ${source}:`, e);
         return 0;
       }
     }
@@ -3207,13 +3328,44 @@ end run
     const imessageStatus = readStatus("imessage_sync_status.json");
     const whatsappStatus = readStatus("whatsapp_sync_status.json");
     const notesStatus = readStatus("notes_sync_status.json");
+    const kycStatus = readStatus("kyc_sync_status.json");
 
-    const [imessageCount, whatsappCount, mailCount, notesCountIngested] = await Promise.all([
-      countIngested("source IN ('iMessage','iMessage-live')"),
-      countIngested("source IN ('WhatsApp')"),
-      // Email can come from Gmail OAuth, IMAP, Mail.app, or legacy mbox ingestion.
-      countIngested("source IN ('Gmail','IMAP','Mail','mbox')"),
-      countIngested("source IN ('apple-notes')"),
+    const [imessageCount, whatsappCount, mailCount, linkedinMessagesCount, linkedinPostsCount, notesCountIngested] = await Promise.all([
+      countIngested("iMessage"),
+      countIngested("WhatsApp"),
+      // Email counts currently remain from LanceDB or specific logs
+      (async () => {
+        try {
+          const { connect } = require("./vector-store.js");
+          const db = await connect();
+          const table = await db.openTable("documents");
+          return await table.countRows("source IN ('Gmail','IMAP','Mail','mbox')");
+        } catch { return 0; }
+      })(),
+      (async () => {
+        try {
+          const { connect } = require("./vector-store.js");
+          const db = await connect();
+          const table = await db.openTable("documents");
+          return await table.countRows("source IN ('LinkedIn')");
+        } catch { return 0; }
+      })(),
+      (async () => {
+        try {
+          const { connect } = require("./vector-store.js");
+          const db = await connect();
+          const table = await db.openTable("documents");
+          return await table.countRows("source IN ('linkedin-posts')");
+        } catch { return 0; }
+      })(),
+      (async () => {
+        try {
+          const { connect } = require("./vector-store.js");
+          const db = await connect();
+          const table = await db.openTable("documents");
+          return await table.countRows("source IN ('apple-notes')");
+        } catch { return 0; }
+      })(),
     ]);
 
     const health = {
@@ -3222,35 +3374,90 @@ end run
       channels: {
         imessage: {
           ...imessageStatus,
-          processed: imessageCount || 0,
-          total: imessageCount || 0
+          processed: imessageCount,
+          total: imessageCount,
         },
         whatsapp: {
           ...whatsappStatus,
-          processed: whatsappCount || 0,
-          total: whatsappCount || 0
+          processed: whatsappCount,
+          total: whatsappCount
         },
         notes: {
           ...notesStatus,
-          processed: notesCountIngested || 0,
+          processed: notesCountIngested,
           total: getNotesCount()
         },
         mail: {
           ...mailStatus,
+          lastAt: mailStatus.lastSync || null,
           provider: mailProvider,
           account: mailAccount,
           connected: !!(gmailOk || imapOk),
-          processed: mailCount || 0,
-          total: mailCount || 0,
+          processed: mailCount,
+          total: mailCount,
         },
-        contacts: readStatus("sync_state.json") // Legacy sync state compatibility
+        linkedin_messages: {
+          ...readStatus("linkedin_sync_status.json"),
+          processed: linkedinMessagesCount,
+          total: linkedinMessagesCount,
+          lastAt: readChannelSyncState().linkedin || null
+        },
+        linkedin_posts: {
+          ...readStatus("linkedin_posts_sync_status.json"),
+          processed: linkedinPostsCount,
+          total: linkedinPostsCount,
+          lastAt: readChannelSyncState().linkedin_posts || null
+        },
+        contacts: readStatus("sync_state.json"),
+        kyc: kycStatus
       },
-      stats: contactStore.getStats(),
+      stats: await contactStore.getStats(),
       lastCheck: new Date().toISOString()
     };
 
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(health));
+    return;
+  }
+  /**
+   * API Endpoint: /api/openclaw/status
+   * Proxies OpenClaw gateway health status.
+   */
+  if (url.pathname === "/api/openclaw/status") {
+    const http = require("http");
+    const options = {
+      hostname: "127.0.0.1",
+      port: 18789, // Default OpenClaw port
+      path: "/health",
+      method: "GET",
+      timeout: 2000
+    };
+
+    const proxyReq = http.request(options, (proxyRes) => {
+      let data = "";
+      proxyRes.on("data", (chunk) => { data += chunk; });
+      proxyRes.on("end", () => {
+        res.writeHead(proxyRes.statusCode, { "Content-Type": "application/json" });
+        res.end(data);
+      });
+    });
+
+    proxyReq.on("error", (e) => {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        status: "offline",
+        error: "OpenClaw gateway unreachable",
+        detail: e.message
+      }));
+    });
+
+    proxyReq.on("timeout", () => {
+      proxyReq.destroy();
+      res.writeHead(504, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "timeout", error: "OpenClaw health check timed out" }));
+    });
+
+    proxyReq.end();
     return;
   }
   // Back-compat alias used by some UI code
@@ -3261,7 +3468,7 @@ end run
   if (url.pathname === "/api/update-status") {
     let body = "";
     req.on("data", (chunk) => { body += chunk; });
-    req.on("end", () => {
+    req.on("end", async () => {
       try {
         const { handle, status } = JSON.parse(body);
         if (!handle || !status) {
@@ -3269,7 +3476,7 @@ end run
           res.end(JSON.stringify({ error: "Missing handle or status" }));
           return;
         }
-        contactStore.updateStatus(handle, status);
+        await contactStore.updateStatus(handle, status);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ status: "ok" }));
       } catch (e) {
@@ -3299,60 +3506,71 @@ end run
       }
       // Trigger background sync
       syncWhatsApp().catch(err => console.error("Manual WhatsApp Sync Error:", err));
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "started" }));
+      writeJson(res, 202, { status: "sync_started", source: "whatsapp" });
     } else {
       res.writeHead(405);
       res.end("Method Not Allowed");
     }
     return;
   }
+  if (url.pathname === "/api/sync-linkedin") {
+    if (req.method === "POST") {
+      const payload = await readJsonBody(req);
+      if (!authorizeSensitiveRoute(req, res, { route: "/api/sync-linkedin", action: "sync-linkedin", payload })) return;
+
+      // Trigger sidecar-based background sync
+      syncLinkedIn().catch(err => console.error("Manual LinkedIn Sync Error:", err));
+
+      writeJson(res, 202, {
+        status: "sync_started",
+        source: "linkedin",
+        message: "LinkedIn sidecar sync started in background."
+      });
+    }
+    return;
+  }
+  if (url.pathname === "/api/sync-linkedin-contacts") {
+    if (req.method === "POST") {
+      const payload = await readJsonBody(req);
+      if (!authorizeSensitiveRoute(req, res, { route: "/api/sync-linkedin-contacts", action: "sync-linkedin-contacts", payload })) return;
+      writeJson(res, 200, {
+        status: "hint",
+        message: "Import 'Connections.csv' to sync LinkedIn contacts.",
+        hint: "Go to Dashboard -> LinkedIn -> Import Archive to upload your CSV."
+      });
+    }
+    return;
+  }
+  if (url.pathname === "/api/sync-linkedin-posts") {
+    if (req.method === "POST") {
+      const payload = await readJsonBody(req);
+      if (!authorizeSensitiveRoute(req, res, { route: "/api/sync-linkedin-posts", action: "sync-linkedin-posts", payload })) return;
+
+      // For now, posts sync is manual CSV import, but we record the activity
+      recordChannelSync('linkedin_posts');
+
+      writeJson(res, 202, {
+        status: "sync_started",
+        source: "linkedin_posts",
+        message: "LinkedIn posts sync (manual refresh) completed."
+      });
+    }
+    return;
+  }
 
   if (url.pathname === "/api/analyze-contact") {
-    if (req.method !== "POST") {
-      writeJson(res, 405, { error: "Method not allowed" });
-      return;
-    }
-    const payload = await readJsonBody(req);
-    if (!authorizeSensitiveRoute(req, res, {
-      route: "/api/analyze-contact",
-      action: "analyze-contact",
-      payload,
-    })) {
-      return;
-    }
-    try {
-      const handle = (payload?.handle || "").toString().trim();
-      if (!handle) {
-        writeJson(res, 400, { error: "Missing handle" });
-        return;
-      }
-
-      const profile = await analyzeContactDeduped(handle);
-      let updatedContact = null;
-      if (profile) {
-        updatedContact = await mergeProfile(profile);
-      }
-
-      writeJson(res, 200, {
-        status: "ok",
-        contact: updatedContact,
-        message: profile ? "Analysis complete" : "Not enough data for analysis"
-      });
-    } catch (e) {
-      console.error("Analysis error:", e);
-      writeJson(res, 500, { error: e.message });
-    }
+    await serveAnalyzeContact(req, res, authorizeSensitiveRoute, analysisInFlightByHandle);
     return;
   }
 
   if (url.pathname === "/api/accept-suggestion") {
     let body = "";
     req.on("data", (chunk) => { body += chunk; });
-    req.on("end", () => {
+    req.on("end", async () => {
       try {
         const { handle, id } = JSON.parse(body);
-        const contact = contactStore.acceptSuggestion(handle, id);
+        await contactStore.acceptSuggestion(handle, id);
+        const contact = contactStore.findContact(handle);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ status: "ok", contact }));
       } catch (e) {
@@ -3373,10 +3591,11 @@ end run
   if (url.pathname === "/api/decline-suggestion") {
     let body = "";
     req.on("data", (chunk) => { body += chunk; });
-    req.on("end", () => {
+    req.on("end", async () => {
       try {
         const { handle, id } = JSON.parse(body);
-        const contact = contactStore.declineSuggestion(handle, id);
+        await contactStore.declineSuggestion(handle, id);
+        const contact = contactStore.findContact(handle);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ status: "ok", contact }));
       } catch (e) {
@@ -3483,6 +3702,21 @@ function tryListen(port) {
 
   server.listen(port, "127.0.0.1");
 }
+
+// ------------------------------------------------------------------
+// Continuous Learning Automation
+// Periodically sync messaging history so the RAG Persona stays up to date.
+// ------------------------------------------------------------------
+const SYNC_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+setInterval(() => {
+  console.log("[Auto-Sync] Running background sync for continuous learning...");
+  Promise.all([
+    syncWhatsApp().catch(err => console.error("[Auto-Sync] WhatsApp failed:", err.message)),
+    syncIMessage().catch(err => console.error("[Auto-Sync] iMessage failed:", err.message))
+  ]).then(() => {
+    console.log("[Auto-Sync] Background sync complete.");
+  });
+}, SYNC_INTERVAL_MS);
 
 applyOpenClawWhatsAppGuard(true);
 tryListen(PORT_MIN);

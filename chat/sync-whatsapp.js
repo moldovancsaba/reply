@@ -6,7 +6,7 @@ const { addDocuments } = require('./vector-store.js');
 const statusManager = require('./status-manager.js');
 const { withDefaults, readSettings } = require('./settings-store.js');
 
-const WA_DB_PATH = path.join(process.env.HOME, 'Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite');
+const WA_DB_PATH = process.env.REPLY_WHATSAPP_DB_PATH || path.join(process.env.HOME, 'Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite');
 const STATE_FILE = path.join(__dirname, 'data', 'whatsapp_sync_state.json');
 
 // Ensure data dir exists
@@ -53,13 +53,14 @@ async function syncWhatsApp() {
     }
 
     const db = new sqlite3.Database(WA_DB_PATH, sqlite3.OPEN_READONLY);
+    db.run("PRAGMA busy_timeout = 5000");
     const state = loadState();
 
     console.log(`Starting WhatsApp sync from date > ${state.lastDate}...`);
     updateStatus({ state: "running", message: "Reading WhatsApp database..." });
 
     const settings = withDefaults(readSettings());
-    const batchLimit = Math.max(1, Math.min(Number(settings?.worker?.quantities?.whatsapp) || 500, 2000));
+    const batchLimit = Math.max(1, Math.min(Number(settings?.worker?.quantities?.whatsapp) || 5000, 10000));
 
     // Query to get messages joined with session info could be complex.
     // simpler to just query ZWAMESSAGE for now and structure JIDs.
@@ -152,29 +153,48 @@ async function syncWhatsApp() {
 
             try {
                 updateStatus({ state: "running", progress: 50, message: `Vectorizing ${docs.length} messages...` });
+
+                // 1. Vectorize for search
                 await addDocuments(docs.map(({ _meta, ...d }) => d));
 
-                // Update contact last contacted?
-                // The contact-store expects a handle it can match. WhatsApp handles are phone numbers.
-                // If we want to merge identities, we need logic for that. For now, we update strictly by handle.
-                const contactStore = require('./contact-store.js');
-                docs.forEach(d => {
-                    const handle = d._meta?.handle || d.path.replace('whatsapp://', '');
-                    const formattedDate = d._meta?.formattedDate || null;
-                    if (handle && handle !== 'unknown' && formattedDate) {
-                        contactStore.updateLastContacted(handle, formattedDate, { channel: 'whatsapp' });
+                // 2. Save to unified chat.db
+                const { saveMessages } = require('./message-store.js');
+                const unifiedDocs = docs.map(d => ({
+                    id: d.id,
+                    text: d.text.split(': ').slice(1).join(': '), // Strip the [Date] Name: prefix if possible or just store text
+                    source: 'WhatsApp',
+                    handle: d._meta?.handle || d.path.replace('whatsapp://', ''),
+                    timestamp: d._meta?.formattedDate,
+                    path: d.path
+                }));
+                await saveMessages(unifiedDocs);
 
-                        const pushName = (d._meta?.pushName || '').trim();
+                // Update contact last contacted?
+                // Using batch update to prevent SQLITE_BUSY locks
+                const contactStore = require('./contact-store.js');
+                const contactUpdates = docs.map(d => ({
+                    handle: d._meta?.handle || d.path.replace('whatsapp://', ''),
+                    timestamp: d._meta?.formattedDate || null,
+                    meta: { channel: 'whatsapp' }
+                })).filter(u => u.handle && u.handle !== 'unknown' && u.timestamp);
+
+                if (contactUpdates.length > 0) {
+                    await contactStore.updateLastContactedBatch(contactUpdates);
+
+                    // Also update pushNames for auto-suggested contacts
+                    for (const u of contactUpdates) {
+                        const d = docs.find(doc => (doc._meta?.handle || doc.path.replace('whatsapp://', '')) === u.handle);
+                        const pushName = (d?._meta?.pushName || '').trim();
                         if (pushName) {
-                            const existing = contactStore.findContact(handle);
+                            const existing = contactStore.findContact(u.handle);
                             const existingName = (existing?.displayName || '').trim();
-                            const looksAuto = !existingName || existingName === handle || /^\d+$/.test(existingName);
+                            const looksAuto = !existingName || existingName === u.handle || /^\d+$/.test(existingName);
                             if (looksAuto) {
-                                contactStore.updateContact(handle, { displayName: pushName });
+                                await contactStore.updateContact(u.handle, { displayName: pushName });
                             }
                         }
                     }
-                });
+                }
 
                 const lastRow = rows[rows.length - 1];
                 const maxDate = lastRow.ZMESSAGEDATE;

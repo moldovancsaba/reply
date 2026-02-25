@@ -33,8 +33,15 @@ function evaluate(text, sender) {
     const lowerText = text.toLowerCase();
 
     for (const rule of rules) {
-        // Check sender constraint (wildcard '*' or exact match)
-        if (rule.sender !== '*' && rule.sender !== sender) continue;
+        // Check sender constraint (wildcard '*' or prefix match like 'linkedin://*')
+        if (rule.sender !== '*' && rule.sender !== sender) {
+            if (rule.sender.endsWith('*')) {
+                const prefix = rule.sender.slice(0, -1);
+                if (!sender.startsWith(prefix)) continue;
+            } else {
+                continue;
+            }
+        }
 
         // Check keywords
         const match = rule.keywords.some(keyword => lowerText.includes(keyword.toLowerCase()));

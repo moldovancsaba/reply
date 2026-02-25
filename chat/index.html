@@ -2,10 +2,22 @@
 <html lang="en">
 
 <head>
+  <script>
+    window.onerror = function (msg, url, line, col, error) {
+      console.error('[GLOBAL ERROR]', { msg, url, line, col, error });
+      // Only alert once to avoid spamming
+      if (!window.__errorAlerted) {
+        window.__errorAlerted = true;
+        alert("CRITICAL UI ERROR: " + msg + "\nFile: " + url + "\nLine: " + line);
+      }
+      return false;
+    };
+  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{reply}</title>
   <link rel="stylesheet" href="css/global.css">
+  <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/app.css">
   <link rel="stylesheet"
     href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
@@ -69,6 +81,7 @@
           <select id="channel-select" class="channel-select" title="Channel">
             <option value="imessage">iMessage</option>
             <option value="whatsapp">WhatsApp</option>
+            <option value="linkedin">LinkedIn</option>
             <option value="email">Email</option>
             <option value="telegram">Telegram (Draft only)</option>
             <option value="discord">Discord (Draft only)</option>
@@ -142,286 +155,321 @@
           </div>
 
           <div id="settings-modal-scroll" class="settings-page-scroll">
-            <div id="settings-channel-mail" style="margin-top: 0.5rem;">
-              <div
-                style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">
-                Email (IMAP / Gmail)</div>
+            <div id="settings-section-global" class="settings-section">
+              <div class="settings-section-title">Core Credentials & Security</div>
 
-              <div style="display:grid; grid-template-columns: 1fr 120px; gap: 10px;">
-                <div>
-                  <label style="font-size:0.8rem; color:#666;">Host</label>
-                  <input id="settings-imap-host"
-                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;"
-                    placeholder="imap.gmail.com">
+              <div class="settings-grid">
+                <div class="settings-field">
+                  <label class="settings-label" for="settings-global-google-api-key">Gemini API Key</label>
+                  <input id="settings-global-google-api-key" type="password" class="settings-input"
+                    placeholder="Leave blank to keep existing">
+                  <div id="settings-global-google-api-key-hint" class="settings-hint">Not set</div>
                 </div>
-                <div>
-                  <label style="font-size:0.8rem; color:#666;">Port</label>
-                  <input id="settings-imap-port"
-                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="993">
+
+                <div class="settings-field">
+                  <label class="settings-label" for="settings-global-operator-token">Operator Token</label>
+                  <input id="settings-global-operator-token" type="password" class="settings-input"
+                    placeholder="Leave blank to keep existing">
+                  <div id="settings-global-operator-token-hint" class="settings-hint">Not set</div>
                 </div>
               </div>
 
-              <div style="display:flex; align-items:center; gap:10px; margin-top:10px;">
+              <div class="settings-grid settings-grid-2 mt-md">
+                <div class="settings-checkbox-group">
+                  <input id="settings-global-require-token" type="checkbox">
+                  <label for="settings-global-require-token" class="settings-checkbox-label">Enforce Token</label>
+                </div>
+                <div class="settings-checkbox-group">
+                  <input id="settings-global-local-writes" type="checkbox">
+                  <label for="settings-global-local-writes" class="settings-checkbox-label">Local Writes Only</label>
+                </div>
+              </div>
+
+              <div class="settings-grid settings-grid-2 mt-sm">
+                <div class="settings-checkbox-group">
+                  <input id="settings-global-require-approval" type="checkbox">
+                  <label for="settings-global-require-approval" class="settings-checkbox-label">Human Approval</label>
+                </div>
+                <div class="settings-checkbox-group">
+                  <input id="settings-global-desktop-fallback" type="checkbox">
+                  <label for="settings-global-desktop-fallback" class="settings-checkbox-label">Desktop Fallback</label>
+                </div>
+              </div>
+
+              <div class="settings-field mt-md">
+                <label class="settings-label" for="settings-global-whatsapp-transport">WhatsApp Send Transport</label>
+                <select id="settings-global-whatsapp-transport" class="settings-input mt-xs">
+                  <option value="openclaw_cli">OpenClaw CLI</option>
+                  <option value="desktop_automation">Desktop Automation</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="settings-channel-mail" class="settings-section mt-sm">
+              <div class="settings-section-title">Email (IMAP / Gmail)</div>
+
+              <div class="settings-grid" style="grid-template-columns: 1fr 120px;">
+                <div class="settings-field">
+                  <label class="settings-label" for="settings-imap-host">Host</label>
+                  <input id="settings-imap-host" class="settings-input" placeholder="imap.gmail.com">
+                </div>
+                <div class="settings-field">
+                  <label class="settings-label" for="settings-imap-port">Port</label>
+                  <input id="settings-imap-port" class="settings-input" value="993">
+                </div>
+              </div>
+
+              <div class="settings-checkbox-group mt-sm">
                 <input id="settings-imap-secure" type="checkbox" checked>
-                <label for="settings-imap-secure" style="font-size:0.85rem; color:#666;">Use TLS</label>
+                <label for="settings-imap-secure" class="settings-checkbox-label">Use TLS</label>
               </div>
 
-              <div style="margin-top:10px;">
-                <label style="font-size:0.8rem; color:#666;">Username</label>
-                <input id="settings-imap-user"
-                  style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;"
-                  placeholder="you@gmail.com">
+              <div class="settings-field">
+                <label class="settings-label" for="settings-imap-user">Username</label>
+                <input id="settings-imap-user" class="settings-input" placeholder="you@gmail.com">
               </div>
 
-              <div style="margin-top:10px;">
-                <label style="font-size:0.8rem; color:#666;">Password (Gmail: App Password)</label>
-                <input id="settings-imap-pass" type="password"
-                  style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;"
+              <div class="settings-field">
+                <label class="settings-label" for="settings-imap-pass">Password (Gmail: App Password)</label>
+                <input id="settings-imap-pass" type="password" class="settings-input"
                   placeholder="Leave blank to keep existing">
-                <div id="settings-imap-pass-hint" style="font-size:0.75rem; color:#999; margin-top:6px;">Not set</div>
+                <div id="settings-imap-pass-hint" class="settings-hint">Not set</div>
               </div>
 
-              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top:10px;">
-                <div>
-                  <label style="font-size:0.8rem; color:#666;">Mailbox</label>
-                  <input id="settings-imap-mailbox"
-                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="INBOX">
+              <div class="settings-grid settings-grid-2 mt-sm">
+                <div class="settings-field">
+                  <label class="settings-label" for="settings-imap-mailbox">Mailbox</label>
+                  <input id="settings-imap-mailbox" class="settings-input" value="INBOX">
                 </div>
-                <div>
-                  <label style="font-size:0.8rem; color:#666;">Sent Mailbox (optional)</label>
-                  <input id="settings-imap-sent-mailbox"
-                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;"
-                    placeholder="[Gmail]/Sent Mail">
+                <div class="settings-field">
+                  <label class="settings-label" for="settings-imap-sent-mailbox">Sent Mailbox (optional)</label>
+                  <input id="settings-imap-sent-mailbox" class="settings-input" placeholder="[Gmail]/Sent Mail">
                 </div>
               </div>
 
-              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top:10px;">
-                <div>
-                  <label style="font-size:0.8rem; color:#666;">Fetch limit / run</label>
-                  <input id="settings-imap-limit"
-                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="200">
+              <div class="settings-grid settings-grid-2 mt-sm">
+                <div class="settings-field">
+                  <label class="settings-label" for="settings-imap-limit">Fetch limit / run</label>
+                  <input id="settings-imap-limit" class="settings-input" value="200">
                 </div>
-                <div>
-                  <label style="font-size:0.8rem; color:#666;">First-run lookback (days)</label>
-                  <input id="settings-imap-since-days"
-                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="30">
+                <div class="settings-field">
+                  <label class="settings-label" for="settings-imap-since-days">First-run lookback (days)</label>
+                  <input id="settings-imap-since-days" class="settings-input" value="30">
                 </div>
               </div>
 
-              <div style="margin-top:10px;">
-                <label style="font-size:0.8rem; color:#666;">Self emails (comma-separated, optional)</label>
-                <input id="settings-self-emails"
-                  style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;"
-                  placeholder="me@domain.com, alias@domain.com">
+              <div class="settings-field">
+                <label class="settings-label" for="settings-self-emails">Self emails (comma-separated, optional)</label>
+                <input id="settings-self-emails" class="settings-input" placeholder="me@domain.com, alias@domain.com">
               </div>
 
-              <div style="font-size:0.75rem; color:#999; margin-top:10px;">
+              <div class="settings-hint mt-sm">
                 Stored locally on this machine (not encrypted). Use an App Password for Gmail.
               </div>
             </div>
 
-            <div id="settings-channel-gmail"
-              style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
-              <div
-                style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">
-                Gmail (OAuth)</div>
+            <div id="settings-channel-gmail" class="settings-section mt-sm">
+              <div class="settings-section-title">Gmail (OAuth)</div>
 
-              <div style="margin-top:10px;">
-                <label style="font-size:0.8rem; color:#666;">OAuth Client ID</label>
-                <input id="settings-gmail-client-id"
-                  style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;"
+              <div class="settings-field">
+                <label class="settings-label" for="settings-gmail-client-id">OAuth Client ID</label>
+                <input id="settings-gmail-client-id" class="settings-input"
                   placeholder="xxxx.apps.googleusercontent.com">
               </div>
 
-              <div style="margin-top:10px;">
-                <label style="font-size:0.8rem; color:#666;">OAuth Client Secret</label>
-                <input id="settings-gmail-client-secret" type="password"
-                  style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;"
+              <div class="settings-field">
+                <label class="settings-label" for="settings-gmail-client-secret">OAuth Client Secret</label>
+                <input id="settings-gmail-client-secret" type="password" class="settings-input"
                   placeholder="Leave blank to keep existing">
-                <div id="settings-gmail-client-secret-hint" style="font-size:0.75rem; color:#999; margin-top:6px;">Not
-                  set</div>
+                <div id="settings-gmail-client-secret-hint" class="settings-hint">Not set</div>
               </div>
 
-              <div id="settings-gmail-status" style="font-size:0.85rem; color:#666; margin-top:10px;">Not connected
-              </div>
+              <div id="settings-gmail-status" class="settings-label mt-sm">Not connected</div>
 
-              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px;">
-                <div>
-                  <label style="font-size:0.8rem; color:#666;">Sync scope</label>
-                  <select id="settings-gmail-scope"
-                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+              <div class="settings-grid settings-grid-2 mt-md">
+                <div class="settings-field">
+                  <label class="settings-label" for="settings-gmail-scope">Sync scope</label>
+                  <select id="settings-gmail-scope" class="settings-input">
                     <option value="inbox_sent">Inbox + Sent</option>
                     <option value="all_mail">All Mail (exclude Spam/Trash)</option>
                     <option value="custom">Custom query</option>
                   </select>
                 </div>
-                <div>
-                  <label style="font-size:0.8rem; color:#666;">Custom query</label>
-                  <input id="settings-gmail-query"
-                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;"
+                <div class="settings-field">
+                  <label class="settings-label" for="settings-gmail-query">Custom query</label>
+                  <input id="settings-gmail-query" class="settings-input"
                     placeholder='e.g. label:finance OR from:foo@bar.com'>
                 </div>
               </div>
 
-              <div style="display:flex; justify-content:flex-end; gap:10px; margin-top: 12px;">
-                <button id="settings-gmail-disconnect" class="btn btn-ghost"
-                  style="padding: 8px 12px;">Disconnect</button>
-                <button id="settings-gmail-connect" class="btn btn-primary" style="padding: 8px 12px;">Connect
-                  Gmail</button>
+              <div class="settings-button-group">
+                <button id="settings-gmail-disconnect" class="btn btn-ghost mx-sm">Disconnect</button>
+                <button id="settings-gmail-connect" class="btn btn-primary mx-sm">Connect Gmail</button>
               </div>
 
-              <div style="font-size:0.75rem; color:#999; margin-top:10px;">
+              <div class="settings-hint mt-sm">
                 Redirect URI must be registered in Google Cloud Console (usually
-                `http://localhost:3000/api/gmail/oauth-callback`).
+                <code>http://localhost:3000/api/gmail/oauth-callback</code>).
               </div>
             </div>
 
-            <div id="settings-section-worker"
-              style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
-              <div
-                style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">
-                Background Worker</div>
+            <div id="settings-section-worker" class="settings-section mt-sm">
+              <div class="settings-section-title">Background Worker</div>
 
-              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                <div id="settings-worker-interval-wrap">
-                  <label style="font-size:0.8rem; color:#666;">Poll interval (seconds)</label>
-                  <input id="settings-worker-interval"
-                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="60">
+              <div class="settings-grid settings-grid-2">
+                <div id="settings-worker-interval-wrap" class="settings-field">
+                  <label class="settings-label" for="settings-worker-interval">Poll interval (seconds)</label>
+                  <input id="settings-worker-interval" class="settings-input" value="60">
                 </div>
-                <div id="settings-worker-gmail-wrap">
-                  <label style="font-size:0.8rem; color:#666;">Gmail max / run</label>
-                  <input id="settings-worker-gmail-max"
-                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="100">
+                <div id="settings-worker-gmail-wrap" class="settings-field">
+                  <label class="settings-label" for="settings-worker-gmail-max">Gmail max / run</label>
+                  <input id="settings-worker-gmail-max" class="settings-input" value="100">
                 </div>
               </div>
 
-              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top:10px;">
-                <div id="settings-worker-imessage-wrap">
-                  <label style="font-size:0.8rem; color:#666;">iMessage max / run</label>
-                  <input id="settings-worker-imessage-max"
-                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="1000">
+              <div class="settings-grid settings-grid-2 mt-sm">
+                <div id="settings-worker-imessage-wrap" class="settings-field">
+                  <label class="settings-label" for="settings-worker-imessage-max">iMessage max / run</label>
+                  <input id="settings-worker-imessage-max" class="settings-input" value="1000">
                 </div>
-                <div id="settings-worker-whatsapp-wrap">
-                  <label style="font-size:0.8rem; color:#666;">WhatsApp max / run</label>
-                  <input id="settings-worker-whatsapp-max"
-                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="500">
+                <div id="settings-worker-whatsapp-wrap" class="settings-field">
+                  <label class="settings-label" for="settings-worker-whatsapp-max">WhatsApp max / run</label>
+                  <input id="settings-worker-whatsapp-max" class="settings-input" value="500">
                 </div>
               </div>
 
-              <div id="settings-channel-notes" style="margin-top:10px;">
-                <label style="font-size:0.8rem; color:#666;">Notes max / run (0 = unlimited)</label>
-                <input id="settings-worker-notes-max"
-                  style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;" value="0">
+              <div id="settings-channel-notes" class="settings-field mt-sm">
+                <label class="settings-label" for="settings-worker-notes-max">Notes max / run (0 = unlimited)</label>
+                <input id="settings-worker-notes-max" class="settings-input" value="0">
               </div>
             </div>
 
-            <div id="settings-section-channel-bridge"
-              style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
-              <div
-                style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">
-                Channel Bridge (Inbound)</div>
+            <div id="settings-section-channel-bridge" class="settings-section mt-sm">
+              <div class="settings-section-title">Channel Bridge (Inbound)</div>
 
-              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                <div>
-                  <label style="font-size:0.8rem; color:#666;">Telegram inbound mode</label>
-                  <select id="settings-bridge-telegram-mode"
-                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+              <div class="settings-grid settings-grid-2">
+                <div class="settings-field">
+                  <label class="settings-label" for="settings-bridge-telegram-mode">Telegram inbound mode</label>
+                  <select id="settings-bridge-telegram-mode" class="settings-input">
                     <option value="draft_only">Draft only (recommended)</option>
                     <option value="disabled">Disabled</option>
                   </select>
                 </div>
-                <div>
-                  <label style="font-size:0.8rem; color:#666;">Discord inbound mode</label>
-                  <select id="settings-bridge-discord-mode"
-                    style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                <div class="settings-field">
+                  <label class="settings-label" for="settings-bridge-discord-mode">Discord inbound mode</label>
+                  <select id="settings-bridge-discord-mode" class="settings-input">
                     <option value="draft_only">Draft only (recommended)</option>
                     <option value="disabled">Disabled</option>
                   </select>
                 </div>
               </div>
 
-              <div style="font-size:0.75rem; color:#999; margin-top:10px;">
+              <div class="settings-hint mt-sm">
                 These flags are enforced server-side on <code>/api/channel-bridge/inbound</code>.
               </div>
             </div>
 
-            <div id="settings-section-ui" style="margin-top: 1.25rem; border-top: 1px solid #eee; padding-top: 1rem;">
-              <div
-                style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; margin-bottom: 10px;">
-                Channel UI</div>
+            <div id="settings-section-ui" class="settings-section mt-sm">
+              <div class="settings-section-title">Channel UI</div>
 
-              <div style="display:grid; grid-template-columns: 1fr; gap: 12px;">
-                <div id="settings-channel-imessage" style="border:1px solid #eee; border-radius: 12px; padding: 12px;">
-                  <div style="font-weight:700; color:#444; margin-bottom:10px;">iMessage</div>
-                  <div style="display:grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; align-items:end;">
-                    <div>
-                      <label style="font-size:0.8rem; color:#666;">Emoji</label>
-                      <input id="settings-ui-imessage-emoji"
-                        style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+              <div class="settings-grid">
+                <div id="settings-channel-imessage" class="settings-card">
+                  <div class="settings-card-title">iMessage</div>
+                  <div class="settings-grid settings-grid-3 items-end">
+                    <div class="settings-field mt-0">
+                      <label class="settings-label" for="settings-ui-imessage-emoji">Emoji</label>
+                      <input id="settings-ui-imessage-emoji" class="settings-input">
                     </div>
-                    <div>
-                      <label style="font-size:0.8rem; color:#666;">My bubble</label>
-                      <input id="settings-ui-imessage-me" type="color"
-                        style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                    <div class="settings-field mt-0">
+                      <label class="settings-label" for="settings-ui-imessage-me">My bubble</label>
+                      <input id="settings-ui-imessage-me" type="color" class="settings-input settings-color-input">
                     </div>
-                    <div>
-                      <label style="font-size:0.8rem; color:#666;">Their bubble</label>
-                      <input id="settings-ui-imessage-contact" type="color"
-                        style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                    <div class="settings-field mt-0">
+                      <label class="settings-label" for="settings-ui-imessage-contact">Their bubble</label>
+                      <input id="settings-ui-imessage-contact" type="color" class="settings-input settings-color-input">
                     </div>
                   </div>
                 </div>
 
-                <div id="settings-channel-whatsapp" style="border:1px solid #eee; border-radius: 12px; padding: 12px;">
-                  <div style="font-weight:700; color:#444; margin-bottom:10px;">WhatsApp</div>
-                  <div style="display:grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; align-items:end;">
-                    <div>
-                      <label style="font-size:0.8rem; color:#666;">Emoji</label>
-                      <input id="settings-ui-whatsapp-emoji"
-                        style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                <div id="settings-channel-whatsapp" class="settings-card">
+                  <div class="settings-card-title">WhatsApp</div>
+                  <div class="settings-grid settings-grid-3 items-end">
+                    <div class="settings-field mt-0">
+                      <label class="settings-label" for="settings-ui-whatsapp-emoji">Emoji</label>
+                      <input id="settings-ui-whatsapp-emoji" class="settings-input">
                     </div>
-                    <div>
-                      <label style="font-size:0.8rem; color:#666;">My bubble</label>
-                      <input id="settings-ui-whatsapp-me" type="color"
-                        style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                    <div class="settings-field mt-0">
+                      <label class="settings-label" for="settings-ui-whatsapp-me">My bubble</label>
+                      <input id="settings-ui-whatsapp-me" type="color" class="settings-input settings-color-input">
                     </div>
-                    <div>
-                      <label style="font-size:0.8rem; color:#666;">Their bubble</label>
-                      <input id="settings-ui-whatsapp-contact" type="color"
-                        style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                    <div class="settings-field mt-0">
+                      <label class="settings-label" for="settings-ui-whatsapp-contact">Their bubble</label>
+                      <input id="settings-ui-whatsapp-contact" type="color" class="settings-input settings-color-input">
                     </div>
                   </div>
                 </div>
 
-                <div id="settings-channel-email" style="border:1px solid #eee; border-radius: 12px; padding: 12px;">
-                  <div style="font-weight:700; color:#444; margin-bottom:10px;">Email</div>
-                  <div style="display:grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; align-items:end;">
-                    <div>
-                      <label style="font-size:0.8rem; color:#666;">Emoji</label>
-                      <input id="settings-ui-email-emoji"
-                        style="width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:8px;">
+                <div id="settings-channel-email" class="settings-card">
+                  <div class="settings-card-title">Email</div>
+                  <div class="settings-grid settings-grid-3 items-end">
+                    <div class="settings-field mt-0">
+                      <label class="settings-label" for="settings-ui-email-emoji">Emoji</label>
+                      <input id="settings-ui-email-emoji" class="settings-input">
                     </div>
-                    <div>
-                      <label style="font-size:0.8rem; color:#666;">My bubble</label>
-                      <input id="settings-ui-email-me" type="color"
-                        style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                    <div class="settings-field mt-0">
+                      <label class="settings-label" for="settings-ui-email-me">My bubble</label>
+                      <input id="settings-ui-email-me" type="color" class="settings-input settings-color-input">
                     </div>
-                    <div>
-                      <label style="font-size:0.8rem; color:#666;">Their bubble</label>
-                      <input id="settings-ui-email-contact" type="color"
-                        style="width:100%; height:40px; border:1px solid #ddd; border-radius:8px; padding: 0;">
+                    <div class="settings-field mt-0">
+                      <label class="settings-label" for="settings-ui-email-contact">Their bubble</label>
+                      <input id="settings-ui-email-contact" type="color" class="settings-input settings-color-input">
+                    </div>
+                  </div>
+                </div>
+
+                <div id="settings-channel-linkedin" class="settings-card">
+                  <div class="settings-card-title">LinkedIn</div>
+                  <div class="settings-hint mb-md" style="line-height:1.4;">
+                    LinkedIn integration is powered by the <strong>{reply} Chrome Extension</strong> and manual
+                    <strong>Data Archive Imports</strong>.
+                    <ul class="ml-lg mt-sm">
+                      <li><strong>Messages:</strong> Synced automatically when you browse LinkedIn with the extension
+                        active.</li>
+                      <li><strong>Contacts/Posts:</strong> Synced by importing <code>Connections.csv</code> and
+                        <code>Shares.csv</code> from your LinkedIn Data Archive.
+                      </li>
+                    </ul>
+                  </div>
+                  <div class="settings-grid settings-grid-3 items-end">
+                    <div class="settings-field mt-0">
+                      <label class="settings-label" for="settings-ui-linkedin-emoji">Emoji</label>
+                      <input id="settings-ui-linkedin-emoji" class="settings-input">
+                    </div>
+                    <div class="settings-field mt-0">
+                      <label class="settings-label" for="settings-ui-linkedin-me">My bubble</label>
+                      <input id="settings-ui-linkedin-me" type="color" class="settings-input settings-color-input">
+                    </div>
+                    <div class="settings-field mt-0">
+                      <label class="settings-label" for="settings-ui-linkedin-contact">Their bubble</label>
+                      <input id="settings-ui-linkedin-contact" type="color" class="settings-input settings-color-input">
+                    </div>
+                  </div>
+
+                  <div class="settings-section mt-md pt-md">
+                    <div class="settings-section-title">Bridge Settings</div>
+                    <div id="settings-bridge-linkedin-wrap" class="settings-field">
+                      <label class="settings-label" for="settings-bridge-linkedin-mode">Inbound Mode</label>
+                      <select id="settings-bridge-linkedin-mode" class="settings-input">
+                        <option value="draft_only">Draft only (recommended)</option>
+                        <option value="disabled">Disabled</option>
+                      </select>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-
-          <div class="settings-page-footer">
-            <div style="font-size:0.75rem; color:#999;">Changes are saved when you click Save.</div>
-          </div>
         </div>
-      </div>
     </main>
 
     <!-- PANE C: KYC DATA -->
@@ -441,7 +489,7 @@
           <div class="kyc-editor-actions">
             <button id="btn-deep-analyze" class="btn btn-secondary btn-sm" title="Run Deep Analysis with Ollama">✨
               Analyze</button>
-            <button class="btn btn-primary btn-sm" onclick="saveInlineProfile()">Save</button>
+            <button class="btn btn-primary btn-sm" onclick="saveInlineProfile(this)">Save</button>
           </div>
         </div>
 
@@ -502,37 +550,47 @@
   <!-- Profile Edit Modal -->
   <div id="profile-modal" class="modal-overlay">
     <div class="modal-content">
-      <h3 style="margin-top:0;">Edit Contact Profile</h3>
-      <div style="margin-bottom: 0.5rem;">
-        <label style="font-size:0.8rem; color:#666;">Name:</label>
-        <input id="prof-name" style="width:100%; padding:0.4rem; border:1px solid #ccc; border-radius:4px;">
+      <h3 class="mt-0">Edit Contact Profile</h3>
+      <div class="settings-field mt-0">
+        <label class="settings-label">Name:</label>
+        <input id="prof-name" class="settings-input">
       </div>
-      <div style="margin-bottom: 0.5rem;">
-        <label style="font-size:0.8rem; color:#666;">Profession:</label>
-        <input id="prof-role" style="width:100%; padding:0.4rem; border:1px solid #ccc; border-radius:4px;">
+      <div class="settings-field">
+        <label class="settings-label">Profession:</label>
+        <input id="prof-role" class="settings-input">
       </div>
-      <div style="margin-bottom: 0.5rem;">
-        <label style="font-size:0.8rem; color:#666;">Relationship:</label>
-        <input id="prof-rel" style="width:100%; padding:0.4rem; border:1px solid #ccc; border-radius:4px;">
+      <div class="settings-field">
+        <label class="settings-label">Relationship:</label>
+        <input id="prof-rel" class="settings-input">
       </div>
-      <div style="margin-bottom: 1rem;">
-        <label style="font-size:0.8rem; color:#666;">Notes:</label>
-        <textarea id="prof-notes"
-          style="width:100%; height:60px; padding:0.4rem; border:1px solid #ccc; border-radius:4px;"></textarea>
+      <div class="settings-field mb-md">
+        <label class="settings-label">Notes:</label>
+        <textarea id="prof-notes" class="settings-input" style="height:60px; resize:vertical;"></textarea>
       </div>
       <input type="hidden" id="prof-handle">
-      <div style="display:flex; justify-content:flex-end; gap:0.5rem;">
-        <button onclick="closeProfileModal()"
-          style="background:#eee; color:#333; border:1px solid #ccc; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">Cancel</button>
-        <button onclick="saveProfile()"
-          style="background:#056; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">Save
-          Profile</button>
+      <div class="settings-button-group mt-0">
+        <button onclick="closeProfileModal()" class="btn btn-ghost mx-sm">Cancel</button>
+        <button id="save-profile-btn" onclick="saveProfile(this)" class="btn btn-primary mx-sm">Save Profile</button>
       </div>
     </div>
   </div>
 
+  <!-- DOMPurify for XSS protection -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
   <!-- Application Modules (ES6) -->
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js?v=2.1"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        if (!window.saveInlineProfile) {
+          console.error('[CRITICAL] KYC handlers NOT found on window!');
+          // alert('Warning: System components failed to initialize. Please check console.');
+        } else {
+          console.log('[READY] KYC handlers found on window.');
+        }
+      }, 1000); // Wait for modules to initialize
+    });
+  </script>
 </body>
 
 </html>
