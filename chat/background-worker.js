@@ -88,7 +88,7 @@ function getPollIntervalMs() {
 
 // Simple bounded cache to prevent memory leaks
 const MAX_SEEN_IDS = 1000;
-let seenIds = new Set();
+const seenIds = new Set();
 let isProcessing = false;
 const deepAnalysisInFlightByHandle = new Map();
 const AUTO_SCAN_CURSOR_PATH = path.join(__dirname, 'data', 'kyc_auto_scan_cursor.json');

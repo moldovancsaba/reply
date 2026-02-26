@@ -194,7 +194,7 @@ async function syncWhatsApp() {
                                 }
                             }
                             if (jid) {
-                                let handle = jid.replace('@s.whatsapp.net', '').replace('@g.us', '').split('@')[0];
+                                const handle = jid.replace('@s.whatsapp.net', '').replace('@g.us', '').split('@')[0];
                                 const date = convertWADate(r.ZMESSAGEDATE);
                                 await contactStore.markChannelInboundVerified(handle, handle, date);
                             }
