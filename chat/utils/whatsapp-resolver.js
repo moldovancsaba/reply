@@ -157,7 +157,7 @@ const whatsAppIdResolver = (() => {
         const CHUNK = 400;
         for (let i = 0; i < missing.length; i += CHUNK) {
             const chunk = missing.slice(i, i + CHUNK);
-            const jids = chunk.map((p) => `${p}@s.whatsapp.net`);
+            const jids = chunk.map((p) => `${p.replace('+', '')}@s.whatsapp.net`);
             const query = buildInQuery(
                 "SELECT ZCONTACTJID, ZCONTACTIDENTIFIER FROM ZWACHATSESSION WHERE ZCONTACTJID IN (",
                 jids

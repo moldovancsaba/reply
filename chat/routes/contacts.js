@@ -88,9 +88,35 @@ async function serveDeleteNote(req, res, url) {
 async function serveAcceptSuggestion(req, res) {
     try {
         const { handle, id } = await readJsonBody(req);
-        await contactStore.acceptSuggestion(handle, id);
+
+        await contactStore.waitUntilReady();
         const contact = contactStore.findContact(handle);
-        writeJson(res, 200, { status: "ok", contact });
+        if (contact && contact.pendingSuggestions) {
+            const suggestion = contact.pendingSuggestions.find(s => s.id === id);
+            if (suggestion) {
+                let updated = false;
+                if (suggestion.type === 'company' || suggestion.type === 'linkedinUrl') {
+                    contact[suggestion.type] = suggestion.content;
+                    updated = true;
+                } else if (suggestion.type === 'notes') {
+                    await contactStore.addNote(handle, suggestion.content);
+                } else {
+                    if (!contact.channels) contact.channels = {};
+                    if (!contact.channels[suggestion.type]) contact.channels[suggestion.type] = [];
+                    if (!contact.channels[suggestion.type].includes(suggestion.content)) {
+                        contact.channels[suggestion.type].push(suggestion.content);
+                        updated = true;
+                    }
+                }
+                if (updated) {
+                    await contactStore.saveContact(contact);
+                }
+            }
+        }
+
+        await contactStore.acceptSuggestion(handle, id);
+        const updatedContact = contactStore.findContact(handle);
+        writeJson(res, 200, { status: "ok", contact: updatedContact });
     } catch (e) {
         writeJson(res, 500, { error: e.message });
     }

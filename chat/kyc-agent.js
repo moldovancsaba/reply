@@ -189,7 +189,7 @@ async function lidsForPhones(phoneDigitsList) {
         const CHUNK = 400;
         for (let i = 0; i < phones.length; i += CHUNK) {
             const chunk = phones.slice(i, i + CHUNK);
-            const jids = chunk.map(p => `${p}@s.whatsapp.net`);
+            const jids = chunk.map(p => `${p.replace('+', '')}@s.whatsapp.net`);
             const query = buildInQuery(
                 "SELECT ZCONTACTJID, ZCONTACTIDENTIFIER FROM ZWACHATSESSION WHERE ZCONTACTJID IN (",
                 jids
@@ -283,6 +283,8 @@ async function analyzeContact(handleId) {
 
         // LLM extraction for higher-level items (chunked to avoid prompt limits).
         const notesSet = new Set();
+        let extractedCompany = null;
+        let extractedLinkedinUrl = null;
 
         const maxLlmMessages = Math.max(50, parseInt(process.env.REPLY_KYC_LLM_MAX_MESSAGES || "400", 10) || 400);
         const maxChunks = Math.max(1, parseInt(process.env.REPLY_KYC_LLM_MAX_CHUNKS || "8", 10) || 8);
@@ -318,18 +320,20 @@ You extract structured contact intelligence from chat logs.
 The log lines are ONLY messages from the contact (not from me).
 
 Extract ONLY what is explicitly mentioned:
+- "company": the name of the company they work for (string or null)
+- "linkedinUrl": their LinkedIn profile URL if mentioned (string or null)
 - "notes": durable facts worth remembering (strings)
 
 Rules:
 - DO NOT infer names, profession, relationship.
 - NEVER include the user's name "Csaba" or "Moldovan" in any output.
-- If unsure, leave arrays empty.
+- If unsure, leave arrays empty or fields null.
 
 CHAT LOG:
 ${corpus}
 
 RETURN ONLY JSON:
-{ "notes": [] }`;
+{ "company": null, "linkedinUrl": null, "notes": [] }`;
 
             let response = null;
             const controller = new AbortController();
@@ -353,6 +357,10 @@ RETURN ONLY JSON:
 
             let parsed = {};
             try { parsed = JSON.parse(response.message.content); } catch { parsed = {}; }
+
+            if (parsed.company && !extractedCompany) extractedCompany = String(parsed.company).trim();
+            if (parsed.linkedinUrl && !extractedLinkedinUrl) extractedLinkedinUrl = String(parsed.linkedinUrl).trim();
+
             const notes = Array.isArray(parsed.notes) ? parsed.notes : [];
 
             for (const n of notes) {
@@ -377,6 +385,8 @@ RETURN ONLY JSON:
 
         const profile = {
             handle: handleId,
+            company: extractedCompany,
+            linkedinUrl: extractedLinkedinUrl,
             links: uniqueClean(Array.from(linkSet)),
             emails: uniqueClean(filteredEmails),
             phones: uniqueClean(filteredPhones),

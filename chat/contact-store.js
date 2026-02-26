@@ -33,6 +33,8 @@ class ContactStore {
                 this._db.run("ALTER TABLE contacts ADD COLUMN primary_contact_id TEXT", () => {
                     // Ignore expected error if column already exists
                 });
+                this._db.run("ALTER TABLE contacts ADD COLUMN company TEXT", () => { });
+                this._db.run("ALTER TABLE contacts ADD COLUMN linkedinUrl TEXT", () => { });
                 this._db.run(`CREATE TABLE IF NOT EXISTS contact_channels (
                     contact_id TEXT,
                     type TEXT,
@@ -129,8 +131,8 @@ class ContactStore {
 
                 contacts.forEach(contact => {
                     this._db.run(`
-                        INSERT INTO contacts (id, displayName, handle, lastContacted, lastChannel, profession, relationship, draft, status, primary_contact_id)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO contacts (id, displayName, handle, lastContacted, lastChannel, profession, relationship, draft, status, primary_contact_id, company, linkedinUrl)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(handle) DO UPDATE SET
                             displayName = COALESCE(NULLIF(?, ''), displayName),
                             lastContacted = COALESCE(?, lastContacted),
@@ -139,11 +141,13 @@ class ContactStore {
                             relationship = COALESCE(NULLIF(?, ''), relationship),
                             draft = COALESCE(NULLIF(?, ''), draft),
                             status = COALESCE(NULLIF(?, ''), status),
-                            primary_contact_id = COALESCE(NULLIF(?, ''), primary_contact_id)
+                            primary_contact_id = COALESCE(NULLIF(?, ''), primary_contact_id),
+                            company = COALESCE(NULLIF(?, ''), company),
+                            linkedinUrl = COALESCE(NULLIF(?, ''), linkedinUrl)
                     `,
                         [
-                            contact.id, contact.displayName, contact.handle, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status, contact.primary_contact_id,
-                            contact.displayName, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status, contact.primary_contact_id
+                            contact.id, contact.displayName, contact.handle, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status, contact.primary_contact_id, contact.company, contact.linkedinUrl,
+                            contact.displayName, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status, contact.primary_contact_id, contact.company, contact.linkedinUrl
                         ],
                         handleError
                     );
