@@ -3,7 +3,34 @@
  * Handles all HTTP requests to the backend server
  */
 
+import { UI } from './ui.js';
+
 const API_BASE = '';
+
+async function _request(url, options = {}) {
+    const isMutation = options.method && options.method !== 'GET';
+    if (isMutation) UI.showLoading();
+
+    try {
+        const res = await fetch(url, options);
+        if (!res.ok) {
+            let errorMsg = `Error: ${res.status} ${res.statusText}`;
+            try {
+                const data = await res.json().catch(() => ({}));
+                errorMsg = data.error || data.message || errorMsg;
+            } catch (e) { }
+            UI.showToast(errorMsg, 'error');
+            throw new Error(errorMsg);
+        }
+        return res;
+    } catch (err) {
+        const msg = err.message || 'Network error';
+        if (!options._silent) UI.showToast(msg, 'error');
+        throw err;
+    } finally {
+        if (isMutation) UI.hideLoading();
+    }
+}
 
 export function buildSecurityHeaders() {
     const headers = { 'Content-Type': 'application/json', 'X-Reply-Human-Approval': 'confirmed' };
@@ -44,8 +71,7 @@ export async function fetchConversations(offset = 0, limit = 20, query = '') {
     const url = q
         ? `${API_BASE}/api/conversations?offset=${offset}&limit=${limit}&q=${encodeURIComponent(q)}`
         : `${API_BASE}/api/conversations?offset=${offset}&limit=${limit}`;
-    const res = await fetch(url, { headers: buildSecurityHeaders() });
-    if (!res.ok) throw new Error(`Failed to fetch conversations: ${res.statusText}`);
+    const res = await _request(url, { headers: buildSecurityHeaders(), _silent: true });
     return await res.json();
 }
 
@@ -57,10 +83,10 @@ export async function fetchConversations(offset = 0, limit = 20, query = '') {
  * @returns {Promise<Array>} Array of message objects
  */
 export async function fetchMessages(handle, offset = 0, limit = 30) {
-    const res = await fetch(`${API_BASE}/api/thread?handle=${encodeURIComponent(handle)}&offset=${offset}&limit=${limit}`, {
+    const res = await _request(`${API_BASE}/api/thread?handle=${encodeURIComponent(handle)}&offset=${offset}&limit=${limit}`, {
         headers: buildSecurityHeaders(),
+        _silent: true
     });
-    if (!res.ok) throw new Error(`Failed to fetch messages: ${res.statusText}`);
     const data = await res.json();
     return data.messages || [];
 }
@@ -70,10 +96,9 @@ export async function fetchMessages(handle, offset = 0, limit = 30) {
  * @returns {Promise<Object>} System health data
  */
 export async function fetchSystemHealth() {
-    const res = await fetch(`${API_BASE}/api/system-health`, {
+    const res = await _request(`${API_BASE}/api/system-health`, {
         headers: buildSecurityHeaders(),
     });
-    if (!res.ok) throw new Error(`Failed to fetch system health: ${res.statusText}`);
     return await res.json();
 }
 
@@ -96,29 +121,26 @@ export async function fetchOpenClawStatus() {
  * @returns {Promise<Array>} Triage log entries
  */
 export async function fetchTriageLogs(limit = 10) {
-    const res = await fetch(`${API_BASE}/api/triage-log?limit=${limit}`, {
+    const res = await _request(`${API_BASE}/api/triage-log?limit=${limit}`, {
         headers: buildSecurityHeaders(),
     });
-    if (!res.ok) throw new Error(`Failed to fetch triage logs: ${res.statusText}`);
     const data = await res.json();
     return data.logs || [];
 }
 
 export async function fetchBridgeEvents(limit = 20) {
     const n = Math.max(1, Math.min(Number(limit) || 20, 500));
-    const res = await fetch(`${API_BASE}/api/channel-bridge/events?limit=${n}`, {
+    const res = await _request(`${API_BASE}/api/channel-bridge/events?limit=${n}`, {
         headers: buildSecurityHeaders(),
     });
-    if (!res.ok) throw new Error(`Failed to fetch channel bridge events: ${res.statusText}`);
     return await res.json();
 }
 
 export async function fetchBridgeSummary(limit = 200) {
     const n = Math.max(1, Math.min(Number(limit) || 200, 2000));
-    const res = await fetch(`${API_BASE}/api/channel-bridge/summary?limit=${n}`, {
+    const res = await _request(`${API_BASE}/api/channel-bridge/summary?limit=${n}`, {
         headers: buildSecurityHeaders(),
     });
-    if (!res.ok) throw new Error(`Failed to fetch channel bridge summary: ${res.statusText}`);
     return await res.json();
 }
 
@@ -141,49 +163,26 @@ export async function sendMessage(handle, text, channel = 'imessage') {
     if (!endpoint) {
         throw new Error(`Outbound send is disabled for channel "${ch}" (draft-only or unsupported).`);
     }
-    let res;
-    try {
-        const sendTrigger = {
-            kind: 'human_enter',
-            at: new Date().toISOString(),
-        };
-        const sendPayload = { recipient: handle, text, trigger: sendTrigger };
-        if (ch === 'whatsapp') {
-            sendPayload.transport = 'openclaw_cli';
-            sendPayload.allowDesktopFallback = false;
-        }
-        res = await fetch(endpoint, {
-            method: 'POST',
-            headers: buildSecurityHeaders(),
-            body: JSON.stringify(withApproval(sendPayload, 'ui-send-message'))
-        });
-    } catch (err) {
-        const raw = String(err?.message || err || '').toLowerCase();
-        if (raw.includes('load failed') || raw.includes('failed to fetch') || raw.includes('networkerror')) {
-            throw new Error('Reply server is not reachable at http://localhost:3000. Launch "Launch Reply.command" and retry.');
-        }
-        throw err;
+
+    const sendTrigger = {
+        kind: 'human_enter',
+        at: new Date().toISOString(),
+    };
+    const sendPayload = { recipient: handle, text, trigger: sendTrigger };
+    if (ch === 'whatsapp') {
+        sendPayload.transport = 'openclaw_cli';
+        sendPayload.allowDesktopFallback = false;
     }
-    if (!res.ok) {
-        let detail = '';
-        try {
-            const raw = await res.text();
-            try {
-                const j = JSON.parse(raw);
-                const errorText = normalizeErrorText(j?.error || j?.message);
-                const hintText = normalizeErrorText(j?.hint);
-                detail = [errorText, hintText].filter(Boolean).join(' ');
-                if (!detail) detail = normalizeErrorText(raw);
-            } catch {
-                detail = normalizeErrorText(raw);
-            }
-        } catch { }
-        const msg = detail
-            ? `Failed to send message: ${detail}`
-            : `Failed to send message: ${res.status} ${res.statusText}`;
-        throw new Error(msg);
-    }
-    return await res.json();
+
+    const res = await _request(endpoint, {
+        method: 'POST',
+        headers: buildSecurityHeaders(),
+        body: JSON.stringify(withApproval(sendPayload, 'ui-send-message'))
+    });
+
+    const data = await res.json();
+    UI.showToast('Message sent!', 'success');
+    return data;
 }
 
 /**
@@ -192,10 +191,9 @@ export async function sendMessage(handle, text, channel = 'imessage') {
  * @returns {Promise<Object>} KYC profile data
  */
 export async function loadKYC(handle) {
-    const res = await fetch(`${API_BASE}/api/kyc?handle=${encodeURIComponent(handle)}`, {
+    const res = await _request(`${API_BASE}/api/kyc?handle=${encodeURIComponent(handle)}`, {
         headers: buildSecurityHeaders(),
     });
-    if (!res.ok) throw new Error(`Failed to load KYC: ${res.statusText}`);
     return await res.json();
 }
 
@@ -206,13 +204,30 @@ export async function loadKYC(handle) {
  * @returns {Promise<Object>} Save result
  */
 export async function saveKYC(handle, data) {
-    const res = await fetch(`${API_BASE}/api/kyc`, {
+    const res = await _request(`${API_BASE}/api/kyc`, {
         method: 'POST',
         headers: buildSecurityHeaders(),
         body: JSON.stringify(withApproval({ handle, ...data }, 'ui-save-kyc'))
     });
-    if (!res.ok) throw new Error(`Failed to save KYC: ${res.statusText}`);
-    return await res.json();
+    const result = await res.json();
+    UI.showToast('Profile saved!', 'success');
+    return result;
+}
+
+/**
+ * Merge source contact into target contact
+ * @param {string} targetId - The ID of the primary identity
+ * @param {string} sourceId - The ID of the alias profile
+ */
+export async function mergeContacts(targetId, sourceId) {
+    const res = await _request(`${API_BASE}/api/contacts/merge`, {
+        method: 'POST',
+        headers: buildSecurityHeaders(),
+        body: JSON.stringify(withApproval({ targetId, sourceId }, 'ui-merge-contact'))
+    });
+    const data = await res.json();
+    UI.showToast('Contacts merged!', 'success');
+    return data;
 }
 
 /**
@@ -222,13 +237,14 @@ export async function saveKYC(handle, data) {
  */
 export async function triggerSync(source) {
     const endpoint = `/api/sync-${source}`;
-    const res = await fetch(endpoint, {
+    const res = await _request(endpoint, {
         method: 'POST',
         headers: buildSecurityHeaders(),
         body: JSON.stringify(withApproval({ source }, `ui-sync-${source}`)),
     });
-    if (!res.ok) throw new Error(`Failed to trigger ${source} sync: ${res.statusText}`);
-    return await res.json();
+    const data = await res.json();
+    UI.showToast(`${source.toUpperCase()} sync complete!`, 'success');
+    return data;
 }
 
 /**
@@ -236,13 +252,9 @@ export async function triggerSync(source) {
  * @returns {Promise<Object>}
  */
 export async function getSettings() {
-    const res = await fetch(`${API_BASE}/api/settings`, {
+    const res = await _request(`${API_BASE}/api/settings`, {
         headers: buildSecurityHeaders(),
     });
-    if (res.status === 404) {
-        throw new Error('Settings API not available (this server build is missing /api/settings).');
-    }
-    if (!res.ok) throw new Error(`Failed to load settings: ${res.status} ${res.statusText}`);
     return await res.json();
 }
 
@@ -252,36 +264,30 @@ export async function getSettings() {
  * @returns {Promise<Object>}
  */
 export async function saveSettings(data) {
-    const res = await fetch(`${API_BASE}/api/settings`, {
+    const res = await _request(`${API_BASE}/api/settings`, {
         method: 'POST',
         headers: buildSecurityHeaders(),
         body: JSON.stringify(withApproval(data || {}, 'ui-save-settings'))
     });
-    if (res.status === 404) {
-        throw new Error('Settings API not available (this server build is missing /api/settings).');
-    }
-    if (!res.ok) throw new Error(`Failed to save settings: ${res.status} ${res.statusText}`);
-    return await res.json();
+    const result = await res.json();
+    UI.showToast('Settings saved!', 'success');
+    return result;
 }
 
 export async function getGmailAuthUrl() {
-    const res = await fetch(`${API_BASE}/api/gmail/auth-url`, {
+    const res = await _request(`${API_BASE}/api/gmail/auth-url`, {
         headers: buildSecurityHeaders(),
     });
-    if (res.status === 404) throw new Error('Gmail API not available (restart the server).');
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.error || `Failed to start Gmail auth: ${res.status} ${res.statusText}`);
-    return data;
+    return await res.json();
 }
 
 export async function disconnectGmail() {
-    const res = await fetch(`${API_BASE}/api/gmail/disconnect`, {
+    const res = await _request(`${API_BASE}/api/gmail/disconnect`, {
         method: 'POST',
         headers: buildSecurityHeaders(),
         body: JSON.stringify(withApproval({}, 'ui-disconnect-gmail')),
     });
-    if (res.status === 404) throw new Error('Gmail API not available (restart the server).');
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.error || `Failed to disconnect Gmail: ${res.status} ${res.statusText}`);
+    const data = await res.json();
+    UI.showToast('Gmail disconnected!', 'success');
     return data;
 }

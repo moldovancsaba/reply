@@ -23,7 +23,7 @@ function getPersona() {
 
 async function generateReply(message, contextSnippets = [], recipient = null, goldenExamples = []) {
   if (!message || typeof message !== "string") {
-    return "Please provide a message to reply to.";
+    return { suggestion: "Please provide a message to reply to.", explanation: "" };
   }
 
   // 1. Get Stylistic Context & System Instructions
@@ -34,23 +34,23 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
   // 2. Load the Holy Grail Persona
   const persona = getPersona();
 
-  // 3. Dynamic RAG: Fetch examples of how Csaba writes about this topic
+  // 3. Dynamic RAG: Fetch examples
   let ragExamplesText = "";
   try {
     const results = await search(message, 20);
     const myMessages = results
       .filter(r => r.text && r.text.includes('] Me: '))
-      .slice(0, 4); // Take top 4 examples
+      .slice(0, 4);
 
     if (myMessages.length > 0) {
-      ragExamplesText = "\n\n### RAG Context (Use these past messages sent by me to perfectly mimic my tone & vocabulary):\n" +
+      ragExamplesText = "\n\n### RAG Context (Past messages sent by me):\n" +
         myMessages.map(m => `- "${m.text.split('] Me: ')[1] || m.text}"`).join('\n');
     }
   } catch (e) {
     console.error("reply-engine RAG fetch failed:", e.message);
   }
 
-  // 4. Construct context string from snippets
+  // 4. Construct context string
   const contextText = contextSnippets
     .map((s) => `[Source: ${s.path}]\n${s.text}`)
     .join("\n\n---\n\n");
@@ -58,41 +58,75 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
   // 5. Construct Golden Examples
   let goldenText = "";
   if (mergedGoldenExamples && mergedGoldenExamples.length > 0) {
-    goldenText = "\nHere are GOLDEN EXAMPLES of how you should talk and structure your messages. Mimic this short, concise style perfectly:\n\n" +
-      mergedGoldenExamples.map((g, i) => `Example ${i + 1}:\n"${g.text}"`).join("\n\n");
+    goldenText = "\nGOLDEN EXAMPLES (Mimic this short, concise style):\n" +
+      mergedGoldenExamples.map((g, i) => `Ex ${i + 1}: "${g.text}"`).join("\n");
   }
 
-  const prompt = `${persona}
+  // --- AGENT 1: THE ANALYZER ---
+  const analyzerPrompt = `${persona}
 ${styleInstructions || ""}
 ${identityContext || ""}
 ${history || ""}
 ${goldenText}
 ${ragExamplesText}
 
-The Identity Context and Local Intelligence (if present) are the most reliable source of facts.
-Prioritize them above the general knowledge snippets if there is any conflict.
-Only use facts that appear in the provided context; do not invent personal details.
-Never mention that you used notes, profiles, or "context" in the draft.
+Based on the knowledge base and history, analyze how to best reply to the message below.
+Draft a response that is helpful and factually correct based ONLY on the provided context.
+Also, provide a brief explanation of why you chose this response (tone, language, historical context).
 
-Based on the knowledge below (my notes/emails), draft a reply to the incoming message.
-
-CONTEXT FROM KNOWLEDGE BASE:
-${contextText || "No relevant notes found."}
+CONTEXT:
+${contextText || "No relevant notes discovered."}
 
 INCOMING MESSAGE:
 "${message}"
 
-DRAFT REPLY (Text only, no conversational filler):`;
+OUTPUT FORMAT: JSON with "draft" and "explanation" fields.
+JSON:`;
 
   try {
-    const response = await ollama.chat({
+    const analyzerResponse = await ollama.chat({
       model: MODEL,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', content: analyzerPrompt }],
+      format: 'json'
     });
-    return response.message.content;
+
+    let analyzerResult;
+    try {
+      analyzerResult = JSON.parse(analyzerResponse.message.content);
+    } catch (e) {
+      // Fallback if JSON fails
+      analyzerResult = { draft: analyzerResponse.message.content, explanation: "Direct response generated." };
+    }
+
+    // --- AGENT 2: THE COPYWRITER ---
+    const copywriterPrompt = `You are a professional copywriter specialized in a concise, "Csaba Style" communication.
+Your task is to take a draft reply and refine it to be as short, direct, and impactful as possible.
+Remove all conversational filler (e.g., "I hope you are well", "Here's the information").
+Use the language of the draft (Hungarian or English).
+
+DRAFT:
+"${analyzerResult.draft}"
+
+REPLY (Text only, 1-2 sentences max, no filler):`;
+
+    const copywriterResponse = await ollama.chat({
+      model: MODEL,
+      messages: [{ role: 'user', content: copywriterPrompt }]
+    });
+
+    const finalSuggestion = copywriterResponse.message.content.trim().replace(/^"(.*)"$/, '$1');
+
+    return {
+      suggestion: finalSuggestion,
+      explanation: analyzerResult.explanation || ""
+    };
+
   } catch (error) {
-    console.error("Error connecting to Ollama:", error);
-    return `Error generating reply: ${error.message}. Is Ollama running?`;
+    console.error("Error in two-agent pipeline:", error);
+    return {
+      suggestion: `Error: ${error.message}`,
+      explanation: "Ollama communication failed."
+    };
   }
 }
 

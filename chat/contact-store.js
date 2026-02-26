@@ -17,6 +17,7 @@ class ContactStore {
             this._db.serialize(() => {
                 this._db.run("PRAGMA journal_mode = WAL");
                 this._db.run("PRAGMA busy_timeout = 5000");
+                this._db.run("PRAGMA synchronous = NORMAL");
                 this._db.run(`CREATE TABLE IF NOT EXISTS contacts (
                     id TEXT PRIMARY KEY,
                     displayName TEXT,
@@ -27,14 +28,22 @@ class ContactStore {
                     relationship TEXT,
                     draft TEXT,
                     status TEXT,
-                    lastMtimeMs INTEGER
+                    lastMtimeMs INTEGER,
+                    primary_contact_id TEXT
                 )`);
+                this._db.run("ALTER TABLE contacts ADD COLUMN primary_contact_id TEXT", (err) => {
+                    // Ignore expected error if column already exists
+                });
                 this._db.run(`CREATE TABLE IF NOT EXISTS contact_channels (
                     contact_id TEXT,
                     type TEXT,
                     value TEXT,
+                    inbound_verified_at TEXT,
                     PRIMARY KEY (contact_id, type, value)
                 )`);
+                this._db.run("ALTER TABLE contact_channels ADD COLUMN inbound_verified_at TEXT", (err) => {
+                    // Ignore expected error if column already exists
+                });
                 this._db.run(`CREATE TABLE IF NOT EXISTS contact_notes (
                     id TEXT PRIMARY KEY,
                     contact_id TEXT,
@@ -77,10 +86,14 @@ class ContactStore {
                             const hydrated = (rows || []).map(c => {
                                 const contact = { ...c };
                                 contact.channels = { phone: [], email: [] };
+                                contact.verifiedChannels = {};
                                 if (channels) {
                                     channels.filter(ch => ch.contact_id === c.id).forEach(ch => {
                                         if (!contact.channels[ch.type]) contact.channels[ch.type] = [];
                                         contact.channels[ch.type].push(ch.value);
+                                        if (ch.inbound_verified_at) {
+                                            contact.verifiedChannels[ch.value] = ch.inbound_verified_at;
+                                        }
                                     });
                                 }
                                 contact.notes = (notes || []).filter(n => n.contact_id === c.id);
@@ -117,8 +130,8 @@ class ContactStore {
 
                 contacts.forEach(contact => {
                     this._db.run(`
-                        INSERT INTO contacts (id, displayName, handle, lastContacted, lastChannel, profession, relationship, draft, status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO contacts (id, displayName, handle, lastContacted, lastChannel, profession, relationship, draft, status, primary_contact_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(handle) DO UPDATE SET
                             displayName = COALESCE(NULLIF(?, ''), displayName),
                             lastContacted = COALESCE(?, lastContacted),
@@ -126,11 +139,12 @@ class ContactStore {
                             profession = COALESCE(NULLIF(?, ''), profession),
                             relationship = COALESCE(NULLIF(?, ''), relationship),
                             draft = COALESCE(NULLIF(?, ''), draft),
-                            status = COALESCE(NULLIF(?, ''), status)
+                            status = COALESCE(NULLIF(?, ''), status),
+                            primary_contact_id = COALESCE(NULLIF(?, ''), primary_contact_id)
                     `,
                         [
-                            contact.id, contact.displayName, contact.handle, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status,
-                            contact.displayName, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status
+                            contact.id, contact.displayName, contact.handle, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status, contact.primary_contact_id,
+                            contact.displayName, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status, contact.primary_contact_id
                         ],
                         handleError
                     );
@@ -141,8 +155,9 @@ class ContactStore {
                             const values = contact.channels[type];
                             if (Array.isArray(values)) {
                                 values.forEach(v => {
-                                    this._db.run("INSERT OR REPLACE INTO contact_channels (contact_id, type, value) VALUES (?, ?, ?)",
-                                        [contact.id, type, v],
+                                    const verifiedAt = contact.verifiedChannels && contact.verifiedChannels[v] ? contact.verifiedChannels[v] : null;
+                                    this._db.run("INSERT OR REPLACE INTO contact_channels (contact_id, type, value, inbound_verified_at) VALUES (?, ?, ?, ?)",
+                                        [contact.id, type, v, verifiedAt],
                                         handleError
                                     );
                                 });
@@ -174,7 +189,7 @@ class ContactStore {
         if (!identifier) return null;
         const search = identifier.toLowerCase().trim();
 
-        return this._contacts.find(c => {
+        let found = this._contacts.find(c => {
             if (c.handle && c.handle.toLowerCase() === search) return true;
             if (c.displayName && c.displayName.toLowerCase() === search) return true;
             if (c.channels) {
@@ -185,6 +200,14 @@ class ContactStore {
             }
             return false;
         });
+
+        // Resolve Alias
+        if (found && found.primary_contact_id) {
+            const primary = this._contacts.find(c => c.id === found.primary_contact_id);
+            if (primary) return primary;
+        }
+
+        return found;
     }
 
     getByHandle(handle) {
@@ -262,6 +285,21 @@ class ContactStore {
         const toSave = Array.from(toSaveMap.values());
         if (toSave.length > 0) {
             await this.saveContacts(toSave);
+        }
+    }
+
+    async markChannelInboundVerified(handle, value, timestamp = new Date().toISOString()) {
+        await this.waitUntilReady();
+        const contact = this.findContact(handle);
+        if (!contact) return;
+
+        if (!contact.verifiedChannels) contact.verifiedChannels = {};
+
+        // Keep the earliest or latest timestamp depending on requirement, usually latest inbound is best proof or perhaps oldest to show trust duration.
+        // We'll just update it or set it if missing.
+        if (!contact.verifiedChannels[value] || new Date(contact.verifiedChannels[value]) < new Date(timestamp)) {
+            contact.verifiedChannels[value] = timestamp;
+            await this.saveContact(contact);
         }
     }
 
@@ -395,6 +433,42 @@ class ContactStore {
             this._db.run("UPDATE contact_suggestions SET status = 'rejected' WHERE id = ?", suggestionId, (err) => {
                 if (err) return reject(err);
                 this.refresh().then(resolve).catch(reject);
+            });
+        });
+    }
+
+    async mergeContacts(targetId, sourceId) {
+        if (!targetId || !sourceId || targetId === sourceId) return;
+        return new Promise((resolve, reject) => {
+            this._db.serialize(() => {
+                this._db.run("BEGIN TRANSACTION");
+                let hasError = false;
+                const handleError = (err) => {
+                    if (err) {
+                        hasError = true;
+                        console.error("Merge error:", err.message);
+                    }
+                };
+
+                // Move channels
+                this._db.run("UPDATE OR IGNORE contact_channels SET contact_id = ? WHERE contact_id = ?", [targetId, sourceId], handleError);
+                this._db.run("DELETE FROM contact_channels WHERE contact_id = ?", [sourceId], handleError);
+
+                // Move notes & suggestions
+                this._db.run("UPDATE contact_notes SET contact_id = ? WHERE contact_id = ?", [targetId, sourceId], handleError);
+                this._db.run("UPDATE contact_suggestions SET contact_id = ? WHERE contact_id = ?", [targetId, sourceId], handleError);
+
+                // Set alias pointer on the source profile
+                this._db.run("UPDATE contacts SET primary_contact_id = ? WHERE id = ?", [targetId, sourceId], handleError);
+
+                if (hasError) {
+                    this._db.run("ROLLBACK", () => reject(new Error("Merge transaction failed")));
+                } else {
+                    this._db.run("COMMIT", (err) => {
+                        if (err) return reject(err);
+                        this.refresh().then(resolve).catch(reject);
+                    });
+                }
             });
         });
     }
