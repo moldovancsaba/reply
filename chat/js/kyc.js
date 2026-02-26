@@ -289,6 +289,58 @@ function renderChannels(channels) {
   root.appendChild(wrap);
 }
 
+function renderConnectedServices(data, handle) {
+  const root = el('kyc-connected-services');
+  if (!root) return;
+  root.innerHTML = '';
+
+  const channels = data?.channels || {};
+  const phone = Array.isArray(channels.phone) ? channels.phone : [];
+  const email = Array.isArray(channels.email) ? channels.email : [];
+
+  const services = [];
+
+  const hasPhone = phone.length > 0 || (handle && !String(handle).includes('@') && String(handle).match(/^\\+?\\d+$/));
+  const hasEmail = email.length > 0 || (handle && String(handle).includes('@'));
+
+  if (hasPhone) {
+    services.push({ id: 'whatsapp', label: 'WhatsApp', value: 'whatsapp' });
+    services.push({ id: 'imessage', label: 'iMessage', value: 'imessage' });
+  }
+  if (hasEmail) {
+    services.push({ id: 'email', label: 'Email', value: 'email' });
+  }
+  if (data?.linkedinUrl) {
+    services.push({ id: 'linkedin', label: 'LinkedIn', value: data.linkedinUrl });
+  }
+
+  if (services.length === 0) {
+    root.appendChild(createEmptyRow('No known connected services.'));
+    return;
+  }
+
+  const wrap = document.createElement('div');
+  wrap.className = 'kyc-chip-wrap';
+
+  for (const svc of services) {
+    // We use the platform icons function to render nice chips
+    const chip = createPlatformValueNode(svc.value, {
+      channelHint: svc.id,
+      showText: false,
+      showIcon: true,
+      showFallbackIcon: true,
+      className: 'kyc-chip',
+    });
+    const labelEl = document.createElement('span');
+    labelEl.textContent = svc.label;
+    chip.appendChild(labelEl);
+    chip.title = svc.label;
+    wrap.appendChild(chip);
+  }
+
+  root.appendChild(wrap);
+}
+
 function renderSuggestions(handle, pendingSuggestions) {
   const root = el('kyc-suggestions');
   if (!root) return;
@@ -452,6 +504,8 @@ export async function loadKYCData(handle) {
 
   const nameInput = el('kyc-name-input');
   const roleInput = el('kyc-role-input');
+  const companyInput = el('kyc-company-input');
+  const linkedinInput = el('kyc-linkedin-input');
   const relInput = el('kyc-rel-input');
   const handleInput = el('kyc-handle-input');
 
@@ -461,6 +515,8 @@ export async function loadKYCData(handle) {
   // Loading state
   if (nameInput) nameInput.placeholder = 'Loading...';
   if (roleInput) roleInput.placeholder = 'Loading...';
+  if (companyInput) companyInput.placeholder = 'Loading...';
+  if (linkedinInput) linkedinInput.placeholder = 'Loading...';
   if (relInput) relInput.placeholder = 'Loading...';
 
   try {
@@ -475,12 +531,21 @@ export async function loadKYCData(handle) {
       roleInput.value = data.profession || '';
       roleInput.placeholder = 'Profession / Role';
     }
+    if (companyInput) {
+      companyInput.value = data.company || '';
+      companyInput.placeholder = 'Company';
+    }
+    if (linkedinInput) {
+      linkedinInput.value = data.linkedinUrl || '';
+      linkedinInput.placeholder = 'LinkedIn URL';
+    }
     if (relInput) {
       relInput.value = data.relationship || '';
       relInput.placeholder = 'Relationship';
     }
     renderNotes(data.notes);
     renderChannels(data.channels);
+    renderConnectedServices(data, handle);
     renderSuggestions(handle, data.pendingSuggestions);
     updateChannelOptionsFromKyc(handle, data);
   } catch (e) {
@@ -493,6 +558,14 @@ export async function loadKYCData(handle) {
       roleInput.value = '';
       roleInput.placeholder = 'Profession / Role';
     }
+    if (companyInput) {
+      companyInput.value = '';
+      companyInput.placeholder = 'Company';
+    }
+    if (linkedinInput) {
+      linkedinInput.value = '';
+      linkedinInput.placeholder = 'LinkedIn URL';
+    }
     if (relInput) {
       relInput.value = '';
       relInput.placeholder = 'Relationship';
@@ -500,6 +573,7 @@ export async function loadKYCData(handle) {
     renderHandlePreview(handle);
     renderNotes([]);
     renderChannels(null);
+    renderConnectedServices(null, handle);
     renderSuggestions(handle, []);
     updateChannelOptionsFromKyc(handle, null);
   }
@@ -520,6 +594,8 @@ export async function saveInlineProfile(btn = null) {
       handle,
       displayName: el('kyc-name-input')?.value?.trim() || '',
       profession: el('kyc-role-input')?.value?.trim() || '',
+      company: el('kyc-company-input')?.value?.trim() || '',
+      linkedinUrl: el('kyc-linkedin-input')?.value?.trim() || '',
       relationship: el('kyc-rel-input')?.value?.trim() || '',
     };
 
@@ -623,6 +699,8 @@ export async function saveProfile(btn = null) {
       handle,
       displayName: el('prof-name')?.value?.trim() || '',
       profession: el('prof-role')?.value?.trim() || '',
+      company: el('prof-company')?.value?.trim() || '',
+      linkedinUrl: el('prof-linkedin')?.value?.trim() || '',
       relationship: el('prof-rel')?.value?.trim() || '',
     };
 

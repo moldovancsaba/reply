@@ -35,9 +35,21 @@ tell application "Contacts"
         -- Get Job Title
         set theJob to (job title of p)
         if theJob is missing value then set theJob to ""
+        -- Get Organization
+        set theOrg to (organization of p)
+        if theOrg is missing value then set theOrg to ""
+        
+        -- Get LinkedIn URL
+        set linkedInUrl to ""
+        repeat with u in (urls of p)
+            if (value of u) contains "linkedin.com" then
+                set linkedInUrl to (value of u)
+                exit repeat
+            end if
+        end repeat
         
         -- Format as pseudo-CSV for easy parsing
-        set end of contactData to fullName & "|SEP|" & emailList & "|SEP|" & phoneList & "|SEP|" & theJob & "|SEP|" & theNote
+        set end of contactData to fullName & "|SEP|" & emailList & "|SEP|" & phoneList & "|SEP|" & theJob & "|SEP|" & theNote & "|SEP|" & theOrg & "|SEP|" & linkedInUrl
     end repeat
     
     set {TID, AppleScript's text item delimiters} to {AppleScript's text item delimiters, "\n"}

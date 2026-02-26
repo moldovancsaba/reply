@@ -1,6 +1,6 @@
 const { Ollama } = require('ollama');
-const { getContext } = require('./context-engine.js');
-const { search } = require('./vector-store.js');
+const { assembleReplyContext } = require('./context-engine.js');
+const { search, getGoldenExamples } = require('./vector-store.js');
 const fs = require('fs');
 const path = require('path');
 
@@ -26,56 +26,56 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
     return { suggestion: "Please provide a message to reply to.", explanation: "" };
   }
 
-  // 1. Get Stylistic Context & System Instructions
-  const context = await getContext(recipient);
-  const { styleInstructions, history, identityContext } = context;
-  const mergedGoldenExamples = [...(goldenExamples || []), ...(context.goldenExamples || [])];
+  // 1. Get Unified Context Bundle
+  const context = await assembleReplyContext(message, recipient);
+  const { identity, tone, history, facts } = context;
+
+  // Combine golden examples from all sources
+  const allGolden = [
+    ...(goldenExamples || []),
+    ...(context.goldenExamples || [])
+  ];
 
   // 2. Load the Holy Grail Persona
   const persona = getPersona();
 
-  // 3. Dynamic RAG: Fetch examples
-  let ragExamplesText = "";
+  // 3. Dynamic RAG: Style examples (fetch specifically for "Me" style)
+  let ragStyleText = "";
   try {
-    const results = await search(message, 20);
-    const myMessages = results
+    const results = await search(message, 15);
+    const myStyleExamples = results
       .filter(r => r.text && r.text.includes('] Me: '))
       .slice(0, 4);
 
-    if (myMessages.length > 0) {
-      ragExamplesText = "\n\n### RAG Context (Past messages sent by me):\n" +
-        myMessages.map(m => `- "${m.text.split('] Me: ')[1] || m.text}"`).join('\n');
+    if (myStyleExamples.length > 0) {
+      ragStyleText = "\n\n### STYLISTIC EXAMPLES (My past replies to mimic):\n" +
+        myStyleExamples.map(m => `- "${m.text.split('] Me: ')[1] || m.text}"`).join('\n');
     }
   } catch (e) {
-    console.error("reply-engine RAG fetch failed:", e.message);
+    console.error("reply-engine style RAG failed:", e.message);
   }
 
-  // 4. Construct context string
-  const contextText = contextSnippets
-    .map((s) => `[Source: ${s.path}]\n${s.text}`)
-    .join("\n\n---\n\n");
-
-  // 5. Construct Golden Examples
+  // 4. Construct Golden Examples String
   let goldenText = "";
-  if (mergedGoldenExamples && mergedGoldenExamples.length > 0) {
+  if (allGolden.length > 0) {
     goldenText = "\nGOLDEN EXAMPLES (Mimic this short, concise style):\n" +
-      mergedGoldenExamples.map((g, i) => `Ex ${i + 1}: "${g.text}"`).join("\n");
+      allGolden.slice(0, 5).map((g, i) => `Ex ${i + 1}: "${g.text}"`).join("\n");
   }
 
   // --- AGENT 1: THE ANALYZER ---
   const analyzerPrompt = `${persona}
-${styleInstructions || ""}
-${identityContext || ""}
+${tone || ""}
+${identity || ""}
 ${history || ""}
 ${goldenText}
-${ragExamplesText}
+${ragStyleText}
 
 Based on the knowledge base and history, analyze how to best reply to the message below.
 Draft a response that is helpful and factually correct based ONLY on the provided context.
 Also, provide a brief explanation of why you chose this response (tone, language, historical context).
 
-CONTEXT:
-${contextText || "No relevant notes discovered."}
+CONTEXT (Factual Snippets):
+${facts || contextSnippets.map((s) => `[Source: ${s.path}]\n${s.text}`).join("\n\n---\n\n") || "No relevant notes discovered."}
 
 INCOMING MESSAGE:
 "${message}"

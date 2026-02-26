@@ -98,10 +98,80 @@ async function getMessages(filter = {}) {
     });
 }
 
+/**
+ * Get a list of unique handles with their most recent message details.
+ * Highly optimized for conversation list rendering.
+ * @param {Object} filter - {limit, offset, q}
+ */
+async function getRecentConversations(filter = {}) {
+    const db = new sqlite3.Database(DB_PATH, sqlite3.OPEN_READONLY);
+    db.run("PRAGMA busy_timeout = 5000");
+
+    let query = `
+        WITH LatestMessages AS (
+            SELECT 
+                handle, 
+                text, 
+                source, 
+                timestamp, 
+                path,
+                ROW_NUMBER() OVER (PARTITION BY handle ORDER BY timestamp DESC) as rn
+            FROM unified_messages
+        )
+        SELECT handle, text, source, timestamp, path
+        FROM LatestMessages
+        WHERE rn = 1
+    `;
+
+    const params = [];
+    if (filter.q) {
+        query = `
+            WITH FilteredMessages AS (
+                SELECT * FROM unified_messages 
+                WHERE handle LIKE ? OR text LIKE ?
+            ),
+            LatestMessages AS (
+                SELECT 
+                    handle, 
+                    text, 
+                    source, 
+                    timestamp, 
+                    path,
+                    ROW_NUMBER() OVER (PARTITION BY handle ORDER BY timestamp DESC) as rn
+                FROM FilteredMessages
+            )
+            SELECT handle, text, source, timestamp, path
+            FROM LatestMessages
+            WHERE rn = 1
+        `;
+        params.push(`%${filter.q}%`, `%${filter.q}%`);
+    }
+
+    query += " ORDER BY timestamp DESC";
+
+    if (filter.limit) {
+        query += " LIMIT ?";
+        params.push(filter.limit);
+    }
+    if (filter.offset) {
+        query += " OFFSET ?";
+        params.push(filter.offset);
+    }
+
+    return new Promise((resolve, reject) => {
+        db.all(query, params, (err, rows) => {
+            db.close();
+            if (err) return reject(err);
+            resolve(rows);
+        });
+    });
+}
+
 module.exports = {
     initialize,
     saveMessages,
-    getMessages
+    getMessages,
+    getRecentConversations
 };
 
 if (require.main === module) {
