@@ -124,7 +124,31 @@ async function assembleReplyContext(message, handle) {
         const rawDocs = await search(message, 10);
         ragFacts = rawDocs
             .filter(d => !d.text.includes('] Me: ')) // Focus on facts, not my own style here
-            .slice(0, 5);
+            .slice(0, 5)
+            .map(d => {
+                let enrichedText = d.text;
+                if (d.is_annotated) {
+                    const summary = d.annotation_summary ? `\nSummary: ${d.annotation_summary}` : "";
+                    let tags = "";
+                    try {
+                        const parsedTags = JSON.parse(d.annotation_tags);
+                        if (Array.isArray(parsedTags) && parsedTags.length > 0) {
+                            tags = `\nTags: ${parsedTags.join(', ')}`;
+                        }
+                    } catch (e) { }
+
+                    let facts = "";
+                    try {
+                        const parsedFacts = JSON.parse(d.annotation_facts);
+                        if (Array.isArray(parsedFacts) && parsedFacts.length > 0) {
+                            facts = `\nKey Facts: ${parsedFacts.join(', ')}`;
+                        }
+                    } catch (e) { }
+
+                    enrichedText += `${summary}${tags}${facts}`;
+                }
+                return { path: d.path, text: enrichedText };
+            });
     } catch (e) {
         console.error("ContextEngine RAG failed:", e.message);
     }

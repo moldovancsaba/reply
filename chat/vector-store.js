@@ -86,6 +86,63 @@ async function addDocuments(docs) {
 }
 
 /**
+ * Update the annotation JSON and flag for an existing document.
+ * We must replace the entire row in LanceDB since partial updates aren't natively supported.
+ * @param {string} id - the unique doc ID
+ * @param {Object} annotationJson - the parsed JSON from Ollama
+ */
+async function annotateDocument(id, annotationJson) {
+    const db = await connect();
+    try {
+        const table = await db.openTable(TABLE_NAME);
+
+        // 1. Fetch existing row to retain text/vector/source/path
+        const results = await table.query()
+            .where(`id = '${escapeSqlString(id)}'`)
+            .limit(1)
+            .toArray();
+
+        let existing = results.length > 0 ? results[0] : null;
+
+        // Ensure it's a plain object
+        existing = existing && existing.toJSON ? existing.toJSON() : existing;
+
+        if (!existing) {
+            console.warn(`Cannot annotate: Doc ${id} not found.`);
+            return false;
+        }
+
+        // 2. Delete the old row
+        await table.delete(`id = '${escapeSqlString(id)}'`);
+
+        // Ensure existing vector is a plain float array, not an internal LanceDB Float32Array wrapper object
+        let flatVector = [];
+        if (existing.vector) {
+            flatVector = Array.from(existing.vector);
+        }
+
+        // 3. Re-insert with annotations
+        const newDoc = {
+            id: existing.id,
+            text: existing.text,
+            source: existing.source,
+            path: existing.path,
+            vector: flatVector,
+            is_annotated: true,
+            annotation_tags: JSON.stringify(annotationJson.tags || []),
+            annotation_summary: annotationJson.summary || "",
+            annotation_facts: JSON.stringify(annotationJson.facts || [])
+        };
+
+        await table.add([newDoc]);
+        return true;
+    } catch (e) {
+        console.error("Failed to annotate document:", e.message);
+        return false;
+    }
+}
+
+/**
  * Search for similar documents using Hybrid Search.
  * Combines Semantic (Vector) and Lexical (Keyword) search for maximum accuracy.
  * @param {string} query - The search text.
@@ -135,6 +192,34 @@ function dedupeDocsByStableKey(rows) {
         out.push(doc);
     }
     return out;
+}
+
+/**
+ * Retrieve all documents that haven't been annotated yet.
+ * @param {number} limit
+ */
+async function getUnannotatedDocuments(limit = 100) {
+    const db = await connect();
+    try {
+        const table = await db.openTable(TABLE_NAME);
+        const results = await table.query()
+            .where(`is_annotated = false`)
+            .limit(limit)
+            .execute();
+
+        if (Array.isArray(results)) return dedupeDocsByStableKey(results);
+
+        const out = [];
+        for await (const batch of results) {
+            for (const row of batch) {
+                out.push(row);
+            }
+        }
+        return dedupeDocsByStableKey(out);
+    } catch (e) {
+        console.error("Unannotated fetch error:", e.message);
+        return [];
+    }
 }
 
 /**
@@ -211,14 +296,12 @@ async function getLatestSubject(email) {
     return null;
 }
 
-module.exports = { addDocuments, search, getHistory, getSnippets, getLatestSubject, connect, annotateDocument, getGoldenExamples, getPendingSuggestions, deleteDocument };
-
 /**
  * Mark a document as a 'golden standard' example for RAG prompting.
  * @param {string} id 
  * @param {boolean} isAnnotated 
  */
-async function annotateDocument(id, isAnnotated) {
+async function annotateDocumentLegacy(id, isAnnotated) {
     const db = await connect();
     try {
         const table = await db.openTable(TABLE_NAME);
@@ -298,3 +381,5 @@ async function deleteDocument(id) {
         console.error("Failed to delete document:", e.message);
     }
 }
+
+module.exports = { getEmbedding, addDocuments, search, getHistory, getSnippets, getLatestSubject, annotateDocument, getUnannotatedDocuments, connect, getGoldenExamples, getPendingSuggestions, deleteDocument };
