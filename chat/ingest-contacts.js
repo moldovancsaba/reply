@@ -1,8 +1,9 @@
 const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const contactStore = require('./contact-store');
+const chatUtils = require('./utils/chat-utils');
 
-const CONTACTS_FILE = path.join(__dirname, 'data', 'contacts.json');
 const SCRIPT_PATH = path.join(__dirname, 'export-contacts.applescript');
 
 /**
@@ -21,11 +22,13 @@ function ingestContacts() {
 
             lines.forEach(line => {
                 if (!line) return;
-                const [name, emails, phones, job, notes] = line.split('|SEP|');
+                const [name, emails, phones, job, notes, company, linkedinUrl] = line.split('|SEP|');
 
                 newContactsData.push({
                     displayName: name,
                     profession: job,
+                    company: company || '',
+                    linkedinUrl: linkedinUrl || '',
                     notes: notes ? notes.split('[NL]').join('\n') : "",
                     channels: {
                         email: emails ? emails.split(',').map(e => e.trim()).filter(e => e) : [],
@@ -34,72 +37,98 @@ function ingestContacts() {
                 });
             });
 
-            mergeWithExisting(newContactsData);
-            resolve(newContactsData.length);
+            mergeWithExisting(newContactsData).then(() => {
+                resolve(newContactsData.length);
+            }).catch(reject);
         });
     });
 }
 
 /**
- * Merge new contacts with existing contacts.json.
+ * Merge new contacts with existing contactStore (SQLite).
  */
-function mergeWithExisting(newOnes) {
-    let existing = [];
-    if (fs.existsSync(CONTACTS_FILE)) {
-        existing = JSON.parse(fs.readFileSync(CONTACTS_FILE, 'utf8'));
-    }
+async function mergeWithExisting(newOnes) {
+    await contactStore.waitUntilReady();
 
-    newOnes.forEach(nc => {
-        // Check for duplicate by email or phone
-        let duplicate = existing.find(ex => {
-            const emailMatch = nc.channels.email.length > 0 && nc.channels.email.some(e => ex.channels.email.includes(e));
-            const phoneMatch = nc.channels.phone.length > 0 && nc.channels.phone.some(p => ex.channels.phone.includes(p));
-            return emailMatch || phoneMatch;
-        });
+    let mergedCount = 0;
+    for (const nc of newOnes) {
+        let duplicate = null;
 
-        // Fallback: Check by Name if no identifier matches were found
+        // Find by emails
+        for (const e of nc.channels.email) {
+            duplicate = contactStore.findContact(e);
+            if (duplicate) break;
+        }
+
+        // Find by phones
+        if (!duplicate) {
+            for (const p of nc.channels.phone) {
+                const normP = chatUtils.normalizePhone(p);
+                if (normP) {
+                    duplicate = contactStore.findContact(normP);
+                    if (duplicate) break;
+                }
+            }
+        }
+
+        // Find by name
         if (!duplicate && nc.displayName) {
-            duplicate = existing.find(ex =>
-                ex.displayName && ex.displayName.toLowerCase().trim() === nc.displayName.toLowerCase().trim()
-            );
+            duplicate = contactStore.findContact(nc.displayName);
         }
 
         if (duplicate) {
-            // Update existing with new info if missing
-            if (!duplicate.profession && nc.profession) duplicate.profession = nc.profession;
+            let updated = false;
+            if (!duplicate.profession && nc.profession) { duplicate.profession = nc.profession; updated = true; }
+            if (!duplicate.company && nc.company) { duplicate.company = nc.company; updated = true; }
+            if (!duplicate.linkedinUrl && nc.linkedinUrl) { duplicate.linkedinUrl = nc.linkedinUrl; updated = true; }
+            if (nc.displayName && !duplicate.displayName) { duplicate.displayName = nc.displayName; updated = true; }
 
-            // Merge notes: only add if new note text isn't already in the structured log
             if (nc.notes) {
-                if (!Array.isArray(duplicate.notes)) {
-                    duplicate.notes = [];
-                }
-                const alreadyExists = duplicate.notes.some(n => n.text === nc.notes);
+                const alreadyExists = duplicate.notes && duplicate.notes.some(n => n.text === nc.notes);
                 if (!alreadyExists) {
-                    duplicate.notes.push({
-                        id: 'note-' + Date.now() + Math.random().toString(36).substr(2, 5),
-                        text: nc.notes,
-                        timestamp: new Date().toISOString()
-                    });
+                    await contactStore.addNote(duplicate.handle || duplicate.id, nc.notes);
                 }
             }
-            // Merge arrays
-            nc.channels.email.forEach(e => { if (!duplicate.channels.email.includes(e)) duplicate.channels.email.push(e); });
-            nc.channels.phone.forEach(p => { if (!duplicate.channels.phone.includes(p)) duplicate.channels.phone.push(p); });
-        } else {
-            // Add as new
-            nc.id = "id-" + Math.random().toString(36).substr(2, 9);
-            // Ensure n.notes is an array even for new contacts
-            nc.notes = nc.notes ? [{
-                id: 'note-' + Date.now() + Math.random().toString(36).substr(2, 5),
-                text: nc.notes,
-                timestamp: new Date().toISOString()
-            }] : [];
-            existing.push(nc);
-        }
-    });
 
-    fs.writeFileSync(CONTACTS_FILE, JSON.stringify(existing, null, 2));
-    console.log(`Successfully merged ${newOnes.length} contacts.`);
+            if (!duplicate.channels) duplicate.channels = { phone: [], email: [] };
+            nc.channels.email.forEach(e => {
+                if (!duplicate.channels.email.includes(e)) { duplicate.channels.email.push(e); updated = true; }
+            });
+            nc.channels.phone.forEach(p => {
+                const normP = chatUtils.normalizePhone(p);
+                if (normP && !duplicate.channels.phone.includes(normP)) { duplicate.channels.phone.push(normP); updated = true; }
+            });
+
+            if (updated) {
+                await contactStore.saveContact(duplicate);
+            }
+            mergedCount++;
+        } else {
+            const handle = nc.channels.email[0] || (nc.channels.phone[0] ? chatUtils.normalizePhone(nc.channels.phone[0]) : null) || nc.displayName;
+            if (!handle) continue;
+
+            const newContact = {
+                id: "id-" + Math.random().toString(36).substr(2, 9),
+                displayName: nc.displayName,
+                profession: nc.profession,
+                company: nc.company,
+                linkedinUrl: nc.linkedinUrl,
+                handle: handle,
+                status: 'open',
+                channels: {
+                    email: nc.channels.email,
+                    phone: nc.channels.phone.map(p => chatUtils.normalizePhone(p)).filter(Boolean)
+                }
+            };
+            await contactStore.saveContact(newContact);
+            if (nc.notes) {
+                await contactStore.addNote(newContact.handle, nc.notes);
+            }
+            mergedCount++;
+        }
+    }
+
+    console.log(`Successfully merged ${mergedCount} contacts into SQLite database.`);
 }
 
 if (require.main === module) {

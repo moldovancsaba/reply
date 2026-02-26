@@ -105,4 +105,59 @@ ${historySnippets.map(s => `- [${s.date || 'Unknown Date'}] ${s.text.substring(0
     };
 }
 
-module.exports = { getContext };
+/**
+ * Unified Context Assembly for a specific reply.
+ * Combines style, identity, historical snippets, and chronological interaction history.
+ */
+async function assembleReplyContext(message, handle) {
+    const profile = loadStyleProfile();
+    const contact = contactStore.findContact(handle);
+
+    // 1. Identity & Style (Personas)
+    const baseContext = await getContext(handle);
+
+    // 2. Semantic Search (RAG) for facts/examples
+    // We fetch a larger pool and then prune by relevance or diversity
+    const { search } = require('./vector-store.js');
+    let ragFacts = [];
+    try {
+        const rawDocs = await search(message, 10);
+        ragFacts = rawDocs
+            .filter(d => !d.text.includes('] Me: ')) // Focus on facts, not my own style here
+            .slice(0, 5);
+    } catch (e) {
+        console.error("ContextEngine RAG failed:", e.message);
+    }
+
+    // 3. Chronological History (Immediate context)
+    const { getHistory } = require('./vector-store.js');
+    let conversationHistory = "";
+    try {
+        const allHistory = await getHistory(handle); // This handles prefixes internally
+        const recent = allHistory
+            .map(d => ({
+                text: d.text,
+                date: d.text.match(/\[(.*?)\]/)?.[1] || "0"
+            }))
+            .sort((a, b) => new Date(a.date) - new Date(b.date))
+            .slice(-10); // Last 10 messages
+
+        conversationHistory = recent.map(r => r.text).join('\n');
+    } catch (e) {
+        console.error("ContextEngine history fetch failed:", e.message);
+    }
+
+    // 4. Token Pruning (Manual but effective for 3.2B models)
+    // We prioritize: Identity > History > Style > RAG Facts
+    const contextBundle = {
+        identity: baseContext.identityContext,
+        tone: baseContext.styleInstructions,
+        history: conversationHistory || baseContext.history,
+        facts: ragFacts.map(f => `[Source: ${f.path}] ${f.text}`).join('\n\n'),
+        goldenExamples: baseContext.goldenExamples
+    };
+
+    return contextBundle;
+}
+
+module.exports = { getContext, assembleReplyContext };

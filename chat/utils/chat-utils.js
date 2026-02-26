@@ -13,16 +13,26 @@ function safeDateMs(v) {
     }
 }
 
+const { parsePhoneNumberFromString } = require('libphonenumber-js');
+
 function normalizePhone(phone) {
     if (!phone) return null;
     const raw = String(phone).trim();
     if (!raw) return null;
-    // Remove punctuation/spaces, keep only digits and a leading "+"
+
     let cleaned = raw.replace(/[^\d+]/g, "");
     if (cleaned.startsWith("00")) cleaned = `+${cleaned.slice(2)}`;
+
+    try {
+        const phoneNumber = parsePhoneNumberFromString(cleaned, 'HU');
+        if (phoneNumber && phoneNumber.isValid()) {
+            return phoneNumber.number; // e.g. +36701234567
+        }
+    } catch (e) { }
+
     const digits = cleaned.replace(/\D/g, "");
     if (digits.length < 6) return null;
-    return digits;
+    return "+" + digits;
 }
 
 function normalizeEmail(email) {

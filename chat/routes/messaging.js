@@ -30,6 +30,7 @@ const { getSnippets } = require("../knowledge");
 const { refineReply } = require("../gemini-client");
 const { execFile, spawn } = require("child_process");
 const { readSettings, resolveWhatsAppSendTransport, resolveWhatsAppOpenClawSendEnabled, resolveWhatsAppDesktopFallbackOnOpenClawFailure } = require("../settings-store");
+const messageStore = require("../message-store");
 
 const CONVERSATION_STATS_TTL_MS = 60 * 1000;
 const CONVERSATION_PREVIEW_SAMPLE_ROWS = 200;
@@ -43,41 +44,41 @@ const conversationsIndexCache = {
     items: [],
 };
 
-async function getConversationsIndexFresh() {
+async function getConversationsIndexFresh(q = "") {
     const now = Date.now();
-    if (conversationsIndexCache.buildPromise) return conversationsIndexCache.buildPromise;
-    if (conversationsIndexCache.items.length && (now - conversationsIndexCache.builtAtMs) < conversationsIndexCache.ttlMs) {
+    const cacheKey = q || "__all__";
+
+    // Check cache (we can keep a simple cache for non-search results or even for specific queries)
+    if (conversationsIndexCache.items.length && (now - conversationsIndexCache.builtAtMs) < conversationsIndexCache.ttlMs && !q) {
         return { items: conversationsIndexCache.items };
     }
 
-    conversationsIndexCache.buildPromise = (async () => {
-        const contacts = await contactStore.refresh();
-        const items = (contacts || [])
-            .slice()
-            .sort((a, b) => safeDateMs(b?.lastContacted) - safeDateMs(a?.lastContacted))
-            .map((c) => {
-                const handle = String(c?.handle || c?.displayName || "").trim();
-                const channel = (c?.lastChannel || inferChannelFromHandle(handle)).toString();
-                return {
-                    key: String(c?.id || handle),
-                    handle,
-                    latestHandle: handle,
-                    sortTime: safeDateMs(c?.lastContacted),
-                    channel,
-                    source: inferSourceFromChannel(channel),
-                    contact: c || null,
-                };
-            })
-            .filter((x) => x.handle);
+    const recentConversations = await messageStore.getRecentConversations({ q });
+    const contacts = await contactStore.refresh();
 
-        conversationsIndexCache.items = items;
-        conversationsIndexCache.builtAtMs = Date.now();
-        return { items };
-    })().finally(() => {
-        conversationsIndexCache.buildPromise = null;
+    const items = recentConversations.map(conv => {
+        const contact = contactStore.getByHandle(conv.handle);
+        const channel = conv.source || (contact?.lastChannel) || inferChannelFromHandle(conv.handle);
+
+        return {
+            key: contact?.id || conv.handle,
+            handle: conv.handle,
+            latestHandle: conv.handle,
+            sortTime: safeDateMs(conv.timestamp),
+            channel: channel,
+            source: conv.source || inferSourceFromChannel(channel),
+            contact: contact || null,
+            preview: stripMessagePrefix(conv.text || ""),
+            previewDate: conv.timestamp,
+        };
     });
 
-    return conversationsIndexCache.buildPromise;
+    if (!q) {
+        conversationsIndexCache.items = items;
+        conversationsIndexCache.builtAtMs = Date.now();
+    }
+
+    return { items };
 }
 
 async function getConversationStatsForHandle(handle, contact) {
@@ -147,21 +148,13 @@ async function serveConversations(req, res, url) {
     const q = (url.searchParams.get("q") || url.searchParams.get("query") || "").toString();
 
     try {
-        const { items } = await getConversationsIndexFresh();
-        const filtered = q && q.trim()
-            ? items.filter((c) => matchesQuery(buildSearchHaystack(c.contact, c), q))
-            : items;
-
-        const page = filtered.slice(offset, offset + limit);
-        const withStats = await Promise.all(page.map(async (item) => {
-            const stats = await getConversationStatsForHandle(item.handle, item.contact);
-            return { ...item, ...stats };
-        }));
+        const { items } = await getConversationsIndexFresh(q);
+        const page = items.slice(offset, offset + limit);
 
         writeJson(res, 200, {
-            contacts: withStats,
-            hasMore: filtered.length > offset + limit,
-            total: filtered.length,
+            contacts: page,
+            hasMore: items.length > offset + limit,
+            total: items.length,
         });
     } catch (err) {
         console.error("Error loading conversations:", err);
