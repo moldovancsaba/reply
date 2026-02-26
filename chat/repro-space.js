@@ -33,7 +33,7 @@ async function run() {
     // Test Exact Prefix with Space
     const exactPrefix = `linkedin://${TEST_HANDLE}`;
     console.log(`   Querying prefix: '${exactPrefix}'`);
-    let history = await getHistory(exactPrefix);
+    const history = await getHistory(exactPrefix);
 
     if (history.find(d => d.text.includes(TEST_TEXT))) {
         console.log(`   ✅ Found with SPACE prefix: '${exactPrefix}'`);

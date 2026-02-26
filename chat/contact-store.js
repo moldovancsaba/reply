@@ -1,6 +1,5 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
-const fs = require('fs');
 
 const DB_PATH = process.env.REPLY_CONTACTS_DB_PATH || path.join(__dirname, 'data', 'contacts.db');
 
@@ -31,7 +30,7 @@ class ContactStore {
                     lastMtimeMs INTEGER,
                     primary_contact_id TEXT
                 )`);
-                this._db.run("ALTER TABLE contacts ADD COLUMN primary_contact_id TEXT", (err) => {
+                this._db.run("ALTER TABLE contacts ADD COLUMN primary_contact_id TEXT", () => {
                     // Ignore expected error if column already exists
                 });
                 this._db.run(`CREATE TABLE IF NOT EXISTS contact_channels (
@@ -41,7 +40,7 @@ class ContactStore {
                     inbound_verified_at TEXT,
                     PRIMARY KEY (contact_id, type, value)
                 )`);
-                this._db.run("ALTER TABLE contact_channels ADD COLUMN inbound_verified_at TEXT", (err) => {
+                this._db.run("ALTER TABLE contact_channels ADD COLUMN inbound_verified_at TEXT", () => {
                     // Ignore expected error if column already exists
                 });
                 this._db.run(`CREATE TABLE IF NOT EXISTS contact_notes (
@@ -189,7 +188,7 @@ class ContactStore {
         if (!identifier) return null;
         const search = identifier.toLowerCase().trim();
 
-        let found = this._contacts.find(c => {
+        const found = this._contacts.find(c => {
             if (c.handle && c.handle.toLowerCase() === search) return true;
             if (c.displayName && c.displayName.toLowerCase() === search) return true;
             if (c.channels) {
