@@ -53,7 +53,9 @@ async function syncWhatsApp() {
     }
 
     const db = new sqlite3.Database(WA_DB_PATH, sqlite3.OPEN_READONLY);
+    db.run("PRAGMA journal_mode = WAL");
     db.run("PRAGMA busy_timeout = 5000");
+    db.run("PRAGMA synchronous = NORMAL");
     const state = loadState();
 
     console.log(`Starting WhatsApp sync from date > ${state.lastDate}...`);
@@ -180,6 +182,24 @@ async function syncWhatsApp() {
 
                 if (contactUpdates.length > 0) {
                     await contactStore.updateLastContactedBatch(contactUpdates);
+
+                    // 4. Mark inbound channels verified
+                    for (const r of rows) {
+                        if (!r.ZISFROMME) {
+                            let jid = r.ZFROMJID;
+                            if (jid && typeof jid === 'string' && jid.endsWith('@lid')) {
+                                const sessionJid = r.ZSESSIONCONTACTJID;
+                                if (sessionJid && typeof sessionJid === 'string' && sessionJid.includes('@s.whatsapp.net')) {
+                                    jid = sessionJid;
+                                }
+                            }
+                            if (jid) {
+                                let handle = jid.replace('@s.whatsapp.net', '').replace('@g.us', '').split('@')[0];
+                                const date = convertWADate(r.ZMESSAGEDATE);
+                                await contactStore.markChannelInboundVerified(handle, handle, date);
+                            }
+                        }
+                    }
 
                     // Also update pushNames for auto-suggested contacts
                     for (const u of contactUpdates) {

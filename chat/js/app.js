@@ -127,6 +127,7 @@ function setupEventListeners() {
         btnSuggest.textContent = '⏳ ...';
 
         let suggestion = '';
+        let explanation = '';
         if (handle) {
           try {
             const res = await fetch('/api/suggest', {
@@ -136,6 +137,7 @@ function setupEventListeners() {
             });
             const data = await res.json();
             suggestion = data?.suggestion || '';
+            explanation = data?.explanation || '';
           } catch (e) {
             console.warn('API suggest failed, using fallback', e);
           }
@@ -152,6 +154,17 @@ function setupEventListeners() {
         }
 
         chatInput.value = suggestion;
+
+        const explanationEl = document.getElementById('suggestion-explanation');
+        if (explanationEl) {
+          if (explanation) {
+            explanationEl.textContent = explanation;
+            explanationEl.style.display = 'block';
+          } else {
+            explanationEl.style.display = 'none';
+          }
+        }
+
         try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
       } finally {
         btnSuggest.disabled = false;

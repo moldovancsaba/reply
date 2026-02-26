@@ -81,9 +81,11 @@
 
 .health-card h4 {
     margin: 0;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--text-primary);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -94,30 +96,39 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--space-md);
+    margin-bottom: var(--space-sm);
+    min-height: 32px;
+    /* Unify alignment of values below */
 }
 
 .health-card-icon {
-    font-size: 1.2rem;
-    width: 24px;
-    height: 24px;
+    font-size: 1.1rem;
+    width: 20px;
+    height: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
 }
 
+.spinner-overlay.active {
+    display: flex;
+}
+
 .health-card-actions {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     align-items: center;
 }
 
 .health-card-meta {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     color: var(--text-muted, #888);
-    margin-top: var(--space-xs);
-    line-height: 1.4;
+    margin-top: 4px;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .health-card-meta-overflow {
@@ -127,11 +138,12 @@
 }
 
 .health-value {
-    font-size: 1.75rem;
-    font-weight: 700;
+    font-size: 1.85rem;
+    font-weight: 800;
     color: var(--text-primary);
-    margin: 0 0 var(--space-sm) 0;
+    margin: 0 0 4px 0;
     line-height: 1.1;
+    min-height: 2rem;
 }
 
 .health-status-tag {
@@ -146,6 +158,10 @@
     margin-bottom: auto;
     /* Pushes meta to bottom if needed */
     width: fit-content;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .health-status-tag.tag-online {
@@ -461,124 +477,173 @@
 }
 
 /* ============================================
-   Health Card Components
+   Global Feedback Components (Spinner & Toast)
    ============================================ */
-.health-card {
-    background: var(--bg-card);
-    border-radius: var(--radius-md);
-    padding: var(--space-md);
-    border: 1px solid var(--border);
-}
 
-.health-card h4 {
-    margin: 0;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.health-value {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin: var(--space-sm) 0;
-}
-
-.health-status-tag {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    padding: 4px 8px;
-    border-radius: var(--radius-sm);
-    background: rgba(255, 255, 255, 0.05);
-    display: inline-block;
-}
-
-.health-status-tag.tag-online {
-    color: var(--success);
-    background: rgba(48, 209, 88, 0.1);
-}
-
-.health-card-actions {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-}
-
-.health-card-actions button {
-    display: inline-flex;
+.spinner-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.4);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+    display: none;
     align-items: center;
     justify-content: center;
+    z-index: 9999;
 }
 
-.health-card-meta {
-    font-size: 0.8rem;
-    color: var(--text-muted, #888);
-    margin-top: var(--space-xs);
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top: 3px solid var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
 }
 
-.health-card-meta-overflow {
-    overflow: hidden;
-    text-overflow: ellipsis;
+#toast-container {
+    position: fixed;
+    bottom: var(--space-lg);
+    right: var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    z-index: 10000;
 }
 
-/* ============================================
-   KPI Display Components
-   ============================================ */
-.kpi-value {
-    font-size: 1.5rem;
-    font-weight: 700;
+.toast {
+    min-width: 280px;
+    max-width: 400px;
+    padding: var(--space-md);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
     color: var(--text-primary);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    animation: toast-in 0.3s ease-out;
+    cursor: pointer;
 }
 
-.kpi-label {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
+.toast-success {
+    border-left: 4px solid var(--success);
+}
+
+.toast-error {
+    border-left: 4px solid var(--danger);
+}
+
+.toast-warning {
+    border-left: 4px solid var(--warning);
+}
+
+.toast-icon {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.toast-message {
+    font-size: 0.9rem;
+    flex-grow: 1;
+}
+
+.toast-close {
+    font-size: 1.2rem;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.toast-close:hover {
+    opacity: 1;
+}
+
+@keyframes toast-in {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes toast-out {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
 }
 
 /* ============================================
-   Training Page Styles
+   AI Suggestion Components
    ============================================ */
-.training-section-header {
-    padding: 10px 20px;
-    margin: 0;
-    background: var(--bg-hover);
+.suggestion-explanation {
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: rgba(10, 132, 255, 0.05);
+    border: 1px solid rgba(10, 132, 255, 0.1);
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: var(--text-secondary);
+    font-style: italic;
+    animation: fade-in 0.3s ease-out;
+}
+
+/* ============================================
+   Triage Log Components
+   ============================================ */
+.triage-log {
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-sm) 0;
+}
+
+.triage-entry {
+    display: grid;
+    grid-template-columns: 80px 120px 1fr;
+    gap: 12px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
     border-bottom: 1px solid var(--border);
+    transition: background 0.2s ease;
+    align-items: center;
+}
+
+.triage-entry:last-child {
+    border-bottom: none;
+}
+
+.triage-entry:hover {
+    background: var(--bg-hover);
+}
+
+.triage-time {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-family: var(--font-mono, monospace);
+}
+
+.triage-action {
+    color: var(--primary);
     font-weight: 600;
 }
 
-.training-item {
-    padding: 15px 20px;
-    border-bottom: 1px solid var(--border);
-}
-
-.training-textarea {
-    width: 100%;
-    min-height: 80px;
-    padding: 10px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    background: var(--bg-input);
-    color: var(--text-primary);
-    font-family: inherit;
-    resize: vertical;
-}
-
-.training-textarea:focus {
-    outline: none;
-    border-color: var(--primary);
-}
-
-.training-meta {
-    font-size: 0.8rem;
+.triage-contact {
     color: var(--text-secondary);
-    margin-bottom: 5px;
-}
-
-.training-content {
-    font-size: 0.95rem;
-    margin-bottom: 10px;
-    white-space: pre-wrap;
-    padding: 10px;
-    background: var(--bg-hover);
-    border-radius: var(--radius-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }

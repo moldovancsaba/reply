@@ -103,12 +103,12 @@ export async function renderDashboard() {
   dashboard.innerHTML = '<div style="padding:40px; text-align:center; color:#666;">Loading dashboard...</div>';
 
   try {
-    // Fetch dashboard data
+    // Fetch dashboard data safely
     const [health, logs, bridgeData, openClawStatus] = await Promise.all([
-      fetchSystemHealth(),
-      fetchTriageLogs(10),
-      fetchBridgeSummary(5000),
-      fetchOpenClawStatus()
+      fetchSystemHealth().catch(e => ({ stats: {}, uptime: 0, channels: {} })),
+      fetchTriageLogs(10).catch(e => []),
+      fetchBridgeSummary(5000).catch(e => ({ summary: {} })),
+      fetchOpenClawStatus().catch(e => ({ status: 'offline', error: 'Failed to fetch status' }))
     ]);
 
     // Calculate uptime
@@ -140,18 +140,27 @@ export async function renderDashboard() {
       return date.toLocaleString();
     };
 
+    // Format OpenClaw status
+    const openClawError = openClawStatus.error || 'Gateway Unreachable';
+    const shortError = openClawError.length > 30 ? openClawError.slice(0, 27) + '...' : openClawError;
+    const openClawChannelsCount = Array.isArray(openClawStatus.channels) ? openClawStatus.channels.length : 0;
+    const openClawMeta = [
+      { text: `Channels: ${openClawChannelsCount} linked` },
+      { text: `Heartbeat: ${formatLastSync(openClawStatus.timestamp || new Date())}` }
+    ];
+    if (openClawStatus.status !== 'online' && openClawError.length > 25) {
+      openClawMeta.unshift({ text: openClawError, overflow: true, title: openClawError });
+    }
+
     // Render dashboard HTML
     dashboard.innerHTML = `
       ${renderHealthCard({
       title: 'OpenClaw Health',
       icon: '🛡️',
       value: openClawStatus.status === 'online' ? (openClawStatus.version || 'Connected') : 'Offline',
-      statusText: openClawStatus.status === 'online' ? '● Gateway Running' : `● ${openClawStatus.error || 'Gateway Unreachable'}`,
+      statusText: openClawStatus.status === 'online' ? '● Gateway Running' : `● ${shortError}`,
       statusClass: openClawStatus.status === 'online' ? 'tag-online' : 'tag-offline',
-      meta: [
-        { text: `Channels: ${openClawStatus.channels ? openClawStatus.channels.length : 0} linked` },
-        { text: `Last Heartbeat: ${formatLastSync(openClawStatus.timestamp || new Date())}` }
-      ],
+      meta: openClawMeta,
       actions: [
         { type: 'settings', channel: 'whatsapp', title: 'OpenClaw Settings' }
       ]
@@ -175,7 +184,7 @@ export async function renderDashboard() {
         icon: '/public/imessage.svg',
         value: imessageSync.processed || 0,
         statusText: '● Messages Scanned',
-        meta: [{ text: `Last Sync: ${formatLastSync(imessageSync.lastSync)}` }],
+        meta: [{ text: `Sync: ${formatLastSync(imessageSync.lastSync)}` }],
         actions: [
           { type: 'settings', channel: 'imessage', title: 'Configure iMessage' },
           { type: 'sync', channel: 'imessage', icon: '/public/imessage.svg', title: 'Sync iMessage' }
@@ -188,7 +197,7 @@ export async function renderDashboard() {
         icon: '/public/whatsapp.svg',
         value: whatsappSync.processed || 0,
         statusText: '● Messages Scanned',
-        meta: [{ text: `Last Sync: ${formatLastSync(whatsappSync.lastSync)}` }],
+        meta: [{ text: `Sync: ${formatLastSync(whatsappSync.lastSync)}` }],
         actions: [
           { type: 'settings', channel: 'whatsapp', title: 'Configure WhatsApp' },
           { type: 'sync', channel: 'whatsapp', icon: '/public/whatsapp.svg', title: 'Sync WhatsApp' }
@@ -201,7 +210,7 @@ export async function renderDashboard() {
         icon: '/public/linkedin.svg',
         value: linkedinMessagesSync.processed || 0,
         statusText: '● Messages Scanned',
-        meta: [{ text: `Last Sync: ${formatLastSync(linkedinMessagesSync.lastAt)}` }],
+        meta: [{ text: `Sync: ${formatLastSync(linkedinMessagesSync.lastAt)}` }],
         actions: [
           { type: 'settings', channel: 'linkedin', title: 'Configure LinkedIn Messages' },
           { type: 'sync', channel: 'linkedin', icon: '/public/linkedin.svg', title: 'Sync LinkedIn Messages (via Sidecar)' }
@@ -216,8 +225,8 @@ export async function renderDashboard() {
         statusText: mailSync.connected ? `● ${mailSync.provider === 'gmail' ? 'Gmail' : 'IMAP'} Connected` : '● Disconnected',
         statusClass: mailSync.connected ? 'tag-online' : 'tag-offline',
         meta: [
-          { overflow: true, title: mailSync.account || '', text: mailSync.account || 'No account set' },
-          { text: `Last Sync: ${formatLastSync(mailSync.lastAt)}` }
+          { overflow: true, title: mailSync.account || '', text: mailSync.account || 'No account' },
+          { text: `Sync: ${formatLastSync(mailSync.lastAt)}` }
         ],
         actions: [
           { type: 'settings', channel: 'mail', title: 'Configure Email' },
@@ -231,7 +240,7 @@ export async function renderDashboard() {
         icon: '/public/linkedin.svg',
         value: linkedinPostsSync.processed || 0,
         statusText: '● Posts Scanned',
-        meta: [{ text: `Last Sync: ${formatLastSync(linkedinPostsSync.lastAt)}` }],
+        meta: [{ text: `Sync: ${formatLastSync(linkedinPostsSync.lastAt)}` }],
         actions: [
           { type: 'settings', channel: 'linkedin-posts', title: 'Configure LinkedIn Posts' },
           { type: 'sync', channel: 'linkedin-posts', icon: '/public/linkedin.svg', title: 'Sync LinkedIn Posts (Import Archive)' }
@@ -244,7 +253,7 @@ export async function renderDashboard() {
         icon: '📝',
         value: notesSync.processed || 0,
         statusText: '● Notes Scanned',
-        meta: [{ text: `Last Sync: ${formatLastSync(notesSync.lastSync)}` }],
+        meta: [{ text: `Sync: ${formatLastSync(notesSync.lastSync)}` }],
         actions: [
           { type: 'settings', channel: 'notes', title: 'Configure Notes' },
           { type: 'sync', channel: 'notes', emoji: '📝', title: 'Sync Notes' }
@@ -256,10 +265,10 @@ export async function renderDashboard() {
         title: 'Contacts Sync',
         icon: '👤',
         value: health.stats?.total || 0,
-        statusText: '● Contacts in Database',
+        statusText: '● Shared Storage',
         meta: [
-          { text: `Sources: LI: ${health.stats?.byChannel?.linkedin || 0} | WA: ${health.stats?.byChannel?.whatsapp || 0} | Apple: ${health.stats?.byChannel?.apple_contacts || 0}` },
-          { text: `Last Sync: ${formatLastSync(contactSync.lastSync)}` }
+          { text: `LI: ${health.stats?.byChannel?.linkedin || 0} | WA: ${health.stats?.byChannel?.whatsapp || 0} | AP: ${health.stats?.byChannel?.apple_contacts || 0}` },
+          { text: `Sync: ${formatLastSync(contactSync.lastSync)}` }
         ],
         actions: [
           { type: 'sync', channel: 'contacts', emoji: '👤', title: 'Sync Contacts from Apple Contacts' }
@@ -274,9 +283,9 @@ export async function renderDashboard() {
         statusText: kycSync.state === 'running' ? '● Analyzing Contacts...' : '● Idle',
         statusClass: kycSync.state === 'running' ? 'tag-online' : '',
         meta: [
-          { text: `Progress: ${kycSync.index != null && kycSync.total ? Math.round((kycSync.index / kycSync.total) * 100) : 0}% (${kycSync.index != null ? kycSync.index + 1 : 0} / ${kycSync.total || 0})` },
-          { overflow: true, title: kycSync.message || '', text: kycSync.message || 'Waiting for next sweep...' },
-          { text: `Last Pulse: ${formatLastSync(kycSync.timestamp)}` }
+          { text: `Progress: ${kycSync.index != null && kycSync.total ? Math.round((kycSync.index / kycSync.total) * 100) : 0}% (${kycSync.index != null ? kycSync.index + 1 : 0}/${kycSync.total || 0})` },
+          { overflow: true, title: kycSync.message || '', text: kycSync.message || 'Waiting...' },
+          { text: `Pulse: ${formatLastSync(kycSync.timestamp)}` }
         ],
         actions: [
           { type: 'sync', channel: 'kyc', emoji: '🧠', title: 'Run Intelligence Sweep' }

@@ -131,6 +131,9 @@ async function syncMail() {
 
             // 1. Update Contact Store
             contactStore.updateLastContacted(cleanHandle, date, { channel: 'email' });
+            if (direction === 'contact') {
+                await contactStore.markChannelInboundVerified(cleanHandle, cleanHandle, date);
+            }
 
             // 2. Prepare Vector Document
             docs.push({

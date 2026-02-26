@@ -2,6 +2,14 @@
 
 Completed work only. The [GitHub Project Board](https://github.com/users/moldovancsaba/projects/1) is the source of truth for delivered items.
  
+## [0.3.0] - 2026-02-26
+### Added
+- **"Rock-Solid" Foundation**: Implemented `SyncGuard` process locking to prevent concurrent sync tasks and 409 Conflict handling.
+- **Atomic Persistence**: Refactored `StatusManager` to use atomic rename-based writes, eliminating JSON corruption risks.
+- **UI/UX Standardization**: Unified dashboard card alignment, fixed metadata text overflow with auto-ellipsis, and standardized header heights.
+- **SQLite Concurrency**: Enabled `WAL` mode and `busy_timeout` across all database modules for resilient multi-process access.
+- **Path Resilience**: Improved `VectorStore` to automatically handle and recreate missing directory structures.
+
 ## [0.2.0] - 2026-02-25
 ### Added
 - **"Holy Grail" Personal AI Pipeline**: Built an end-to-end local generation pipeline that automatically mimics the user's communication style (tone, sentence length, vocabulary, emojis).

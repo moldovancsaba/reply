@@ -382,33 +382,56 @@ function renderSuggestions(handle, pendingSuggestions) {
   root.appendChild(list);
 }
 
-function updateChannelOptionsFromKyc(handle, channels) {
+function updateChannelOptionsFromKyc(handle, data) {
   const sel = document.getElementById('channel-select');
   if (!sel) return;
 
-  const phone = Array.isArray(channels?.phone) ? channels.phone : [];
-  const email = Array.isArray(channels?.email) ? channels.email : [];
+  const channels = data?.channels || {};
+  const verified = data?.verifiedChannels || {};
+  const phone = Array.isArray(channels.phone) ? channels.phone : [];
+  const email = Array.isArray(channels.email) ? channels.email : [];
 
   const available = new Set();
+  const verifiedTypes = new Set();
+
   if (phone.length > 0 || (handle && !String(handle).includes('@'))) {
     available.add('imessage');
     available.add('whatsapp');
+    // Check if at least one phone number is verified
+    if (phone.some(p => verified[p]) || (handle && verified[handle] && !handle.includes('@'))) {
+      verifiedTypes.add('imessage');
+      verifiedTypes.add('whatsapp');
+    }
   }
   if (email.length > 0 || (handle && String(handle).includes('@'))) {
     available.add('email');
+    if (email.some(e => verified[e]) || (handle && verified[handle] && handle.includes('@'))) {
+      verifiedTypes.add('email');
+    }
   }
 
   Array.from(sel.options).forEach(o => {
-    o.disabled = !available.has(o.value);
-    o.hidden = !available.has(o.value);
+    const isAvailable = available.has(o.value);
+    const isVerified = verifiedTypes.has(o.value);
+
+    o.disabled = !isAvailable || !isVerified;
+    o.hidden = !isAvailable;
+
+    // Reset text first
+    const baseText = o.value.charAt(0).toUpperCase() + o.value.slice(1);
+    if (isAvailable && !isVerified) {
+      o.textContent = `${baseText} (🔒 Unverified)`;
+    } else {
+      o.textContent = baseText;
+    }
   });
 
-  // If current selection is no longer available, pick a sensible default.
-  if (!available.has(sel.value)) {
+  // If current selection is no longer available or not verified, pick a sensible default.
+  if (!available.has(sel.value) || !verifiedTypes.has(sel.value)) {
     const preferred = (window.currentChannel || '').toString().toLowerCase();
-    const pick = available.has(preferred)
+    const pick = (available.has(preferred) && verifiedTypes.has(preferred))
       ? preferred
-      : (available.has('imessage') ? 'imessage' : (available.values().next().value || 'imessage'));
+      : (verifiedTypes.has('imessage') ? 'imessage' : (verifiedTypes.has('whatsapp') ? 'whatsapp' : (verifiedTypes.has('email') ? 'email' : (available.values().next().value || 'imessage'))));
     sel.value = pick;
     window.setSelectedChannel?.(pick);
   }
@@ -459,7 +482,7 @@ export async function loadKYCData(handle) {
     renderNotes(data.notes);
     renderChannels(data.channels);
     renderSuggestions(handle, data.pendingSuggestions);
-    updateChannelOptionsFromKyc(handle, data.channels);
+    updateChannelOptionsFromKyc(handle, data);
   } catch (e) {
     console.warn('Failed to load KYC:', e);
     if (nameInput) {
@@ -666,6 +689,62 @@ window.loadKYCData = loadKYCData;
 window.dismissKYC = dismissKYC;
 window.acceptKYC = dismissKYC;
 window.editKYC = dismissKYC;
+
+window.openMergeModal = () => {
+  const handle = el('kyc-handle-input')?.value?.trim();
+  if (!handle) return alert('No contact selected');
+  const sourceHandleEl = el('merge-source-handle');
+  if (sourceHandleEl) sourceHandleEl.textContent = handle;
+  const targetHandleEl = el('merge-target-handle');
+  if (targetHandleEl) targetHandleEl.value = '';
+  const modal = el('merge-modal');
+  if (modal) modal.style.display = 'flex';
+};
+
+window.closeMergeModal = () => {
+  const modal = el('merge-modal');
+  if (modal) modal.style.display = 'none';
+};
+
+window.executeMerge = async (btn) => {
+  const sourceHandle = el('merge-source-handle')?.textContent?.trim();
+  const targetHandle = el('merge-target-handle')?.value?.trim();
+
+  if (!sourceHandle || !targetHandle) return alert('Target handle is required');
+  if (sourceHandle === targetHandle) return alert('Cannot merge a contact into itself');
+
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Merging...';
+
+  try {
+    const { mergeContacts } = await import('./api.js');
+    await mergeContacts(targetHandle, sourceHandle);
+
+    window.closeMergeModal();
+
+    // Close the current profile pane to avoid stale state and force UI refresh
+    const emptyState = el('kyc-empty-state');
+    const editor = el('kyc-content-editor');
+    if (emptyState) emptyState.style.display = 'block';
+    if (editor) editor.style.display = 'none';
+
+    // Refresh sidebar conversations
+    if (typeof window.loadConversations === 'function') {
+      try {
+        await window.loadConversations(false);
+      } catch (e) {
+        console.warn('Failed to refresh conversations after merge:', e);
+      }
+    }
+  } catch (e) {
+    console.error('Merge failed:', e);
+    alert(`Merge failed: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+};
 
 // Wire Analyze button (exists only when profile editor is visible)
 function wireAnalyzeButton() {

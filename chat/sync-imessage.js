@@ -127,11 +127,15 @@ async function sync() {
                 }));
                 await saveMessages(unifiedDocs);
 
-                // Update LastContacted in the store
+                // Update LastContacted and Inbound Verified in the store
                 const contactStore = require('./contact-store.js');
-                rows.forEach(row => {
-                    contactStore.updateLastContacted(row.handle_id, convertDate(row.date), { channel: 'imessage' });
-                });
+                for (const row of rows) {
+                    const date = convertDate(row.date);
+                    contactStore.updateLastContacted(row.handle_id, date, { channel: 'imessage' });
+                    if (!row.is_from_me && row.handle_id) {
+                        await contactStore.markChannelInboundVerified(row.handle_id, row.handle_id, date);
+                    }
+                }
 
                 const maxId = rows[rows.length - 1].ROWID;
                 saveState(maxId);

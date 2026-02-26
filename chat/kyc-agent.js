@@ -7,6 +7,7 @@ const { extractSignals } = require('./signal-extractor.js');
 const { withDefaults, readSettings } = require('./settings-store.js');
 const fs = require('fs');
 const path = require('path');
+const syncGuard = require('./utils/sync-guard');
 
 const MODEL = process.env.REPLY_KYC_OLLAMA_MODEL || "qwen2.5:7b";
 const KYC_DEBUG = process.env.REPLY_KYC_DEBUG === "1";
@@ -360,6 +361,9 @@ RETURN ONLY JSON:
                 if (/csaba|moldovan/i.test(v)) continue;
                 notesSet.add(v);
             }
+
+            // Yield to event loop between chunks to keep server responsive
+            await new Promise(r => setTimeout(r, 0));
         }
 
         const filteredEmails = Array.from(emailSet).filter((e) => {
@@ -402,12 +406,24 @@ RETURN ONLY JSON:
 }
 
 async function run() {
+    if (syncGuard.isLocked("kyc")) {
+        console.log("[KYC] Already running, skipping this trigger.");
+        return;
+    }
+    syncGuard.acquireLock("kyc");
+
     try {
         console.log("Starting KYC Agent analysis...");
         const { fetchHandles } = require('./ingest-imessage.js');
-        const handles = await fetchHandles(10);
+        const batchSize = parseInt(process.env.REPLY_KYC_BATCH_SIZE || "50", 10);
+        const handles = await fetchHandles(batchSize);
+        console.log(`Found ${handles.length} contacts for analysis (Batch Size: ${batchSize}).`);
 
-        for (const meta of handles) {
+        for (let i = 0; i < handles.length; i++) {
+            const meta = handles[i];
+            const progress = Math.round(((i + 1) / handles.length) * 100);
+            console.log(`[KYC Progress: ${progress}%] Analyzing ${i + 1}/${handles.length}: ${meta.id}...`);
+
             const profile = await analyzeContact(meta.id);
             if (profile) {
                 await mergeProfile(profile);
@@ -416,6 +432,8 @@ async function run() {
         console.log("Analysis complete.");
     } catch (e) {
         console.error("KYC Agent Runtime Error:", e);
+    } finally {
+        syncGuard.releaseLock("kyc");
     }
 }
 

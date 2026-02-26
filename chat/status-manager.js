@@ -25,12 +25,16 @@ class StatusManager {
 
     _write(filename, data) {
         const filepath = path.join(this.dataDir, filename);
+        const tmppath = `${filepath}.tmp`;
         try {
-            // Atomic write using temp file + rename is better, 
-            // but for now simple sync write with try/catch is an improvement.
-            fs.writeFileSync(filepath, JSON.stringify(data, null, 2));
+            // Atomic write: write to temp file then rename
+            fs.writeFileSync(tmppath, JSON.stringify(data, null, 2));
+            fs.renameSync(tmppath, filepath);
         } catch (e) {
             console.error(`[StatusManager] Error writing ${filename}:`, e.message);
+            if (fs.existsSync(tmppath)) {
+                try { fs.unlinkSync(tmppath); } catch (u) { }
+            }
         }
     }
 

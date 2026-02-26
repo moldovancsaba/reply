@@ -39,9 +39,10 @@ async function getEmbedding(text) {
  * Creates the database directory if it does not exist.
  */
 async function connect() {
-    const dbdir = path.dirname(DB_PATH);
-    if (!fs.existsSync(dbdir)) {
-        fs.mkdirSync(dbdir, { recursive: true });
+    const dbdir = path.resolve(DB_PATH);
+    const parentDir = path.dirname(dbdir);
+    if (!fs.existsSync(parentDir)) {
+        fs.mkdirSync(parentDir, { recursive: true });
     }
     return await lancedb.connect(DB_PATH);
 }
