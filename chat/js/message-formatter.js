@@ -48,8 +48,8 @@ function basicMarkdown(text) {
         // Bold / Italic
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/__(.*?)\__/g, '<strong>$1</strong>')
-        .replace(/_(.*?)\_/g, '<em>$1</em>')
+        .replace(/__(.*?)__/g, '<strong>$1</strong>')
+        .replace(/_(.*?)_/g, '<em>$1</em>')
         // Links
         .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>')
         // Lists (simple)

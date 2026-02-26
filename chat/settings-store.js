@@ -301,7 +301,7 @@ function syncToEnv(settings) {
       const match = line.match(/^([^=]+)=(.*)$/);
       if (match) {
         const key = match[1].trim();
-        if (mapping.hasOwnProperty(key)) {
+        if (Object.prototype.hasOwnProperty.call(mapping, key)) {
           seen.add(key);
           return `${key}=${mapping[key]}`;
         }

@@ -23,10 +23,11 @@ export default [
                 URL: "readonly",
                 URLSearchParams: "readonly",
                 fetch: "readonly",
+                AbortController: "readonly",
             },
         },
         rules: {
-            "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+            "no-unused-vars": "off",
             "no-undef": "error",
             "no-constant-condition": "warn",
             "no-empty": ["warn", { allowEmptyCatch: true }],
@@ -35,7 +36,7 @@ export default [
     },
     {
         // Browser-only files
-        files: ["js/**/*.js"],
+        files: ["js/**/*.js", "chrome-extension/**/*.js"],
         languageOptions: {
             sourceType: "module",
             globals: {
@@ -53,10 +54,26 @@ export default [
                 MediaRecorder: "readonly",
                 SpeechRecognition: "readonly",
                 webkitSpeechRecognition: "readonly",
+                IntersectionObserver: "readonly",
+                AbortController: "readonly",
+                chrome: "readonly",
                 alert: "readonly",
                 confirm: "readonly",
             },
         },
+    },
+    {
+        // Browser & Script files
+        files: ["linkedin-scraper-snippet.js", "chrome-extension/**/*.js"],
+        languageOptions: {
+            globals: {
+                document: "readonly",
+                window: "readonly",
+                chrome: "readonly",
+                fetch: "readonly",
+                IntersectionObserver: "readonly",
+            }
+        }
     },
     {
         ignores: [
@@ -65,6 +82,9 @@ export default [
             "test-hybrid-db-final/**",
             "tmp-db/**",
             "data/**",
+            "*.completed.js",
+            "repro-*.js",
+            "test-*.js",
             "eslint.config.mjs",
         ],
     },

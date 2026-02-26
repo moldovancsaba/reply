@@ -25,7 +25,7 @@ function normalizeLinkedInHandle(input) {
 
     // 3. Basic normalization: lowercase, remove spaces, remove special characters
     // This matches the logic in ingest-linkedin-contacts.js
-    let normalized = clean
+    const normalized = clean
         .toLowerCase()
         .replace(/\s+/g, "") // Remove all spaces
         .replace(/[^\w-]/g, ""); // Keep alphanumeric and hyphens

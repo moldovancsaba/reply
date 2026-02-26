@@ -67,7 +67,7 @@ async function ingestLinkedInContactsFromString(content) {
         const profession = position && company ? `${position} @ ${company}` : (position || company || "");
         const { normalizeLinkedInHandle } = require('./linkedin-utils.js');
         const liHandle = normalizeLinkedInHandle(displayName);
-        let handle = email ? email : liHandle;
+        const handle = email ? email : liHandle;
         const contactId = 'li-con-' + Buffer.from(handle).toString('hex').slice(-12);
 
         const contactData = {

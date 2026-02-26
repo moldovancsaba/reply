@@ -92,7 +92,7 @@ function normalizeLinkedInHandle(input) {
     if (clean.includes("linkedin.com/in/")) {
         clean = clean.split("linkedin.com/in/")[1].split("/")[0].split("?")[0];
     }
-    let normalized = clean
+    const normalized = clean
         .toLowerCase()
         .replace(/\s+/g, "")
         .replace(/[^\w-]/g, "");
