@@ -31,6 +31,7 @@ const { refineReply } = require("../gemini-client");
 const { execFile, spawn } = require("child_process");
 const { readSettings, resolveWhatsAppSendTransport, resolveWhatsAppOpenClawSendEnabled, resolveWhatsAppDesktopFallbackOnOpenClawFailure } = require("../settings-store");
 const messageStore = require("../message-store");
+const hatori = require("../hatori-client.js");
 
 const CONVERSATION_STATS_TTL_MS = 60 * 1000;
 const CONVERSATION_PREVIEW_SAMPLE_ROWS = 200;
@@ -248,8 +249,29 @@ async function serveSuggest(req, res) {
         }
 
         const snippets = await getSnippets(message, 3);
-        const { suggestion, explanation } = await generateReply(message, snippets, handle);
-        writeJson(res, 200, { suggestion, explanation });
+
+        // Ingest into Hatori before suggestion if enabled
+        if (process.env.REPLY_USE_HATORI === '1') {
+            try {
+                await hatori.ingestEvent({
+                    external_event_id: `reply:msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    kind: handle.includes('@') ? 'email' : 'imessage',
+                    conversation_id: `reply:${handle}`,
+                    sender_id: `reply:${handle}`,
+                    content: message,
+                    metadata: { source: 'api-suggest' }
+                });
+            } catch (e) {
+                console.warn("[Hatori] Ingest failed, continuing to suggestion:", e.message);
+            }
+        }
+
+        const suggestionResult = await generateReply(message, snippets, handle);
+        const suggestion = typeof suggestionResult === 'string' ? suggestionResult : (suggestionResult.suggestion || "");
+        const explanation = suggestionResult.explanation || "";
+        const hatori_id = suggestionResult.hatori_id || null;
+
+        writeJson(res, 200, { suggestion, explanation, hatori_id });
     } catch (e) {
         writeJson(res, 500, { error: e.message || "Suggest failed" });
     }
@@ -450,6 +472,26 @@ async function serveSendWhatsApp(req, res) {
 function handleWhatsAppDesktopSend(req, res, recipient, text, dryRun, recipientRaw) {
     // [OMITTED FULL APPLESCRIPT FOR BREVITY IN THIS DRAFT, BUT IT WOULD BE HERE]
     writeJson(res, 501, { error: "WhatsApp Desktop Automation refactor pending" });
+}
+
+async function serveHatoriOutcome(req, res) {
+    try {
+        const payload = await readJsonBody(req);
+        if (process.env.REPLY_USE_HATORI !== '1') {
+            return writeJson(res, 403, { error: "Hatori is disabled" });
+        }
+        const result = await hatori.reportOutcome({
+            external_outcome_id: payload.external_outcome_id || `reply:outcome-${Date.now()}`,
+            assistant_interaction_id: payload.assistant_interaction_id,
+            status: payload.status, // sent_as_is | edited_then_sent | not_sent
+            original_text: payload.original_text,
+            final_sent_text: payload.final_sent_text,
+            diff: payload.diff
+        });
+        writeJson(res, 200, result);
+    } catch (e) {
+        writeJson(res, 500, { error: e.message });
+    }
 }
 
 module.exports = {

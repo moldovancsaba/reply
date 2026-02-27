@@ -31,6 +31,7 @@ const { extractSignals } = require('./signal-extractor.js');
 const { mergeProfile } = require('./kyc-merge.js');
 const { execFile } = require('child_process');
 const statusManager = require('./status-manager.js');
+const hatori = require('./hatori-client.js');
 
 /**
  * Optimized Background Worker (SQLite version)
@@ -339,6 +340,18 @@ async function poll() {
                     const next = (Number.isFinite(processed) && processed >= 0 ? processed : 0) + 1;
                     statusManager.update('imessage', { processed: next, lastSync: new Date().toISOString() });
                 } catch { }
+
+                // 1.5. Ingest into Hatori if enabled
+                if (process.env.REPLY_USE_HATORI === '1') {
+                    hatori.ingestEvent({
+                        external_event_id: `reply:live-${id}`,
+                        kind: 'imessage',
+                        conversation_id: `reply:${handle}`,
+                        sender_id: fromMe ? 'reply:me' : `reply:${handle}`,
+                        content: text,
+                        metadata: { source: 'iMessage-live', date }
+                    }).catch(e => console.warn(`[Hatori] Background ingest failed for ${id}:`, e.message));
+                }
 
                 // 2. Track activity
                 if (handle) {
