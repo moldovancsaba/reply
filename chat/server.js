@@ -113,6 +113,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/api/suggest") return messagingRoutes.serveSuggest(req, res);
   if (pathname === "/api/refine-reply") return messagingRoutes.serveRefineReply(req, res);
   if (pathname === "/api/feedback") return messagingRoutes.serveFeedback(req, res);
+  if (pathname === "/api/hatori/outcome") return messagingRoutes.serveHatoriOutcome(req, res);
 
   // Sending (Sensitive)
   if (pathname === "/api/send-whatsapp") {
