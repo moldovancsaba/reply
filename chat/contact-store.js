@@ -306,12 +306,13 @@ class ContactStore {
         }
     }
 
-    async setDraft(handle, text) {
+    async setDraft(handle, text, meta = {}) {
         await this.waitUntilReady();
         const contact = this.findContact(handle);
         if (contact) {
             contact.draft = text;
-            contact.status = text ? "draft" : "open";
+            contact.draft_hatori_id = meta.hatori_id || null;
+            contact.status = text ? 'draft' : 'open';
             await this.saveContact(contact);
         }
     }

@@ -302,6 +302,15 @@ export async function selectContact(handle) {
     // Load messages
     await window.loadMessages(handle);
 
+    // Seed {hatori} draft into composer if one exists for this contact
+    try {
+        if (contact && contact.draft && typeof window.seedHatoriDraft === 'function') {
+            window.seedHatoriDraft(contact.draft, contact.draft_hatori_id || null);
+        }
+    } catch (e) {
+        console.warn('[selectContact] Failed to seed hatori draft:', e);
+    }
+
     // Load KYC
     try {
         if (typeof window.loadKYCData === 'function') {
