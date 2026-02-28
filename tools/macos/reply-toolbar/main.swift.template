@@ -1,0 +1,305 @@
+import AppKit
+import Foundation
+import CoreText
+
+final class MenuApp: NSObject, NSApplicationDelegate {
+    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    private let menu = NSMenu()
+    
+    private let productItem = NSMenuItem(title: "{reply} v__APP_VERSION__", action: nil, keyEquivalent: "")
+    private let healthItem = NSMenuItem(title: "Health: checking...", action: nil, keyEquivalent: "")
+    private let detailItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+
+    private let depsHeaderItem = NSMenuItem(title: "--- Dependencies ---", action: nil, keyEquivalent: "")
+    private let hatoriItem = NSMenuItem(title: "Hatori API: checking...", action: nil, keyEquivalent: "")
+    private let ollamaItem = NSMenuItem(title: "Ollama: checking...", action: nil, keyEquivalent: "")
+    private let openclawItem = NSMenuItem(title: "OpenClaw: checking...", action: nil, keyEquivalent: "")
+
+    private let syncHeaderItem = NSMenuItem(title: "--- Ingests ---", action: nil, keyEquivalent: "")
+    private let imessageItem = NSMenuItem(title: "iMessage: ...", action: nil, keyEquivalent: "")
+    private let whatsappItem = NSMenuItem(title: "WhatsApp: ...", action: nil, keyEquivalent: "")
+    private let mailItem = NSMenuItem(title: "Mail: ...", action: nil, keyEquivalent: "")
+    
+    private let basicsHeaderItem = NSMenuItem(title: "--- Basics ---", action: nil, keyEquivalent: "")
+    private let advancedHeaderItem = NSMenuItem(title: "--- Advanced ---", action: nil, keyEquivalent: "")
+    
+    private var timer: Timer?
+    private let repoRoot = "__REPO_ROOT__"
+    private var iconFont: NSFont?
+    
+    private let replyPort = "45311"
+    private let hatoriPort = "23572"
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        configureMenuBarIcon()
+
+        productItem.isEnabled = false
+        healthItem.isEnabled = false
+        detailItem.isEnabled = false
+        depsHeaderItem.isEnabled = false
+        hatoriItem.isEnabled = false
+        ollamaItem.isEnabled = false
+        openclawItem.isEnabled = false
+        syncHeaderItem.isEnabled = false
+        imessageItem.isEnabled = false
+        whatsappItem.isEnabled = false
+        mailItem.isEnabled = false
+        basicsHeaderItem.isEnabled = false
+        advancedHeaderItem.isEnabled = false
+
+        menu.addItem(productItem)
+        menu.addItem(healthItem)
+        menu.addItem(detailItem)
+        menu.addItem(NSMenuItem.separator())
+
+        menu.addItem(depsHeaderItem)
+        menu.addItem(hatoriItem)
+        menu.addItem(ollamaItem)
+        menu.addItem(openclawItem)
+        menu.addItem(NSMenuItem.separator())
+
+        menu.addItem(syncHeaderItem)
+        menu.addItem(imessageItem)
+        menu.addItem(whatsappItem)
+        menu.addItem(mailItem)
+        menu.addItem(NSMenuItem.separator())
+        
+        menu.addItem(basicsHeaderItem)
+        menu.addItem(item("Open UI /", #selector(openUIWorkspace)))
+        menu.addItem(item("Open UI /settings", #selector(openUISettings)))
+        menu.addItem(item("Open UI /contacts", #selector(openUIContacts)))
+        menu.addItem(item("Open API Health", #selector(openReplyHealth)))
+
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(advancedHeaderItem)
+        menu.addItem(item("Restart Service", #selector(restartService)))
+        menu.addItem(item("Stop Service", #selector(stopService)))
+        menu.addItem(item("Start/Install Service", #selector(startService)))
+        menu.addItem(item("Check System Status", #selector(checkStatus)))
+        menu.addItem(item("Service Logs", #selector(serviceLogs)))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(item("Quit", #selector(quitApp)))
+
+        statusItem.menu = menu
+        refreshHealth()
+        timer = Timer.scheduledTimer(timeInterval: 5.0, target: self, selector: #selector(refreshHealth), userInfo: nil, repeats: true)
+    }
+
+    private func configureMenuBarIcon() {
+        guard let button = statusItem.button else { return }
+        let bundled = Bundle.main.url(forResource: "MaterialSymbolsOutlined", withExtension: "ttf")
+        let fontURL = bundled ?? URL(fileURLWithPath: repoRoot)
+            .appendingPathComponent("tools/macos/reply-toolbar/MaterialSymbolsOutlined.ttf")
+        
+        if FileManager.default.fileExists(atPath: fontURL.path) {
+            CTFontManagerRegisterFontsForURL(fontURL as CFURL, .process, nil)
+        }
+        
+        if let font = NSFont(name: "Material Symbols Outlined", size: 18) {
+            iconFont = font
+            button.imagePosition = .imageOnly
+            button.image = makeGlyphImage(font: font, color: .labelColor)
+            return
+        }
+        button.title = "R"
+    }
+
+    private func item(_ title: String, _ action: Selector) -> NSMenuItem {
+        let m = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        m.target = self
+        return m
+    }
+
+    private func runShell(_ command: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = ["-lc", "cd \(repoRoot) && \(command)"]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        do {
+            try process.run()
+        } catch {
+            healthItem.title = "Health: command failed"
+            detailItem.title = "Failed to run command"
+        }
+    }
+
+    @objc private func refreshHealth() {
+        fetchReplyHealth()
+        fetchHatoriHealth()
+        fetchOpenClawHealth()
+    }
+
+    private func fetchReplyHealth() {
+        guard let url = URL(string: "http://127.0.0.1:\(replyPort)/api/health") else { return }
+        let task = URLSession.shared.dataTask(with: url) { data, response, _ in
+            DispatchQueue.main.async {
+                guard
+                    let http = response as? HTTPURLResponse,
+                    http.statusCode == 200,
+                    let data = data,
+                    let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                else {
+                    self.updateIconColor(isUp: false)
+                    self.healthItem.title = "Health: API down"
+                    self.detailItem.title = "DB: unknown  Hub: \(self.replyPort)"
+                    self.imessageItem.title = "iMessage: down"
+                    self.whatsappItem.title = "WhatsApp: down"
+                    self.mailItem.title = "Mail: down"
+                    return
+                }
+
+                self.updateIconColor(isUp: true)
+                self.healthItem.title = "Health: API up"
+                self.detailItem.title = "DB: ok"
+                
+                let channels = (obj["channels"] as? [String: Any]) ?? [:]
+                
+                let imsgObj = (channels["imessage"] as? [String: Any]) ?? [:]
+                let waObj = (channels["whatsapp"] as? [String: Any]) ?? [:]
+                let mailObj = (channels["mail"] as? [String: Any]) ?? [:]
+                
+                let imsg = (imsgObj["processed"] as? Int) ?? 0
+                let wa = (waObj["processed"] as? Int) ?? 0
+                let mail = (mailObj["processed"] as? Int) ?? 0
+                
+                self.imessageItem.title = "iMessage: \(imsg) messages"
+                self.whatsappItem.title = "WhatsApp: \(wa) messages"
+                self.mailItem.title = "Mail: \(mail) records"
+            }
+        }
+        task.resume()
+    }
+    
+    private func fetchHatoriHealth() {
+        guard let url = URL(string: "http://127.0.0.1:\(hatoriPort)/v1/health") else { return }
+        let task = URLSession.shared.dataTask(with: url) { data, response, _ in
+            DispatchQueue.main.async {
+                guard
+                    let http = response as? HTTPURLResponse,
+                    http.statusCode == 200,
+                    let data = data,
+                    let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                else {
+                    self.hatoriItem.title = "Hatori API: down"
+                    self.ollamaItem.title = "Ollama: down"
+                    return
+                }
+                
+                self.hatoriItem.title = "Hatori API: up"
+                let runtime = (obj["runtime_status"] as? [String: Any]) ?? [:]
+                let ollama = (runtime["ollama"] as? [String: Any]) ?? [:]
+                let ollamaUp = (ollama["ok"] as? Bool) == true
+                self.ollamaItem.title = "Ollama: \(ollamaUp ? "up" : "down")"
+            }
+        }
+        task.resume()
+    }
+
+    private func fetchOpenClawHealth() {
+        guard let url = URL(string: "http://127.0.0.1:\(replyPort)/api/openclaw/status") else { return }
+        let task = URLSession.shared.dataTask(with: url) { data, response, _ in
+            DispatchQueue.main.async {
+                guard
+                    let http = response as? HTTPURLResponse,
+                    http.statusCode == 200,
+                    let data = data,
+                    let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                else {
+                    self.openclawItem.title = "OpenClaw: unknown"
+                    return
+                }
+                
+                let status = (obj["status"] as? String) ?? "unknown"
+                self.openclawItem.title = "OpenClaw: \(status)"
+            }
+        }
+        task.resume()
+    }
+
+    private func updateIconColor(isUp: Bool) {
+        guard let button = statusItem.button else { return }
+        guard let font = iconFont else { return }
+        let color: NSColor = isUp ? .systemBlue : .systemRed
+        button.imagePosition = .imageOnly
+        button.image = makeGlyphImage(font: font, color: color)
+    }
+
+    private func makeGlyphImage(font: NSFont, color: NSColor) -> NSImage {
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size)
+        image.lockFocus()
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: color
+        ]
+        // Use a chat bubble or target glyph
+        let glyph = NSString(string: "quickreply")
+        let textSize = glyph.size(withAttributes: attrs)
+        let rect = NSRect(
+            x: (size.width - textSize.width) / 2.0,
+            y: (size.height - textSize.height) / 2.0 - 0.5,
+            width: textSize.width,
+            height: textSize.height
+        )
+        glyph.draw(in: rect, withAttributes: attrs)
+        image.unlockFocus()
+        image.isTemplate = false
+        return image
+    }
+
+    @objc private func openUIWorkspace() {
+        NSWorkspace.shared.open(URL(string: "http://127.0.0.1:\(replyPort)/")!)
+    }
+
+    @objc private func openUISettings() {
+        NSWorkspace.shared.open(URL(string: "http://127.0.0.1:\(replyPort)/settings.html")!)
+    }
+
+    @objc private func openUIContacts() {
+        NSWorkspace.shared.open(URL(string: "http://127.0.0.1:\(replyPort)/contacts.html")!)
+    }
+
+    @objc private func openReplyHealth() {
+        NSWorkspace.shared.open(URL(string: "http://127.0.0.1:\(replyPort)/api/health")!)
+    }
+
+    @objc private func startService() {
+        runShell("make run")
+    }
+    
+    @objc private func restartService() {
+        runShell("make stop && make run")
+    }
+
+    @objc private func stopService() {
+        runShell("make stop")
+    }
+
+    @objc private func checkStatus() {
+        runShell("make status")
+        let script = "tell application \"Terminal\" to do script \"cd \(repoRoot) && ./runbook/status.sh\""
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+        try? process.run()
+    }
+    
+    @objc private func serviceLogs() {
+        let script = "tell application \"Terminal\" to do script \"tail -f /tmp/reply-hub.log\""
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+        try? process.run()
+    }
+
+    @objc private func quitApp() {
+        NSApplication.shared.terminate(nil)
+    }
+}
+
+let app = NSApplication.shared
+let delegate = MenuApp()
+app.delegate = delegate
+app.setActivationPolicy(.accessory)
+app.run()

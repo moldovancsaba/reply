@@ -268,8 +268,6 @@ async function loadIntoForm() {
   el('settings-global-require-token').checked = global.requireOperatorToken !== false;
   el('settings-global-local-writes').checked = global.localWritesOnly !== false;
   el('settings-global-require-approval').checked = global.requireHumanApproval !== false;
-  el('settings-global-desktop-fallback').checked = global.desktopFallback === true;
-  el('settings-global-whatsapp-transport').value = global.whatsappTransport || 'openclaw_cli';
 
   el('settings-imap-host').value = imap.host || '';
   el('settings-imap-port').value = imap.port ? String(imap.port) : '993';
@@ -360,8 +358,6 @@ async function onSave() {
         requireOperatorToken: el('settings-global-require-token').checked,
         localWritesOnly: el('settings-global-local-writes').checked,
         requireHumanApproval: el('settings-global-require-approval').checked,
-        desktopFallback: el('settings-global-desktop-fallback').checked,
-        whatsappTransport: el('settings-global-whatsapp-transport').value,
       },
       gmail: {
         clientId: el('settings-gmail-client-id').value.trim(),
