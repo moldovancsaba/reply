@@ -20,12 +20,15 @@ let activeHatoriContext = null; // { hatori_id, original_draft }
 
 /**
  * Seeds the composer with a {hatori} draft and records annotation context.
+ * @param {string} draftText - The text to seed.
+ * @param {string} hatoriId - Associated {hatori} generation ID.
+ * @param {boolean} force - If true, overwrites existing text.
  */
-function seedHatoriDraft(draftText, hatoriId) {
+function seedHatoriDraft(draftText, hatoriId, force = false) {
     const chatInput = document.getElementById('chat-input');
     if (!chatInput || !draftText) return;
-    // Only pre-fill if the composer is currently empty
-    if (!chatInput.value.trim()) {
+    // Only pre-fill if the composer is currently empty, or if forced (regenerate)
+    if (force || !chatInput.value.trim()) {
         chatInput.value = draftText;
         chatInput.dispatchEvent(new Event('input', { bubbles: true }));
     }
