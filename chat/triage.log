@@ -215,3 +215,8 @@
 {"timestamp":"2026-02-24T07:06:23.772Z","ruleId":"meeting-requests","action":"log","tag":"Scheduling","sender":"linkedin://mikelmull","preview":"Unlike Apollo (data provider) and RogerRoger (basi..."}
 {"timestamp":"2026-02-24T07:06:29.410Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://csabazoltanmoldovan","preview":"Compare your service to Apollo and Rogerroger so t..."}
 {"timestamp":"2026-02-24T07:06:32.532Z","ruleId":"linkedin-catchall","action":"log","tag":"LinkedIn","sender":"linkedin://mikelmull","preview":"Even if the AI will say Its ME..."}
+{"timestamp":"2026-02-28T05:38:46.085Z","ruleId":"meeting-requests","action":"log","tag":"Scheduling","sender":"whatsapp://+1555000111","preview":"Hi, I'm interested in your services. Can we schedu..."}
+{"timestamp":"2026-02-28T05:40:20.717Z","ruleId":"meeting-requests","action":"log","tag":"Scheduling","sender":"whatsapp://+1555000111","preview":"Hi, I'm interested in your services. Can we schedu..."}
+{"timestamp":"2026-02-28T05:44:12.573Z","ruleId":"meeting-requests","action":"log","tag":"Scheduling","sender":"whatsapp://+1555000111","preview":"Hi, I'm interested in your services. Can we schedu..."}
+{"timestamp":"2026-02-28T05:47:13.647Z","ruleId":"meeting-requests","action":"log","tag":"Scheduling","sender":"whatsapp://+1555000111","preview":"Hi, I'm interested in your services. Can we schedu..."}
+{"timestamp":"2026-02-28T05:48:21.820Z","ruleId":"meeting-requests","action":"log","tag":"Scheduling","sender":"whatsapp://+1555000111","preview":"Hi, I'm interested in your services. Can we schedu..."}

@@ -53,6 +53,7 @@ function evaluate(text, sender) {
                 action: rule.action,
                 tag: rule.tag,
                 sender: sender,
+                contact: sender,  // alias for UI compatibility (dashboard.js reads log.contact)
                 preview: text.substring(0, 50) + "..."
             };
 

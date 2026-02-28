@@ -2,7 +2,7 @@
   <img src="public/favicon.svg" alt="{reply} logo" width="140" />
 </p>
 
-<h1 align="center">{reply} Workspace</h1>
+<h1 align="center">{reply}</h1>
 <p align="center"><strong>A unified aggregation proxy and outbound transport engine for iMessage, WhatsApp, Mail, and LinkedIn.</strong></p>
 
 <p align="center">
@@ -41,7 +41,7 @@ make run
 ```
 
 Open:
-- UI Workspace: `http://127.0.0.1:45311/`
+- UI: `http://127.0.0.1:45311/`
 - API Health: `http://127.0.0.1:45311/api/health`
 
 ---
