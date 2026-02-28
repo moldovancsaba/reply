@@ -300,3 +300,13 @@ See detailed plans:
 - **Completed**: Fixed NBA inbound issues in `channel-bridge.js`. Hardened port block to `45311`. Migrated `ReplyMenu` to `reply-toolbar` Swift menu app, integrating `openclaw/status` and `hatori/health` dependencies. Fixed base64 WhatsApp 404 contact resolution bug.
 - **Project Consistency**: Audited entire codebase and documentation (README, LEARNINGS, INGESTION, RELEASE_NOTES, HANDOVER) to strictly enforce the `{reply}` SSOT product naming convention instead of `Reply` or `{reply} Workspace`.
 - **Status**: Issue `mvp-factory-control#283` ("Implement reply-toolbar and harden port 45311") successfully verified, pushed to `main`, and marked as **Done** on the MVP Factory Project Board.
+
+## Active Session Update (2026-02-28, {hatori} Intelligence Loop)
+- **Implemented all 4 components of the contextual draft + annotation loop:**
+  - `chat/reply-engine.js`: Added `buildThreadContext(handle, limit=15)` — queries LanceDB for the last N messages per contact and injects them as `thread_context` into every `{hatori}` `getResponse` call (stateless payload, no race conditions).
+  - `chat/background-worker.js`: Proactive drafting now runs on every inbound message (not only when no draft exists), stores both the `draftText` and `draftHatoriId` via `contactStore.setDraft(handle, text, { hatori_id })`.
+  - `chat/contact-store.js`: `setDraft()` extended to persist `draft_hatori_id` on the contact record.
+  - `chat/js/api.js`: Added `reportHatoriOutcome()` — calculates `sent_as_is` vs `edited_then_sent` by diffing the sent text vs. the original draft, then POSTs the annotation to `/api/hatori-outcome` fire-and-forget. `sendMessage()` now accepts `hatoriContext` and triggers this automatically.
+  - `chat/js/messages.js`: Added `activeHatoriContext` module state and `seedHatoriDraft(text, hatori_id)`. Exposed `window.seedHatoriDraft`. Passes context to `sendMessage()` and clears it after send.
+  - `chat/js/contacts.js`: `selectContact()` now calls `window.seedHatoriDraft(contact.draft, contact.draft_hatori_id)` to pre-populate the composer when switching contacts.
+- **Pushed**: Commit `61acc1f` on `origin/main`.
