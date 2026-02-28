@@ -366,14 +366,18 @@ function renderSuggestions(handle, pendingSuggestions) {
     tag.className = 'kyc-sugg-tag';
     const kind = String(s.type || 'suggestion').toLowerCase();
     const label =
-      kind === 'links' ? 'LINK' :
-        kind === 'emails' ? 'EMAIL' :
-          kind === 'phones' ? 'PHONE' :
-            kind === 'addresses' ? 'ADDRESS' :
-              kind === 'hashtags' ? 'HASHTAG' :
-                kind === 'notes' ? 'NOTE' :
-                  String(s.type || 'SUGGESTION').toUpperCase();
+      kind.includes('nba') ? 'ACTION' :
+        kind === 'draft' ? 'DRAFT' :
+          kind === 'links' ? 'LINK' :
+            kind === 'emails' ? 'EMAIL' :
+              kind === 'phones' ? 'PHONE' :
+                kind === 'addresses' ? 'ADDRESS' :
+                  kind === 'hashtags' ? 'HASHTAG' :
+                    kind === 'notes' ? 'NOTE' :
+                      String(s.type || 'SUGGESTION').toUpperCase();
     tag.textContent = label;
+    if (label === 'ACTION') tag.style.background = 'var(--primary-color)';
+    if (label === 'DRAFT') tag.style.background = 'var(--secondary-color)';
 
     const actions = document.createElement('div');
     actions.className = 'kyc-sugg-actions';
@@ -382,6 +386,38 @@ function renderSuggestions(handle, pendingSuggestions) {
     accept.className = 'btn btn-secondary btn-sm kyc-sugg-accept';
     accept.textContent = 'Accept';
     accept.onclick = async () => {
+      // Specialized handling for NBA/Draft actions
+      const typeStr = String(s.type || '').toUpperCase();
+      const content = s.content || '';
+
+      if (typeStr.includes('DRAFT') || typeStr.includes('NBA')) {
+        const chatInput = document.getElementById('chat-input');
+        if (chatInput) {
+          // If it's a draft or a substantive NBA text, put it in the composer
+          const existing = chatInput.value.trim();
+          if (!existing || confirm('Replace current draft with this suggestion?')) {
+            chatInput.value = content;
+            try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
+          }
+        }
+
+        // Logic for channel switching if mentioned in content
+        const lowerContent = content.toLowerCase();
+        const channelSelect = document.getElementById('channel-select');
+        if (channelSelect) {
+          let targetChannel = null;
+          if (lowerContent.includes('whatsapp')) targetChannel = 'whatsapp';
+          else if (lowerContent.includes('imessage')) targetChannel = 'imessage';
+          else if (lowerContent.includes('email')) targetChannel = 'email';
+          else if (lowerContent.includes('linkedin')) targetChannel = 'linkedin';
+
+          if (targetChannel && channelSelect.value !== targetChannel) {
+            channelSelect.value = targetChannel;
+            try { channelSelect.dispatchEvent(new Event('change', { bubbles: true })); } catch { }
+          }
+        }
+      }
+
       await fetchJson('/api/accept-suggestion', {
         method: 'POST',
         headers: buildSecurityHeaders({ 'Content-Type': 'application/json' }),
@@ -463,10 +499,7 @@ function updateChannelOptionsFromKyc(handle, data) {
   }
 
   Array.from(sel.options).forEach(o => {
-    const isAvailable = available.has(o.value);
-    const isVerified = verifiedTypes.has(o.value);
-
-    o.disabled = !isAvailable || !isVerified;
+    o.disabled = !isAvailable;
     o.hidden = !isAvailable;
 
     // Reset text first
@@ -478,12 +511,13 @@ function updateChannelOptionsFromKyc(handle, data) {
     }
   });
 
-  // If current selection is no longer available or not verified, pick a sensible default.
-  if (!available.has(sel.value) || !verifiedTypes.has(sel.value)) {
+  // If current selection is no longer available, pick a sensible default.
+  // We no longer force a fallback just because the preferred channel isn't verified.
+  if (!available.has(sel.value)) {
     const preferred = (window.currentChannel || '').toString().toLowerCase();
-    const pick = (available.has(preferred) && verifiedTypes.has(preferred))
+    const pick = (available.has(preferred))
       ? preferred
-      : (verifiedTypes.has('imessage') ? 'imessage' : (verifiedTypes.has('whatsapp') ? 'whatsapp' : (verifiedTypes.has('email') ? 'email' : (available.values().next().value || 'imessage'))));
+      : (available.values().next().value || 'imessage');
     sel.value = pick;
     window.setSelectedChannel?.(pick);
   }

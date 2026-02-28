@@ -1,62 +1,137 @@
-# Reply — Your Local-First Digital "Brain"
+<p align="center">
+  <img src="public/favicon.svg" alt="{reply} logo" width="140" />
+</p>
 
-**Reply** is a privacy-focused, local-first AI assistant that learns from your data (emails, notes, files) to act as your digital extension. It runs entirely on your machine, leveraging local LLMs (Ollama) and vector databases (LanceDB).
+<h1 align="center">{reply} Workspace</h1>
+<p align="center"><strong>A unified aggregation proxy and outbound transport engine for iMessage, WhatsApp, Mail, and LinkedIn.</strong></p>
 
-## 🚀 Quick Start (POC)
+<p align="center">
+  <img src="https://img.shields.io/badge/version-v1.0.0-2563EB?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/platform-macOS-0F172A?style=for-the-badge" alt="Platform">
+  <img src="https://img.shields.io/badge/transport-OpenClaw%20%7C%20AppleScript-0EA5E9?style=for-the-badge" alt="Transports">
+</p>
 
-### Prerequisites
-*   Node.js (v18+)
-*   Ollama (running locally)
+<p align="center">
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#run-modes">Run Modes</a> •
+  <a href="#architecture-and-tools">Architecture & Tools</a>
+</p>
 
-### Installation
+## Product Overview
+
+`{reply}` is your unified communication bridge. It continuously scrapes, polls, and listens to webhook events from all your major messaging platforms, vectors them into an embedded [LanceDB](https://lancedb.github.io/lancedb/) engine, and ties directly into your local offline intelligence engine (`{hatori}`). 
+
+Capabilities:
+- **WhatsApp Webhook Ingress**: Works exclusively via `OpenClaw` hardware routing.
+- **iMessage Scraping**: Scans `~/Library/Messages/chat.db` every few minutes.
+- **Unified RAG Search**: Semantically search your multi-channel history.
+- **AI Suggest & Magic**: Hooks up to `23572` (Hatori) to draft, refine, and plan messages.
+
+---
+
+## Quick Start
+
 ```bash
-git clone https://github.com/moldovancsaba/reply.git
+git clone https://github.com/your-org/reply.git
 cd reply/chat
-npm install
+npm i
+cd ..
+make run
 ```
 
-### Running the "Brain"
-1.  **Start the Server:**
-    ```bash
-    npm start
-    ```
-    Access the UI at `http://localhost:3000` (or the port printed in the terminal if 3000 is already in use).
+Open:
+- UI Workspace: `http://127.0.0.1:45311/`
+- API Health: `http://127.0.0.1:45311/api/health`
 
-2.  **Ingest Data:**
-    *   **Local Files:** `node ingest.js` (scans `knowledge/documents`)
-    *   **Gmail Archive:** `node ingest.js --mbox /path/to/archive.mbox`
-    *   **Apple Notes:** Click "Sync Notes" in the Web UI.
-    *   **LinkedIn Archive:** Click "Import Archive" on the LinkedIn Dashboard card to upload `messages.csv`.
-    *   **Email Sync (live):** Click "Sync Email" in the Web UI. Configure IMAP or Gmail OAuth via Settings (gear icon).
+---
 
-## 🧠 Core Features
-*   **Unified Knowledge Base:** Stores vectors of your notes and emails locally.
-*   **Hybrid Search:** Combines semantic understanding (Vector) with exact keyword matching (FTS) for 100% retrieval accuracy.
-*   **Context-Aware Chat:** Ask questions about your own data; the bot cites sources.
-*   **Draft-First Omnichannel:** External channels (Telegram, Discord, Signal, Viber, LinkedIn) ingest inbound events through a local bridge while outbound stays human-controlled.
+## Installation
 
-## Channel Policy (Current)
-*   **Send-enabled:** iMessage, WhatsApp, Email
-*   **Draft-only via Channel Bridge:** Telegram, Discord, Signal, Viber, LinkedIn
-*   **OpenClaw note:** On this machine, `openclaw message send` currently rejects `signal`, `viber`, and `linkedin` as unknown channels, so these remain inbound/draft-only in `{reply}`.
-*   **LinkedIn compliance:** Automated LinkedIn messaging is high ToS risk; keep LinkedIn in draft-only mode unless you have an official compliant integration path.
+### Prerequisites
 
-## 📚 Documentation
-*   [Architecture Overview](docs/ARCHITECTURE.md)
-*   [App Navigation + File Map](docs/APP_NAVIGATION.md)
-*   [Ingestion Guide](docs/INGESTION.md)
-*   [Channel Bridge Contract](docs/CHANNEL_BRIDGE.md)
-*   [Channel Integration Case Study](docs/CHANNEL_INTEGRATION_CASE_STUDY.md)
-*   [Learnings & Decisions](docs/LEARNINGS.md)
-*   [Coding Standards](docs/CODING_STANDARDS.md)
-*   [Human Final Decision Policy](docs/HUMAN_FINAL_DECISION_POLICY.md)
-*   [Developer Handover](docs/HANDOVER.md)
-*   [LinkedIn Import Handover](docs/HANDOVER_LINKEDIN_IMPORT.md)
-*   [Release Notes](docs/RELEASE_NOTES.md)
+Required:
+- **macOS** (mandatory for AppleScript and iMessage database reads)
+- **Node.js 18+**
+- **Full Disk Access** granted to your Terminal / IDE to read `~/Library/Messages/chat.db`.
 
-## 🛡️ Privacy First
-All ingested data remains on your device. Core functionality runs locally (Ollama + LanceDB). Optional connectors (e.g. Gmail OAuth) use external provider APIs only when you configure them.
+External Dependencies:
+- **OpenClaw** (for WhatsApp routing)
+- **`{hatori}`** (for AI summarization and suggestions)
 
-## 📌 Project Management (SSOT)
-The internal project management single source of truth (SSOT) is exclusively the GitHub Project Board. All issues MUST be created in the `moldovancsaba/mvp-factory-control` repository.
-**Do NOT use local `task.md`, `ROADMAP.md`, or `IDEABANK.md` files in this repository.** All tasks must be recorded on the GitHub board.
+### 1. Environment Bootstrap
+
+Copy the example file:
+```bash
+cd chat
+cp .env.example .env
+```
+Ensure your ports line up with what your ecosystem expects (default: `PORT=45311`). Make sure `REPLY_USE_HATORI=1` is set if you want the magic wand UI to work.
+
+### 2. Configure Hardware Routing
+
+In the UI (`http://127.0.0.1:45311/settings.html`), configure the backend. `{reply}` uses hardcoded, resilient routing. For WhatsApp, it explicitly delegates out to OpenClaw. Make sure your gateway is linked:
+
+```bash
+openclaw channels login --channel whatsapp
+```
+
+---
+
+## Run Modes
+
+### 1) Background Scripts (Recommended)
+
+To run {reply}, {hatori}, and OpenClaw all in tandem, use the provided wrapper:
+
+```bash
+make run
+make stop
+make status
+```
+Logs are automatically written to `/tmp/reply-hub.log`.
+
+### 2) macOS Menu Bar App
+
+We supply a compiled Swift app identical to Hatori's to quickly observe database ingestion status and jump to specific URLs.
+
+```bash
+make install-reply-toolbar
+make run-reply-toolbar # or open ~/Applications/reply-toolbar.app
+```
+
+### 3) Foreground Debugging
+
+```bash
+cd chat
+npm run dev
+```
+
+---
+
+## Architecture and Tools
+
+### Egress (Sending)
+- **WhatsApp**: Hard-wired to use `openclaw message send --target <b64> --message <text> --channel whatsapp`.
+- **iMessage**: Generates localized AppleScripts pointing to `1st service whose service type is iMessage`.
+- **Email**: Attempts `sendGmail()` via OAuth if configured; otherwise, launches `Mail.app` via GUI scripting.
+- **LinkedIn**: Generates payload via `{hatori}`, assigns to `pbcopy` (clipboard), and spawns `open https://www.linkedin.com/messaging/`.
+
+### Ingress (Receiving)
+- `{reply}` background workers recursively parse `chat.db` for Apple messages.
+- OpenClaw pushes `http://127.0.0.1:45311/api/channel-bridge/inbound` events whenever a WhatsApp/Viber/Discord/Signal device routes a message.
+- Newly ingested events trigger `persistHatoriNbaForInbound`—a silent call to `{hatori}` to generate Next Best Actions (NBA) and drafts before you even open the UI.
+
+## Troubleshooting
+
+- **WhatsApp failing with "refactor pending" or AppleScript errors**: We recently scrubbed all legacy desktop automation fallbacks from the system. Ensure you are exclusively using `OpenClaw` and running the correct CLI.
+- **iMessage Missing?**: Go to System Settings -> Privacy & Security -> Full Disk Access -> Give Terminal / VSCode permissions.
+- **Hatori Magic is red?**: Hatori operates on `http://127.0.0.1:23572`. Check the Menu Bar App to see if it is down.
+
+## Contributing
+1. Create a feature branch.
+2. Run standard NPM linting.
+3. Keep hardware dependencies abstracted behind `interfaces/`.
+
+## License
+Provided "as-is" for individual localhost ecosystem routing.

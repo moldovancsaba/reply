@@ -31,7 +31,7 @@ const systemRoutes = require("./routes/system.js");
 const { serveKyc, serveAnalyzeContact } = require("./routes/kyc.js");
 
 // Project Constants
-const PORT_MIN = parseInt(process.env.PORT || "3000", 10);
+const PORT_MIN = parseInt(process.env.PORT || "45311", 10);
 const HTML_PATH = path.join(__dirname, "index.html");
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
 
@@ -166,6 +166,10 @@ const server = http.createServer(async (req, res) => {
     if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "sync-kyc" })) return;
     return syncRoutes.serveSyncKyc(req, res);
   }
+  if (pathname === "/api/import/linkedin") {
+    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "import-linkedin" })) return;
+    return syncRoutes.serveImportLinkedIn(req, res);
+  }
 
   // Settings & OAuth
   if (pathname === "/api/settings") {
@@ -228,7 +232,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/api/channel-bridge/events") return bridgeRoutes.serveEventsList(req, res, url);
 
   // System Health
-  if (pathname === "/api/system-health") return systemRoutes.serveSystemHealth(req, res);
+  if (pathname === "/api/health" || pathname === "/api/system-health") return systemRoutes.serveSystemHealth(req, res);
   if (pathname === "/api/openclaw/status") return systemRoutes.serveOpenClawStatus(req, res);
   if (pathname === "/api/triage-log") {
     const triageEngine = require('./triage-engine.js');

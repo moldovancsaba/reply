@@ -618,9 +618,14 @@ async function ingestInboundEvent(rawEvent) {
       path: doc.path
     }]);
 
-    await contactStore.updateLastContacted(event.peer.handle, event.timestamp, {
-      channel: event.channel,
+    await contactStore.updateContact(event.peer.handle, {
+      lastContacted: event.timestamp,
+      lastChannel: event.channel,
+      channels: {
+        [event.channel]: [event.peer.handle]
+      }
     });
+
     if (event.direction === "inbound") {
       contactStore.markChannelInboundVerified(event.peer.handle, event.peer.handle, event.timestamp).catch(e => console.error("[Bridge] Inbound verification failed:", e));
     }

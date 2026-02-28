@@ -193,6 +193,39 @@ function serveSyncKyc(req, res) {
     writeJson(res, 200, { status: "started", message: "KYC sync started in background" });
 }
 
+/**
+ * API Endpoint: /api/import/linkedin
+ * Accepts raw JSON body (LinkedIn data archive) and ingests it.
+ */
+function serveImportLinkedIn(req, res) {
+    if (req.method !== 'POST') {
+        return writeJson(res, 405, { error: 'Method not allowed' });
+    }
+    if (syncGuard.isLocked("linkedin_import")) {
+        return writeJson(res, 409, { status: "error", message: "LinkedIn import already in progress" });
+    }
+    syncGuard.acquireLock("linkedin_import");
+
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+        try {
+            const tmpPath = path.join(__dirname, '../data/_linkedin_import_tmp.json');
+            require('fs').writeFileSync(tmpPath, body, 'utf8');
+
+            const { ingestLinkedInPosts } = require('../ingest-linkedin-posts');
+            const result = await ingestLinkedInPosts(tmpPath);
+            require('fs').unlinkSync(tmpPath);
+            writeJson(res, 200, { status: 'ok', count: result?.count || 0, errors: result?.errors || 0 });
+        } catch (err) {
+            console.error('[Import] LinkedIn import error:', err);
+            writeJson(res, 500, { error: err.message });
+        } finally {
+            syncGuard.releaseLock("linkedin_import");
+        }
+    });
+}
+
 module.exports = {
     serveSyncNotes,
     serveSyncIMessage,
@@ -201,5 +234,6 @@ module.exports = {
     serveSyncLinkedIn,
     serveSyncContacts,
     serveSyncLinkedInPosts,
-    serveSyncKyc
+    serveSyncKyc,
+    serveImportLinkedIn
 };
