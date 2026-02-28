@@ -145,13 +145,44 @@ export async function fetchBridgeSummary(limit = 200) {
 }
 
 /**
+ * Report the outcome of a {hatori} suggestion back to the intelligence engine.
+ * status: 'sent_as_is' | 'edited_then_sent'
+ * Fires as background (no await needed by callers).
+ */
+export async function reportHatoriOutcome({ hatori_id, original_text, final_sent_text }) {
+    if (!hatori_id) return; // Nothing to report if this message didn't originate from {hatori}
+
+    const isSentAsIs = original_text === final_sent_text ||
+        Math.abs(original_text.length - final_sent_text.length) <= 2;
+    const status = isSentAsIs ? 'sent_as_is' : 'edited_then_sent';
+
+    try {
+        await fetch(`${API_BASE}/api/hatori-outcome`, {
+            method: 'POST',
+            headers: buildSecurityHeaders(),
+            body: JSON.stringify({
+                external_outcome_id: `reply:outcome-${Date.now()}`,
+                assistant_interaction_id: hatori_id,
+                status,
+                original_text,
+                final_sent_text,
+                diff: status === 'edited_then_sent' ? { original: original_text, final: final_sent_text } : null
+            })
+        });
+    } catch (e) {
+        console.warn('[{reply}] Hatori annotation failed (non-blocking):', e.message);
+    }
+}
+
+/**
  * Send a message to a contact
  * @param {string} handle - Contact handle
  * @param {string} text - Message text
  * @param {string} channel - Channel to use (only imessage/email/whatsapp are send-enabled)
+ * @param {object} hatoriContext - Optional {hatori} draft context for annotation { hatori_id, original_draft }
  * @returns {Promise<Object>} Send result
  */
-export async function sendMessage(handle, text, channel = 'imessage') {
+export async function sendMessage(handle, text, channel = 'imessage', hatoriContext = null) {
     const ch = (channel || 'imessage').toString().toLowerCase();
     const endpointByChannel = {
         imessage: '/api/send-imessage',
@@ -182,6 +213,16 @@ export async function sendMessage(handle, text, channel = 'imessage') {
 
     const data = await res.json();
     UI.showToast('Message sent!', 'success');
+
+    // Fire-and-forget annotation to {hatori} (does not block the send UI)
+    if (hatoriContext && hatoriContext.hatori_id) {
+        reportHatoriOutcome({
+            hatori_id: hatoriContext.hatori_id,
+            original_text: hatoriContext.original_draft || '',
+            final_sent_text: text
+        });
+    }
+
     return data;
 }
 

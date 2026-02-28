@@ -3,7 +3,7 @@
  * Handles message thread loading, display, and sending
  */
 
-import { fetchMessages, sendMessage } from './api.js';
+import { fetchMessages, sendMessage, reportHatoriOutcome } from './api.js';
 import { appendLinkedText, createPlatformIcon, resolvePlatformTarget } from './platform-icons.js';
 import { formatPleasant } from './message-formatter.js';
 
@@ -13,6 +13,24 @@ let hasMoreMessages = true;
 const MESSAGE_LIMIT = 30;
 const SEND_CAPABLE_CHANNELS = new Set(['imessage', 'whatsapp', 'email', 'linkedin']);
 const DRAFT_ONLY_CHANNELS = new Set(['telegram', 'discord']);
+
+// {hatori} annotation state: tracks the active draft seeded into the composer
+// so we can report whether the user sent it as-is or made edits.
+let activeHatoriContext = null; // { hatori_id, original_draft }
+
+/**
+ * Seeds the composer with a {hatori} draft and records annotation context.
+ */
+function seedHatoriDraft(draftText, hatoriId) {
+    const chatInput = document.getElementById('chat-input');
+    if (!chatInput || !draftText) return;
+    // Only pre-fill if the composer is currently empty
+    if (!chatInput.value.trim()) {
+        chatInput.value = draftText;
+        chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    activeHatoriContext = { hatori_id: hatoriId || null, original_draft: draftText };
+}
 
 function normalizeChannelKey(channel) {
     const raw = (channel ?? '').toString().toLowerCase();
@@ -367,8 +385,10 @@ export async function handleSendMessage() {
         }
 
         console.log(`[SendMessage] channel=${channel}, targetHandle=${targetHandle}, textLen=${text.length}`);
-        // Send message
-        const result = await sendMessage(targetHandle, text, channel);
+        // Send message — pass hatoriContext so annotation fires automatically
+        const result = await sendMessage(targetHandle, text, channel, activeHatoriContext);
+        // Clear the annotation state after send
+        activeHatoriContext = null;
         console.log(`[SendMessage] Result status: ${result?.status}`);
 
         if (result?.status !== 'ok') {
@@ -428,6 +448,7 @@ export async function handleSendMessage() {
 // Export to window for onclick handlers
 window.loadMessages = loadMessages;
 window.handleSendMessage = handleSendMessage;
+window.seedHatoriDraft = seedHatoriDraft;
 window.setSelectedChannel = (channel) => {
     applyComposerChannel(channel);
 };

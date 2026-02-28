@@ -403,15 +403,17 @@ async function runIntelligencePipeline(handle, text) {
         // Fire-and-forget so the worker can keep processing inbound messages.
         void maybeRunDeepAnalysis(handle, 'new-message');
 
-        // B. Proactive Drafting
-        if (!contact.draft) {
-            const snippets = await getSnippets(text, 3);
-            const draft = await generateReply(text, snippets, handle);
+        // B. Proactive Drafting — always generate a fresh draft for each inbound message
+        // so the composer shows an up-to-date {hatori} suggestion.
+        const snippets = await getSnippets(text, 3);
+        const draftResult = await generateReply(text, snippets, handle);
+        const draftText = typeof draftResult === 'string' ? draftResult : (draftResult.suggestion || '');
+        const draftHatoriId = typeof draftResult === 'object' ? (draftResult.hatori_id || null) : null;
 
-            if (draft && !draft.startsWith("Error")) {
-                contactStore.setDraft(handle, draft);
-                console.log(`[Worker] Proactive draft created.`);
-            }
+        if (draftText && !draftText.startsWith('Error')) {
+            // Persist draft + hatori_id for the annotation loop
+            contactStore.setDraft(handle, draftText, { hatori_id: draftHatoriId });
+            console.log(`[Worker] Proactive draft created${draftHatoriId ? ` (hatori_id: ${draftHatoriId})` : ''}.`);
         }
     } catch (e) {
         console.error("Intelligence Pipeline Error:", e);
