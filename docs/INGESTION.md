@@ -1,6 +1,6 @@
-# Reply — Knowledge Ingestion
+# {reply} — Knowledge Ingestion
 
-Reply learns your context by ingesting your data into a local Vector Database (LanceDB).
+`{reply}` learns your context by ingesting your data into a local Vector Database (LanceDB).
 
 ---
 
