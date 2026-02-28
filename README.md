@@ -6,7 +6,7 @@
 <p align="center"><strong>A unified aggregation proxy and outbound transport engine for iMessage, WhatsApp, Mail, and LinkedIn.</strong></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.0.0-2563EB?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/version-v1.0.1-2563EB?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-0F172A?style=for-the-badge" alt="Platform">
   <img src="https://img.shields.io/badge/transport-OpenClaw%20%7C%20AppleScript-0EA5E9?style=for-the-badge" alt="Transports">
 </p>
@@ -117,10 +117,11 @@ npm run dev
 - **Email**: Attempts `sendGmail()` via OAuth if configured; otherwise, launches `Mail.app` via GUI scripting.
 - **LinkedIn**: Generates payload via `{hatori}`, assigns to `pbcopy` (clipboard), and spawns `open https://www.linkedin.com/messaging/`.
 
-### Ingress (Receiving)
-- `{reply}` background workers recursively parse `chat.db` for Apple messages.
-- OpenClaw pushes `http://127.0.0.1:45311/api/channel-bridge/inbound` events whenever a WhatsApp/Viber/Discord/Signal device routes a message.
-- Newly ingested events trigger `persistHatoriNbaForInbound`—a silent call to `{hatori}` to generate Next Best Actions (NBA) and drafts before you even open the UI.
+### Intelligence Loop
+- `{reply}` automatically triggers `{hatori}` draft generation for every inbound message via `background-worker.js`.
+- **Annotation Loop**: Every sent message is compared against its original draft. `{reply}` reports outcomes (`sent_as_is` or `edited_then_sent` with diffs) back to `{hatori}` at `POST /v1/agent/outcome` for model fine-tuning.
+- **Manual Drafting**: Use "💡 Suggest" for forced regeneration or "✨ Magic" for context-aware refinement via Hatori/Gemini.
+- **Background Backfill**: A periodic task runs every 5 minutes to generate missing drafts for older active conversations.
 
 ## Troubleshooting
 

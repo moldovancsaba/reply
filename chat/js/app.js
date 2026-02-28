@@ -138,6 +138,11 @@ function setupEventListeners() {
             const data = await res.json();
             suggestion = data?.suggestion || '';
             explanation = data?.explanation || '';
+            const hatori_id = data?.hatori_id || null;
+            if (suggestion && typeof window.seedHatoriDraft === 'function') {
+              window.seedHatoriDraft(suggestion, hatori_id, true);
+              return; // seedHatoriDraft handles the assignment
+            }
           } catch (e) {
             console.warn('API suggest failed, using fallback', e);
           }
@@ -305,7 +310,7 @@ function setupEventListeners() {
 
   const btnMagic = document.getElementById('btn-magic');
   if (btnMagic) {
-    btnMagic.onclick = () => {
+    btnMagic.onclick = async () => {
       if (!chatInput) return;
       const val = chatInput.value;
       if (!val) {
@@ -313,17 +318,49 @@ function setupEventListeners() {
         return;
       }
 
-      let polished = val.trim();
-      polished = polished.charAt(0).toUpperCase() + polished.slice(1);
-      if (!polished.endsWith('.') && !polished.endsWith('!') && !polished.endsWith('?')) polished += '.';
-      if (polished.length < 10 && !polished.includes('Thanks')) polished = `Hi, ${polished} Thanks.`;
-
-      chatInput.value = polished;
-      try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
-
       const originalText = btnMagic.textContent;
-      btnMagic.textContent = '✨ Done';
-      setTimeout(() => (btnMagic.textContent = originalText), 1000);
+      try {
+        btnMagic.disabled = true;
+        btnMagic.textContent = '⏳ ...';
+
+        const res = await fetch('/api/refine', {
+          method: 'POST',
+          headers: buildSecurityHeaders(),
+          body: JSON.stringify({ draft: val, context: "" })
+        });
+        const data = await res.json();
+
+        if (data.refined) {
+          if (typeof window.seedHatoriDraft === 'function') {
+            // We pass null for ID to indicate this is a refinement (or keep existing)
+            // But to avoid breaking the annotation loop if it was a Hatori draft,
+            // we'll just manully update the value if we want to keep the old ID.
+            // Actually, for "Magic", let's just update the input value.
+            chatInput.value = data.refined;
+            try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
+          } else {
+            chatInput.value = data.refined;
+            try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
+          }
+          btnMagic.textContent = '✨ Done';
+        } else {
+          let polished = val.trim();
+          polished = polished.charAt(0).toUpperCase() + polished.slice(1);
+          if (!polished.endsWith('.') && !polished.endsWith('!') && !polished.endsWith('?')) polished += '.';
+          chatInput.value = polished;
+          btnMagic.textContent = '✨ Done';
+        }
+      } catch (e) {
+        console.warn('Refinement failed:', e);
+        let polished = val.trim();
+        polished = polished.charAt(0).toUpperCase() + polished.slice(1);
+        if (!polished.endsWith('.') && !polished.endsWith('!') && !polished.endsWith('?')) polished += '.';
+        chatInput.value = polished;
+        btnMagic.textContent = '✨ Done';
+      } finally {
+        btnMagic.disabled = false;
+        setTimeout(() => (btnMagic.textContent = originalText), 1500);
+      }
     };
   }
 }
