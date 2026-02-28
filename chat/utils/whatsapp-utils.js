@@ -76,12 +76,13 @@ function resolveWhatsAppSendTransport(rawTransport) {
 function sendWhatsAppViaOpenClawCli({ recipient, text, dryRun = false }) {
     const bin = resolveOpenClawBinary();
     const args = [
-        "channels",
+        "message",
         "send",
         "--channel", "whatsapp",
         "--account", "default",
-        "--recipient", recipient,
-        "--text", text
+        "--target", recipient,
+        "--message", text,
+        "--json"
     ];
     if (dryRun) args.push("--dry-run");
 
@@ -95,12 +96,19 @@ function sendWhatsAppViaOpenClawCli({ recipient, text, dryRun = false }) {
                 err.stderr = stderr;
                 return reject(err);
             }
+            let parsed = null;
             try {
-                const parsed = JSON.parse(stdout);
-                resolve({ raw: stdout, parsed });
+                // Read from the first { to the end, to ignore plugin/cli warning logs safely
+                const jsonMatch = stdout.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    parsed = JSON.parse(jsonMatch[0]);
+                } else {
+                    parsed = JSON.parse(stdout);
+                }
             } catch {
-                resolve({ raw: stdout, parsed: null });
+                // Fallback to null; messaging.js will use raw stdout if parsed is null
             }
+            resolve({ raw: stdout, parsed });
         });
     });
 }

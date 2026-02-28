@@ -29,7 +29,7 @@ const { generateReply } = require("../reply-engine");
 const { getSnippets } = require("../knowledge");
 const { refineReply } = require("../gemini-client");
 const { execFile, spawn } = require("child_process");
-const { readSettings, resolveWhatsAppSendTransport, resolveWhatsAppOpenClawSendEnabled, resolveWhatsAppDesktopFallbackOnOpenClawFailure } = require("../settings-store");
+const { readSettings, resolveWhatsAppSendTransport } = require("../settings-store");
 const messageStore = require("../message-store");
 const hatori = require("../hatori-client.js");
 
@@ -47,32 +47,85 @@ const conversationsIndexCache = {
 
 async function getConversationsIndexFresh(q = "") {
     const now = Date.now();
-    const cacheKey = q || "__all__";
+    const { getUnifiedIndex } = require("../vector-store");
 
-    // Check cache (we can keep a simple cache for non-search results or even for specific queries)
-    if (conversationsIndexCache.items.length && (now - conversationsIndexCache.builtAtMs) < conversationsIndexCache.ttlMs && !q) {
-        return { items: conversationsIndexCache.items };
-    }
-
-    const recentConversations = await messageStore.getRecentConversations({ q });
+    // Fetch unified stats from LanceDB
+    const statsIndex = await getUnifiedIndex();
     const contacts = await contactStore.refresh();
 
-    const items = recentConversations.map(conv => {
-        const contact = contactStore.getByHandle(conv.handle);
-        const channel = conv.source || (contact?.lastChannel) || inferChannelFromHandle(conv.handle);
+    // Map stats back to contacts or raw handles
+    const itemsMap = new Map();
 
-        return {
-            key: contact?.id || conv.handle,
-            handle: conv.handle,
-            latestHandle: conv.handle,
-            sortTime: safeDateMs(conv.timestamp),
-            channel: channel,
-            source: conv.source || inferSourceFromChannel(channel),
-            contact: contact || null,
-            preview: stripMessagePrefix(conv.text || ""),
-            previewDate: conv.timestamp,
-        };
+    // 1. Process stats index to create base items
+    for (const [handle, stats] of statsIndex.entries()) {
+        const contact = contactStore.getByHandle(handle);
+        const key = contact?.id || handle;
+
+        if (!itemsMap.has(key)) {
+            itemsMap.set(key, {
+                key: key,
+                handle: handle, // Use handle from index as representative
+                latestHandle: stats.latestHandle || handle,
+                sortTime: stats.latestTimestamp,
+                channel: stats.latestChannel,
+                source: stats.latestSource,
+                contact: contact || null,
+                displayName: contact?.displayName || handle,
+                lastMessage: stats.latestMessage,
+                preview: stats.latestMessage,
+                previewDate: stats.latestTimestamp ? new Date(stats.latestTimestamp).toISOString() : null,
+                count: stats.count
+            });
+        } else {
+            // Merge stats if multiple handles map to same contact
+            const item = itemsMap.get(key);
+            item.count += stats.count;
+            if (stats.latestTimestamp > item.sortTime) {
+                item.sortTime = stats.latestTimestamp;
+                item.latestHandle = stats.latestHandle || handle;
+                item.channel = stats.latestChannel;
+                item.source = stats.latestSource;
+                item.lastMessage = stats.latestMessage;
+                item.preview = stats.latestMessage;
+                item.previewDate = stats.latestTimestamp ? new Date(stats.latestTimestamp).toISOString() : null;
+            }
+        }
+    }
+
+    // 2. Add contacts that don't have messages yet but exist in contact store
+    contacts.forEach(c => {
+        if (!itemsMap.has(c.id)) {
+            itemsMap.set(c.id, {
+                key: c.id,
+                handle: c.handle,
+                latestHandle: c.handle,
+                sortTime: safeDateMs(c.lastContacted),
+                channel: c.lastChannel || inferChannelFromHandle(c.handle),
+                source: inferSourceFromChannel(c.lastChannel || inferChannelFromHandle(c.handle)),
+                contact: c,
+                displayName: c.displayName,
+                lastMessage: "No recent messages",
+                preview: "No recent messages",
+                previewDate: c.lastContacted,
+                count: 0
+            });
+        }
     });
+
+    let items = Array.from(itemsMap.values());
+
+    // 3. Filter if search active
+    if (q) {
+        const query = q.toLowerCase();
+        items = items.filter(item => {
+            return (item.displayName || "").toLowerCase().includes(query) ||
+                (item.handle || "").toLowerCase().includes(query) ||
+                (item.lastMessage || "").toLowerCase().includes(query);
+        });
+    }
+
+    // 4. Sort by time
+    items.sort((a, b) => (b.sortTime || 0) - (a.sortTime || 0));
 
     if (!q) {
         conversationsIndexCache.items = items;
@@ -82,66 +135,7 @@ async function getConversationsIndexFresh(q = "") {
     return { items };
 }
 
-async function getConversationStatsForHandle(handle, contact) {
-    const key = String(contact?.id || handle || "").trim();
-    const lastContacted = String(contact?.lastContacted || "");
-    const cached = conversationStatsCache.get(key);
-    const now = Date.now();
-    if (cached && cached.lastContacted === lastContacted && (now - cached.builtAtMs) < CONVERSATION_STATS_TTL_MS) {
-        return cached.stats;
-    }
 
-    const { getHistory } = require("../vector-store");
-    const handles = contactStore.getAllHandles(handle);
-
-    const phoneDigits = handles
-        .filter((h) => typeof h === "string" && !h.includes("@"))
-        .map((h) => h.replace(/\D/g, ""))
-        .filter(Boolean);
-
-    const lidByPhone = await whatsAppIdResolver.lidsForPhones(phoneDigits);
-    const lidHandles = Array.from(new Set(Array.from(lidByPhone.values()).filter(Boolean)));
-    const allHandles = Array.from(new Set([...handles, ...lidHandles]));
-    const prefixes = Array.from(new Set(allHandles.flatMap((h) => pathPrefixesForHandle(h))));
-
-    let totalCount = 0;
-    let best = { time: 0, preview: null, previewDate: null, channel: null, source: null, latestHandle: null, path: null };
-
-    for (const prefix of prefixes) {
-        const rows = await getHistory(prefix);
-        totalCount += Array.isArray(rows) ? rows.length : 0;
-        if (!Array.isArray(rows) || rows.length === 0) continue;
-
-        const sample = rows.slice(-CONVERSATION_PREVIEW_SAMPLE_ROWS);
-        for (const r of sample) {
-            const dt = extractDateFromText(r?.text || "");
-            const t = dt ? dt.getTime() : 0;
-            if (t > best.time) {
-                best = {
-                    time: t,
-                    preview: stripMessagePrefix(r?.text || "").trim(),
-                    previewDate: dt.toISOString(),
-                    channel: channelFromDoc(r),
-                    source: r?.source || null,
-                    latestHandle: (r?.path || "").replace(/^(imessage:\/\/|whatsapp:\/\/|mailto:|telegram:\/\/|discord:\/\/|signal:\/\/|viber:\/\/|linkedin:\/\/)/i, "").trim(),
-                    path: r?.path || null,
-                };
-            }
-        }
-    }
-
-    const stats = {
-        count: totalCount,
-        channel: best.channel,
-        source: best.source,
-        preview: best.preview,
-        previewDate: best.previewDate,
-        latestHandle: best.latestHandle || handle,
-    };
-
-    conversationStatsCache.set(key, { builtAtMs: now, lastContacted, stats });
-    return stats;
-}
 
 async function serveConversations(req, res, url) {
     const limit = parseInt(url.searchParams.get("limit")) || 20;
@@ -441,37 +435,23 @@ async function serveSendWhatsApp(req, res) {
         const recipient = recipientRaw.replace(/\s+/g, "");
         const text = textRaw.replace(/\r\n/g, "\n");
 
-        const requestedTransport = resolveWhatsAppSendTransport(payload?.transport);
-        if (requestedTransport === "openclaw_cli" && !resolveWhatsAppOpenClawSendEnabled()) {
+        const settings = readSettings();
+        const allowOpenClaw = settings?.global?.allowOpenClaw !== false;
+
+        if (!allowOpenClaw) {
             writeJson(res, 403, { error: "OpenClaw WhatsApp outbound is disabled by policy." });
             return;
         }
 
-        if (requestedTransport === "openclaw_cli") {
-            const { sendWhatsAppViaOpenClawCli } = require("../utils/whatsapp-utils");
-            try {
-                const result = await sendWhatsAppViaOpenClawCli({ recipient, text, dryRun });
-                await contactStore.clearDraft(recipientRaw);
-                writeJson(res, 200, { status: "ok", result: result.parsed || result.raw || "ok" });
-                return;
-            } catch (e) {
-                if (!resolveWhatsAppDesktopFallbackOnOpenClawFailure(payload?.allowDesktopFallback)) {
-                    throw e;
-                }
-            }
-        }
-
-        // Desktop Fallback / Default Desktop Automation
-        // AppleScript logic for WhatsApp (I'll keep it abbreviated for brevity, but I should copy it fully in real life)
-        handleWhatsAppDesktopSend(req, res, recipient, text, dryRun, recipientRaw);
+        const { sendWhatsAppViaOpenClawCli } = require("../utils/whatsapp-utils");
+        const result = await sendWhatsAppViaOpenClawCli({ recipient, text, dryRun });
+        await contactStore.clearDraft(recipientRaw);
+        writeJson(res, 200, { status: "ok", result: result.parsed || result.raw || "ok" });
+        return;
     } catch (e) {
-        writeJson(res, 500, { error: e.message });
+        console.error("[DEBUG] OpenClaw Transport threw:", e.message, "\n---", e.stderr || "", "\n---", e.stdout || "");
+        writeJson(res, 500, { error: e.message || "WhatsApp send failed." });
     }
-}
-
-function handleWhatsAppDesktopSend(req, res, recipient, text, dryRun, recipientRaw) {
-    // [OMITTED FULL APPLESCRIPT FOR BREVITY IN THIS DRAFT, BUT IT WOULD BE HERE]
-    writeJson(res, 501, { error: "WhatsApp Desktop Automation refactor pending" });
 }
 
 async function serveHatoriOutcome(req, res) {

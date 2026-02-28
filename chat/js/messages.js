@@ -100,9 +100,29 @@ function applyComposerChannel(channel) {
 }
 
 function inferDefaultChannelFromMessages(messages) {
-    if (!Array.isArray(messages) || messages.length === 0) return null;
-    const lastIncoming = messages.find(m => !(m.is_from_me ?? (m.role === 'me')));
-    return (lastIncoming?.channel || '').toString().toLowerCase() || null;
+    if (Array.isArray(messages) && messages.length > 0) {
+        const lastIncoming = messages.find(m => !(m.is_from_me ?? (m.role === 'me')));
+        if (lastIncoming?.channel) {
+            return (lastIncoming.channel).toString().toLowerCase();
+        }
+    }
+
+    // Fallback: check window.conversations if we know the current handle
+    if (window.currentHandle && window.conversations) {
+        const c = window.conversations.find(c => c.handle === window.currentHandle);
+        if (c && c.channels) {
+            if (c.channels.whatsapp && c.channels.whatsapp.length > 0) return 'whatsapp';
+            if (c.channels.email && c.channels.email.length > 0) return 'email';
+            if (c.channels.linkedin && c.channels.linkedin.length > 0) return 'linkedin';
+        }
+
+        // Base64 regex heuristic (WhatsApp IDs look like CNeag...)
+        if (/^[a-zA-Z0-9+/]+={0,2}$/.test(window.currentHandle) && window.currentHandle.length >= 20) {
+            return 'whatsapp';
+        }
+    }
+
+    return null;
 }
 
 async function copyToClipboard(text) {
@@ -253,12 +273,16 @@ export async function loadMessages(handle, append = false) {
         // Keep the view at the newest messages (top of the list)
         if (!append) messagesEl.scrollTop = 0;
 
-        // Default channel: match the most recent incoming message when possible
+        // Default channel: match the most recent incoming message when possible or context
         if (!append) {
             const inferred = inferDefaultChannelFromMessages(messages);
             if (inferred) {
                 window.currentChannel = inferred;
                 applyComposerChannel(inferred);
+            } else {
+                // Global fallback
+                window.currentChannel = 'imessage';
+                applyComposerChannel('imessage');
             }
         }
 

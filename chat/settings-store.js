@@ -4,7 +4,7 @@ const crypto = require("crypto");
 
 const SETTINGS_PATH = path.join(__dirname, "data", "settings.json");
 const CHANNEL_BRIDGE_MODES = new Set(["disabled", "draft_only"]);
-const CHANNEL_BRIDGE_CHANNELS = ["telegram", "discord", "signal", "viber", "linkedin"];
+const CHANNEL_BRIDGE_CHANNELS = ["imessage", "whatsapp", "telegram", "discord", "signal", "viber", "linkedin"];
 
 // Encryption settings
 const ALGORITHM = "aes-256-cbc";
@@ -100,9 +100,7 @@ function withDefaults(settings) {
       requireOperatorToken: global.requireOperatorToken !== false,
       localWritesOnly: global.localWritesOnly !== false,
       requireHumanApproval: global.requireHumanApproval !== false,
-      whatsappTransport: (global.whatsappTransport || "openclaw_cli").toString(),
       allowOpenClaw: global.allowOpenClaw !== false,
-      desktopFallback: global.desktopFallback === true,
     },
     channelBridge: {
       channels: bridgeChannels,
@@ -288,9 +286,7 @@ function syncToEnv(settings) {
       "REPLY_SECURITY_REQUIRE_OPERATOR_TOKEN": global.requireOperatorToken,
       "REPLY_SECURITY_LOCAL_WRITES_ONLY": global.localWritesOnly,
       "REPLY_SECURITY_REQUIRE_HUMAN_APPROVAL": global.requireHumanApproval,
-      "REPLY_WHATSAPP_SEND_TRANSPORT": global.whatsappTransport,
-      "REPLY_WHATSAPP_ALLOW_OPENCLAW_SEND": global.allowOpenClaw,
-      "REPLY_WHATSAPP_DESKTOP_FALLBACK_ON_OPENCLAW_FAILURE": global.desktopFallback
+      "REPLY_WHATSAPP_ALLOW_OPENCLAW_SEND": global.allowOpenClaw
     };
 
     let lines = content.split("\n");

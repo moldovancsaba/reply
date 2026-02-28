@@ -77,9 +77,7 @@ async function handleUpdateSettings(req, res) {
             if (global.requireOperatorToken !== undefined) next.global.requireOperatorToken = !!global.requireOperatorToken;
             if (global.localWritesOnly !== undefined) next.global.localWritesOnly = !!global.localWritesOnly;
             if (global.requireHumanApproval !== undefined) next.global.requireHumanApproval = !!global.requireHumanApproval;
-            if (typeof global.whatsappTransport === "string" && ["openclaw_cli", "desktop_automation"].includes(global.whatsappTransport.trim())) next.global.whatsappTransport = global.whatsappTransport.trim();
             if (global.allowOpenClaw !== undefined) next.global.allowOpenClaw = !!global.allowOpenClaw;
-            if (global.desktopFallback !== undefined) next.global.desktopFallback = !!global.desktopFallback;
         }
 
         // Worker
