@@ -6,6 +6,70 @@ const contactStore = require("./contact-store.js");
 const { saveMessages } = require("./message-store.js");
 const triageEngine = require("./triage-engine.js");
 const { normalizeLinkedInHandle } = require("./linkedin-utils.js");
+const hatori = require("./hatori-client.js");
+
+function withTimeout(promise, timeoutMs, label) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label || "operation"} timeout after ${timeoutMs}ms`)), timeoutMs);
+    Promise.resolve(promise)
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
+async function persistHatoriNbaForInbound({ doc, event }) {
+  if (process.env.REPLY_USE_HATORI !== "1") return;
+  if (event.direction !== "inbound") return;
+
+  const start = Date.now();
+  const nbaRes = await withTimeout(
+    hatori.getNBA({
+      conversation_id: doc.path,
+      message_id: doc.id,
+      sender_id: event.peer.handle,
+      message: event.text,
+      metadata: {
+        channel: event.channel,
+        displayName: event.peer.displayName,
+      },
+    }),
+    12000,
+    "hatori_nba",
+  );
+
+  let added = 0;
+  if (nbaRes?.assistant_message) {
+    await contactStore.addSuggestion(event.peer.handle, "Draft", nbaRes.assistant_message);
+    added += 1;
+  }
+
+  if (Array.isArray(nbaRes?.next_actions)) {
+    for (const action of nbaRes.next_actions) {
+      const text = typeof action === "string" ? action : (action?.action || action?.text || "");
+      if (!text) continue;
+      const priorityMatch = text.match(/^[-\s]*(P[012])\s/i);
+      const priority = priorityMatch ? priorityMatch[1].toUpperCase() : "";
+      const type = priority ? `NBA (${priority})` : "NBA";
+      await contactStore.addSuggestion(event.peer.handle, type, text);
+      added += 1;
+    }
+  }
+
+  appendBridgeEvent({
+    status: "nba_generated",
+    channel: event.channel,
+    messageId: event.messageId,
+    peer: event.peer,
+    suggestionsAdded: added,
+    latencyMs: Date.now() - start,
+  });
+}
 
 const SUPPORTED_CHANNELS = new Set([
   "imessage",
@@ -375,6 +439,8 @@ function normalizeInboundEvent(rawEvent) {
     payload.text || payload.message || payload.body || payload.content || payload.caption || ""
   );
   const attachments = normalizeAttachments(payload.attachments || payload.files || payload.media);
+  const rawDirection = toNonEmptyString(payload.direction || payload.dir || payload.type || "inbound").toLowerCase();
+  const direction = rawDirection === "outbound" ? "outbound" : "inbound";
   if (!text && attachments.length === 0) {
     throw new Error("Inbound event must include text or attachments");
   }
@@ -404,6 +470,7 @@ function normalizeInboundEvent(rawEvent) {
     text,
     timestamp,
     attachments,
+    direction,
   };
 }
 
@@ -551,7 +618,7 @@ async function ingestInboundEvent(rawEvent) {
       path: doc.path
     }]);
 
-    contactStore.updateLastContacted(event.peer.handle, event.timestamp, {
+    await contactStore.updateLastContacted(event.peer.handle, event.timestamp, {
       channel: event.channel,
     });
     if (event.direction === "inbound") {
@@ -565,6 +632,20 @@ async function ingestInboundEvent(rawEvent) {
       triageEngine.evaluate(event.text, pathForEvent(event));
     } catch (e) {
       console.warn("[Bridge] Triage failed:", e.message);
+    }
+
+    // 4. Hatori Next Best Action (NBA) Generation
+    try {
+      await persistHatoriNbaForInbound({ doc, event });
+    } catch (err) {
+      console.warn("[Bridge] Hatori NBA generation failed:", err.message);
+      appendBridgeEvent({
+        status: "nba_error",
+        channel: event.channel,
+        messageId: event.messageId,
+        peer: event.peer,
+        error: err?.message || String(err),
+      });
     }
   })();
   inflightByDocId.set(doc.id, ingestPromise);
