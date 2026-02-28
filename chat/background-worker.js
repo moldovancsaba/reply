@@ -433,6 +433,59 @@ async function pollLoop() {
     }
 }
 
+/**
+ * Background draft backfill: Once every 5 minutes, find a conversation without a draft
+ * and generate one to ensure we have full coverage.
+ */
+async function backfillPendingHatoriDrafts() {
+    try {
+        if (process.env.REPLY_USE_HATORI !== '1') return;
+
+        console.log('[Worker] Checking for conversations needing draft backfill...');
+        const contacts = contactStore.contacts;
+        if (!contacts || contacts.length === 0) return;
+
+        // Find active contacts without a draft, sorted by recently contacted
+        const pending = contacts
+            .filter(c => !c.draft && c.status !== 'closed' && c.handle)
+            .sort((a, b) => (b.lastContacted || '').localeCompare(a.lastContacted || ''));
+
+        if (pending.length === 0) {
+            console.log('[Worker] All active conversations have drafts.');
+            return;
+        }
+
+        const target = pending[0];
+        console.log(`[Worker] Backfilling draft for ${target.displayName} (${target.handle})...`);
+
+        // Fetch the last inbound message from vector store to use as context
+        const { getHistory } = require('./vector-store.js');
+        const history = await getHistory(target.handle).catch(() => []);
+        const lastInbound = history
+            .filter(h => h.text && !h.text.includes('] Me:'))
+            .sort((a, b) => (b.text.match(/\[(\d{4}-\d{2}-\d{2}[^\]]+)\]/)?.[1] || '').localeCompare(a.text.match(/\[(\d{4}-\d{2}-\d{2}[^\]]+)\]/)?.[1] || ''))[0];
+
+        if (lastInbound) {
+            const stripped = lastInbound.text.replace(/^\[[^\]]+\]\s*(Me|\S+):?\s*/i, '').trim();
+            if (stripped) {
+                await runIntelligencePipeline(target.handle, stripped);
+                console.log(`[Worker] Backfill complete for ${target.handle}.`);
+            } else {
+                console.log(`[Worker] No clear message text for backfill for ${target.handle}.`);
+            }
+        } else {
+            console.log(`[Worker] No inbound history found for backfill for ${target.handle}.`);
+        }
+    } catch (e) {
+        console.error('[Worker] Backfill Error:', e);
+    }
+}
+
+// Start the backfill interval (every 5 minutes)
+setInterval(backfillPendingHatoriDrafts, 5 * 60 * 1000);
+// Run once shortly after startup
+setTimeout(backfillPendingHatoriDrafts, 30 * 1000);
+
 pollLoop();
 
 // Background deep analysis sweep: N contacts per hour (default 1/hour).
