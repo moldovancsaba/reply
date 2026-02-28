@@ -10,7 +10,7 @@
 *   **zsh quoting:** In `zsh`, unquoted `{reply}` in commands can trigger brace-expansion parse errors. When using `gh issue create -t '{reply}: ...'` always wrap the title in **single quotes** (or escape braces).
 
 ## 2. The Single Source of Truth (SSOT)
-The **GitHub Project Board** is the ONLY source of truth for what is being worked on, and **all issues for Reply live in the SSOT repo**:
+The **GitHub Project Board** is the ONLY source of truth for what is being worked on, and **all issues for `{reply}` live in the SSOT repo**:
 
 *   Board: https://github.com/users/moldovancsaba/projects/1
 *   SSOT Issues Repo: `moldovancsaba/mvp-factory-control`
@@ -23,7 +23,7 @@ The **GitHub Project Board** is the ONLY source of truth for what is being worke
 *   **Rule:** Issues are disabled in `moldovancsaba/reply` to prevent accidental drift away from SSOT.
 
 ## 3. Mandatory Issue Recording & Management SOP
-Use this exact process for every Reply task/idea/bug.
+Use this exact process for every `{reply}` task/idea/bug.
 
 1. **Create issue in SSOT repo only** (`moldovancsaba/mvp-factory-control`).
 2. **Use title format**: `{reply}: <short description>`.
@@ -86,7 +86,7 @@ Accurate metadata is critical for filtering and finding work.
 Use `gh project item-list ... --jq ...` so you don't depend on a separate `jq` installation.
 
 ```bash
-# List active Reply items (Ready/In Progress)
+# List active `{reply}` items (Ready/In Progress)
 gh project item-list 1 --owner moldovancsaba --format json --limit 200 \
   --jq '.items[] | select(.product == "reply" and (.status == "Ready" or .status == "In Progress")) | {priority, status, title, url: (.content.url // null)}'
 ```
