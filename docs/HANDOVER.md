@@ -296,3 +296,7 @@ See detailed plans:
 - **SSOT:**
   - Work tracks against `mvp-factory-control#220` ({reply}: LinkedIn channel enablement).
 
+## Active Session Update (2026-02-28, Reply Toolbar & Naming Audit)
+- **Completed**: Fixed NBA inbound issues in `channel-bridge.js`. Hardened port block to `45311`. Migrated `ReplyMenu` to `reply-toolbar` Swift menu app, integrating `openclaw/status` and `hatori/health` dependencies. Fixed base64 WhatsApp 404 contact resolution bug.
+- **Project Consistency**: Audited entire codebase and documentation (README, LEARNINGS, INGESTION, RELEASE_NOTES, HANDOVER) to strictly enforce the `{reply}` SSOT product naming convention instead of `Reply` or `{reply} Workspace`.
+- **Status**: Issue `mvp-factory-control#283` ("Implement reply-toolbar and harden port 45311") successfully verified, pushed to `main`, and marked as **Done** on the MVP Factory Project Board.
