@@ -6,6 +6,17 @@ function escapeSqlString(value) {
     return String(value ?? "").replace(/'/g, "''");
 }
 
+function extractDetailedDateFromText(text) {
+    const match = text.match(/\[(.*?)\]/);
+    if (!match) return null;
+    try {
+        const d = new Date(match[1]);
+        return isNaN(d.getTime()) ? null : d;
+    } catch (e) {
+        return null;
+    }
+}
+
 // Singleton for the embedding pipeline to avoid reloading the model.
 let pipelineInstance = null;
 
@@ -382,4 +393,76 @@ async function deleteDocument(id) {
     }
 }
 
-module.exports = { getEmbedding, addDocuments, search, getHistory, getSnippets, getLatestSubject, annotateDocument, getUnannotatedDocuments, connect, getGoldenExamples, getPendingSuggestions, deleteDocument };
+/**
+ * Perform a columnar scan to build a unified index of all conversations.
+ * Aggregates counts and latest message info in one pass.
+ */
+async function getUnifiedIndex() {
+    const db = await connect();
+    try {
+        const table = await db.openTable(TABLE_NAME);
+        // Columnar selection of just what we need for the index
+        const results = await table.query()
+            .select(["path", "text", "source"])
+            .execute();
+
+        const stats = new Map();
+
+        const processBatch = (rows) => {
+            for (const row of rows) {
+                const path = row.path || "";
+                if (!path) continue;
+
+                // Strip protocol to get a "canonical" handle
+                const handle = path.replace(/^(imessage:\/\/|whatsapp:\/\/|mailto:|telegram:\/\/|discord:\/\/|signal:\/\/|viber:\/\/|linkedin:\/\/)/i, "").trim();
+                const source = row.source || "";
+
+                if (!stats.has(handle)) {
+                    stats.set(handle, {
+                        count: 0,
+                        latestMessage: "",
+                        latestTimestamp: 0,
+                        latestChannel: "",
+                        latestSource: "",
+                        path: path
+                    });
+                }
+
+                const s = stats.get(handle);
+                s.count++;
+
+                const dt = extractDetailedDateFromText(row.text || "");
+                const ts = dt ? dt.getTime() : 0;
+
+                if (ts > s.latestTimestamp) {
+                    s.latestTimestamp = ts;
+                    // Extract text after the "[Date] Me: " or "[Date] Contact: " prefix
+                    const text = (row.text || "").replace(/^\[.*?\]\s*.*?:/i, "").trim();
+                    s.latestMessage = text;
+                    s.latestSource = source;
+                    // Infer channel from path protocol
+                    if (path.startsWith("imessage://")) s.latestChannel = "imessage";
+                    else if (path.startsWith("whatsapp://")) s.latestChannel = "whatsapp";
+                    else if (path.startsWith("mailto:")) s.latestChannel = "email";
+                    else if (path.startsWith("linkedin://")) s.latestChannel = "linkedin";
+                    else s.latestChannel = source;
+                }
+            }
+        };
+
+        if (Array.isArray(results)) {
+            processBatch(results);
+        } else {
+            for await (const batch of results) {
+                processBatch(batch);
+            }
+        }
+
+        return stats;
+    } catch (e) {
+        console.error("Unified index error:", e.message);
+        return new Map();
+    }
+}
+
+module.exports = { getEmbedding, addDocuments, search, getHistory, getSnippets, getLatestSubject, annotateDocument, getUnannotatedDocuments, connect, getGoldenExamples, getPendingSuggestions, deleteDocument, getUnifiedIndex };
