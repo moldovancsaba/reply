@@ -30,7 +30,7 @@ Every task, pull request, or commit must satisfy these criteria before being con
 ## 4. Project Management (GitHub Board) & Issues
 *   **Single Source of Truth:** The [GitHub Project Board](https://github.com/users/moldovancsaba/projects/1) is the sole authority for roadmap, backlog, and tasks.
 *   **No Local Tracking:** Do NOT create or maintain local `IDEABANK.md`, `ROADMAP.md`, `TASKLIST.md`, or similar tracking files. If they exist, they must only contain a link to the Board.
-*   **SSOT Repo Only:** All Reply issues must be created and managed in `moldovancsaba/mvp-factory-control` (never in `moldovancsaba/reply`).
+*   **SSOT Repo Only:** All `{reply}` issues must be created and managed in `moldovancsaba/mvp-factory-control` (never in `moldovancsaba/reply`).
 *   **Issue Lifecycle:**
     *   **Create:** Open issue in SSOT repo with title format `{reply}: <short description>`.
     *   **Record:** Add issue to Project 1 immediately (mandatory).

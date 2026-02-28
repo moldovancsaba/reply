@@ -8,7 +8,7 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
 - Board: https://github.com/users/moldovancsaba/projects/1
 - Issues repo: `moldovancsaba/mvp-factory-control`
 - Rules:
-  - Track Reply work only as issues in `mvp-factory-control` and as items on the board.
+  - Track `{reply}` work only as issues in `mvp-factory-control` and as items on the board.
   - Do not create/manage issues in product repos (e.g. `moldovancsaba/reply`).
   - Issues are disabled in `moldovancsaba/reply` to prevent SSOT drift.
   - Issue title convention for Reply: `{reply}: <short description>`.

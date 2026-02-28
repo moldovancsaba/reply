@@ -56,4 +56,4 @@ This document answers: **“Where is X in the UI?”** and **“Where is X in th
 * Project Board: https://github.com/users/moldovancsaba/projects/1
 * Issues live in: `moldovancsaba/mvp-factory-control`
 * Do not create/manage issues in product repos (e.g. `moldovancsaba/reply`).
-* Mandatory: every new Reply issue must be added to Project 1 immediately after creation.
+* Mandatory: every new `{reply}` issue must be added to Project 1 immediately after creation.

@@ -7,7 +7,7 @@ This playbook documents the architecture, state locations, and common troublesho
 - **OpenClaw CLI (`openclaw`)**: The command-line interface used to manage the gateway, channels, and agent configuration.
 - **Gateway Daemon (ws://127.0.0.1:18789)**: The background Local WebSocket server (managed by macOS `launchd`). It holds the active WhatsApp connection and routes agent executions.
 - **Browser Sidecar (http://127.0.0.1:18791)**: An isolated Chromium instance spawned by OpenClaw to handle Canvas and specialized web automations.
-- **Reply Backend (`server.js`)**: Communicates with the OpenClaw Gateway to send/receive WhatsApp messages. It executes `openclaw message send --json` under the hood for outbound transmission.
+- **`{reply}` Backend (`server.js`)**: Communicates with the OpenClaw Gateway to send/receive WhatsApp messages. It executes `openclaw message send --json` under the hood for outbound transmission.
 
 ## 2. State & Configuration Locations
 

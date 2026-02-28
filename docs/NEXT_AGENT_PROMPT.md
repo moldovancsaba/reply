@@ -32,7 +32,7 @@ Trigger: User warned context is about to reach 70%
 
 ## Objective
 
-Adopt OpenClaw capabilities incrementally in Reply with human-final-decision controls (draft-first omnichannel rollout), while completing security baseline hardening.
+Adopt OpenClaw capabilities incrementally in `{reply}` with human-final-decision controls (draft-first omnichannel rollout), while completing security baseline hardening.
 
 ## Completed
 
@@ -85,7 +85,7 @@ You are taking over from a previous agent because context usage reached the hand
 
 Follow this order:
 1. Read these docs first: /Users/moldovancsaba/Projects/reply/docs/HANDOVER.md, /Users/moldovancsaba/Projects/reply/docs/PROJECT_MANAGEMENT.md, /Users/moldovancsaba/Projects/reply/docs/HUMAN_FINAL_DECISION_POLICY.md.
-2. Continue this objective: Adopt OpenClaw capabilities incrementally in Reply with human-final-decision controls (draft-first omnichannel rollout), while completing security baseline hardening.
+2. Continue this objective: Adopt OpenClaw capabilities incrementally in `{reply}` with human-final-decision controls (draft-first omnichannel rollout), while completing security baseline hardening.
 3. Preserve existing decisions; do not reopen settled architectural choices unless a blocker requires it.
 4. Execute immediate next actions:
 - Read HANDOVER + HUMAN_FINAL_DECISION_POLICY first, then continue issue #202 (draft-only omnichannel bridge spec).
