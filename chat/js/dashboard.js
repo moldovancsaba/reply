@@ -24,6 +24,15 @@ function wireDashboardActions(root) {
     });
   });
 
+  root.querySelectorAll('[data-dashboard-service-control]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const name = (btn.getAttribute('data-dashboard-service-control') || '').trim();
+      const action = (btn.getAttribute('data-dashboard-action') || '').trim();
+      if (!name || !action) return;
+      handleServiceControl(name, action, btn);
+    });
+  });
+
   const retryBtn = root.querySelector('[data-dashboard-retry]');
   if (retryBtn) {
     retryBtn.addEventListener('click', () => renderDashboard());
@@ -62,6 +71,11 @@ function renderHealthCard(config) {
     if (action.type === 'sync') {
       return `<button type="button" class="btn-icon" data-dashboard-sync="${action.channel}" title="${action.title || 'Sync'}">
             ${action.icon ? `<img src="${action.icon}" alt="${action.channel}" class="platform-icon platform-icon--sm">` : action.emoji || '🔄'}
+          </button>`;
+    }
+    if (action.type === 'service') {
+      return `<button type="button" class="btn-icon" data-dashboard-service-control="${action.name}" data-dashboard-action="${action.action}" title="${action.title || 'Control'}">
+            ${action.emoji || '🔄'}
           </button>`;
     }
     return '';
@@ -141,15 +155,21 @@ export async function renderDashboard() {
     };
 
     // Format OpenClaw status
-    const openClawError = openClawStatus.error || 'Gateway Unreachable';
-    const shortError = openClawError.length > 30 ? openClawError.slice(0, 27) + '...' : openClawError;
-    const openClawChannelsCount = Array.isArray(openClawStatus.channels) ? openClawStatus.channels.length : 0;
+    const shortError = openClawStatus.error || 'OpenClaw health check failed';
+    const openClawStatusText = openClawStatus.status === 'online' ? '● Gateway Running' : `● ${shortError}`;
+    const openClawStatusClass = openClawStatus.status === 'online' ? 'tag-online' : 'tag-offline';
+
     const openClawMeta = [
-      { text: `Channels: ${openClawChannelsCount} linked` },
-      { text: `Heartbeat: ${formatLastSync(openClawStatus.timestamp || new Date())}` }
+      { text: `Channels: ${openClawStatus.channels || 0} linked` },
+      { text: `Heartbeat: ${formatLastSync(openClawStatus.heartbeat)}` }
     ];
-    if (openClawStatus.status !== 'online' && openClawError.length > 25) {
-      openClawMeta.unshift({ text: openClawError, overflow: true, title: openClawError });
+    const openClawActions = [
+      { type: 'settings', channel: 'whatsapp', title: 'OpenClaw Settings' }
+    ];
+    if (openClawStatus.status !== 'online') {
+      openClawActions.push({ type: 'service', name: 'openclaw', action: 'start', emoji: '🟢', title: 'Start OpenClaw Gateway' });
+    } else {
+      openClawActions.push({ type: 'service', name: 'openclaw', action: 'restart', emoji: '🔄', title: 'Restart OpenClaw Gateway' });
     }
 
     // Render dashboard HTML
@@ -158,16 +178,14 @@ export async function renderDashboard() {
       title: 'OpenClaw Health',
       icon: '🛡️',
       value: openClawStatus.status === 'online' ? (openClawStatus.version || 'Connected') : 'Offline',
-      statusText: openClawStatus.status === 'online' ? '● Gateway Running' : `● ${shortError}`,
-      statusClass: openClawStatus.status === 'online' ? 'tag-online' : 'tag-offline',
+      statusText: openClawStatusText,
+      statusClass: openClawStatusClass,
       meta: openClawMeta,
-      actions: [
-        { type: 'settings', channel: 'whatsapp', title: 'OpenClaw Settings' }
-      ]
+      actions: openClawActions
     })
       }
 
-      ${renderHealthCard({
+       ${renderHealthCard({
         title: 'System Status',
         icon: '🖥️',
         value: 'Online',
@@ -178,6 +196,31 @@ export async function renderDashboard() {
         ]
       })
       }
+
+      ${(() => {
+        const worker = health.services?.worker || { status: 'offline' };
+        const workerUptime = worker.uptime ? (worker.uptime / 3600).toFixed(1) + 'h' : '0h';
+
+        const workerActions = [];
+        if (worker.status === 'online') {
+          workerActions.push({ type: 'service', name: 'worker', action: 'restart', emoji: '🔄', title: 'Restart Worker' });
+        } else {
+          workerActions.push({ type: 'service', name: 'worker', action: 'start', emoji: '🟢', title: 'Start Worker' });
+        }
+
+        return renderHealthCard({
+          title: 'Background Worker',
+          icon: '⚙️',
+          value: worker.status === 'online' ? 'Running' : 'Offline',
+          statusText: `● Process ${worker.status}`,
+          statusClass: worker.status === 'online' ? 'tag-online' : 'tag-offline',
+          meta: [
+            { text: `PID: ${worker.pid || 'N/A'} | Uptime: ${workerUptime}` },
+            { text: `Last Pulse: ${formatLastSync(new Date().toISOString())}` }
+          ],
+          actions: workerActions
+        });
+      })()}
       
       ${renderHealthCard({
         title: 'iMessage Sync',
@@ -305,6 +348,7 @@ export async function renderDashboard() {
     // Safe injection of triage logs
     const triageContainer = dashboard.querySelector('#dashboard-triage-log');
     if (triageContainer) {
+      triageContainer.innerHTML = ''; // Clear previous logs
       if (logs.length > 0) {
         logs.forEach(log => {
           const entry = document.createElement('div');
@@ -389,6 +433,34 @@ export async function handleSync(source, triggerButton = null) {
   } catch (error) {
     console.error(`Sync failed for ${source}: `, error);
     alert(`Sync failed: ${error.message} `);
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = originalHtml;
+    }
+  }
+}
+/**
+ * Handle service control action
+ */
+export async function handleServiceControl(name, action, triggerButton = null) {
+  const button = triggerButton || null;
+  const originalHtml = button ? button.innerHTML : '';
+  try {
+    if (button) {
+      button.disabled = true;
+      button.textContent = '⏳';
+    }
+
+    const { controlService } = await import('./api.js');
+    await controlService(name, action);
+
+    if (button) button.textContent = '✅';
+    setTimeout(() => {
+      renderDashboard(); // Refresh dashboard
+    }, 1000);
+  } catch (error) {
+    console.error(`Service control failed for ${name} ${action}: `, error);
+    alert(`Action failed: ${error.message} `);
     if (button) {
       button.disabled = false;
       button.innerHTML = originalHtml;

@@ -1,102 +1,69 @@
 # Next Agent Continuation Prompt
 
-Generated: 2026-02-18 09:48:28 UTC
-Trigger: User warned context is about to reach 70%
+**Project:** {reply}
+**Last Updated:** 2026-03-02 19:42 UTC
+**Status:** v0.4.5 Released (Fixes: Settings Persistence, Sync Depth, KYC Speed)
 
-## Session Snapshot
+---
 
-- Branch: `main`
-- Working tree changes:
-- D IDEABANK.md
-- M README.md
-- M chat/css/app.css
-- M chat/js/api.js
-- M chat/js/contacts.js
-- M chat/js/dashboard.js
-- M chat/js/kyc.js
-- M chat/js/messages.js
-- M chat/package.json
-- M chat/server.js
-- M docs/APP_NAVIGATION.md
-- M docs/DEFINITION_OF_DONE.md
-- M docs/HANDOVER.md
-- M docs/LEARNINGS.md
-- M docs/NEXT_AGENT_PROMPT.md
-- M docs/PROJECT_MANAGEMENT.md
-- M docs/ROADMAP.md
-- ?? chat/js/platform-icons.js
-- ?? chat/security-audit.js
-- ?? chat/security-policy.js
-- ?? docs/HUMAN_FINAL_DECISION_POLICY.md
-- ?? public/
+## Developer Agent Guidelines
 
-## Objective
+You are a Developer Agent working on `{reply}`. Follow these operating principles at all times.
 
-Adopt OpenClaw capabilities incrementally in `{reply}` with human-final-decision controls (draft-first omnichannel rollout), while completing security baseline hardening.
+### Operating Principles
+- **Be explicit, evidence-driven, and reversible**: small edits, minimal blast radius, clear rollback.
+- **Prefer “prove it” over “trust me”**: include commands run + outputs/observations.
+- **Keep the board and handover current** as you work (not at the end).
+- **Absolute Mandate – Documentation = Code**: Documentation must be maintained with the same rigor as code. Never use placeholders. Every logic/file/feature update must trigger an immediate documentation refresh.
 
-## Completed
+### Definition of Done (DoD)
+1. **Scope & acceptance**: Match the issue/card acceptance criteria explicitly.
+2. **Quality gates**: Build passes, tests pass, no new warnings/errors.
+3. **Implementation hygiene**: Minimal, coherent changes. No secrets committed.
+4. **Evidence & documentation**: Provide what/where/how/results. Update [docs/HANDOVER.md](./docs/HANDOVER.md) and [docs/RELEASE_NOTES.md](./docs/RELEASE_NOTES.md). Update the project board with correct status + concise notes.
 
-- Added human final-decision policy doc and linked it in README/HANDOVER.
-- Implemented security control module (local-only checks, optional operator token checks, explicit human approval checks, audit log).
-- Added security audit CLI with --fix and npm scripts security:audit/security:fix.
-- Applied sensitive-route authorization to send/sync/settings/KYC/analyze/disconnect routes in server.
-- Replaced shell exec usage in updated iMessage/sync paths with argv-based execFile.
-- Updated SSOT issues #199 and #202 with progress comments and set board status to In Progress.
+### Board Discipline (SSOT)
+- **Board URL**: https://github.com/users/moldovancsaba/projects/1
+- **Issues Repo**: `moldovancsaba/mvp-factory-control`
+- **Action**: Move selected card to “In Progress” when starting. Move to “Done” with validation evidence.
 
-## In Progress
+---
 
-- Define Telegram/Discord draft-only ChannelBridge integration plan using OpenClaw sidecar.
-- Enable operator token enforcement in runtime env and verify UI headers end-to-end.
+## 70 Protocol (Handover)
 
-## Immediate Next Actions
+**Trigger:** Context usage reaching threshold.
 
-- Read HANDOVER + HUMAN_FINAL_DECISION_POLICY first, then continue issue #202 (draft-only omnichannel bridge spec).
-- Implement minimal OpenClaw sidecar contract for inbound event normalization (channel, peer, messageId, text, timestamp, attachments).
-- Keep outbound blocked by default; require explicit human approval (Enter/send) for final send.
-- Set REPLY_OPERATOR_TOKEN and REPLY_SECURITY_REQUIRE_OPERATOR_TOKEN=true in local env; validate sensitive routes with and without token.
-- Run security audit and fix commands before any new channel rollout changes.
+### A) Session Snapshot
+- **Branch:** `main`
+- **Objective:** Fix Gmail sync depth, settings persistence (API key loss), and KYC speed.
+- **Status:** **DONE**. Version 0.4.5 is fully released and verified.
 
-## Known Blockers
+### B) What Changed in this Session
+- **Settings Persistence Fixed**: Resolved bug in `settings-store.js:withDefaults` that wiped secrets during security token updates.
+- **Gmail Sync Depth**: Increased limit to 10,000 messages in `gmail-connector.js`.
+- **KYC Performance**: Increased auto-scan speed to 20/hr (cap 60/hr) via `.env`.
+- **Standalone Settings**: Completed migration to `settings.html` + `settings-fragment.html`.
+- **Operator Token**: Transitioned to automatic injection via `server.js`.
 
-- Environment PATH is minimal; use absolute binaries (/opt/homebrew/bin/node, /usr/bin/git, /bin/bash).
-- WhatsApp desktop UI automation remains flaky across app variants (#196).
+### C) Immediate Next Actions
+1. **Gmail Reconnect**: **USER ACTION REQUIRED**. Re-authenticate Gmail in Settings to restore the secrets wiped during today's upgrade.
+2. **Monitor KYC**: Confirm that contact intelligence advances at the new rate of ~480/day.
+3. **Refactor server.js**: (Issue #211) Decompose monolithic routes into modules.
 
-## Validation Commands
+### D) Validation Commands
+- `cd ./chat && npm test`
+- `curl -s http://127.0.0.1:45311/api/health | jq`
+- `make status`
 
-- cd /Users/moldovancsaba/Projects/reply && /opt/homebrew/bin/node chat/security-audit.js
-- cd /Users/moldovancsaba/Projects/reply && /opt/homebrew/bin/node chat/security-audit.js --fix
-- cd /Users/moldovancsaba/Projects/reply && /usr/bin/git status --short
-
-## Notes
-
-- SSOT rule remains mandatory: all work tracked in mvp-factory-control + Project 1 only.
-- Do not recreate local ideabank/tasklist files.
-
-## Docs To Read First
-
-- /Users/moldovancsaba/Projects/reply/docs/HANDOVER.md
-- /Users/moldovancsaba/Projects/reply/docs/PROJECT_MANAGEMENT.md
-- /Users/moldovancsaba/Projects/reply/docs/HUMAN_FINAL_DECISION_POLICY.md
+---
 
 ## Copy-Paste Prompt For The Next Agent
 
 ```text
-You are taking over from a previous agent because context usage reached the handover threshold.
-
-Follow this order:
-1. Read these docs first: /Users/moldovancsaba/Projects/reply/docs/HANDOVER.md, /Users/moldovancsaba/Projects/reply/docs/PROJECT_MANAGEMENT.md, /Users/moldovancsaba/Projects/reply/docs/HUMAN_FINAL_DECISION_POLICY.md.
-2. Continue this objective: Adopt OpenClaw capabilities incrementally in `{reply}` with human-final-decision controls (draft-first omnichannel rollout), while completing security baseline hardening.
-3. Preserve existing decisions; do not reopen settled architectural choices unless a blocker requires it.
-4. Execute immediate next actions:
-- Read HANDOVER + HUMAN_FINAL_DECISION_POLICY first, then continue issue #202 (draft-only omnichannel bridge spec).
-- Implement minimal OpenClaw sidecar contract for inbound event normalization (channel, peer, messageId, text, timestamp, attachments).
-- Keep outbound blocked by default; require explicit human approval (Enter/send) for final send.
-- Set REPLY_OPERATOR_TOKEN and REPLY_SECURITY_REQUIRE_OPERATOR_TOKEN=true in local env; validate sensitive routes with and without token.
-- Run security audit and fix commands before any new channel rollout changes.
-5. Run validations:
-- cd /Users/moldovancsaba/Projects/reply && /opt/homebrew/bin/node chat/security-audit.js
-- cd /Users/moldovancsaba/Projects/reply && /opt/homebrew/bin/node chat/security-audit.js --fix
-- cd /Users/moldovancsaba/Projects/reply && /usr/bin/git status --short
-6. If a blocker prevents progress, update the handover doc and refresh this continuation prompt before ending the window.
-
+You are a Developer Agent taking over the {reply} project.
+1. Read ./docs/HANDOVER.md and ./docs/PROJECT_MANAGEMENT.md first.
+2. Verify the current state by running: cd ./chat && npm test
+3. Objective: Continue post-v0.4.5 stabilization and begin Issue #211 (server.js decomposition).
+4. Follow the "Developer Agent Guidelines" and "70 Protocol" in ./docs/NEXT_AGENT_PROMPT.md.
+5. Project Board: https://github.com/users/moldovancsaba/projects/1 (Product={reply}).
 ```

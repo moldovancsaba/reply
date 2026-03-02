@@ -66,6 +66,8 @@ function getNotesCount() {
     return 0;
 }
 
+const serviceManager = require("../service-manager");
+
 async function serveSystemHealth(req, res) {
     const settings = readSettings();
     const mailStatus = readStatus("mail_sync_status.json");
@@ -81,6 +83,18 @@ async function serveSystemHealth(req, res) {
     const whatsappStatus = readStatus("whatsapp_sync_status.json");
     const notesStatus = readStatus("notes_sync_status.json");
     const kycStatus = readStatus("kyc_sync_status.json");
+
+    // Check Hatori/Ollama
+    let hatoriHealth = { status: "offline", ollama: "offline" };
+    try {
+        const hatoriPort = process.env.REPLY_HATORI_PORT || "23572";
+        const hRes = await fetch(`http://127.0.0.1:${hatoriPort}/v1/health`, { signal: AbortSignal.timeout(2000) });
+        if (hRes.ok) {
+            const hData = await hRes.json();
+            hatoriHealth.status = "online";
+            hatoriHealth.ollama = hData.runtime_status?.ollama?.ok ? "online" : "offline";
+        }
+    } catch (e) { /* ignore */ }
 
     const [imessageCount, whatsappCount, mailCount, linkedinMessagesCount, linkedinPostsCount, notesCountIngested] = await Promise.all([
         countIngested("iMessage"),
@@ -119,9 +133,31 @@ async function serveSystemHealth(req, res) {
         })(),
     ]);
 
+    const services = serviceManager.getStatus();
+
+    const systemStatus = readStatus("system_status.json");
+
+    // Simple DB check: if chat.db exists and is readable
+    const dbPath = path.join(DATA_DIR, "chat.db");
+    const dbExists = fs.existsSync(dbPath);
+    let dbStatus = dbExists ? "ok" : "repair_required";
+
+    // Inject OpenClaw status into services if it's not managed but found via health check
+    // This allows the UI to see 'openclaw' in the services list for the "Start" button logic
+    if (!services.openclaw) {
+        services.openclaw = { name: "openclaw", status: "unknown" };
+    }
+
     const health = {
         uptime: Math.floor(process.uptime()),
-        status: "online",
+        status: systemStatus.status || "online",
+        progress: systemStatus.progress || 100,
+        db: { status: dbStatus },
+        services: {
+            ...services,
+            hatori_api: { status: hatoriHealth.status },
+            ollama: { status: hatoriHealth.ollama }
+        },
         channels: {
             imessage: { ...imessageStatus, processed: imessageCount, total: imessageCount },
             whatsapp: { ...whatsappStatus, processed: whatsappCount, total: whatsappCount },
@@ -134,6 +170,7 @@ async function serveSystemHealth(req, res) {
                 connected: !!(gmailOk || imapOk),
                 processed: mailCount,
                 total: mailCount,
+                status: (mailStatus.state === 'error' || (!!(gmailOk || imapOk) && mailCount === 0 && mailStatus.state === 'idle')) ? "repair_required" : (mailStatus.state || "ok")
             },
             linkedin_messages: {
                 ...readStatus("linkedin_sync_status.json"),
@@ -156,6 +193,52 @@ async function serveSystemHealth(req, res) {
 
     writeJson(res, 200, health);
 }
+
+async function serveServiceControl(req, res) {
+    try {
+        const { readJsonBody } = require("../utils/server-utils");
+        const { name, action } = await readJsonBody(req);
+
+        if (!name || !action) {
+            writeJson(res, 400, { error: "Missing name or action" });
+            return;
+        }
+
+        console.log(`[SystemControl] Service: ${name}, Action: ${action}`);
+
+        if (action === "restart") {
+            await serviceManager.restart(name);
+        } else if (action === "stop") {
+            await serviceManager.stop(name);
+        } else if (action === "start") {
+            const { resolveOpenClawBinary } = require("../utils/whatsapp-utils");
+            let script = null;
+            let args = [];
+
+            if (name === 'worker') {
+                script = path.join(__dirname, '..', 'background-worker.js');
+            } else if (name === 'openclaw') {
+                script = resolveOpenClawBinary();
+                args = ['gateway'];
+            }
+
+            if (!script) {
+                writeJson(res, 400, { error: `Unknown service or missing configuration for ${name}` });
+                return;
+            }
+            serviceManager.start(name, script, args);
+        } else {
+            writeJson(res, 400, { error: "Invalid action" });
+            return;
+        }
+
+        writeJson(res, 200, { status: "ok", service: serviceManager.getStatus(name) });
+    } catch (e) {
+        console.error("[SystemControl Error]", e);
+        writeJson(res, 500, { error: e.message });
+    }
+}
+
 async function serveOpenClawStatus(req, res) {
     const { execFile } = require("child_process");
     const { resolveOpenClawBinary } = require("../utils/whatsapp-utils");

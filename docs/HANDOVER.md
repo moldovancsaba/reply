@@ -309,4 +309,27 @@ See detailed plans:
   - `chat/js/api.js`: Added `reportHatoriOutcome()` — calculates `sent_as_is` vs `edited_then_sent` by diffing the sent text vs. the original draft, then POSTs the annotation to `/api/hatori-outcome` fire-and-forget. `sendMessage()` now accepts `hatoriContext` and triggers this automatically.
   - `chat/js/messages.js`: Added `activeHatoriContext` module state and `seedHatoriDraft(text, hatori_id)`. Exposed `window.seedHatoriDraft`. Passes context to `sendMessage()` and clears it after send.
   - `chat/js/contacts.js`: `selectContact()` now calls `window.seedHatoriDraft(contact.draft, contact.draft_hatori_id)` to pre-populate the composer when switching contacts.
-- **Pushed**: Commit `61acc1f` on `origin/main`.
+ 
+## Active Session Update (2026-03-02, Settings IA & Dashboard Polish)
+- **Settings UI Modularization**: Refactored the monolithic Settings UI into a separate HTML fragment (`fragments/settings-fragment.html`).
+- **Lazy Loading**: Implemented asynchronous loading for the settings fragment in `js/settings.js`, ensuring it only loads when needed and `await`s the DOM wiring to prevent race conditions.
+- **Dashboard Triage Log Fix**: Resolved the "overload" issue where triage logs would overflow or duplicate. Added `max-height` and `overflow-y: auto` via CSS and ensured `innerHTML` is cleared before re-rendering in `js/dashboard.js`.
+- **Project Maintenance**: Synchronized version `0.4.4` across `package.json`, `README.md`, and `RELEASE_NOTES.md`. Updated GitHub Project 1 board statuses for Settings IA and Versioning.
+ 
+## Active Session Update (2026-03-02, Rich Status & Toolbar v0.4.4)
+- **Rich Status Reporting**: Enhanced `routes/system.js` and `server.js` to report aggregated health including "loading", "online", and "repair required" states.
+- **Service Management**: Added `cwd` support to `ServiceManager.js` and fixed Hatori auto-start in `server.js` by launching it directly from its project root via Python/uvicorn.
+- **Toolbar v0.4.4**: Rebuilt and installed a clean version of the macOS toolbar. Fixed version mismatch by performing a full `rm -rf` and `make install` sequence to resolve stale process issues.
+- **SSOT Alignment**: Synchronized the GitHub Project Board (Project 1) by creating and closing issue **#334** with status `Done`, product `{reply}`, and release `v0.4.4`.
+- **Validation**: Verified richness of `/api/health` output and confirmed "orange" loading icon in toolbar during hub startup.
+
+
+## Active Session Update (2026-03-02, Release v0.4.5)
+- **Settings Persistence Fixed**: Resolved `withDefaults` bug that wiped sensitive fields (API keys/tokens) during safety merges. Validated that UI-entered keys now survive security token updates.
+- **Gmail Sync Depth**: Increased initial sync limit to 10,000 messages for `all_mail` and `custom` scopes.
+- **Gmail Bug Fixed**: Fixed a terminal regression (`await` syntax error) introduced during sync depth implementation.
+- **KYC Performance**: Tuned background auto-scan to 20/hour (cap 60/hour) via new `.env` variables `REPLY_KYC_AUTO_SCAN_PER_HOUR` and `REPLY_KYC_BATCH_SIZE`.
+- **Operator Token Injected**: Successfully transitioned to automatic `window.REPLY_OPERATOR_TOKEN` injection via `server.js` matching `.env`. No more manual token entry required.
+- **Stand-alone Settings UI**: Completed migration to `settings.html` + `fragments/settings-fragment.html` for clean, full-page configuration.
+- **Validation**: 28/28 tests passed (`npm test`). Verified server health and KYC progress via `/api/health`.
+- **NEXT P1**: Gmail Reconnect. User must disconnect/connect Gmail in Settings to restore the secrets wiped during the token migration earlier today.
