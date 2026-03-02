@@ -33,6 +33,7 @@ function seedHatoriDraft(draftText, hatoriId, force = false) {
         chatInput.dispatchEvent(new Event('input', { bubbles: true }));
     }
     activeHatoriContext = { hatori_id: hatoriId || null, original_draft: draftText };
+    window.__replyActiveHatoriContext = activeHatoriContext;
 }
 
 function normalizeChannelKey(channel) {
@@ -392,6 +393,7 @@ export async function handleSendMessage() {
         const result = await sendMessage(targetHandle, text, channel, activeHatoriContext);
         // Clear the annotation state after send
         activeHatoriContext = null;
+        window.__replyActiveHatoriContext = null;
         console.log(`[SendMessage] Result status: ${result?.status}`);
 
         if (result?.status !== 'ok') {

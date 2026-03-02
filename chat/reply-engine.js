@@ -24,7 +24,12 @@ async function buildThreadContext(handle, limit = 15) {
         const dateRaw = d.text && d.text.match(/\[(\d{4}-\d{2}-\d{2}[^\]]+)\]/);
         const date = dateRaw ? dateRaw[1] : null;
         const stripped = (d.text || '').replace(/^\[[^\]]+\]\s*(Me|\S+):?\s*/i, '').trim();
-        return { role: isMe ? 'me' : 'contact', text: stripped, date };
+        return {
+          role: isMe ? 'me' : 'contact',
+          text: stripped,
+          date,
+          channel: (d.channel || d.source || '').toString().toLowerCase()
+        };
       })
       .filter(m => m.text)
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
@@ -37,6 +42,51 @@ async function buildThreadContext(handle, limit = 15) {
 }
 
 module.exports.buildThreadContext = buildThreadContext;
+
+function detectLanguageHeuristic(text) {
+  const sample = String(text || '').toLowerCase();
+  if (!sample.trim()) return 'en';
+  if (/[áéíóöőúüű]/.test(sample) || /\b(szia|köszi|koszi|vagy|hogy|nem|igen|majd|és|de)\b/.test(sample)) return 'hu';
+  if (/[äöüß]/.test(sample) || /\b(und|nicht|bitte|danke|ja|nein)\b/.test(sample)) return 'de';
+  if (/[ñ¿¡]/.test(sample) || /\b(hola|gracias|por|favor|que|como)\b/.test(sample)) return 'es';
+  return 'en';
+}
+
+function detectDominantLanguage(threadContext, fallbackText = '') {
+  const counts = new Map();
+  const push = (code) => counts.set(code, (counts.get(code) || 0) + 1);
+  const arr = Array.isArray(threadContext) ? threadContext : [];
+  for (const m of arr.slice(-40)) {
+    const code = detectLanguageHeuristic(m?.text || '');
+    push(code);
+  }
+  if (fallbackText) push(detectLanguageHeuristic(fallbackText));
+  let best = 'en';
+  let bestN = -1;
+  for (const [k, v] of counts.entries()) {
+    if (v > bestN) {
+      best = k;
+      bestN = v;
+    }
+  }
+  return best;
+}
+
+function inferToneProfile(threadContext) {
+  const arr = Array.isArray(threadContext) ? threadContext : [];
+  if (!arr.length) return 'neutral';
+  let informal = 0;
+  let formal = 0;
+  for (const m of arr.slice(-40)) {
+    const t = String(m?.text || '').toLowerCase();
+    if (!t) continue;
+    if (/[😀😅😂🤣😊❤️👍]/.test(t) || /\b(xd|lol|haha|köszi|koszi|szia)\b/.test(t)) informal += 1;
+    if (/\b(tisztelettel|köszönöm|udvozlettel|regards|dear|best regards)\b/.test(t)) formal += 1;
+  }
+  if (informal > formal + 1) return 'friendly';
+  if (formal > informal + 1) return 'formal';
+  return 'balanced';
+}
 
 // Using default localhost:11434
 const ollama = new Ollama();
@@ -66,14 +116,25 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
       console.log(`[Hatori] Routing logic for ${recipient || 'unknown'}...`);
       // Build the stateless thread_context payload so {hatori} has guaranteed
       // accurate conversation history without relying on its own replicated DB.
-      const thread_context = await buildThreadContext(recipient, 15);
+      const thread_context = await buildThreadContext(recipient, 50);
+      const identifiedLanguage = detectDominantLanguage(thread_context, message);
+      const toneProfile = inferToneProfile(thread_context);
+      const externalRequestId = `reply:req:${recipient || 'general'}:${Buffer.from(message).toString('base64').slice(0, 48)}`;
       const response = await hatori.getResponse({
         conversation_id: `reply:${recipient || 'general'}`,
         message_id: `reply:msg-${Date.now()}`,
         sender_id: `reply:${recipient || 'unknown'}`,
         message: message,
         thread_context,
-        metadata: { platform: 'reply-poc', context_messages: thread_context.length }
+        external_request_id: externalRequestId,
+        metadata: {
+          platform: 'reply-poc',
+          context_messages: thread_context.length,
+          identified_language: identifiedLanguage,
+          language_hint: identifiedLanguage,
+          tone_profile: toneProfile,
+          omnichannel: true,
+        }
       });
 
       return {

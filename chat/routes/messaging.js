@@ -58,7 +58,7 @@ async function getConversationsIndexFresh(q = "") {
 
     // 1. Process stats index to create base items
     for (const [handle, stats] of statsIndex.entries()) {
-        const contact = contactStore.getByHandle(handle);
+        const contact = contactStore.findContact(handle);
         const key = contact?.id || handle;
 
         if (!itemsMap.has(key)) {
@@ -220,6 +220,7 @@ async function serveSuggest(req, res) {
         }
 
         let message = providedMessage;
+        let inferredChannel = "other";
         if (!message) {
             const handles = contactStore.getAllHandles(handle);
             const { getHistory } = require("../vector-store");
@@ -231,10 +232,12 @@ async function serveSuggest(req, res) {
                     role: (d.text || "").includes("] Me:") ? "me" : "contact",
                     text: stripMessagePrefix(d.text || ""),
                     date: extractDateFromText(d.text || ""),
+                    channel: channelFromDoc(d) || inferChannelFromHandle(handle),
                 }))
                 .filter((m) => m.date && m.text && m.role === "contact")
                 .sort((a, b) => b.date - a.date)[0];
             message = lastIncoming?.text?.trim() || "";
+            inferredChannel = (lastIncoming?.channel || inferChannelFromHandle(handle) || "other").toString().toLowerCase();
         }
 
         if (!message) {
@@ -249,11 +252,11 @@ async function serveSuggest(req, res) {
             try {
                 await hatori.ingestEvent({
                     external_event_id: `reply:msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                    kind: handle.includes('@') ? 'email' : 'imessage',
+                    kind: inferredChannel === "email" ? "email" : (inferredChannel || "other"),
                     conversation_id: `reply:${handle}`,
                     sender_id: `reply:${handle}`,
                     content: message,
-                    metadata: { source: 'api-suggest' }
+                    metadata: { source: 'api-suggest', channel: inferredChannel, omnichannel: true }
                 });
             } catch (e) {
                 console.warn("[Hatori] Ingest failed, continuing to suggestion:", e.message);
@@ -482,6 +485,7 @@ module.exports = {
     serveFeedback,
     serveSendMessage,
     serveSendWhatsApp,
+    serveHatoriOutcome,
     invalidateConversationsCache: () => {
         conversationsIndexCache.builtAtMs = 0;
         conversationStatsCache.clear();

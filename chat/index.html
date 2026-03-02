@@ -28,19 +28,19 @@
     <!-- PANE A: SIDEBAR -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <div style="display:flex; gap:10px; align-items:center;">
-          <span id="btn-dash" class="material-symbols-outlined"
-            style="font-size: 28px; color: var(--text-primary); cursor: pointer;" title="Go to Dashboard">
+        <div class="u-flex-center-gap">
+          <span id="btn-dash" class="material-symbols-outlined u-sidebar-icon-lg" title="Go to Dashboard">
             flip_camera_android
           </span>
-          <span id="btn-settings" class="material-symbols-outlined"
-            style="font-size: 24px; color: var(--text-primary); cursor: pointer;" title="Settings">
+          <span id="btn-settings" class="material-symbols-outlined u-sidebar-icon" title="Settings">
             settings
           </span>
-          <span id="btn-training" class="material-symbols-outlined"
-            style="font-size: 24px; color: var(--text-primary); cursor: pointer;" title="Agent Training">
+          <span id="btn-training" class="material-symbols-outlined u-sidebar-icon" title="Agent Training">
             model_training
           </span>
+        </div>
+        <div id="services-health-status" class="services-health-status" title="Services Health">
+          <span id="services-health-dot" class="status-dot online"></span>
         </div>
         <div id="sync-status" title="Sync Status">
           <span class="status-dot active"></span>
@@ -59,8 +59,8 @@
     <!-- PANE B: MAIN CHAT -->
     <main class="chat-area">
       <header class="chat-header">
-        <div style="display:flex; align-items:center; gap:12px;">
-          <div id="active-contact-name-chat" style="font-weight: 700; font-size: 1.1rem;">Select a contact</div>
+        <div class="u-flex-center-gap-12">
+          <div id="active-contact-name-chat" class="u-chat-active-contact">Select a contact</div>
           <select id="status-select" onchange="updateManualStatus()"
             style="font-size:0.8rem; border-radius:12px; border:1px solid #ddd; padding:2px 8px; cursor:pointer; display:none;">
             <option value="open">🟢 Active</option>
@@ -68,9 +68,9 @@
             <option value="closed">🔵 Resolved</option>
           </select>
         </div>
-        <div style="display: flex; gap: 8px;">
+        <div class="u-flex-center-gap">
           <button class="btn btn-primary" id="btn-mic" title="Voice Input" style="display:none;">🎤 Mic</button>
-          <button class="btn btn-primary" id="btn-magic" title="Instant Polish" style="display:none;">✨ Magic</button>
+          <button class="btn btn-primary" id="btn-magic" title="Refine draft" style="display:none;">✨ Refine</button>
           <button class="btn btn-primary" id="btn-suggest" style="display:none;">💡 Suggest</button>
         </div>
       </header>
@@ -88,22 +88,21 @@
           </select>
           <button id="btn-send" class="btn btn-primary">Send</button>
         </div>
-        <div id="channel-policy-hint" class="channel-policy-hint" style="display:none;"></div>
-        <div id="suggestion-explanation" class="suggestion-explanation" style="display:none;"></div>
+        <div id="channel-policy-hint" class="channel-policy-hint u-display-none"></div>
+        <div id="suggestion-explanation" class="suggestion-explanation u-display-none"></div>
       </div>
 
       <div id="messages" class="messages-container">
         <!-- Messages will be injected here -->
       </div>
 
-      <div id="dashboard" class="dashboard" style="display:none;">
+      <div id="dashboard" class="dashboard u-display-none">
         <!-- Dashboard items will be injected here -->
       </div>
 
       <!-- Agent Training Page -->
-      <div id="training-page" class="settings-page" style="display:none; overflow-y:auto;">
-        <div class="settings-page-shell"
-          style="max-width: 800px; margin: 0 auto; height:100%; display:flex; flex-direction:column;">
+      <div id="training-page" class="settings-page u-display-none u-overflow-y-auto">
+        <div class="settings-page-shell u-max-width-800 u-margin-auto u-flex-column u-height-100 u-display-flex">
           <div class="settings-page-topbar">
             <div>
               <div class="settings-page-title">Agent Training</div>
@@ -114,362 +113,22 @@
               <button id="training-close" class="btn btn-secondary btn-sm">Close</button>
             </div>
           </div>
-          <div id="training-list-container" style="flex:1; overflow-y:auto; padding-top: 20px;">
-            <div style="font-size:0.9rem; color:var(--text-secondary); text-align:center;">Loading examples...</div>
+          <div id="kyc-loader" class="u-text-center u-padding-20 u-display-none">
+            <div class="u-color-tertiary u-font-size-09">Loading KYC data...</div>
+          </div>
+          <div id="training-list-container" class="u-flex-1 u-overflow-y-auto u-padding-top-20">
+            <!-- Training Examples will be injected here -->
           </div>
         </div>
       </div>
 
-      <!-- Settings Page -->
-      <div id="settings-page" class="settings-page" style="display:none;">
-        <div class="settings-page-shell">
-          <div class="settings-page-topbar">
-            <div>
-              <div class="settings-page-title">Settings</div>
-              <div class="settings-page-subtitle">Local-only configuration for this machine</div>
-            </div>
-            <div class="settings-page-actions">
-              <button id="settings-close" class="btn btn-secondary btn-sm">Back</button>
-              <button id="settings-save" class="btn btn-primary btn-sm">Save</button>
-            </div>
-          </div>
-
-          <div class="settings-services">
-            <div class="settings-services-label">Configure a service:</div>
-            <div class="settings-services-actions">
-              <button type="button" class="btn btn-secondary btn-sm"
-                onclick="window.openChannelSettings('imessage')">iMessage</button>
-              <button type="button" class="btn btn-secondary btn-sm"
-                onclick="window.openChannelSettings('whatsapp')">WhatsApp</button>
-              <button type="button" class="btn btn-secondary btn-sm"
-                onclick="window.openChannelSettings('email')">Email</button>
-              <button type="button" class="btn btn-secondary btn-sm"
-                onclick="window.openChannelSettings('bridge')">Bridge</button>
-              <button type="button" class="btn btn-secondary btn-sm"
-                onclick="window.openChannelSettings('notes')">Notes</button>
-            </div>
-          </div>
-
-          <div id="settings-filter-bar" class="settings-filter-bar" style="display:none;">
-            <div id="settings-filter-label" class="settings-filter-label">Configuring</div>
-            <button id="settings-show-all" class="btn btn-ghost btn-sm">General Settings</button>
-          </div>
-
-          <div id="settings-modal-scroll" class="settings-page-scroll">
-            <div id="settings-section-global" class="settings-section">
-              <div class="settings-section-title">Core Credentials & Security</div>
-
-              <div class="settings-grid">
-                <div class="settings-field">
-                  <label class="settings-label" for="settings-global-google-api-key">Gemini API Key</label>
-                  <input id="settings-global-google-api-key" type="password" class="settings-input"
-                    placeholder="Leave blank to keep existing">
-                  <div id="settings-global-google-api-key-hint" class="settings-hint">Not set</div>
-                </div>
-
-                <div class="settings-field">
-                  <label class="settings-label" for="settings-global-operator-token">Operator Token</label>
-                  <input id="settings-global-operator-token" type="password" class="settings-input"
-                    placeholder="Leave blank to keep existing">
-                  <div id="settings-global-operator-token-hint" class="settings-hint">Not set</div>
-                </div>
-              </div>
-
-              <div class="settings-grid settings-grid-2 mt-md">
-                <div class="settings-checkbox-group">
-                  <input id="settings-global-require-token" type="checkbox">
-                  <label for="settings-global-require-token" class="settings-checkbox-label">Enforce Token</label>
-                </div>
-                <div class="settings-checkbox-group">
-                  <input id="settings-global-local-writes" type="checkbox">
-                  <label for="settings-global-local-writes" class="settings-checkbox-label">Local Writes Only</label>
-                </div>
-              </div>
-
-              <div class="settings-grid settings-grid-2 mt-sm">
-                <div class="settings-checkbox-group">
-                  <input id="settings-global-require-approval" type="checkbox">
-                  <label for="settings-global-require-approval" class="settings-checkbox-label">Human Approval</label>
-                </div>
-              </div>
-            </div>
-
-            <div id="settings-channel-mail" class="settings-section mt-sm">
-              <div class="settings-section-title">Email (IMAP / Gmail)</div>
-
-              <div class="settings-grid" style="grid-template-columns: 1fr 120px;">
-                <div class="settings-field">
-                  <label class="settings-label" for="settings-imap-host">Host</label>
-                  <input id="settings-imap-host" class="settings-input" placeholder="imap.gmail.com">
-                </div>
-                <div class="settings-field">
-                  <label class="settings-label" for="settings-imap-port">Port</label>
-                  <input id="settings-imap-port" class="settings-input" value="993">
-                </div>
-              </div>
-
-              <div class="settings-checkbox-group mt-sm">
-                <input id="settings-imap-secure" type="checkbox" checked>
-                <label for="settings-imap-secure" class="settings-checkbox-label">Use TLS</label>
-              </div>
-
-              <div class="settings-field">
-                <label class="settings-label" for="settings-imap-user">Username</label>
-                <input id="settings-imap-user" class="settings-input" placeholder="you@gmail.com">
-              </div>
-
-              <div class="settings-field">
-                <label class="settings-label" for="settings-imap-pass">Password (Gmail: App Password)</label>
-                <input id="settings-imap-pass" type="password" class="settings-input"
-                  placeholder="Leave blank to keep existing">
-                <div id="settings-imap-pass-hint" class="settings-hint">Not set</div>
-              </div>
-
-              <div class="settings-grid settings-grid-2 mt-sm">
-                <div class="settings-field">
-                  <label class="settings-label" for="settings-imap-mailbox">Mailbox</label>
-                  <input id="settings-imap-mailbox" class="settings-input" value="INBOX">
-                </div>
-                <div class="settings-field">
-                  <label class="settings-label" for="settings-imap-sent-mailbox">Sent Mailbox (optional)</label>
-                  <input id="settings-imap-sent-mailbox" class="settings-input" placeholder="[Gmail]/Sent Mail">
-                </div>
-              </div>
-
-              <div class="settings-grid settings-grid-2 mt-sm">
-                <div class="settings-field">
-                  <label class="settings-label" for="settings-imap-limit">Fetch limit / run</label>
-                  <input id="settings-imap-limit" class="settings-input" value="200">
-                </div>
-                <div class="settings-field">
-                  <label class="settings-label" for="settings-imap-since-days">First-run lookback (days)</label>
-                  <input id="settings-imap-since-days" class="settings-input" value="30">
-                </div>
-              </div>
-
-              <div class="settings-field">
-                <label class="settings-label" for="settings-self-emails">Self emails (comma-separated, optional)</label>
-                <input id="settings-self-emails" class="settings-input" placeholder="me@domain.com, alias@domain.com">
-              </div>
-
-              <div class="settings-hint mt-sm">
-                Stored locally on this machine (not encrypted). Use an App Password for Gmail.
-              </div>
-            </div>
-
-            <div id="settings-channel-gmail" class="settings-section mt-sm">
-              <div class="settings-section-title">Gmail (OAuth)</div>
-
-              <div class="settings-field">
-                <label class="settings-label" for="settings-gmail-client-id">OAuth Client ID</label>
-                <input id="settings-gmail-client-id" class="settings-input"
-                  placeholder="xxxx.apps.googleusercontent.com">
-              </div>
-
-              <div class="settings-field">
-                <label class="settings-label" for="settings-gmail-client-secret">OAuth Client Secret</label>
-                <input id="settings-gmail-client-secret" type="password" class="settings-input"
-                  placeholder="Leave blank to keep existing">
-                <div id="settings-gmail-client-secret-hint" class="settings-hint">Not set</div>
-              </div>
-
-              <div id="settings-gmail-status" class="settings-label mt-sm">Not connected</div>
-
-              <div class="settings-grid settings-grid-2 mt-md">
-                <div class="settings-field">
-                  <label class="settings-label" for="settings-gmail-scope">Sync scope</label>
-                  <select id="settings-gmail-scope" class="settings-input">
-                    <option value="inbox_sent">Inbox + Sent</option>
-                    <option value="all_mail">All Mail (exclude Spam/Trash)</option>
-                    <option value="custom">Custom query</option>
-                  </select>
-                </div>
-                <div class="settings-field">
-                  <label class="settings-label" for="settings-gmail-query">Custom query</label>
-                  <input id="settings-gmail-query" class="settings-input"
-                    placeholder='e.g. label:finance OR from:foo@bar.com'>
-                </div>
-              </div>
-
-              <div class="settings-button-group">
-                <button id="settings-gmail-disconnect" class="btn btn-ghost mx-sm">Disconnect</button>
-                <button id="settings-gmail-connect" class="btn btn-primary mx-sm">Connect Gmail</button>
-              </div>
-
-              <div class="settings-hint mt-sm">
-                Redirect URI must be registered in Google Cloud Console (usually
-                <code>http://localhost:3000/api/gmail/oauth-callback</code>).
-              </div>
-            </div>
-
-            <div id="settings-section-worker" class="settings-section mt-sm">
-              <div class="settings-section-title">Background Worker</div>
-
-              <div class="settings-grid settings-grid-2">
-                <div id="settings-worker-interval-wrap" class="settings-field">
-                  <label class="settings-label" for="settings-worker-interval">Poll interval (seconds)</label>
-                  <input id="settings-worker-interval" class="settings-input" value="60">
-                </div>
-                <div id="settings-worker-gmail-wrap" class="settings-field">
-                  <label class="settings-label" for="settings-worker-gmail-max">Gmail max / run</label>
-                  <input id="settings-worker-gmail-max" class="settings-input" value="100">
-                </div>
-              </div>
-
-              <div class="settings-grid settings-grid-2 mt-sm">
-                <div id="settings-worker-imessage-wrap" class="settings-field">
-                  <label class="settings-label" for="settings-worker-imessage-max">iMessage max / run</label>
-                  <input id="settings-worker-imessage-max" class="settings-input" value="1000">
-                </div>
-                <div id="settings-worker-whatsapp-wrap" class="settings-field">
-                  <label class="settings-label" for="settings-worker-whatsapp-max">WhatsApp max / run</label>
-                  <input id="settings-worker-whatsapp-max" class="settings-input" value="500">
-                </div>
-              </div>
-
-              <div id="settings-channel-notes" class="settings-field mt-sm">
-                <label class="settings-label" for="settings-worker-notes-max">Notes max / run (0 = unlimited)</label>
-                <input id="settings-worker-notes-max" class="settings-input" value="0">
-              </div>
-            </div>
-
-            <div id="settings-section-channel-bridge" class="settings-section mt-sm">
-              <div class="settings-section-title">Channel Bridge (Inbound)</div>
-
-              <div class="settings-grid settings-grid-2">
-                <div class="settings-field">
-                  <label class="settings-label" for="settings-bridge-telegram-mode">Telegram inbound mode</label>
-                  <select id="settings-bridge-telegram-mode" class="settings-input">
-                    <option value="draft_only">Draft only (recommended)</option>
-                    <option value="disabled">Disabled</option>
-                  </select>
-                </div>
-                <div class="settings-field">
-                  <label class="settings-label" for="settings-bridge-discord-mode">Discord inbound mode</label>
-                  <select id="settings-bridge-discord-mode" class="settings-input">
-                    <option value="draft_only">Draft only (recommended)</option>
-                    <option value="disabled">Disabled</option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="settings-hint mt-sm">
-                These flags are enforced server-side on <code>/api/channel-bridge/inbound</code>.
-              </div>
-            </div>
-
-            <div id="settings-section-ui" class="settings-section mt-sm">
-              <div class="settings-section-title">Channel UI</div>
-
-              <div class="settings-grid">
-                <div id="settings-channel-imessage" class="settings-card">
-                  <div class="settings-card-title">iMessage</div>
-                  <div class="settings-grid settings-grid-3 items-end">
-                    <div class="settings-field mt-0">
-                      <label class="settings-label" for="settings-ui-imessage-emoji">Emoji</label>
-                      <input id="settings-ui-imessage-emoji" class="settings-input">
-                    </div>
-                    <div class="settings-field mt-0">
-                      <label class="settings-label" for="settings-ui-imessage-me">My bubble</label>
-                      <input id="settings-ui-imessage-me" type="color" class="settings-input settings-color-input">
-                    </div>
-                    <div class="settings-field mt-0">
-                      <label class="settings-label" for="settings-ui-imessage-contact">Their bubble</label>
-                      <input id="settings-ui-imessage-contact" type="color" class="settings-input settings-color-input">
-                    </div>
-                  </div>
-                </div>
-
-                <div id="settings-channel-whatsapp" class="settings-card">
-                  <div class="settings-card-title">WhatsApp</div>
-                  <div class="settings-grid settings-grid-3 items-end">
-                    <div class="settings-field mt-0">
-                      <label class="settings-label" for="settings-ui-whatsapp-emoji">Emoji</label>
-                      <input id="settings-ui-whatsapp-emoji" class="settings-input">
-                    </div>
-                    <div class="settings-field mt-0">
-                      <label class="settings-label" for="settings-ui-whatsapp-me">My bubble</label>
-                      <input id="settings-ui-whatsapp-me" type="color" class="settings-input settings-color-input">
-                    </div>
-                    <div class="settings-field mt-0">
-                      <label class="settings-label" for="settings-ui-whatsapp-contact">Their bubble</label>
-                      <input id="settings-ui-whatsapp-contact" type="color" class="settings-input settings-color-input">
-                    </div>
-                  </div>
-                </div>
-
-                <div id="settings-channel-email" class="settings-card">
-                  <div class="settings-card-title">Email</div>
-                  <div class="settings-grid settings-grid-3 items-end">
-                    <div class="settings-field mt-0">
-                      <label class="settings-label" for="settings-ui-email-emoji">Emoji</label>
-                      <input id="settings-ui-email-emoji" class="settings-input">
-                    </div>
-                    <div class="settings-field mt-0">
-                      <label class="settings-label" for="settings-ui-email-me">My bubble</label>
-                      <input id="settings-ui-email-me" type="color" class="settings-input settings-color-input">
-                    </div>
-                    <div class="settings-field mt-0">
-                      <label class="settings-label" for="settings-ui-email-contact">Their bubble</label>
-                      <input id="settings-ui-email-contact" type="color" class="settings-input settings-color-input">
-                    </div>
-                  </div>
-                </div>
-
-                <div id="settings-channel-linkedin" class="settings-card">
-                  <div class="settings-card-title">LinkedIn</div>
-                  <div class="settings-hint mb-md" style="line-height:1.4;">
-                    LinkedIn integration is powered by the <strong>{reply} Chrome Extension</strong> and manual
-                    <strong>Data Archive Imports</strong>.
-                    <ul class="ml-lg mt-sm">
-                      <li><strong>Messages:</strong> Synced automatically when you browse LinkedIn with the extension
-                        active.</li>
-                      <li><strong>Contacts/Posts:</strong> Synced by importing <code>Connections.csv</code> and
-                        <code>Shares.csv</code> from your LinkedIn Data Archive.
-                      </li>
-                    </ul>
-                  </div>
-                  <div class="settings-grid settings-grid-3 items-end">
-                    <div class="settings-field mt-0">
-                      <label class="settings-label" for="settings-ui-linkedin-emoji">Emoji</label>
-                      <input id="settings-ui-linkedin-emoji" class="settings-input">
-                    </div>
-                    <div class="settings-field mt-0">
-                      <label class="settings-label" for="settings-ui-linkedin-me">My bubble</label>
-                      <input id="settings-ui-linkedin-me" type="color" class="settings-input settings-color-input">
-                    </div>
-                    <div class="settings-field mt-0">
-                      <label class="settings-label" for="settings-ui-linkedin-contact">Their bubble</label>
-                      <input id="settings-ui-linkedin-contact" type="color" class="settings-input settings-color-input">
-                    </div>
-                  </div>
-
-                  <div class="settings-section mt-md pt-md">
-                    <div class="settings-section-title">Bridge Settings</div>
-                    <div id="settings-bridge-linkedin-wrap" class="settings-field">
-                      <label class="settings-label" for="settings-bridge-linkedin-mode">Inbound Mode</label>
-                      <select id="settings-bridge-linkedin-mode" class="settings-input">
-                        <option value="draft_only">Draft only (recommended)</option>
-                        <option value="disabled">Disabled</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-    </main>
+    </main> <!-- Correct closing of chat-area -->
 
     <!-- PANE C: KYC DATA -->
     <section class="kyc-pane">
       <div id="kyc-empty-state" class="kyc-empty">
         <h3 class="kyc-empty-title">{reply} Overview</h3>
         <p class="kyc-empty-text">Select a contact from the sidebar to view their profile and history.</p>
-        <div class="kyc-tip">
-          <div class="kyc-tip-label">Quick Tip</div>
-          <div class="kyc-tip-text">You can search contacts by name or handle.</div>
-        </div>
       </div>
 
       <div id="kyc-content-editor" class="kyc-editor" style="display:none;">
@@ -532,7 +191,7 @@
 
           <div class="kyc-section">
             <div class="kyc-section-label">AI Suggestions</div>
-            <div id="kyc-suggestions" class="kyc-section-body">
+            <div id="kyc-suggestions" class="u-display-none">
               <!-- Suggestions injected here -->
             </div>
           </div>
