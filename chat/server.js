@@ -8,11 +8,15 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, ".env") });
+require("dotenv").config({ path: path.join(__dirname, ".env"), override: true });
 
 // Utilities & Middleware
 const { writeJson } = require("./utils/server-utils.js");
 const securityMiddleware = require("./middleware/security.js");
+const statusManager = require("./status-manager");
+
+// 0. Initial Status: Loading
+statusManager.update("system", { status: "loading", progress: 10, message: "Initializing hub..." });
 const { getSecurityPolicy } = require("./security-policy.js");
 const {
   syncWhatsApp
@@ -29,6 +33,43 @@ const bridgeRoutes = require("./routes/bridge.js");
 const contactRoutes = require("./routes/contacts.js");
 const systemRoutes = require("./routes/system.js");
 const { serveKyc, serveAnalyzeContact } = require("./routes/kyc.js");
+const serviceManager = require("./service-manager.js");
+
+// Start Managed Services
+// The original `serviceManager.start('worker', ...)` call is replaced by the new structured block below.
+// serviceManager.start('worker', path.join(__dirname, 'background-worker.js'));
+
+try {
+  const HATORI_PROJECT_PATH = path.join(__dirname, '..', '..', 'hatori');
+
+  // Mark services as loading in queue if they are about to be started
+  serviceManager.setStatus('hatori', 'loading in queue');
+  serviceManager.setStatus('worker', 'loading in queue');
+
+  if (process.env.REPLY_USE_HATORI === '1' && fs.existsSync(HATORI_PROJECT_PATH)) {
+    statusManager.update("system", { progress: 30, message: "Starting Hatori sidecar..." });
+    console.log("[Server] Auto-starting Hatori sidecar...");
+
+    // Use direct python command to avoid make process exiting immediately
+    const venvPython = path.join(HATORI_PROJECT_PATH, '.venv/bin/python');
+    const pythonCmd = fs.existsSync(venvPython) ? venvPython : 'python3';
+
+    serviceManager.start('hatori', pythonCmd, [
+      '-m', 'uvicorn', 'api.app:app',
+      '--host', '127.0.0.1',
+      '--port', '23572'
+    ], HATORI_PROJECT_PATH);
+  }
+
+  statusManager.update("system", { progress: 50, message: "Launching background worker..." });
+  const bgWorkerPath = path.join(__dirname, 'background-worker.js');
+  serviceManager.start('worker', bgWorkerPath);
+
+  statusManager.update("system", { status: "online", progress: 100, message: "All systems ready" });
+} catch (e) {
+  console.error("[Startup Error]", e);
+  statusManager.update("system", { status: "error", message: e.message });
+}
 
 // Project Constants
 const PORT_MIN = parseInt(process.env.PORT || "45311", 10);
@@ -53,20 +94,45 @@ const server = http.createServer(async (req, res) => {
 
   // 2. Static Content Handlers
   if (pathname === "/" || pathname === "/index.html") {
-    fs.readFile(HTML_PATH, (err, data) => {
+    fs.readFile(HTML_PATH, "utf8", (err, data) => {
       if (err) {
         res.writeHead(500);
         res.end("Error loading UI");
         return;
       }
+      // Inject operator token into window scope
+      let content = data;
+      if (securityPolicy.operatorToken) {
+        const inject = `<script>window.REPLY_OPERATOR_TOKEN = "${securityPolicy.operatorToken}";</script>\n</head>`;
+        content = content.replace("</head>", inject);
+      }
       res.writeHead(200, { "Content-Type": "text/html" });
-      res.end(data);
+      res.end(content);
+    });
+    return;
+  }
+
+  if (pathname === "/settings" || pathname === "/settings.html") {
+    fs.readFile(path.join(__dirname, "settings.html"), "utf8", (err, data) => {
+      if (err) {
+        res.writeHead(404);
+        res.end("Settings page not found");
+        return;
+      }
+      // Inject operator token into window scope
+      let content = data;
+      if (securityPolicy.operatorToken) {
+        const inject = `<script>window.REPLY_OPERATOR_TOKEN = "${securityPolicy.operatorToken}";</script>\n</head>`;
+        content = content.replace("</head>", inject);
+      }
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(content);
     });
     return;
   }
 
   // Static Assets (CSS/JS/Public)
-  if (pathname.startsWith('/css/') || pathname.startsWith('/js/') || pathname.startsWith('/public/')) {
+  if (pathname.startsWith('/css/') || pathname.startsWith('/js/') || pathname.startsWith('/public/') || pathname.startsWith('/fragments/')) {
     const baseDir = pathname.startsWith('/public/') ? path.join(__dirname, "..") : __dirname;
     const filePath = path.join(baseDir, pathname);
     try {
@@ -111,9 +177,9 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/api/conversations") return messagingRoutes.serveConversations(req, res, url);
   if (pathname === "/api/thread") return messagingRoutes.serveThread(req, res, url);
   if (pathname === "/api/suggest") return messagingRoutes.serveSuggest(req, res);
-  if (pathname === "/api/refine-reply") return messagingRoutes.serveRefineReply(req, res);
+  if (pathname === "/api/refine-reply" || pathname === "/api/refine") return messagingRoutes.serveRefineReply(req, res);
   if (pathname === "/api/feedback") return messagingRoutes.serveFeedback(req, res);
-  if (pathname === "/api/hatori/outcome") return messagingRoutes.serveHatoriOutcome(req, res);
+  if (pathname === "/api/hatori/outcome" || pathname === "/api/hatori-outcome") return messagingRoutes.serveHatoriOutcome(req, res);
 
   // Sending (Sensitive)
   if (pathname === "/api/send-whatsapp") {
@@ -233,6 +299,11 @@ const server = http.createServer(async (req, res) => {
 
   // System Health
   if (pathname === "/api/health" || pathname === "/api/system-health") return systemRoutes.serveSystemHealth(req, res);
+  if (pathname === "/api/system/services") return systemRoutes.serveSystemHealth(req, res); // Reuse health for full status
+  if (pathname === "/api/system/service/control") {
+    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "service-control" })) return;
+    return systemRoutes.serveServiceControl(req, res);
+  }
   if (pathname === "/api/openclaw/status") return systemRoutes.serveOpenClawStatus(req, res);
   if (pathname === "/api/triage-log") {
     const triageEngine = require('./triage-engine.js');

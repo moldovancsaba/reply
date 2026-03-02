@@ -1,8 +1,23 @@
 # {reply} — Release Notes
 
 Completed work only. The [GitHub Project Board](https://github.com/users/moldovancsaba/projects/1) is the source of truth for delivered items.
+
+## [0.4.5] - 2026-03-02
+### Fixed
+- **Hatori Outcome Wiring**: Unified `/api/hatori/outcome` and `/api/hatori-outcome` routing and exported the missing outcome handler so sent/edit outcomes are persisted reliably.
+- **Refine Endpoint Wiring**: Unified `/api/refine-reply` and `/api/refine` routing so the Refine button consistently updates the current draft.
+- **Suggest Replacement Feedback**: Added explicit replacement feedback/outcome signaling when Suggest replaces an existing draft (`not_sent` + replacement reason).
+
+### Improved
+- **Language Fallback Governance**: Added explicit language hint propagation from `{reply}` to `{hatori}` and stronger fallback resolution from thread context.
+- **Omnichannel Context Delivery**: Expanded thread context payload for `{hatori}` and attached omnichannel/tone metadata for better per-contact adaptation.
  
-## [0.3.0] - 2026-02-26
+## [0.4.4] - 2026-03-02
+### Added
+- **Settings UI Modularization**: Refactored the monolithic Settings UI into a separate HTML fragment (`fragments/settings-fragment.html`) with asynchronous lazy-loading, improving initial load performance and maintainability.
+- **Dashboard Triage Log Fixes**: Implementation of a scrollable triage log with `max-height` and `overflow-y: auto`. Fixed a bug where logs were duplicated or overloaded by clearing the container before re-rendering.
+- **Project Documentation Sync**: Comprehensive update of `v0.4.4` across `package.json`, `README.md`, and handover documentation.
+
 ### Added
 - **"Rock-Solid" Foundation**: Implemented `SyncGuard` process locking to prevent concurrent sync tasks and 409 Conflict handling.
 - **Atomic Persistence**: Refactored `StatusManager` to use atomic rename-based writes, eliminating JSON corruption risks.

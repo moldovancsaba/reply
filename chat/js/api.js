@@ -34,7 +34,7 @@ async function _request(url, options = {}) {
 
 export function buildSecurityHeaders() {
     const headers = { 'Content-Type': 'application/json', 'X-Reply-Human-Approval': 'confirmed' };
-    const token = (window.localStorage && window.localStorage.getItem('replyOperatorToken')) || window.REPLY_OPERATOR_TOKEN;
+    const token = window.REPLY_OPERATOR_TOKEN || (window.localStorage && window.localStorage.getItem('replyOperatorToken'));
     if (token) headers['X-Reply-Operator-Token'] = token;
     return headers;
 }
@@ -149,28 +149,60 @@ export async function fetchBridgeSummary(limit = 200) {
  * status: 'sent_as_is' | 'edited_then_sent'
  * Fires as background (no await needed by callers).
  */
-export async function reportHatoriOutcome({ hatori_id, original_text, final_sent_text }) {
+export async function reportHatoriOutcome({
+    hatori_id,
+    original_text,
+    final_sent_text,
+    statusOverride = null,
+    platform = 'other',
+    recipient_id = '',
+    conversation_id = '',
+    edit_reason = ''
+}) {
     if (!hatori_id) return; // Nothing to report if this message didn't originate from {hatori}
 
     const isSentAsIs = original_text === final_sent_text ||
         Math.abs(original_text.length - final_sent_text.length) <= 2;
-    const status = isSentAsIs ? 'sent_as_is' : 'edited_then_sent';
+    const status = statusOverride || (isSentAsIs ? 'sent_as_is' : 'edited_then_sent');
 
     try {
-        await fetch(`${API_BASE}/api/hatori-outcome`, {
+        await fetch(`${API_BASE}/api/hatori/outcome`, {
             method: 'POST',
             headers: buildSecurityHeaders(),
             body: JSON.stringify({
                 external_outcome_id: `reply:outcome-${Date.now()}`,
                 assistant_interaction_id: hatori_id,
                 status,
+                platform,
+                recipient_id,
+                conversation_id,
                 original_text,
                 final_sent_text,
-                diff: status === 'edited_then_sent' ? { original: original_text, final: final_sent_text } : null
+                edit_reason: edit_reason || (status === 'not_sent' ? 'replaced_via_suggest' : ''),
+                diff: status === 'edited_then_sent' ? `${original_text} -> ${final_sent_text}` : null
             })
         });
     } catch (e) {
         console.warn('[{reply}] Hatori annotation failed (non-blocking):', e.message);
+    }
+}
+
+export async function reportDraftReplacement({ handle, original_text, reason = 'suggest_replace' }) {
+    if (!original_text || !String(original_text).trim()) return;
+    try {
+        await fetch(`${API_BASE}/api/feedback`, {
+            method: 'POST',
+            headers: buildSecurityHeaders(),
+            body: JSON.stringify({
+                type: 'draft_replaced',
+                reason,
+                handle: handle || '',
+                original_text,
+                timestamp: new Date().toISOString(),
+            }),
+        });
+    } catch (e) {
+        console.warn('[{reply}] Draft replacement feedback failed (non-blocking):', e.message);
     }
 }
 
@@ -219,7 +251,10 @@ export async function sendMessage(handle, text, channel = 'imessage', hatoriCont
         reportHatoriOutcome({
             hatori_id: hatoriContext.hatori_id,
             original_text: hatoriContext.original_draft || '',
-            final_sent_text: text
+            final_sent_text: text,
+            platform: ch,
+            recipient_id: handle,
+            conversation_id: `reply:${handle}`
         });
     }
 
@@ -331,4 +366,17 @@ export async function disconnectGmail() {
     const data = await res.json();
     UI.showToast('Gmail disconnected!', 'success');
     return data;
+}
+
+export async function controlService(name, action) {
+    const res = await fetch('/api/system/service/control', {
+        method: 'POST',
+        headers: buildSecurityHeaders(),
+        body: JSON.stringify({ name, action })
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to control service');
+    }
+    return res.json();
 }
