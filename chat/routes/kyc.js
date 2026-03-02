@@ -49,12 +49,17 @@ async function serveKyc(req, res, url, authorizeSensitiveRoute, onUpdate, bodyDa
     }
 
     const contact = contactStore.findContact(handle);
+    if (!contact) {
+      console.warn(`[KYC] No contact found for handle: ${handle}`);
+    }
     writeJson(res, 200, {
       handle,
       displayName: contact?.displayName || contact?.name || handle,
       profession: contact?.profession || "",
       relationship: contact?.relationship || "",
       intro: contact?.intro || "",
+      company: contact?.company || "",
+      linkedinUrl: contact?.linkedinUrl || "",
       notes: Array.isArray(contact?.notes) ? contact.notes : [],
       channels: contact?.channels || { phone: [], email: [] },
       pendingSuggestions: Array.isArray(contact?.pendingSuggestions) ? contact.pendingSuggestions : [],
@@ -82,6 +87,8 @@ async function serveKyc(req, res, url, authorizeSensitiveRoute, onUpdate, bodyDa
       const data = {
         displayName: (json.displayName ?? json.name ?? "").trim(),
         profession: (json.profession ?? json.role ?? "").trim(),
+        company: (json.company ?? "").trim(),
+        linkedinUrl: (json.linkedinUrl ?? "").trim(),
         relationship: (json.relationship ?? "").trim(),
         intro: (json.intro ?? "").trim(),
       };

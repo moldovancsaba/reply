@@ -35,6 +35,7 @@ class ContactStore {
                 });
                 this._db.run("ALTER TABLE contacts ADD COLUMN company TEXT", () => { });
                 this._db.run("ALTER TABLE contacts ADD COLUMN linkedinUrl TEXT", () => { });
+                this._db.run("ALTER TABLE contacts ADD COLUMN intro TEXT", () => { });
                 this._db.run(`CREATE TABLE IF NOT EXISTS contact_channels (
                     contact_id TEXT,
                     type TEXT,
@@ -131,8 +132,8 @@ class ContactStore {
 
                 contacts.forEach(contact => {
                     this._db.run(`
-                        INSERT INTO contacts (id, displayName, handle, lastContacted, lastChannel, profession, relationship, draft, status, primary_contact_id, company, linkedinUrl)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO contacts (id, displayName, handle, lastContacted, lastChannel, profession, relationship, draft, status, primary_contact_id, company, linkedinUrl, intro)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(handle) DO UPDATE SET
                             displayName = COALESCE(NULLIF(?, ''), displayName),
                             lastContacted = COALESCE(?, lastContacted),
@@ -143,13 +144,19 @@ class ContactStore {
                             status = COALESCE(NULLIF(?, ''), status),
                             primary_contact_id = COALESCE(NULLIF(?, ''), primary_contact_id),
                             company = COALESCE(NULLIF(?, ''), company),
-                            linkedinUrl = COALESCE(NULLIF(?, ''), linkedinUrl)
+                            linkedinUrl = COALESCE(NULLIF(?, ''), linkedinUrl),
+                            intro = COALESCE(NULLIF(?, ''), intro)
                     `,
                         [
-                            contact.id, contact.displayName, contact.handle, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status, contact.primary_contact_id, contact.company, contact.linkedinUrl,
-                            contact.displayName, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status, contact.primary_contact_id, contact.company, contact.linkedinUrl
+                            contact.id, contact.displayName, contact.handle, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status, contact.primary_contact_id, contact.company, contact.linkedinUrl, contact.intro,
+                            contact.displayName, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status, contact.primary_contact_id, contact.company, contact.linkedinUrl, contact.intro
                         ],
-                        handleError
+                        (err) => {
+                            if (err) handleError(err);
+                            else if (contact.company || contact.linkedinUrl) {
+                                console.log(`[ContactStore] Saved KYC for ${contact.handle}: ${contact.company}, ${contact.linkedinUrl}`);
+                            }
+                        }
                     );
 
                     if (contact.channels) {

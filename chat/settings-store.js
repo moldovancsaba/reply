@@ -6,13 +6,23 @@ const SETTINGS_PATH = path.join(__dirname, "data", "settings.json");
 const CHANNEL_BRIDGE_MODES = new Set(["disabled", "draft_only"]);
 const CHANNEL_BRIDGE_CHANNELS = ["imessage", "whatsapp", "telegram", "discord", "signal", "viber", "linkedin"];
 
-// Encryption settings
+// Encryption settings - Lazy initialization to ensure process.env is ready (via dotenv)
 const ALGORITHM = "aes-256-cbc";
-const ENCRYPTION_KEY = crypto.scryptSync(
-  process.env.REPLY_OPERATOR_TOKEN || "reply-local-fallback-salt",
-  "salt",
-  32
-);
+let _cachedKey = null;
+function getEncryptionKey() {
+  if (!_cachedKey) {
+    const token = process.env.REPLY_OPERATOR_TOKEN || "reply-local-fallback-salt";
+    try {
+      fs.appendFileSync(path.join(__dirname, "data", "debug_token.log"), `[${new Date().toISOString()}] Token: ${token.substring(0, 4)}... (len: ${token.length})\n`);
+    } catch { }
+    _cachedKey = crypto.scryptSync(
+      token,
+      "salt",
+      32
+    );
+  }
+  return _cachedKey;
+}
 const IV_LENGTH = 16;
 const SENSITIVE_FIELDS = [
   "imap.pass",
@@ -25,7 +35,7 @@ const SENSITIVE_FIELDS = [
 function encrypt(text) {
   if (!text) return text;
   const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY), iv);
+  const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(getEncryptionKey()), iv);
   let encrypted = cipher.update(text);
   encrypted = Buffer.concat([encrypted, cipher.final()]);
   return iv.toString("hex") + ":" + encrypted.toString("hex");
@@ -37,13 +47,15 @@ function decrypt(text) {
     const textParts = text.split(":");
     const iv = Buffer.from(textParts.shift(), "hex");
     const encryptedText = Buffer.from(textParts.join(":"), "hex");
-    const decipher = crypto.createDecipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY), iv);
+    const decipher = crypto.createDecipheriv(ALGORITHM, Buffer.from(getEncryptionKey()), iv);
     let decrypted = decipher.update(encryptedText);
     decrypted = Buffer.concat([decrypted, decipher.final()]);
     return decrypted.toString();
   } catch (e) {
-    console.warn("[Settings] Decryption failed, returning raw value.");
-    return text;
+    // If decryption fails, we DO NOT return the raw encrypted string as fallback.
+    // This prevents corruption if the result is later written to .env as a secret.
+    console.error(`[Settings] Decryption failed for field. Check REPLY_OPERATOR_TOKEN. Error: ${e.message}`);
+    return null;
   }
 }
 
@@ -95,8 +107,8 @@ function withDefaults(settings) {
   return {
     ...s,
     global: {
-      googleApiKey: (global.googleApiKey || "").toString(),
-      operatorToken: (global.operatorToken || "").toString(),
+      googleApiKey: global.googleApiKey === null ? null : (global.googleApiKey || "").toString(),
+      operatorToken: global.operatorToken === null ? null : (global.operatorToken || "").toString(),
       requireOperatorToken: global.requireOperatorToken !== false,
       localWritesOnly: global.localWritesOnly !== false,
       requireHumanApproval: global.requireHumanApproval !== false,
@@ -118,7 +130,7 @@ function withDefaults(settings) {
       quantities: {
         imessage: Number(s?.worker?.quantities?.imessage) || 1000,
         whatsapp: Number(s?.worker?.quantities?.whatsapp) || 500,
-        gmail: Number(s?.worker?.quantities?.gmail) || 100,
+        gmail: Number(s?.worker?.quantities?.gmail) || 500,
         notes: Number(s?.worker?.quantities?.notes) || 0,
       },
     },
@@ -162,9 +174,33 @@ function readSettings() {
 }
 
 function writeSettings(next) {
+  // --- Safety Merge Logic ---
+  // If the incoming 'next' object has null for sensitive fields, it likely means 
+  // decryption failed in the caller's session. We should preserve the existing 
+  // encrypted values from disk instead of overwriting with null.
+  try {
+    if (fs.existsSync(SETTINGS_PATH)) {
+      const onDiskEncrypted = JSON.parse(fs.readFileSync(SETTINGS_PATH, "utf8"));
+      for (const field of SENSITIVE_FIELDS) {
+        const incomingVal = getByPath(next, field);
+        // If incoming is null (from my previous fix in decrypt()), but on-disk has a value
+        if (incomingVal === null) {
+          const existingEncrypted = getByPath(onDiskEncrypted, field);
+          if (existingEncrypted && typeof existingEncrypted === 'string' && existingEncrypted.includes(':')) {
+            console.log(`[Settings] Safety Merge: Preserving encrypted value for ${field}`);
+            setByPath(next, field, existingEncrypted);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[Settings] Safety merge failed, proceeding with standard write:", e.message);
+  }
+
   const encrypted = processSensitive(next, encrypt);
   const dir = path.dirname(SETTINGS_PATH);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+
   const tmp = `${SETTINGS_PATH}.${Date.now()}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(encrypted, null, 2), { mode: 0o600 });
   fs.renameSync(tmp, SETTINGS_PATH);
@@ -175,7 +211,7 @@ function writeSettings(next) {
   try {
     fs.chmodSync(SETTINGS_PATH, 0o600);
   } catch {
-    // Best-effort hardening: avoid failing settings writes on chmod issues.
+    // Best-effort hardening
   }
 }
 
@@ -288,6 +324,15 @@ function syncToEnv(settings) {
       "REPLY_SECURITY_REQUIRE_HUMAN_APPROVAL": global.requireHumanApproval,
       "REPLY_WHATSAPP_ALLOW_OPENCLAW_SEND": global.allowOpenClaw
     };
+
+    // FILTER out fields that failed decryption (null) or still look encrypted (contain a colon)
+    // to prevent corrupting the .env with encrypted master keys or secrets.
+    for (const key of Object.keys(mapping)) {
+      const val = mapping[key];
+      if (val === null || (typeof val === 'string' && val.includes(':'))) {
+        delete mapping[key];
+      }
+    }
 
     let lines = content.split("\n");
     const seen = new Set();

@@ -4,11 +4,15 @@ Completed work only. The [GitHub Project Board](https://github.com/users/moldova
 
 ## [0.4.5] - 2026-03-02
 ### Fixed
+- **Settings Persistence**: Fixed a critical bug in `withDefaults` where sensitive fields (API keys/tokens) were being wiped during safety merges after security token updates.
+- **Gmail Connector Sync Depth**: Increased initial sync limit to 10,000 messages (from 2,000) for "All Mail" and "Custom" scopes to resolve the low message count issue.
+- **Gmail Sync Logic**: Fixed a regression in `gmail-connector.js` that caused an `await` syntax error outside of an async block.
 - **Hatori Outcome Wiring**: Unified `/api/hatori/outcome` and `/api/hatori-outcome` routing and exported the missing outcome handler so sent/edit outcomes are persisted reliably.
 - **Refine Endpoint Wiring**: Unified `/api/refine-reply` and `/api/refine` routing so the Refine button consistently updates the current draft.
 - **Suggest Replacement Feedback**: Added explicit replacement feedback/outcome signaling when Suggest replaces an existing draft (`not_sent` + replacement reason).
 
 ### Improved
+- **KYC Performance**: Increased auto-scan speed cap to 60/hour and set default processing to 20/hour (up from 1/hour), enabling ~480 profile prioritizations per day.
 - **Language Fallback Governance**: Added explicit language hint propagation from `{reply}` to `{hatori}` and stronger fallback resolution from thread context.
 - **Omnichannel Context Delivery**: Expanded thread context payload for `{hatori}` and attached omnichannel/tone metadata for better per-contact adaptation.
  

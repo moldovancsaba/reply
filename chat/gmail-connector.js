@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 const statusManager = require("./status-manager.js");
 const contactStore = require("./contact-store.js");
 const { addDocuments } = require("./vector-store.js");
@@ -299,7 +300,7 @@ function shouldIncludeMessageByScope(labelIds, scope) {
   return true; // custom or unknown scope
 }
 
-async function syncGmail({ maxMessages = 100 } = {}) {
+async function syncGmail({ maxMessages = 500 } = {}) {
   const settings = readSettings();
   const gmail = settings?.gmail || {};
   const gmailSync = gmail?.sync || {};
@@ -351,8 +352,10 @@ async function syncGmail({ maxMessages = 100 } = {}) {
 
   if (shouldRunInitialSync) {
     // Initial sync: pull recent messages based on configured scope and set baseline historyId.
-    const max = Math.min(maxMessages, 200);
+    const max = (scope === "all_mail" || scope === "custom") ? Math.min(maxMessages, 10000) : Math.min(maxMessages, 2000);
     const ids = new Set();
+
+    console.log(`[Gmail Sync] Running initial sync for up to ${max} messages (Scope: ${scope})`);
 
     if (scope === "all_mail") {
       const q = "-in:spam -in:trash";
@@ -370,6 +373,7 @@ async function syncGmail({ maxMessages = 100 } = {}) {
     }
 
     messageIds = Array.from(ids).slice(0, maxMessages);
+    console.log(`[Gmail Sync] Found ${messageIds.length} candidate messages. Baseline historyId: ${state.historyId}`);
     state.historyId = String(profile.historyId || state.historyId || "");
   }
 
@@ -380,7 +384,10 @@ async function syncGmail({ maxMessages = 100 } = {}) {
     const id = messageIds[i];
     try {
       const msg = await fetchMessage(accessToken, id);
-      if (!shouldIncludeMessageByScope(msg?.labelIds, scope)) continue;
+      if (!shouldIncludeMessageByScope(msg?.labelIds, scope)) {
+        console.log(`[Gmail Debug] Skipped ${id}: Out of scope (Labels: ${msg?.labelIds?.join(',')}, Scope: ${scope})`);
+        continue;
+      }
 
       const headers = msg?.payload?.headers || [];
       const subject = headerValue(headers, "Subject");
@@ -391,13 +398,19 @@ async function syncGmail({ maxMessages = 100 } = {}) {
       const date = dateObj && !Number.isNaN(dateObj.getTime()) ? dateObj.toISOString() : new Date(Number(msg.internalDate) || Date.now()).toISOString();
 
       const counterparty = pickCounterparty({ fromHeader, toHeader, meEmail });
-      if (!counterparty) continue;
+      if (!counterparty) {
+        console.log(`[Gmail Debug] Skipped ${id}: No counterparty (Me: ${meEmail}, From: ${fromHeader}, To: ${toHeader})`);
+        continue;
+      }
 
       const fromEmail = extractEmailAddress(fromHeader);
       const isFromMe = !!(fromEmail && meEmail && fromEmail === meEmail);
 
       const body = extractTextFromPayload(msg.payload);
-      if (!body) continue;
+      if (!body) {
+        console.log(`[Gmail Debug] Skipped ${id}: Empty body`);
+        continue;
+      }
 
       contactStore.updateLastContacted(counterparty, date);
 
@@ -414,6 +427,8 @@ async function syncGmail({ maxMessages = 100 } = {}) {
       console.warn("[Gmail] Failed to fetch message:", id, e.message);
     }
   }
+
+  console.log(`[Gmail Sync] Processed ${i} messages. Collected ${docs.length} new documents.`);
 
   if (docs.length > 0) {
     updateMailStatus({ state: "running", message: `Vectorizing ${docs.length} Gmail messages…`, connector: "gmail", progress: 80 });
@@ -497,3 +512,19 @@ module.exports = {
   sendGmail,
   checkGmailConnection,
 };
+
+if (require.main === module) {
+  const args = process.argv.slice(2);
+  if (args.includes('--test-sync')) {
+    console.log('[Test] Running sync with 500 batch limit...');
+    syncGmail({ maxMessages: 500 })
+      .then(count => {
+        console.log(`[Test] Sync complete. Processed ${count} messages.`);
+        process.exit(0);
+      })
+      .catch(e => {
+        console.error('[Test] Sync failed:', e);
+        process.exit(1);
+      });
+  }
+}

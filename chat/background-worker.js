@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env'), override: true });
 const sqlite3 = require('sqlite3').verbose();
 
 // Log Rotation
@@ -107,7 +108,7 @@ function getAutoScanPerHour() {
     if (raw === undefined || raw === null || String(raw).trim() === "") return 1;
     const n = Number(raw);
     if (!Number.isFinite(n) || n < 0) return 1;
-    return Math.min(n, 12); // hard cap: 12/hour
+    return Math.min(n, 60); // hard cap: 60/hour
 }
 
 function readAutoScanCursor() {

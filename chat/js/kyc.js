@@ -499,6 +499,9 @@ function updateChannelOptionsFromKyc(handle, data) {
   }
 
   Array.from(sel.options).forEach(o => {
+    const isAvailable = available.has(o.value);
+    const isVerified = verifiedTypes.has(o.value);
+
     o.disabled = !isAvailable;
     o.hidden = !isAvailable;
 
