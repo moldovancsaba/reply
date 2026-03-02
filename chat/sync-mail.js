@@ -63,10 +63,10 @@ async function syncMail() {
                 hasRefreshToken: !!settings.gmail?.refreshToken,
                 clientSecretHint: settings.gmail?.clientSecret?.slice(-4),
             });
-            const maxMessages = Math.max(1, Math.min(Number(settings?.worker?.quantities?.gmail) || 100, 500));
+            const maxMessages = Math.max(1, Math.min(Number(settings?.worker?.quantities?.gmail) || 500, 2000));
             return await syncGmail({ maxMessages });
         } catch {
-            return await syncGmail({ maxMessages: 100 });
+            return await syncGmail({ maxMessages: 500 });
         }
     }
 
@@ -79,8 +79,8 @@ async function syncMail() {
     console.log("Synchronizing Apple Mail...");
     updateStatus({ state: "running", message: "Fetching emails from Mail.app..." });
 
-    // We'll target the last 500 messages from each to keep it snappy for the POC
-    const BATCH_SIZE = 500;
+    // We'll target the last 2000 messages from each
+    const BATCH_SIZE = 2000;
     const delimiter = "||MB||";
     const fieldDelimiter = "||FD||";
 
