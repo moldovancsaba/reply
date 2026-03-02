@@ -5,7 +5,7 @@
 
 import { loadConversations, selectContact, setConversationsQuery } from './contacts.js';
 import { handleSendMessage } from './messages.js';
-import { getSettings, buildSecurityHeaders } from './api.js';
+import { getSettings, buildSecurityHeaders, reportHatoriOutcome, reportDraftReplacement } from './api.js';
 import './dashboard.js?v=2.1';
 import './kyc.js?v=2.1';
 import { applyReplyUiSettings } from './settings.js?v=2.1';
@@ -44,7 +44,7 @@ function setupEventListeners() {
   if (btnDash) btnDash.onclick = () => { if (typeof window.selectContact === 'function') window.selectContact(null); };
 
   const btnSettings = document.getElementById('btn-settings');
-  if (btnSettings) btnSettings.onclick = () => { if (typeof window.openSettings === 'function') window.openSettings(); };
+  if (btnSettings) btnSettings.onclick = () => { window.location.href = 'settings.html'; };
 
   const btnTraining = document.getElementById('btn-training');
   if (btnTraining) btnTraining.onclick = openTrainingPage;
@@ -60,7 +60,7 @@ function setupEventListeners() {
         return;
       }
       if (action === 'settings') {
-        if (typeof window.openSettings === 'function') window.openSettings();
+        window.location.href = 'settings.html';
       }
     });
   });
@@ -116,15 +116,39 @@ function setupEventListeners() {
 
   const btnSuggest = document.getElementById('btn-suggest');
   if (btnSuggest) {
-    btnSuggest.onclick = async () => {
-      if (!chatInput) return;
+        btnSuggest.onclick = async () => {
+          if (!chatInput) return;
 
-      const handle = window.currentHandle;
-      const originalText = btnSuggest.textContent;
+          const handle = window.currentHandle;
+          const originalText = btnSuggest.textContent;
+          const existingDraft = (chatInput.value || '').trim();
+          const previousHatoriContext = window.__replyActiveHatoriContext || null;
 
-      try {
-        btnSuggest.disabled = true;
-        btnSuggest.textContent = '⏳ ...';
+          try {
+            btnSuggest.disabled = true;
+            btnSuggest.textContent = '⏳ ...';
+
+            // If the operator asks for a fresh suggestion while there is an existing draft,
+            // record it as a replacement signal for ongoing learning.
+            if (existingDraft) {
+              await reportDraftReplacement({
+                handle,
+                original_text: existingDraft,
+                reason: 'suggest_replace'
+              });
+              if (previousHatoriContext && previousHatoriContext.hatori_id) {
+                await reportHatoriOutcome({
+                  hatori_id: previousHatoriContext.hatori_id,
+                  original_text: previousHatoriContext.original_draft || '',
+                  final_sent_text: '',
+                  statusOverride: 'not_sent',
+                  platform: (window.currentChannel || 'other'),
+                  recipient_id: handle || '',
+                  conversation_id: handle ? `reply:${handle}` : '',
+                  edit_reason: 'replaced_via_suggest'
+                });
+              }
+            }
 
         let suggestion = '';
         let explanation = '';
@@ -323,7 +347,7 @@ function setupEventListeners() {
         btnMagic.disabled = true;
         btnMagic.textContent = '⏳ ...';
 
-        const res = await fetch('/api/refine', {
+        const res = await fetch('/api/refine-reply', {
           method: 'POST',
           headers: buildSecurityHeaders(),
           body: JSON.stringify({ draft: val, context: "" })
@@ -342,13 +366,13 @@ function setupEventListeners() {
             chatInput.value = data.refined;
             try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
           }
-          btnMagic.textContent = '✨ Done';
+          btnMagic.textContent = '✨ Refined';
         } else {
           let polished = val.trim();
           polished = polished.charAt(0).toUpperCase() + polished.slice(1);
           if (!polished.endsWith('.') && !polished.endsWith('!') && !polished.endsWith('?')) polished += '.';
           chatInput.value = polished;
-          btnMagic.textContent = '✨ Done';
+          btnMagic.textContent = '✨ Refined';
         }
       } catch (e) {
         console.warn('Refinement failed:', e);
@@ -356,7 +380,7 @@ function setupEventListeners() {
         polished = polished.charAt(0).toUpperCase() + polished.slice(1);
         if (!polished.endsWith('.') && !polished.endsWith('!') && !polished.endsWith('?')) polished += '.';
         chatInput.value = polished;
-        btnMagic.textContent = '✨ Done';
+        btnMagic.textContent = '✨ Refined';
       } finally {
         btnMagic.disabled = false;
         setTimeout(() => (btnMagic.textContent = originalText), 1500);
@@ -369,6 +393,76 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {
   init();
+}
+
+/**
+ * Poll service health and update sidebar indicator
+ */
+async function pollServiceHealth() {
+  const dot = document.getElementById('services-health-dot');
+  const container = document.getElementById('services-health-status');
+  if (!dot) return;
+
+  try {
+    const { fetchSystemHealth, fetchOpenClawStatus } = await import('./api.js');
+    const [health, openClaw] = await Promise.all([
+      fetchSystemHealth().catch(() => ({ status: 'offline' })),
+      fetchOpenClawStatus().catch(() => ({ status: 'offline' }))
+    ]);
+
+    const worker = health.services?.worker || { status: 'offline' };
+    const isOpenClawOffline = openClaw.status !== 'online';
+    const isWorkerOffline = worker.status !== 'online';
+
+    if (isOpenClawOffline || isWorkerOffline) {
+      dot.className = 'status-dot offline';
+      container.title = `Services Offline: ${isWorkerOffline ? 'Worker ' : ''}${isOpenClawOffline ? 'OpenClaw' : ''}. Click to Fix.`;
+    } else {
+      dot.className = 'status-dot online';
+      container.title = 'All services online.';
+    }
+  } catch (e) {
+    dot.className = 'status-dot warning';
+    container.title = 'Health check failed. Click to retry.';
+  }
+}
+
+async function handleOneClickFix() {
+  const dot = document.getElementById('services-health-dot');
+  if (!dot) return;
+
+  const originalClass = dot.className;
+  dot.className = 'status-dot active'; // Pulse blue
+
+  try {
+    const { controlService } = await import('./api.js');
+
+    // Attempt to start worker and openclaw if they are likely down
+    // We don't need to check exactly here, controlService start is idempotent if already running
+    await Promise.allSettled([
+      controlService('worker', 'start'),
+      controlService('openclaw', 'start')
+    ]);
+
+    // Give it a moment then poll again
+    setTimeout(pollServiceHealth, 2000);
+  } catch (e) {
+    console.error('One-click fix failed:', e);
+    dot.className = originalClass;
+  }
+}
+
+// Start polling
+setInterval(pollServiceHealth, 15000);
+pollServiceHealth();
+
+// Wire one-click fix
+const healthContainer = document.getElementById('services-health-status');
+if (healthContainer) {
+  healthContainer.onclick = (e) => {
+    e.stopPropagation();
+    handleOneClickFix();
+  };
 }
 
 window.init = init;
