@@ -7,57 +7,98 @@
    Settings Form Components
    ============================================ */
 
+/* ============================================
+   Premium Settings Components
+   ============================================ */
+
 .settings-field {
-    margin-top: var(--space-sm);
+    margin-top: var(--space-md);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
 .settings-label {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
     display: block;
-    margin-bottom: var(--space-xs);
+    letter-spacing: -0.01em;
 }
 
 .settings-input {
     width: 100%;
-    padding: var(--space-sm);
-    border: 1px solid var(--input-border, var(--border));
-    border-radius: var(--radius-sm);
-    background: var(--bg-input);
+    padding: 12px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.04);
     color: var(--text-primary);
     font-family: inherit;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
 }
 
 .settings-input:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.15);
 }
 
 .settings-input::placeholder {
-    color: var(--text-placeholder);
+    color: var(--text-tertiary);
 }
 
 .settings-hint {
-    font-size: 0.75rem;
-    color: var(--text-hint, #999);
-    margin-top: 6px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
 }
 
 .settings-section-title {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: var(--text-muted, #888);
-    text-transform: uppercase;
-    margin-bottom: 15px;
-    letter-spacing: 0.05em;
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 24px;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.settings-checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.settings-checkbox-group:hover {
+    background: rgba(255, 255, 255, 0.06);
 }
 
 .settings-checkbox-label {
-    font-size: 0.85rem;
-    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
     cursor: pointer;
+}
+
+/* Premium Card Container */
+.settings-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
 }
 
 /* ============================================
@@ -647,4 +688,143 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* ============================================
+   System Alerts Panel
+   ============================================ */
+.system-alerts-panel {
+    grid-column: 1 / -1;
+    background: rgba(255, 59, 48, 0.08);
+    border: 1px solid rgba(255, 59, 48, 0.35);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md) var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    margin-bottom: var(--space-sm);
+    animation: fade-in 0.3s ease-out;
+}
+
+.system-alerts-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: 0.95rem;
+    color: #ff453a;
+}
+
+.system-alerts-note {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+.system-alert {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: var(--radius-md);
+    padding: var(--space-sm) var(--space-md);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.system-alert.alert-critical {
+    border-left: 3px solid #ff453a;
+}
+
+.system-alert.alert-warning {
+    border-left: 3px solid #ff9f0a;
+    background: rgba(255, 159, 10, 0.06);
+}
+
+.system-alert-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+}
+
+.system-alert-icon {
+    font-size: 1rem;
+}
+
+.system-alert-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+}
+
+.system-alert-severity {
+    margin-left: auto;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 99px;
+    background: rgba(255, 59, 48, 0.15);
+    color: #ff453a;
+}
+
+.alert-warning .system-alert-severity {
+    background: rgba(255, 159, 10, 0.15);
+    color: #ff9f0a;
+}
+
+.system-alert-message {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.4;
+}
+
+.system-alert-hint {
+    font-size: 0.82rem;
+    color: var(--primary);
+    margin: 0;
+    line-height: 1.4;
+}
+
+.system-alert-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.btn-repair {
+    background: rgba(255, 59, 48, 0.15);
+    color: #ff453a;
+    border: 1px solid rgba(255, 59, 48, 0.3);
+    border-radius: var(--radius-sm);
+    padding: 4px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.btn-repair:hover {
+    background: rgba(255, 59, 48, 0.28);
+}
+
+.btn-muted {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-sm);
+    padding: 4px 12px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.btn-muted:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-sm {
+    padding: 3px 10px;
+    font-size: 0.75rem;
 }

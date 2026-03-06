@@ -2,7 +2,33 @@
 
 Completed work only. The [GitHub Project Board](https://github.com/users/moldovancsaba/projects/1) is the source of truth for delivered items.
 
-## [0.4.5] - 2026-03-02
+## [0.5.0] - 2026-03-06
+### Added
+- **Self-Repair Watchdog**: `service-manager.js` now auto-restarts crashed services (`worker`, `openclaw`, `hatori`) with exponential backoff (up to 3–5 retries). After exhausting retries, surfaces a `repair_required` state with an actionable error hint.
+- **System Alerts Dashboard Panel**: New panel at the top of the dashboard appears only when a service is down. Shows severity (CRITICAL/WARNING), the exact error, an actionable hint (e.g. `ollama serve`), a "Try Again" button for managed services, and a "Copy Log Cmd" button.
+- **Hatori/Ollama Watchdog**: The health API now triggers an automatic Hatori restart after 3 consecutive health check failures. Ollama (unmanaged external) surfaces as a UI alert with terminal command instructions.
+- **Gmail Full-History Backfill**: Implemented `nextPageToken` paging in `gmail-connector.js` to progressively index the entire Gmail history (15+ years, 200K+ emails) in batches of 500 every 7 minutes, to avoid overloading the system.
+- **Toolbar v0.5.0**: Rebuilt and re-launched the macOS menu bar tool to reflect the new version.
+
+### Fixed
+- **Operator Token Errors**: Resolved `Missing or invalid operator token` errors blocking background worker and OpenClaw startup.
+- **Settings Black Screen**: Fixed `innerHTML.trim()` bug that prevented the Settings page from rendering.
+- **Async Poll Race**: Refactored `background-worker.js` poll loop to properly await all async operations, preventing missed processing batches.
+
+### Improved
+- **Premium Settings UI**: Complete glassmorphism redesign of the Settings page with dark theme, icon sidebar, and improved card layouts.
+- **Health API repair[]**: `/api/health` now exposes a `repair` array containing active service alerts for programmatic and UI consumption.
+
+## [0.4.6] - 2026-03-02
+### Refactored
+- **Server Decomposition**: Modularized `server.js` for better maintainability (reduced to < 200 lines).
+- **Static Asset Routes**: Extracted HTML and asset serving to `chat/routes/static.js`.
+- **System Route Consolidation**: Consolidated service control and triage logs into `chat/routes/system.js`.
+
+### Security
+- **Hardened Human Approval**: Enabled mandatory human approval for sensitive writes by default (`REPLY_SECURITY_REQUIRE_HUMAN_APPROVAL=true`).
+- **Code Audit**: Verified elimination of all shell-based execution patterns in the main server gateway.
+
 ### Fixed
 - **Settings Persistence**: Fixed a critical bug in `withDefaults` where sensitive fields (API keys/tokens) were being wiped during safety merges after security token updates.
 - **Gmail Connector Sync Depth**: Increased initial sync limit to 10,000 messages (from 2,000) for "All Mail" and "Custom" scopes to resolve the low message count issue.

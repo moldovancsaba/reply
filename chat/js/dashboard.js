@@ -106,9 +106,52 @@ function renderHealthCard(config) {
 }
 
 /**
- * Render the dashboard with system health cards
- * Shows system status, sync status for each source, and recent triage log
+ * Renders the System Alerts panel.
+ * Only shown when health.repair array is non-empty.
  */
+function renderAlertsPanel(repairs) {
+  if (!Array.isArray(repairs) || repairs.length === 0) return '';
+
+  const SERVICE_ICONS = { worker: '⚙️', openclaw: '🛡️', hatori: '🤖', ollama: '🦙' };
+  const SEVERITY_CLASSES = { critical: 'alert-critical', warning: 'alert-warning' };
+
+  const items = repairs.map(alert => {
+    const icon = SERVICE_ICONS[alert.service] || '⚠️';
+    const severityClass = SEVERITY_CLASSES[alert.severity] || 'alert-warning';
+    const isManaged = alert.service !== 'ollama';
+    const actionBtn = isManaged
+      ? `<button type="button" class="btn btn-sm btn-repair" data-dashboard-service-control="${alert.service}" data-dashboard-action="restart" title="Try to restart ${alert.service}">🔄 Try Again</button>`
+      : '';
+    const logBtn = alert.logPath
+      ? `<button type="button" class="btn btn-sm btn-muted" onclick="navigator.clipboard&&navigator.clipboard.writeText('tail -f ${alert.logPath}')" title="Copy log command">📋 Copy Log Cmd</button>`
+      : '';
+
+    const attemptsText = alert.attempts > 0 ? ` (auto-restarted ${alert.attempts}× already)` : '';
+
+    return `
+      <div class="system-alert ${severityClass}">
+        <div class="system-alert-header">
+          <span class="system-alert-icon">${icon}</span>
+          <strong class="system-alert-name">${alert.service}</strong>
+          <span class="system-alert-severity">${alert.severity.toUpperCase()}${attemptsText}</span>
+        </div>
+        <p class="system-alert-message">${alert.message}</p>
+        <p class="system-alert-hint">💡 ${alert.hint}</p>
+        <div class="system-alert-actions">${actionBtn}${logBtn}</div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="system-alerts-panel">
+      <div class="system-alerts-header">
+        <span>⚠️</span>
+        <strong>System Alerts — ${repairs.length} issue${repairs.length > 1 ? 's' : ''} detected</strong>
+        <span class="system-alerts-note">Auto-repair has been attempted where possible.</span>
+      </div>
+      ${items}
+    </div>`;
+}
+
 export async function renderDashboard() {
   const dashboard = document.getElementById('dashboard');
   if (!dashboard) return;
@@ -174,6 +217,8 @@ export async function renderDashboard() {
 
     // Render dashboard HTML
     dashboard.innerHTML = `
+      ${renderAlertsPanel(health.repair || [])}
+
       ${renderHealthCard({
       title: 'OpenClaw Health',
       icon: '🛡️',

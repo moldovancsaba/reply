@@ -32,50 +32,55 @@ const settingsRoutes = require("./routes/settings.js");
 const bridgeRoutes = require("./routes/bridge.js");
 const contactRoutes = require("./routes/contacts.js");
 const systemRoutes = require("./routes/system.js");
+const staticRoutes = require("./routes/static.js");
 const { serveKyc, serveAnalyzeContact } = require("./routes/kyc.js");
 const serviceManager = require("./service-manager.js");
 
 // Start Managed Services
-// The original `serviceManager.start('worker', ...)` call is replaced by the new structured block below.
-// serviceManager.start('worker', path.join(__dirname, 'background-worker.js'));
-
 try {
   const HATORI_PROJECT_PATH = path.join(__dirname, '..', '..', 'hatori');
-
-  // Mark services as loading in queue if they are about to be started
   serviceManager.setStatus('hatori', 'loading in queue');
   serviceManager.setStatus('worker', 'loading in queue');
 
   if (process.env.REPLY_USE_HATORI === '1' && fs.existsSync(HATORI_PROJECT_PATH)) {
     statusManager.update("system", { progress: 30, message: "Starting Hatori sidecar..." });
-    console.log("[Server] Auto-starting Hatori sidecar...");
+    // Check if Hatori is already running (e.g. toolbar daemon) before spawning
+    const hatoriPort = process.env.REPLY_HATORI_PORT || '23572';
+    const hatoriHealthUrl = `http://127.0.0.1:${hatoriPort}/v1/health`;
+    fetch(hatoriHealthUrl, { signal: AbortSignal.timeout(3500) })
+      .then(r => {
+        if (r.ok) {
+          console.log(`[ServiceManager] Hatori already running on port ${hatoriPort} (external). Skipping spawn.`);
+          serviceManager.setStatus('hatori', 'external');
+        } else {
+          spawnHatoriSidecar();
+        }
+      })
+      .catch(() => {
+        // Port not responding — safe to spawn our own sidecar
+        spawnHatoriSidecar();
+      });
 
-    // Use direct python command to avoid make process exiting immediately
-    const venvPython = path.join(HATORI_PROJECT_PATH, '.venv/bin/python');
-    const pythonCmd = fs.existsSync(venvPython) ? venvPython : 'python3';
-
-    serviceManager.start('hatori', pythonCmd, [
-      '-m', 'uvicorn', 'api.app:app',
-      '--host', '127.0.0.1',
-      '--port', '23572'
-    ], HATORI_PROJECT_PATH);
+    function spawnHatoriSidecar() {
+      const venvPython = path.join(HATORI_PROJECT_PATH, '.venv/bin/python');
+      const pythonCmd = fs.existsSync(venvPython) ? venvPython : 'python3';
+      serviceManager.start('hatori', pythonCmd, [
+        '-m', 'uvicorn', 'api.app:app',
+        '--host', '127.0.0.1',
+        '--port', hatoriPort
+      ], HATORI_PROJECT_PATH);
+    }
   }
 
   statusManager.update("system", { progress: 50, message: "Launching background worker..." });
-  const bgWorkerPath = path.join(__dirname, 'background-worker.js');
-  serviceManager.start('worker', bgWorkerPath);
-
+  serviceManager.start('worker', path.join(__dirname, 'background-worker.js'));
   statusManager.update("system", { status: "online", progress: 100, message: "All systems ready" });
 } catch (e) {
   console.error("[Startup Error]", e);
   statusManager.update("system", { status: "error", message: e.message });
 }
 
-// Project Constants
 const PORT_MIN = parseInt(process.env.PORT || "45311", 10);
-const HTML_PATH = path.join(__dirname, "index.html");
-const PUBLIC_DIR = path.join(__dirname, "..", "public");
-
 let boundPort = PORT_MIN;
 const securityPolicy = getSecurityPolicy(process.env);
 const analysisInFlightByHandle = new Map();
@@ -88,92 +93,20 @@ const server = http.createServer(async (req, res) => {
   const pathname = url.pathname;
 
   // 1. Core Security Middleware
-  if (!securityMiddleware.handleSecurity(req, res, boundPort, securityPolicy)) {
-    return;
-  }
+  if (!securityMiddleware.handleSecurity(req, res, boundPort, securityPolicy)) return;
 
-  // 2. Static Content Handlers
-  if (pathname === "/" || pathname === "/index.html") {
-    fs.readFile(HTML_PATH, "utf8", (err, data) => {
-      if (err) {
-        res.writeHead(500);
-        res.end("Error loading UI");
-        return;
-      }
-      // Inject operator token into window scope
-      let content = data;
-      if (securityPolicy.operatorToken) {
-        const inject = `<script>window.REPLY_OPERATOR_TOKEN = "${securityPolicy.operatorToken}";</script>\n</head>`;
-        content = content.replace("</head>", inject);
-      }
-      res.writeHead(200, { "Content-Type": "text/html" });
-      res.end(content);
-    });
-    return;
-  }
-
-  if (pathname === "/settings" || pathname === "/settings.html") {
-    fs.readFile(path.join(__dirname, "settings.html"), "utf8", (err, data) => {
-      if (err) {
-        res.writeHead(404);
-        res.end("Settings page not found");
-        return;
-      }
-      // Inject operator token into window scope
-      let content = data;
-      if (securityPolicy.operatorToken) {
-        const inject = `<script>window.REPLY_OPERATOR_TOKEN = "${securityPolicy.operatorToken}";</script>\n</head>`;
-        content = content.replace("</head>", inject);
-      }
-      res.writeHead(200, { "Content-Type": "text/html" });
-      res.end(content);
-    });
-    return;
-  }
-
-  // Static Assets (CSS/JS/Public)
+  // 2. Static Content & Assets
+  if (pathname === "/" || pathname === "/index.html") return staticRoutes.serveIndex(req, res, securityPolicy);
+  if (pathname === "/settings" || pathname === "/settings.html") return staticRoutes.serveSettingsPage(req, res, securityPolicy);
   if (pathname.startsWith('/css/') || pathname.startsWith('/js/') || pathname.startsWith('/public/') || pathname.startsWith('/fragments/')) {
-    const baseDir = pathname.startsWith('/public/') ? path.join(__dirname, "..") : __dirname;
-    const filePath = path.join(baseDir, pathname);
-    try {
-      const content = await fs.promises.readFile(filePath);
-      const ext = path.extname(filePath).toLowerCase();
-      const contentType = {
-        '.css': 'text/css',
-        '.js': 'application/javascript',
-        '.json': 'application/json',
-        '.svg': 'image/svg+xml',
-        '.png': 'image/png',
-        '.jpg': 'image/jpeg',
-        '.webp': 'image/webp',
-      }[ext] || 'text/plain';
-
-      res.writeHead(200, { 'Content-Type': contentType });
-      res.end(content);
-    } catch {
-      res.writeHead(404);
-      res.end('Not found');
-    }
-    return;
+    return staticRoutes.serveAsset(req, res, pathname);
   }
+  if (/^\/[a-zA-Z0-9_-]+\.svg$/.test(pathname)) return staticRoutes.serveRootSvg(req, res, pathname);
 
-  // Root SVG Assets (backward compatibility)
-  if (/^\/[a-zA-Z0-9_-]+\.svg$/.test(pathname)) {
-    const filePath = path.join(PUBLIC_DIR, pathname.slice(1));
-    try {
-      const content = await fs.promises.readFile(filePath);
-      res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
-      res.end(content);
-    } catch {
-      res.writeHead(404);
-      res.end('Not found');
-    }
-    return;
-  }
+  // 3. API Routes Dispatch
+  const auth = (opts) => securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, opts);
 
-  // 3. API Routes Integration
-
-  // Messaging & Conversations
+  // Messaging
   if (pathname === "/api/conversations") return messagingRoutes.serveConversations(req, res, url);
   if (pathname === "/api/thread") return messagingRoutes.serveThread(req, res, url);
   if (pathname === "/api/suggest") return messagingRoutes.serveSuggest(req, res);
@@ -182,137 +115,52 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/api/hatori/outcome" || pathname === "/api/hatori-outcome") return messagingRoutes.serveHatoriOutcome(req, res);
 
   // Sending (Sensitive)
-  if (pathname === "/api/send-whatsapp") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "send-whatsapp", requireHumanApproval: true })) return;
-    return messagingRoutes.serveSendWhatsApp(req, res);
-  }
-  if (pathname === "/api/send-imessage") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "send-imessage", requireHumanApproval: true })) return;
-    return messagingRoutes.serveSendMessage(req, res, 'imessage');
-  }
-  if (pathname === "/api/send-linkedin") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "send-linkedin", requireHumanApproval: true })) return;
-    return messagingRoutes.serveSendMessage(req, res, 'linkedin');
-  }
-  if (pathname === "/api/send-email") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "send-email", requireHumanApproval: true })) return;
-    return messagingRoutes.serveSendMessage(req, res, 'email');
-  }
+  if (pathname === "/api/send-whatsapp") return auth({ route: pathname, action: "send-whatsapp", requireHumanApproval: true }) && messagingRoutes.serveSendWhatsApp(req, res);
+  if (pathname === "/api/send-imessage") return auth({ route: pathname, action: "send-imessage", requireHumanApproval: true }) && messagingRoutes.serveSendMessage(req, res, 'imessage');
+  if (pathname === "/api/send-linkedin") return auth({ route: pathname, action: "send-linkedin", requireHumanApproval: true }) && messagingRoutes.serveSendMessage(req, res, 'linkedin');
+  if (pathname === "/api/send-email") return auth({ route: pathname, action: "send-email", requireHumanApproval: true }) && messagingRoutes.serveSendMessage(req, res, 'email');
 
-  // Background Sync
-  if (pathname === "/api/sync-notes") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "sync-notes" })) return;
-    return syncRoutes.serveSyncNotes(req, res);
-  }
-  if (pathname === "/api/sync-imessage") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "sync-imessage" })) return;
-    return syncRoutes.serveSyncIMessage(req, res);
-  }
-  if (pathname === "/api/sync-mail") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "sync-mail" })) return;
-    return syncRoutes.serveSyncMail(req, res);
-  }
-  if (pathname === "/api/sync-whatsapp") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "sync-whatsapp" })) return;
-    return syncRoutes.serveSyncWhatsApp(req, res);
-  }
-  if (pathname === "/api/sync-linkedin") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "sync-linkedin" })) return;
-    return syncRoutes.serveSyncLinkedIn(req, res);
-  }
-  if (pathname === "/api/sync-linkedin-posts") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "sync-linkedin-posts" })) return;
-    return syncRoutes.serveSyncLinkedInPosts(req, res);
-  }
-  if (pathname === "/api/sync-contacts") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "sync-contacts" })) return;
-    return syncRoutes.serveSyncContacts(req, res);
-  }
-  if (pathname === "/api/sync-kyc") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "sync-kyc" })) return;
-    return syncRoutes.serveSyncKyc(req, res);
-  }
-  if (pathname === "/api/import/linkedin") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "import-linkedin" })) return;
-    return syncRoutes.serveImportLinkedIn(req, res);
-  }
+  // Sync
+  if (pathname === "/api/sync-notes") return auth({ route: pathname, action: "sync-notes" }) && syncRoutes.serveSyncNotes(req, res);
+  if (pathname === "/api/sync-imessage") return auth({ route: pathname, action: "sync-imessage" }) && syncRoutes.serveSyncIMessage(req, res);
+  if (pathname === "/api/sync-mail") return auth({ route: pathname, action: "sync-mail" }) && syncRoutes.serveSyncMail(req, res);
+  if (pathname === "/api/sync-whatsapp") return auth({ route: pathname, action: "sync-whatsapp" }) && syncRoutes.serveSyncWhatsApp(req, res);
+  if (pathname === "/api/sync-linkedin") return auth({ route: pathname, action: "sync-linkedin" }) && syncRoutes.serveSyncLinkedIn(req, res);
+  if (pathname === "/api/sync-linkedin-posts") return auth({ route: pathname, action: "sync-linkedin-posts" }) && syncRoutes.serveSyncLinkedInPosts(req, res);
+  if (pathname === "/api/sync-contacts") return auth({ route: pathname, action: "sync-contacts" }) && syncRoutes.serveSyncContacts(req, res);
+  if (pathname === "/api/sync-kyc") return auth({ route: pathname, action: "sync-kyc" }) && syncRoutes.serveSyncKyc(req, res);
+  if (pathname === "/api/import/linkedin") return auth({ route: pathname, action: "import-linkedin" }) && syncRoutes.serveImportLinkedIn(req, res);
 
-  // Settings & OAuth
-  if (pathname === "/api/settings") {
-    if (req.method === "POST" && !securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "update-settings" })) return;
-    return settingsRoutes.serveSettings(req, res);
-  }
+  // Settings
+  if (pathname === "/api/settings") return (req.method !== "POST" || auth({ route: pathname, action: "update-settings" })) && settingsRoutes.serveSettings(req, res);
   if (pathname === "/api/gmail/auth-url") return settingsRoutes.serveGmailAuthUrl(req, res);
   if (pathname === "/api/gmail/oauth-callback") return settingsRoutes.serveGmailOAuthCallback(req, res, url);
-  if (pathname === "/api/gmail/disconnect") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "disconnect-gmail" })) return;
-    return settingsRoutes.serveGmailDisconnect(req, res);
-  }
+  if (pathname === "/api/gmail/disconnect") return auth({ route: pathname, action: "disconnect-gmail" }) && settingsRoutes.serveGmailDisconnect(req, res);
   if (pathname === "/api/gmail/check") return settingsRoutes.serveGmailCheck(req, res);
 
   // KYC & Contacts
-  if (pathname === "/api/kyc") {
-    return serveKyc(req, res, url,
-      (req, res, opts) => securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, opts),
-      () => messagingRoutes.invalidateConversationsCache()
-    );
-  }
-  if (pathname === "/api/analyze-contact") {
-    return serveAnalyzeContact(req, res,
-      (req, res, opts) => securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, opts),
-      analysisInFlightByHandle
-    );
-  }
-  if (pathname === "/api/contacts/merge") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "merge-contact" })) return;
-    return contactRoutes.serveMerge(req, res, () => messagingRoutes.invalidateConversationsCache());
-  }
-  if (pathname === "/api/contacts/update-status" || pathname === "/api/update-status" || pathname === "/api/status") {
-    return contactRoutes.serveUpdateStatus(req, res);
-  }
-  if (pathname === "/api/update-contact") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "update-contact" })) return;
-    return contactRoutes.serveUpdateContact(req, res);
-  }
-  if (pathname === "/api/add-note") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "add-note" })) return;
-    return contactRoutes.serveAddNote(req, res);
-  }
-  if (pathname === "/api/update-note") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "update-note" })) return;
-    return contactRoutes.serveUpdateNote(req, res);
-  }
-  if (pathname === "/api/delete-note") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "delete-note" })) return;
-    return contactRoutes.serveDeleteNote(req, res, url);
-  }
+  if (pathname === "/api/kyc") return serveKyc(req, res, url, auth, () => messagingRoutes.invalidateConversationsCache());
+  if (pathname === "/api/analyze-contact") return serveAnalyzeContact(req, res, auth, analysisInFlightByHandle);
+  if (pathname === "/api/contacts/merge") return auth({ route: pathname, action: "merge-contact" }) && contactRoutes.serveMerge(req, res, () => messagingRoutes.invalidateConversationsCache());
+  if (pathname === "/api/contacts/update-status" || pathname === "/api/update-status" || pathname === "/api/status") return contactRoutes.serveUpdateStatus(req, res);
+  if (pathname === "/api/update-contact") return auth({ route: pathname, action: "update-contact" }) && contactRoutes.serveUpdateContact(req, res);
+  if (pathname === "/api/add-note") return auth({ route: pathname, action: "add-note" }) && contactRoutes.serveAddNote(req, res);
+  if (pathname === "/api/update-note") return auth({ route: pathname, action: "update-note" }) && contactRoutes.serveUpdateNote(req, res);
+  if (pathname === "/api/delete-note") return auth({ route: pathname, action: "delete-note" }) && contactRoutes.serveDeleteNote(req, res, url);
   if (pathname === "/api/accept-suggestion") return contactRoutes.serveAcceptSuggestion(req, res);
   if (pathname === "/api/decline-suggestion") return contactRoutes.serveDeclineSuggestion(req, res);
 
   // Channel Bridge
-  if (pathname === "/api/channel-bridge/inbound") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "bridge-inbound", requireHumanApproval: false })) return;
-    return bridgeRoutes.serveInbound(req, res, () => messagingRoutes.invalidateConversationsCache());
-  }
+  if (pathname === "/api/channel-bridge/inbound") return auth({ route: pathname, action: "bridge-inbound", requireHumanApproval: false }) && bridgeRoutes.serveInbound(req, res, () => messagingRoutes.invalidateConversationsCache());
   if (pathname === "/api/channel-bridge/summary") return bridgeRoutes.serveSummary(req, res, url);
   if (pathname === "/api/channel-bridge/events") return bridgeRoutes.serveEventsList(req, res, url);
 
   // System Health
-  if (pathname === "/api/health" || pathname === "/api/system-health") return systemRoutes.serveSystemHealth(req, res);
-  if (pathname === "/api/system/services") return systemRoutes.serveSystemHealth(req, res); // Reuse health for full status
-  if (pathname === "/api/system/service/control") {
-    if (!securityMiddleware.authorizeSensitiveRoute(req, res, securityPolicy, { route: pathname, action: "service-control" })) return;
-    return systemRoutes.serveServiceControl(req, res);
-  }
+  if (pathname === "/api/health" || pathname === "/api/system-health" || pathname === "/api/system/services") return systemRoutes.serveSystemHealth(req, res);
+  if (pathname === "/api/system/service/control") return auth({ route: pathname, action: "service-control" }) && systemRoutes.serveServiceControl(req, res);
   if (pathname === "/api/openclaw/status") return systemRoutes.serveOpenClawStatus(req, res);
-  if (pathname === "/api/triage-log") {
-    const triageEngine = require('./triage-engine.js');
-    const logs = triageEngine.getLogs(20);
-    writeJson(res, 200, { logs });
-    return;
-  }
+  if (pathname === "/api/triage-log") return systemRoutes.serveTriageLog(req, res);
 
-  // Catch-all
   res.writeHead(404);
   res.end("Not found");
 });

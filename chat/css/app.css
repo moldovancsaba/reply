@@ -1343,13 +1343,12 @@
 
       .settings-sidebar {
         width: 260px;
-        background: rgba(255, 255, 255, 0.03);
-        -webkit-backdrop-filter: blur(10px);
-        backdrop-filter: blur(10px);
-        border-right: 1px solid var(--border-color);
+        background: rgba(22, 22, 24, 0.7);
+        -webkit-backdrop-filter: blur(30px);
+        backdrop-filter: blur(30px);
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
         display: flex;
         flex-direction: column;
-        /* Corrected from flex-column */
         padding: 24px 0;
       }
 
@@ -1407,7 +1406,8 @@
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        background: var(--bg-secondary, #fafafa);
+        background: var(--bg-app);
+        position: relative;
       }
 
       .settings-content-header {
@@ -1416,8 +1416,11 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        border-bottom: 1px solid var(--border-color);
-        background: var(--bg-primary);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(15, 15, 16, 0.82);
+        -webkit-backdrop-filter: blur(20px);
+        backdrop-filter: blur(20px);
+        z-index: 10;
       }
 
       .settings-content-header h2 {
@@ -1530,15 +1533,82 @@
         background: rgba(255, 69, 58, 0.1) !important;
       }
 
-      /* Dark Mode Overrides for Settings */
+      /* Dark Mode Overrides for Settings - Cleaned up to use tokens */
       @media (prefers-color-scheme: dark) {
         .settings-content-area {
-          background: #111;
+          background: var(--bg-app);
         }
 
         .settings-sidebar {
-          background: #161616;
+          background: rgba(22, 22, 24, 0.7);
         }
+      }
+
+      /* Premium Utility Helpers */
+      .settings-info-card-premium {
+        background: rgba(10, 132, 255, 0.08);
+        border: 1px solid rgba(10, 132, 255, 0.2);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .settings-info-card-premium::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: var(--primary);
+      }
+
+      .settings-color-swatch-round {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+        cursor: pointer;
+        overflow: hidden;
+        background: none;
+        transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+
+      .settings-color-swatch-round:hover {
+        transform: scale(1.1);
+        border-color: rgba(255, 255, 255, 0.4);
+      }
+
+      .settings-list-premium {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+      }
+
+      .settings-list-item-premium {
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .settings-list-item-premium:last-child {
+        border-bottom: none;
+      }
+
+      .settings-input-inline {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: var(--text-primary);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 0.85rem;
+        outline: none;
+        cursor: pointer;
       }
 
       /* --- Utility Classes (for refactoring inline styles) --- */

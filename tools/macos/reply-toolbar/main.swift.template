@@ -173,7 +173,9 @@ final class MenuApp: NSObject, NSApplicationDelegate {
                 let hatoriApiObj = (services["hatori_api"] as? [String: Any]) ?? [:]
                 let ollamaObj = (services["ollama"] as? [String: Any]) ?? [:]
                 
-                let hatoriStatus = (hatoriObj["status"] as? String) ?? (hatoriApiObj["status"] as? String) ?? "down"
+                // Prefer direct API dependency state over sidecar process state.
+                // A managed sidecar can be "crashed" while API is still reachable via external supervisor.
+                let hatoriStatus = (hatoriApiObj["status"] as? String) ?? (hatoriObj["status"] as? String) ?? "down"
                 let ollamaStatus = (ollamaObj["status"] as? String) ?? "down"
                 
                 self.hatoriItem.title = "Hatori API: \(hatoriStatus.replacingOccurrences(of: "_", with: " "))"

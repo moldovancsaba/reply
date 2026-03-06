@@ -1,11 +1,31 @@
 /**
  * {reply} - Service Manager
  * Handles orchestration of background processes (Worker, sidecars, etc.)
+ * Includes self-repair watchdog with auto-restart and actionable error hints.
  */
 
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+
+// Per-service restart policies
+const RESTART_POLICIES = {
+    worker: {
+        maxRetries: 5,
+        backoffMs: 30000,
+        actionHint: 'Check logs/worker.log for errors. You can also restart from the Advanced menu in the toolbar.'
+    },
+    openclaw: {
+        maxRetries: 3,
+        backoffMs: 20000,
+        actionHint: 'Ensure OpenClaw is installed. Run `openclaw --version` in Terminal to verify.'
+    },
+    hatori: {
+        maxRetries: 3,
+        backoffMs: 30000,
+        actionHint: 'Ensure the Hatori Python app is in the `../hatori/` folder. Run `pip install -r requirements.txt` in that directory.'
+    }
+};
 
 class ServiceManager {
     constructor() {
@@ -30,6 +50,7 @@ class ServiceManager {
                 console.log(`[ServiceManager] Service "${name}" is already running.`);
                 return existing;
             }
+            // Preserve restart tracking when restarting
         }
 
         let spawnCmd = command;
@@ -54,25 +75,42 @@ class ServiceManager {
         child.stdout.pipe(logStream);
         child.stderr.pipe(logStream);
 
+        // Retrieve or init service info
+        const existing = this.services.get(name) || {};
         const serviceInfo = {
             name,
             command: spawnCmd,
             args: spawnArgs,
             scriptPath: command,
+            spawnCwd: cwd,
             process: child,
             startTime: Date.now(),
-            logPath
+            logPath,
+            restartAttempts: existing.restartAttempts || 0,
+            lastError: existing.lastError || null,
+            repairRequired: false,
+            customStatus: null
         };
 
         child.on('exit', (code, signal) => {
-            console.log(`[ServiceManager] Service "${name}" exited with code ${code}, signal ${signal}`);
+            console.log(`[ServiceManager] Service "${name}" exited (code=${code}, signal=${signal}).`);
             serviceInfo.exitCode = code;
             serviceInfo.exitSignal = signal;
             serviceInfo.process = null;
+
+            // Non-zero exit or killed without SIGTERM = unexpected crash
+            const isCrash = code !== 0 && signal !== 'SIGTERM';
+            if (isCrash) {
+                serviceInfo.lastError = `Exited with code ${code}`;
+                this._attemptAutoRestart(name, serviceInfo);
+            }
         });
 
         child.on('error', (err) => {
-            console.error(`[ServiceManager] Service "${name}" error:`, err);
+            console.error(`[ServiceManager] Service "${name}" spawn error:`, err.message);
+            serviceInfo.lastError = err.message;
+            serviceInfo.process = null;
+            this._attemptAutoRestart(name, serviceInfo);
         });
 
         child.unref();
@@ -81,8 +119,44 @@ class ServiceManager {
     }
 
     /**
+     * Attempt auto-restart with backoff, up to maxRetries.
+     * After exhausting retries, marks the service as repair_required.
+     */
+    _attemptAutoRestart(name, serviceInfo) {
+        const policy = RESTART_POLICIES[name];
+        if (!policy) return; // No policy = no auto-restart
+
+        if (serviceInfo.restartAttempts >= policy.maxRetries) {
+            console.error(
+                `[ServiceManager] Service "${name}" exceeded max retries (${policy.maxRetries}). ` +
+                `Marking as repair_required. Hint: ${policy.actionHint}`
+            );
+            serviceInfo.repairRequired = true;
+            serviceInfo.customStatus = 'repair_required';
+            return;
+        }
+
+        serviceInfo.restartAttempts += 1;
+        const backoff = policy.backoffMs * serviceInfo.restartAttempts;
+        console.warn(
+            `[ServiceManager] Auto-restarting "${name}" ` +
+            `(attempt ${serviceInfo.restartAttempts}/${policy.maxRetries}) in ${backoff / 1000}s...`
+        );
+
+        serviceInfo.customStatus = `restarting (attempt ${serviceInfo.restartAttempts}/${policy.maxRetries})`;
+
+        setTimeout(() => {
+            // Only restart if still in crashed state
+            if (!serviceInfo.process) {
+                console.log(`[ServiceManager] Auto-restart triggered for "${name}".`);
+                this.start(name, serviceInfo.scriptPath, serviceInfo.args.slice(1), serviceInfo.spawnCwd);
+            }
+        }, backoff);
+    }
+
+    /**
      * Stop a background service
-     * @param {string} name 
+     * @param {string} name
      */
     async stop(name) {
         const service = this.services.get(name);
@@ -110,33 +184,40 @@ class ServiceManager {
     }
 
     /**
-     * Restart a background service
-     * @param {string} name 
+     * Restart a background service (also resets repair state)
+     * @param {string} name
      */
     async restart(name) {
         const service = this.services.get(name);
         if (!service) return;
 
-        const { scriptPath } = service;
+        // Reset repair counters so manual restart gives a fresh chance
+        service.restartAttempts = 0;
+        service.repairRequired = false;
+        service.lastError = null;
+
+        const { scriptPath, args, spawnCwd } = service;
         await this.stop(name);
-        this.start(name, scriptPath);
+        this.start(name, scriptPath, args.slice(scriptPath.endsWith('.js') ? 0 : 1), spawnCwd);
     }
 
     /**
      * Set a custom status string for a service
-     * @param {string} name 
-     * @param {string} status 
+     * @param {string} name
+     * @param {string} status
      */
     setStatus(name, status) {
-        const service = this.services.get(name);
-        if (service) {
-            service.customStatus = status;
+        let service = this.services.get(name);
+        if (!service) {
+            service = { name, process: null, startTime: Date.now(), logPath: null, restartAttempts: 0, repairRequired: false };
+            this.services.set(name, service);
         }
+        service.customStatus = status;
     }
 
     /**
      * Get status of all or a specific service
-     * @param {string} [name] 
+     * @param {string} [name]
      */
     getStatus(name) {
         if (name) {
@@ -152,13 +233,35 @@ class ServiceManager {
         return status;
     }
 
+    /**
+     * Returns a list of services currently in repair_required state with hints.
+     */
+    getRepairAlerts() {
+        const alerts = [];
+        for (const [name, service] of this.services.entries()) {
+            if (service.repairRequired) {
+                const policy = RESTART_POLICIES[name] || {};
+                alerts.push({
+                    service: name,
+                    severity: 'critical',
+                    message: service.lastError || 'Service failed to start',
+                    hint: policy.actionHint || 'Check logs and restart manually.',
+                    logPath: service.logPath,
+                    attempts: service.restartAttempts
+                });
+            }
+        }
+        return alerts;
+    }
+
     _formatStatus(service) {
         const isAlive = !!(service.process && !service.process.killed);
         let status = isAlive ? 'online' : (service.exitCode != null ? 'crashed' : 'offline');
 
-        // Prefer custom status if set and it's not "online" when process is dead
-        if (service.customStatus) {
-            if (isAlive || service.customStatus === 'loading in queue' || service.customStatus === 'repair required') {
+        if (service.repairRequired) {
+            status = 'repair_required';
+        } else if (service.customStatus) {
+            if (isAlive || ['loading in queue', 'restarting', 'external'].some(s => String(service.customStatus).startsWith(s))) {
                 status = service.customStatus;
             }
         }
@@ -169,6 +272,9 @@ class ServiceManager {
             pid: service.process ? service.process.pid : null,
             uptime: isAlive ? Math.floor((Date.now() - service.startTime) / 1000) : 0,
             exitCode: service.exitCode,
+            restartAttempts: service.restartAttempts || 0,
+            repairRequired: !!service.repairRequired,
+            lastError: service.lastError || null,
             logPath: service.logPath
         };
     }
