@@ -2,7 +2,17 @@
 
 This file is onboarding + operational context. Keep it accurate when behavior/architecture changes.
 
-**Last Updated**: 2026-02-22 (Sprint 1 planning complete, foundation verified, blockers resolved)
+**Last Updated**: 2026-03-06 (v0.5.0 — Gmail backfill, self-repair watchdog, premium Settings UI, toolbar rebuild)
+
+**Current Version**: `0.5.0` (see `chat/package.json`)
+
+**Key changes in v0.5.0**:
+- `service-manager.js` — auto-restart watchdog with exponential backoff + `repair_required` state
+- `routes/system.js` — `/api/health` now returns `repair[]` alerts; Hatori auto-restart after 3 failures
+- `js/dashboard.js` — System Alerts panel with actionable hints and "Try Again" buttons
+- `gmail-connector.js` / `background-worker.js` — paged Gmail backfill (500 emails every 7 min); entire mail history
+- Settings page — premium glassmorphism redesign
+
 
 ## SSOT (Work Tracking)
 - Board: https://github.com/users/moldovancsaba/projects/1
@@ -333,3 +343,10 @@ See detailed plans:
 - **Stand-alone Settings UI**: Completed migration to `settings.html` + `fragments/settings-fragment.html` for clean, full-page configuration.
 - **Validation**: 28/28 tests passed (`npm test`). Verified server health and KYC progress via `/api/health`.
 - **NEXT P1**: Gmail Reconnect. User must disconnect/connect Gmail in Settings to restore the secrets wiped during the token migration earlier today.
+
+## Active Session Update (2026-03-02, Release v0.4.6)
+- **Monolith Decomposition (Issue #211)**: Decomposed `server.js` from 365+ lines to **191 lines**.
+- **Modular Routing**: Extracted static asset handling and token injection to `routes/static.js`. Moved system/control handlers to `routes/system.js`.
+- **Security Hardening**: Enforced `REPLY_SECURITY_REQUIRE_HUMAN_APPROVAL=true` in `.env`.
+- **Zero Shell Usage**: Confirmed that `server.js` contains no shell-based `exec()` patterns.
+- **Validation**: 28/28 tests passed. Security audit `critical=0`.

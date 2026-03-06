@@ -320,61 +320,93 @@ async function syncGmail({ maxMessages = 500 } = {}) {
   const meEmail = (profile.emailAddress || gmail.email || "").toString().toLowerCase();
 
   const state = loadState();
-  let messageIds = [];
-  let shouldRunInitialSync = !state.historyId;
+  const ids = new Set();
+  let latestHistoryId = profile.historyId;
 
+  // 1. Incremental Sync (New Messages since last run)
   if (state.historyId) {
     try {
+      console.log(`[Gmail Sync] Checking for new messages since historyId: ${state.historyId}`);
       const history = await apiRequest(
         accessToken,
         `/history?startHistoryId=${encodeURIComponent(state.historyId)}&historyTypes=messageAdded`
       );
-      shouldRunInitialSync = false;
       const hist = Array.isArray(history.history) ? history.history : [];
-      const ids = new Set();
       for (const h of hist) {
         const added = Array.isArray(h.messagesAdded) ? h.messagesAdded : [];
         for (const a of added) {
           if (a?.message?.id) ids.add(a.message.id);
         }
       }
-      messageIds = Array.from(ids).slice(0, maxMessages);
-      if (history.historyId) state.historyId = String(history.historyId);
+      if (history.historyId) {
+        state.historyId = String(history.historyId);
+        latestHistoryId = history.historyId;
+      }
     } catch (e) {
-      // When startHistoryId is too old, Gmail returns 404. Fall back to initial list.
+      // When startHistoryId is too old, Gmail returns 404. 
       const msg = String(e?.message || "");
-      if (!msg.includes("404")) throw e;
-      state.historyId = null;
-      messageIds = [];
-      shouldRunInitialSync = true;
+      if (msg.includes("404")) {
+        console.warn(`[Gmail Sync] historyId ${state.historyId} expired. Resetting to latest.`);
+        state.historyId = String(profile.historyId);
+      } else {
+        throw e;
+      }
+    }
+  } else {
+    // First time? Set baseline historyId from profile
+    state.historyId = String(profile.historyId);
+  }
+
+  // 2. Backfill Sync (Old Messages via paging)
+  // We run backfill if we've never run it (no historyId) OR if we have a nextPageToken
+  const isFirstRun = !state.lastSync;
+  if (isFirstRun || state.nextPageToken) {
+    const max = Math.min(maxMessages, 500);
+    let url = `/messages?maxResults=${max}`;
+
+    if (state.nextPageToken) {
+      url += `&pageToken=${encodeURIComponent(state.nextPageToken)}`;
+      console.log(`[Gmail Sync] Fetching next page of old emails (backfill)...`);
+    } else {
+      console.log(`[Gmail Sync] Starting initial backfill (Scope: ${scope})...`);
+    }
+
+    // Apply Scope/Query filters to the list request
+    if (scope === "all_mail") {
+      url += `&q=${encodeURIComponent("-in:spam -in:trash")}`;
+    } else if (scope === "custom" && query) {
+      url += `&q=${encodeURIComponent(query)}`;
+    } else {
+      // Default: inbox + sent (simplified for backfill list - we'll filter details later if needed, 
+      // but better to fetch precisely if possible. Gmail list doesn't support multiple labelIds easily with OR in one call without q)
+      url += `&q=${encodeURIComponent("in:inbox OR in:sent")}`;
+    }
+
+    const list = await apiRequest(accessToken, url);
+    for (const m of (list.messages || [])) {
+      if (m?.id) ids.add(m.id);
+    }
+
+    state.nextPageToken = list.nextPageToken || null;
+    if (state.nextPageToken) {
+      console.log(`[Gmail Sync] More emails to backfill. Saved nextPageToken.`);
+    } else {
+      console.log(`[Gmail Sync] Backfill complete!`);
     }
   }
 
-  if (shouldRunInitialSync) {
-    // Initial sync: pull recent messages based on configured scope and set baseline historyId.
-    const max = (scope === "all_mail" || scope === "custom") ? Math.min(maxMessages, 10000) : Math.min(maxMessages, 2000);
-    const ids = new Set();
+  const messageIds = Array.from(ids).slice(0, maxMessages * 2); // Allow slight overflow if history + backfill overlap
 
-    console.log(`[Gmail Sync] Running initial sync for up to ${max} messages (Scope: ${scope})`);
-
-    if (scope === "all_mail") {
-      const q = "-in:spam -in:trash";
-      const list = await apiRequest(accessToken, `/messages?maxResults=${max}&q=${encodeURIComponent(q)}`);
-      for (const m of (list.messages || [])) if (m?.id) ids.add(m.id);
-    } else if (scope === "custom" && query) {
-      const list = await apiRequest(accessToken, `/messages?maxResults=${max}&q=${encodeURIComponent(query)}`);
-      for (const m of (list.messages || [])) if (m?.id) ids.add(m.id);
-    } else {
-      // Default: inbox + sent.
-      const listInbox = await apiRequest(accessToken, `/messages?maxResults=${max}&labelIds=INBOX`);
-      const listSent = await apiRequest(accessToken, `/messages?maxResults=${max}&labelIds=SENT`);
-      for (const m of (listInbox.messages || [])) if (m?.id) ids.add(m.id);
-      for (const m of (listSent.messages || [])) if (m?.id) ids.add(m.id);
-    }
-
-    messageIds = Array.from(ids).slice(0, maxMessages);
-    console.log(`[Gmail Sync] Found ${messageIds.length} candidate messages. Baseline historyId: ${state.historyId}`);
-    state.historyId = String(profile.historyId || state.historyId || "");
+  if (messageIds.length === 0) {
+    state.lastSync = new Date().toISOString();
+    saveState(state);
+    updateMailStatus({
+      state: "idle",
+      lastSync: state.lastSync,
+      connector: "gmail",
+      message: state.nextPageToken ? "Backfilling... (next batch soon)" : "No new emails",
+    });
+    return 0;
   }
 
   updateMailStatus({ state: "running", message: `Fetching ${messageIds.length} Gmail messages…`, connector: "gmail", progress: 40 });
@@ -428,7 +460,7 @@ async function syncGmail({ maxMessages = 500 } = {}) {
     }
   }
 
-  console.log(`[Gmail Sync] Processed ${i} messages. Collected ${docs.length} new documents.`);
+  console.log(`[Gmail Sync] Processed ${messageIds.length} messages. Collected ${docs.length} new documents.`);
 
   if (docs.length > 0) {
     updateMailStatus({ state: "running", message: `Vectorizing ${docs.length} Gmail messages…`, connector: "gmail", progress: 80 });
@@ -438,18 +470,19 @@ async function syncGmail({ maxMessages = 500 } = {}) {
   state.lastSync = new Date().toISOString();
   saveState(state);
 
-  const currentStatus = statusManager.get("mail");
+  const currentStatus = statusManager.get("mail") || {};
   const currentCount = Number(currentStatus.processed) || 0;
 
+  const hasMore = !!state.nextPageToken;
   updateMailStatus({
     state: "idle",
     lastSync: state.lastSync,
     processed: currentCount + docs.length,
     connector: "gmail",
-    message: docs.length ? `Synced ${docs.length} Gmail emails` : "No new emails",
+    message: hasMore ? `Backfilling... (${currentCount + docs.length} total)` : `Synced ${docs.length} Gmail emails`,
   });
 
-  return docs.length;
+  return { added: docs.length, hasMore };
 }
 
 async function sendGmail({ to, subject, text }) {

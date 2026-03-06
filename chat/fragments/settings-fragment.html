@@ -4,7 +4,7 @@
         <!-- Settings Sidebar Navigation -->
         <aside class="settings-sidebar">
             <div class="settings-sidebar-header">
-                <h3>Settings</h3>
+                <h3>{reply} <span>Settings</span></h3>
             </div>
             <nav class="settings-nav">
                 <button class="settings-nav-item active" data-tab="general">
@@ -14,13 +14,13 @@
                     <span class="material-symbols-outlined">mail</span> Email
                 </button>
                 <button class="settings-nav-item" data-tab="messaging">
-                    <span class="material-symbols-outlined">chat</span> Messaging
+                    <span class="material-symbols-outlined">chat_bubble</span> Messaging
                 </button>
                 <button class="settings-nav-item" data-tab="worker">
-                    <span class="material-symbols-outlined">settings_slow_motion_video</span> Worker
+                    <span class="material-symbols-outlined">cyclone</span> Worker
                 </button>
                 <button class="settings-nav-item" data-tab="security">
-                    <span class="material-symbols-outlined">security</span> Privacy & Security
+                    <span class="material-symbols-outlined">lock</span> Privacy & Security
                 </button>
             </nav>
             <div class="settings-sidebar-footer">
@@ -39,37 +39,49 @@
 
                 <!-- TAB: GENERAL -->
                 <section id="tab-content-general" class="settings-tab-content">
-                    <div class="settings-section">
-                        <div class="settings-section-title">Generative Persona</div>
+                    <div class="settings-card">
+                        <div class="settings-section-title">
+                            <span class="material-symbols-outlined">auto_awesome</span> Generative Persona
+                        </div>
                         <div class="settings-grid">
                             <div class="settings-field">
                                 <label class="settings-label">Gemini API Key</label>
                                 <input id="settings-global-google-api-key" type="password" class="settings-input"
-                                    placeholder="••••••••••••••••">
-                                <div id="settings-global-google-api-key-hint" class="settings-hint">Not set</div>
+                                    placeholder="Enter your API key">
+                                <div id="settings-global-google-api-key-hint" class="settings-hint">Securely encrypted
+                                    on disk</div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="settings-section">
-                        <div class="settings-section-title">UI Customization</div>
-                        <p class="settings-hint mb-md">Customize how different channels appear in your chat history.</p>
+                    <div class="settings-card">
+                        <div class="settings-section-title">
+                            <span class="material-symbols-outlined">palette</span> UI Aesthetics
+                        </div>
+                        <p class="settings-hint mb-md">Personalize how message bubbles appear for each secondary
+                            channel.</p>
                         <div class="settings-grid settings-grid-2">
                             <div class="settings-ui-card">
-                                <span class="settings-ui-card-label">iMessage</span>
+                                <div class="u-flex-column">
+                                    <span class="settings-ui-card-label">iMessage</span>
+                                    <span class="u-font-size-07 u-color-tertiary">Classic blue bubbles</span>
+                                </div>
                                 <div class="u-flex-center-gap">
                                     <input id="settings-ui-imessage-emoji" class="settings-input-sm" value="💬"
                                         title="iMessage Emoji Tag">
-                                    <input id="settings-ui-imessage-me" type="color" class="settings-color-swatch"
+                                    <input id="settings-ui-imessage-me" type="color" class="settings-color-swatch-round"
                                         title="My Bubble Color">
                                 </div>
                             </div>
                             <div class="settings-ui-card">
-                                <span class="settings-ui-card-label">WhatsApp</span>
+                                <div class="u-flex-column">
+                                    <span class="settings-ui-card-label">WhatsApp</span>
+                                    <span class="u-font-size-07 u-color-tertiary">Encrypted green bubbles</span>
+                                </div>
                                 <div class="u-flex-center-gap">
                                     <input id="settings-ui-whatsapp-emoji" class="settings-input-sm" value="🟢"
                                         title="WhatsApp Emoji Tag">
-                                    <input id="settings-ui-whatsapp-me" type="color" class="settings-color-swatch"
+                                    <input id="settings-ui-whatsapp-me" type="color" class="settings-color-swatch-round"
                                         title="My Bubble Color">
                                 </div>
                             </div>
@@ -79,106 +91,119 @@
 
                 <!-- TAB: EMAIL -->
                 <section id="tab-content-email" class="settings-tab-content u-display-none">
-                    <div class="settings-section">
-                        <div class="settings-section-title">Gmail (OAuth)</div>
-                        <div class="settings-info-card mb-md">
-                            <div id="settings-gmail-status" class="u-font-weight-600">Checking...</div>
-                            <p class="u-font-size-08 u-color-secondary mt-xs">Recommended for Gmail users. Fast and
-                                secure.</p>
+                    <div class="settings-card">
+                        <div class="settings-section-title">
+                            <span class="material-symbols-outlined">alternate_email</span> Gmail (OAuth)
+                        </div>
+                        <div class="settings-info-card-premium mb-lg">
+                            <div class="u-flex-center-gap">
+                                <div id="settings-gmail-status-dot" class="status-dot online"></div>
+                                <div id="settings-gmail-status" class="u-font-weight-700 u-font-size-11">Checking
+                                    Status...</div>
+                            </div>
+                            <p class="u-font-size-085 u-color-secondary mt-sm">Official Google OAuth integration. No
+                                passwords required.</p>
                         </div>
 
                         <div class="settings-grid settings-grid-2">
                             <div class="settings-field">
                                 <label class="settings-label">Client ID</label>
                                 <input id="settings-gmail-client-id" class="settings-input"
-                                    placeholder="Google Cloud Client ID">
+                                    placeholder="your-app.apps.googleusercontent.com">
                             </div>
                             <div class="settings-field">
                                 <label class="settings-label">Client Secret</label>
                                 <input id="settings-gmail-client-secret" type="password" class="settings-input"
                                     placeholder="••••••••">
-                                <div id="settings-gmail-client-secret-hint" class="settings-hint">Not set</div>
+                                <div id="settings-gmail-client-secret-hint" class="settings-hint">Lost? Re-enter it
+                                    here.</div>
                             </div>
                         </div>
 
                         <div class="settings-field mt-md">
-                            <label class="settings-label">Initial Sync Depth</label>
+                            <label class="settings-label">Sync Depth Strategy</label>
                             <select id="settings-gmail-scope" class="settings-input" title="Sync Depth Scope">
-                                <option value="inbox_sent">Inbox + Sent Only</option>
-                                <option value="all_mail">All Mail (Archive)</option>
-                                <option value="custom">Custom Filter Query</option>
+                                <option value="inbox_sent">Targeted: Inbox & Sent</option>
+                                <option value="all_mail">Comprehensive: All Archives</option>
+                                <option value="custom">Advanced: Gmail Query</option>
                             </select>
                         </div>
 
-                        <div class="u-flex-center-gap mt-lg">
-                            <button id="settings-gmail-connect" class="btn btn-primary">Connect Account</button>
-                            <button id="settings-gmail-disconnect" class="btn btn-ghost btn-danger">Disconnect</button>
+                        <div class="u-flex-center-gap mt-xl">
+                            <button id="settings-gmail-connect" class="btn btn-primary u-flex-1">Connect Gmail
+                                Account</button>
+                            <button id="settings-gmail-disconnect" class="btn btn-ghost btn-danger">Disconnect
+                                Account</button>
                         </div>
                     </div>
 
-                    <div class="settings-section mt-xl">
-                        <div class="settings-section-title">Direct IMAP (Fallback)</div>
+                    <div class="settings-card">
+                        <div class="settings-section-title">
+                            <span class="material-symbols-outlined">dns</span> Direct IMAP
+                        </div>
+                        <p class="settings-hint mb-lg">Legacy connection for custom providers or non-Gmail accounts.</p>
                         <div class="settings-grid settings-grid-2">
                             <div class="settings-field">
-                                <label class="settings-label">Host</label>
-                                <input id="settings-imap-host" class="settings-input" placeholder="imap.gmail.com">
+                                <label class="settings-label">Hostname</label>
+                                <input id="settings-imap-host" class="settings-input" placeholder="imap.domain.com">
                             </div>
                             <div class="settings-field">
                                 <label class="settings-label">Port</label>
                                 <input id="settings-imap-port" class="settings-input" type="number" value="993"
-                                    title="IMAP Port Number" placeholder="993">
+                                    title="IMAP Port Number">
                             </div>
                         </div>
-                        <div class="settings-field mt-sm">
-                            <label class="settings-label">Username</label>
-                            <input id="settings-imap-user" class="settings-input" placeholder="you@example.com">
+                        <div class="settings-field">
+                            <label class="settings-label">Username / Identity</label>
+                            <input id="settings-imap-user" class="settings-input" placeholder="user@domain.com">
                         </div>
-                        <div class="settings-field mt-sm">
-                            <label class="settings-label">App Password</label>
+                        <div class="settings-field">
+                            <label class="settings-label">App-Specific Password</label>
                             <input id="settings-imap-pass" type="password" class="settings-input"
                                 placeholder="••••••••">
-                            <div id="settings-imap-pass-hint" class="settings-hint">Not set</div>
+                            <div id="settings-imap-pass-hint" class="settings-hint">Stored in encrypted vault</div>
                         </div>
                     </div>
                 </section>
 
                 <!-- TAB: MESSAGING -->
                 <section id="tab-content-messaging" class="settings-tab-content u-display-none">
-                    <div class="settings-section">
-                        <div class="settings-section-title">Inbound Bridge Filters</div>
-                        <p class="settings-hint mb-md">Control which messages are automatically processed into drafts.
-                        </p>
+                    <div class="settings-card">
+                        <div class="settings-section-title">
+                            <span class="material-symbols-outlined">bridge</span> Channel Bridge Policies
+                        </div>
+                        <p class="settings-hint mb-lg">Define how inbound traffic from secondary bridges is handled by
+                            the automated tiler.</p>
 
-                        <div class="settings-list">
-                            <div class="settings-list-item">
-                                <div class="u-flex-1">
-                                    <div class="u-font-weight-600">Telegram</div>
-                                    <div class="u-font-size-08 u-color-secondary">Process inbound messages</div>
+                        <div class="settings-list-premium">
+                            <div class="settings-list-item-premium">
+                                <div class="u-flex-column">
+                                    <div class="u-font-weight-700">Telegram</div>
+                                    <div class="u-font-size-08 u-color-tertiary">Real-time messaging bridge</div>
                                 </div>
-                                <select id="settings-bridge-telegram-mode" class="settings-input"
+                                <select id="settings-bridge-telegram-mode" class="settings-input-inline"
                                     title="Telegram Inbound Mode">
                                     <option value="draft_only">Draft Only</option>
                                     <option value="disabled">Disabled</option>
                                 </select>
                             </div>
-                            <div class="settings-list-item">
-                                <div class="u-flex-1">
-                                    <div class="u-font-weight-600">Discord</div>
-                                    <div class="u-font-size-08 u-color-secondary">Process inbound messages</div>
+                            <div class="settings-list-item-premium">
+                                <div class="u-flex-column">
+                                    <div class="u-font-weight-700">Discord</div>
+                                    <div class="u-font-size-08 u-color-tertiary">Community & server communications</div>
                                 </div>
-                                <select id="settings-bridge-discord-mode" class="settings-input"
+                                <select id="settings-bridge-discord-mode" class="settings-input-inline"
                                     title="Discord Inbound Mode">
                                     <option value="draft_only">Draft Only</option>
                                     <option value="disabled">Disabled</option>
                                 </select>
                             </div>
-                            <div class="settings-list-item">
-                                <div class="u-flex-1">
-                                    <div class="u-font-weight-600">LinkedIn</div>
-                                    <div class="u-font-size-08 u-color-secondary">Process extension-synced messages
-                                    </div>
+                            <div class="settings-list-item-premium">
+                                <div class="u-flex-column">
+                                    <div class="u-font-weight-700">LinkedIn</div>
+                                    <div class="u-font-size-08 u-color-tertiary">Professional networking sync</div>
                                 </div>
-                                <select id="settings-bridge-linkedin-mode" class="settings-input"
+                                <select id="settings-bridge-linkedin-mode" class="settings-input-inline"
                                     title="LinkedIn Inbound Mode">
                                     <option value="draft_only">Draft Only</option>
                                     <option value="disabled">Disabled</option>
@@ -190,34 +215,36 @@
 
                 <!-- TAB: WORKER -->
                 <section id="tab-content-worker" class="settings-tab-content u-display-none">
-                    <div class="settings-section">
-                        <div class="settings-section-title">Sync Performance</div>
+                    <div class="settings-card">
+                        <div class="settings-section-title">
+                            <span class="material-symbols-outlined">speed</span> Background Intelligence
+                        </div>
                         <div class="settings-field">
-                            <label class="settings-label">Poll Interval (seconds)</label>
+                            <label class="settings-label">Polling Cadence (seconds)</label>
                             <input id="settings-worker-interval" type="number" class="settings-input" value="60"
                                 title="Poll Interval (Seconds)" placeholder="60">
                         </div>
 
-                        <div class="settings-grid settings-grid-2 mt-md">
+                        <div class="settings-grid settings-grid-2 mt-lg">
                             <div class="settings-field">
                                 <label class="settings-label">iMessage Batch</label>
-                                <input id="settings-worker-imessage-max" type="number" class="settings-input-sm"
-                                    value="1000" title="Max iMessage to Sync" placeholder="1000">
+                                <input id="settings-worker-imessage-max" type="number" class="settings-input"
+                                    value="1000" title="Max iMessage to Sync">
                             </div>
                             <div class="settings-field">
                                 <label class="settings-label">WhatsApp Batch</label>
-                                <input id="settings-worker-whatsapp-max" type="number" class="settings-input-sm"
-                                    value="500" title="Max WhatsApp to Sync" placeholder="500">
+                                <input id="settings-worker-whatsapp-max" type="number" class="settings-input"
+                                    value="500" title="Max WhatsApp to Sync">
                             </div>
                             <div class="settings-field">
                                 <label class="settings-label">Gmail Batch</label>
-                                <input id="settings-worker-gmail-max" type="number" class="settings-input-sm"
-                                    value="100" title="Max Gmail to Sync" placeholder="100">
+                                <input id="settings-worker-gmail-max" type="number" class="settings-input" value="100"
+                                    title="Max Gmail to Sync">
                             </div>
                             <div class="settings-field">
                                 <label class="settings-label">Notes Batch</label>
-                                <input id="settings-worker-notes-max" type="number" class="settings-input-sm" value="0"
-                                    title="Max Notes to Sync" placeholder="0">
+                                <input id="settings-worker-notes-max" type="number" class="settings-input" value="0"
+                                    title="Max Notes to Sync">
                             </div>
                         </div>
                     </div>
@@ -225,32 +252,39 @@
 
                 <!-- TAB: SECURITY -->
                 <section id="tab-content-security" class="settings-tab-content u-display-none">
-                    <div class="settings-section">
-                        <div class="settings-section-title">Privacy Controls</div>
-                        <div class="settings-checkbox-group">
-                            <input id="settings-global-local-writes" type="checkbox" title="Local Writes Only">
-                            <label for="settings-global-local-writes" class="settings-checkbox-label">Local Writes
-                                Only</label>
+                    <div class="settings-card">
+                        <div class="settings-section-title">
+                            <span class="material-symbols-outlined">verified_user</span> Security Hardening
                         </div>
-                        <div class="settings-checkbox-group">
-                            <input id="settings-global-require-approval" type="checkbox" title="Require Approval">
-                            <label for="settings-global-require-approval" class="settings-checkbox-label">Human Review
-                                Before Send</label>
+                        <div class="u-flex-column gap-md">
+                            <div class="settings-checkbox-group">
+                                <input id="settings-global-local-writes" type="checkbox" title="Local Writes Only">
+                                <label for="settings-global-local-writes" class="settings-checkbox-label">Strict Local
+                                    Writes Only</label>
+                            </div>
+                            <div class="settings-checkbox-group">
+                                <input id="settings-global-require-approval" type="checkbox" title="Require Approval">
+                                <label for="settings-global-require-approval"
+                                    class="settings-checkbox-label">Human-in-the-Loop Approval</label>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="settings-section mt-lg">
-                        <div class="settings-section-title">Master Access</div>
+                    <div class="settings-card">
+                        <div class="settings-section-title">
+                            <span class="material-symbols-outlined">vpn_key</span> API Sovereignty
+                        </div>
                         <div class="settings-field">
-                            <label class="settings-label">Operator Token</label>
+                            <label class="settings-label">Master Operator Token</label>
                             <input id="settings-global-operator-token" type="password" class="settings-input"
                                 placeholder="••••••••••••••••">
-                            <div id="settings-global-operator-token-hint" class="settings-hint">Not set</div>
+                            <div id="settings-global-operator-token-hint" class="settings-hint">Last updated: Never
+                            </div>
                         </div>
-                        <div class="settings-checkbox-group mt-sm">
+                        <div class="settings-checkbox-group mt-lg">
                             <input id="settings-global-require-token" type="checkbox" title="Require Operator Token">
-                            <label for="settings-global-require-token" class="settings-checkbox-label">Deny API access
-                                without token</label>
+                            <label for="settings-global-require-token" class="settings-checkbox-label">Enforce
+                                Token-Based Authorization</label>
                         </div>
                     </div>
                 </section>

@@ -93,6 +93,7 @@ const MAX_SEEN_IDS = 1000;
 const seenIds = new Set();
 let isProcessing = false;
 const deepAnalysisInFlightByHandle = new Map();
+let pollFastRequested = false;
 const AUTO_SCAN_CURSOR_PATH = path.join(__dirname, 'data', 'kyc_auto_scan_cursor.json');
 
 function getAutoAnalyzeIntervalMs() {
@@ -257,7 +258,10 @@ async function runAutoDeepAnalyzeSweepOnce() {
 }
 
 async function poll() {
-    if (isProcessing) return;
+    if (isProcessing) {
+        console.log("[Worker] Poll skipped: still processing previous batch.");
+        return;
+    }
     isProcessing = true;
 
     try {
@@ -275,7 +279,11 @@ async function poll() {
         const gmailOk = typeof isGmailConfigured === 'function' ? isGmailConfigured() : false;
         if (gmailOk || imapOk) {
             console.log(`Running Mail sync (${gmailOk ? 'Gmail' : 'IMAP'})...`);
-            await syncMail();
+            const res = await syncMail();
+            if (res && res.hasMore) {
+                console.log("[Worker] Gmail backfill in progress, requested fast poll.");
+                pollFastRequested = true;
+            }
         }
     } catch (e) {
         console.error("Sync Error:", e);
@@ -304,72 +312,76 @@ async function poll() {
         ORDER BY m.date DESC
     `;
 
-    db.all(query, [MESSAGE_LOOKBACK_SECONDS], async (err, rows) => {
-        if (err) {
-            console.error("SQL Query Error:", err.message);
-            db.close();
-            isProcessing = false;
-            return;
-        }
-
-        try {
-            for (const row of rows) {
-                const { guid: id, text, handle, is_from_me, formatted_date: date } = row;
-                const fromMe = is_from_me === 1;
-
-                if (seenIds.has(id)) continue;
-
-                // Maintain bounded cache
-                if (seenIds.size >= MAX_SEEN_IDS) {
-                    const it = seenIds.values();
-                    seenIds.delete(it.next().value);
-                }
-                seenIds.add(id);
-
-                console.log(`[Worker] New Message: ${text.substring(0, 50)}...`);
-
-                // 1. Vectorize (Always)
-                await addDocuments([{
-                    id: `live-${id}`,
-                    text: `[${date}] ${fromMe ? 'Me' : handle}: ${text}`,
-                    source: 'iMessage-live',
-                    path: `imessage://${handle}`
-                }]);
-                try {
-                    const cur = statusManager.get('imessage') || {};
-                    const processed = Number(cur.processed);
-                    const next = (Number.isFinite(processed) && processed >= 0 ? processed : 0) + 1;
-                    statusManager.update('imessage', { processed: next, lastSync: new Date().toISOString() });
-                } catch { }
-
-                // 1.5. Ingest into Hatori if enabled
-                if (process.env.REPLY_USE_HATORI === '1') {
-                    hatori.ingestEvent({
-                        external_event_id: `reply:live-${id}`,
-                        kind: 'imessage',
-                        conversation_id: `reply:${handle}`,
-                        sender_id: fromMe ? 'reply:me' : `reply:${handle}`,
-                        content: text,
-                        metadata: { source: 'iMessage-live', date }
-                    }).catch(e => console.warn(`[Hatori] Background ingest failed for ${id}:`, e.message));
-                }
-
-                // 2. Track activity
-                if (handle) {
-                    contactStore.updateLastContacted(handle, date, { channel: 'imessage' });
-                }
-
-                // 3. Intelligence Pipeline (Only if NOT from me)
-                if (!fromMe && handle) {
-                    await runIntelligencePipeline(handle, text);
-                }
+    await new Promise((resolve) => {
+        db.all(query, [MESSAGE_LOOKBACK_SECONDS], async (err, rows) => {
+            if (err) {
+                console.error("SQL Query Error:", err.message);
+                db.close();
+                isProcessing = false;
+                resolve();
+                return;
             }
-        } catch (e) {
-            console.error("Worker Core Error:", e);
-        } finally {
-            db.close();
-            isProcessing = false;
-        }
+
+            try {
+                for (const row of rows) {
+                    const { guid: id, text, handle, is_from_me, formatted_date: date } = row;
+                    const fromMe = is_from_me === 1;
+
+                    if (seenIds.has(id)) continue;
+
+                    // Maintain bounded cache
+                    if (seenIds.size >= MAX_SEEN_IDS) {
+                        const it = seenIds.values();
+                        seenIds.delete(it.next().value);
+                    }
+                    seenIds.add(id);
+
+                    console.log(`[Worker] New Message: ${text.substring(0, 50)}...`);
+
+                    // 1. Vectorize (Always)
+                    await addDocuments([{
+                        id: `live-${id}`,
+                        text: `[${date}] ${fromMe ? 'Me' : handle}: ${text}`,
+                        source: 'iMessage-live',
+                        path: `imessage://${handle}`
+                    }]);
+                    try {
+                        const cur = statusManager.get('imessage') || {};
+                        const processed = Number(cur.processed);
+                        const next = (Number.isFinite(processed) && processed >= 0 ? processed : 0) + 1;
+                        statusManager.update('imessage', { processed: next, lastSync: new Date().toISOString() });
+                    } catch { }
+
+                    // 1.5. Ingest into Hatori if enabled
+                    if (process.env.REPLY_USE_HATORI === '1') {
+                        hatori.ingestEvent({
+                            external_event_id: `reply:live-${id}`,
+                            kind: 'imessage',
+                            conversation_id: `reply:${handle}`,
+                            sender_id: fromMe ? 'reply:me' : `reply:${handle}`,
+                            content: text,
+                            metadata: { source: 'iMessage-live', date }
+                        }).catch(e => console.warn(`[Hatori] Background ingest failed for ${id}:`, e.message));
+                    }
+
+                    // 2. Track activity
+                    if (handle) {
+                        contactStore.updateLastContacted(handle, date, { channel: 'imessage' });
+                    }
+
+                    // 3. Intelligence Pipeline (Only if NOT from me)
+                    if (!fromMe && handle) {
+                        await runIntelligencePipeline(handle, text);
+                    }
+                }
+            } catch (e) {
+                console.error("Worker Core Error:", e);
+            } finally {
+                db.close();
+                isProcessing = false;
+                resolve();
+            }
+        });
     });
 }
 
@@ -430,7 +442,12 @@ async function pollLoop() {
     try {
         await poll();
     } finally {
-        setTimeout(pollLoop, getPollIntervalMs());
+        const interval = pollFastRequested ? 420000 : getPollIntervalMs();
+        if (pollFastRequested) {
+            console.log(`[Worker] Backfill fast-poll active (next in 420s)`);
+            pollFastRequested = false;
+        }
+        setTimeout(pollLoop, interval);
     }
 }
 

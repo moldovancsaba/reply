@@ -275,7 +275,8 @@ export async function wireDom() {
   if (!container) return;
 
   // Lazy load the settings fragment if not already loaded
-  if (!container.innerHTML.trim()) {
+  const hasPage = !!document.getElementById('settings-page');
+  if (!hasPage) {
     try {
       const response = await fetch('fragments/settings-fragment.html');
       if (!response.ok) throw new Error('Failed to load settings fragment');
@@ -295,8 +296,12 @@ export async function wireDom() {
 
   if (closeBtn) closeBtn.onclick = closeSettings;
   if (saveBtn) saveBtn.onclick = onSave;
-  el('settings-gmail-connect').onclick = onConnectGmail;
-  el('settings-gmail-disconnect').onclick = onDisconnectGmail;
+
+  const connectBtn = el('settings-gmail-connect');
+  if (connectBtn) connectBtn.onclick = onConnectGmail;
+
+  const disconnectBtn = el('settings-gmail-disconnect');
+  if (disconnectBtn) disconnectBtn.onclick = onDisconnectGmail;
 
   navItems.forEach(btn => {
     btn.onclick = () => switchTab(btn.getAttribute('data-tab'));
