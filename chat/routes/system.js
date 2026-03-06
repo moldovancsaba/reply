@@ -11,6 +11,7 @@ const path = require("path");
 const http = require("http");
 
 const DATA_DIR = path.join(__dirname, "..", "data");
+let hatoriConsecutiveFailures = 0;
 
 function readStatus(filename) {
     const p = path.join(DATA_DIR, filename);
@@ -85,16 +86,40 @@ async function serveSystemHealth(req, res) {
     const kycStatus = readStatus("kyc_sync_status.json");
 
     // Check Hatori/Ollama
-    let hatoriHealth = { status: "offline", ollama: "offline" };
+    let hatoriHealth = { status: "degraded", ollama: "offline", detail: "unreachable" };
     try {
         const hatoriPort = process.env.REPLY_HATORI_PORT || "23572";
-        const hRes = await fetch(`http://127.0.0.1:${hatoriPort}/v1/health`, { signal: AbortSignal.timeout(2000) });
+        const hRes = await fetch(`http://127.0.0.1:${hatoriPort}/v1/health`, {
+            signal: AbortSignal.timeout(5000)
+        });
         if (hRes.ok) {
             const hData = await hRes.json();
+            hatoriConsecutiveFailures = 0;
             hatoriHealth.status = "online";
             hatoriHealth.ollama = hData.runtime_status?.ollama?.ok ? "online" : "offline";
+            hatoriHealth.detail = "ok";
+        } else {
+            hatoriConsecutiveFailures += 1;
+            hatoriHealth.status = hatoriConsecutiveFailures >= 3 ? "offline" : "degraded";
+            hatoriHealth.detail = `http_${hRes.status}`;
         }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+        hatoriConsecutiveFailures += 1;
+        hatoriHealth.status = hatoriConsecutiveFailures >= 3 ? "offline" : "degraded";
+        hatoriHealth.detail = e?.name === "TimeoutError" ? "timeout" : "unreachable";
+    }
+
+    // ── Hatori/Ollama watchdog ─────────────────────────────────────────
+    // After 3 consecutive failures, try to restart the hatori sidecar automatically.
+    if (hatoriConsecutiveFailures === 3) {
+        const hatoriService = serviceManager.getStatus('hatori');
+        if (hatoriService.status !== 'online' && hatoriService.status !== 'restarting') {
+            console.warn('[Watchdog] Hatori unreachable for 3 checks — attempting auto-restart...');
+            try { await serviceManager.restart('hatori'); } catch (e) {
+                console.error('[Watchdog] Hatori auto-restart failed:', e.message);
+            }
+        }
+    }
 
     const [imessageCount, whatsappCount, mailCount, linkedinMessagesCount, linkedinPostsCount, notesCountIngested] = await Promise.all([
         countIngested("iMessage"),
@@ -135,6 +160,21 @@ async function serveSystemHealth(req, res) {
 
     const services = serviceManager.getStatus();
 
+    // Collect automated repair alerts from service manager
+    const repairAlerts = serviceManager.getRepairAlerts();
+
+    // Add Ollama as a non-managed external alert if it's offline
+    if (hatoriHealth.ollama !== 'online') {
+        repairAlerts.push({
+            service: 'ollama',
+            severity: hatoriConsecutiveFailures >= 3 ? 'critical' : 'warning',
+            message: 'Ollama is not running. AI features (suggestions, KYC) will be unavailable.',
+            hint: 'Open Terminal and run: ollama serve',
+            logPath: null,
+            attempts: 0
+        });
+    }
+
     const systemStatus = readStatus("system_status.json");
 
     // Simple DB check: if chat.db exists and is readable
@@ -153,9 +193,10 @@ async function serveSystemHealth(req, res) {
         status: systemStatus.status || "online",
         progress: systemStatus.progress || 100,
         db: { status: dbStatus },
+        repair: repairAlerts,
         services: {
             ...services,
-            hatori_api: { status: hatoriHealth.status },
+            hatori_api: { status: hatoriHealth.status, detail: hatoriHealth.detail },
             ollama: { status: hatoriHealth.ollama }
         },
         channels: {
@@ -293,7 +334,20 @@ async function serveOpenClawStatus(req, res) {
     });
 }
 
+async function serveTriageLog(req, res) {
+    try {
+        const triageEngine = require('../triage-engine.js');
+        const logs = triageEngine.getLogs(20);
+        writeJson(res, 200, { logs });
+    } catch (e) {
+        console.error("[TriageLog Error]", e);
+        writeJson(res, 500, { error: e.message });
+    }
+}
+
 module.exports = {
     serveSystemHealth,
-    serveOpenClawStatus
+    serveServiceControl,
+    serveOpenClawStatus,
+    serveTriageLog
 };

@@ -64,16 +64,21 @@ async function syncMail() {
                 clientSecretHint: settings.gmail?.clientSecret?.slice(-4),
             });
             const maxMessages = Math.max(1, Math.min(Number(settings?.worker?.quantities?.gmail) || 500, 2000));
-            return await syncGmail({ maxMessages });
-        } catch {
-            return await syncGmail({ maxMessages: 500 });
+            const result = await syncGmail({ maxMessages });
+            // Ensure result is an object with { added, hasMore }
+            return (typeof result === 'object') ? result : { added: Number(result) || 0, hasMore: false };
+        } catch (e) {
+            console.error("[Mail Sync] Gmail sync failed:", e.message);
+            updateStatus({ state: "error", message: e.message, connector: "gmail" });
+            throw e;
         }
     }
 
     // Prefer IMAP connector (supports Gmail via IMAP/App Password) when configured.
     if (hasImapConfig()) {
         const { syncImap } = require('./sync-imap.js');
-        return await syncImap();
+        const added = await syncImap();
+        return { added: Number(added) || 0, hasMore: false };
     }
 
     console.log("Synchronizing Apple Mail...");
@@ -162,7 +167,7 @@ async function syncMail() {
             updateStatus({ state: "idle", lastSync: new Date().toISOString(), processed: currentCount, message: "No new emails found" });
         }
 
-        return docs.length;
+        return { added: docs.length, hasMore: false };
 
     } catch (e) {
         console.error("Mail Sync Error:", e);
