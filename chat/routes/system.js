@@ -261,6 +261,16 @@ async function serveServiceControl(req, res) {
             } else if (name === 'openclaw') {
                 script = resolveOpenClawBinary();
                 args = ['gateway'];
+            } else if (name === 'ollama') {
+                // Ollama is an external binary — find it and spawn 'ollama serve'
+                // Common install locations on macOS
+                const ollamaPaths = [
+                    '/usr/local/bin/ollama',
+                    '/opt/homebrew/bin/ollama',
+                    process.env.OLLAMA_BIN || ''
+                ].filter(Boolean);
+                script = ollamaPaths.find(p => fs.existsSync(p)) || 'ollama';
+                args = ['serve'];
             }
 
             if (!script) {
@@ -273,7 +283,12 @@ async function serveServiceControl(req, res) {
             return;
         }
 
-        writeJson(res, 200, { status: "ok", service: serviceManager.getStatus(name) });
+        // For ollama, we can't query serviceManager directly (external binary)
+        // Return a synthesized status
+        const svcStatus = name === 'ollama'
+            ? { name: 'ollama', status: 'starting' }
+            : serviceManager.getStatus(name);
+        writeJson(res, 200, { status: "ok", service: svcStatus });
     } catch (e) {
         console.error("[SystemControl Error]", e);
         writeJson(res, 500, { error: e.message });
