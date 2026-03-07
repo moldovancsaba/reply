@@ -118,10 +118,11 @@ function renderAlertsPanel(repairs) {
   const items = repairs.map(alert => {
     const icon = SERVICE_ICONS[alert.service] || '⚠️';
     const severityClass = SEVERITY_CLASSES[alert.severity] || 'alert-warning';
-    const isManaged = alert.service !== 'ollama';
-    const actionBtn = isManaged
-      ? `<button type="button" class="btn btn-sm btn-repair" data-dashboard-service-control="${alert.service}" data-dashboard-action="restart" title="Try to restart ${alert.service}">🔄 Try Again</button>`
-      : '';
+
+    // All services (including ollama) get a direct launch button
+    const startLabel = { ollama: '🦙 Start Ollama', worker: '🔄 Restart Worker', openclaw: '🔄 Start OpenClaw', hatori: '🔄 Start Hatori' };
+    const actionBtn = `<button type="button" class="btn btn-sm btn-repair" data-dashboard-service-control="${alert.service}" data-dashboard-action="${alert.service === 'ollama' ? 'start' : 'restart'}" title="${startLabel[alert.service] || 'Restart'}">${startLabel[alert.service] || '🔄 Try Again'}</button>`;
+
     const logBtn = alert.logPath
       ? `<button type="button" class="btn btn-sm btn-muted" onclick="navigator.clipboard&&navigator.clipboard.writeText('tail -f ${alert.logPath}')" title="Copy log command">📋 Copy Log Cmd</button>`
       : '';
@@ -136,7 +137,6 @@ function renderAlertsPanel(repairs) {
           <span class="system-alert-severity">${alert.severity.toUpperCase()}${attemptsText}</span>
         </div>
         <p class="system-alert-message">${alert.message}</p>
-        <p class="system-alert-hint">💡 ${alert.hint}</p>
         <div class="system-alert-actions">${actionBtn}${logBtn}</div>
       </div>`;
   }).join('');
