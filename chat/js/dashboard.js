@@ -456,7 +456,44 @@ export async function renderDashboard() {
 }
 
 /**
- * Handle sync button click
+ * Refresh only the System Alerts panel in-place without re-rendering the whole dashboard.
+ * Polls health once and replaces just the alerts section.
+ */
+async function refreshAlertsPanel() {
+  const dashboard = document.getElementById('dashboard');
+  if (!dashboard) return;
+  try {
+    const [health, openClawStatus] = await Promise.all([
+      fetchSystemHealth().catch(() => ({})),
+      fetchOpenClawStatus().catch(() => ({ status: 'offline' }))
+    ]);
+    // Build repair list (same logic as main render)
+    const repairs = Array.isArray(health.repair) ? health.repair : [];
+    // Find or create the alerts panel root
+    let alertsRoot = dashboard.querySelector('.system-alerts-panel');
+    const newHtml = renderAlertsPanel(repairs);
+    if (newHtml) {
+      if (alertsRoot) {
+        alertsRoot.outerHTML = newHtml;
+      } else {
+        // Prepend before the first health-card
+        const firstCard = dashboard.querySelector('.health-card');
+        if (firstCard) firstCard.insertAdjacentHTML('beforebegin', newHtml);
+        else dashboard.insertAdjacentHTML('afterbegin', newHtml);
+      }
+    } else if (alertsRoot) {
+      alertsRoot.remove();
+    }
+    // Re-wire buttons in the alerts panel after DOM update
+    const newPanel = dashboard.querySelector('.system-alerts-panel');
+    if (newPanel) wireDashboardActions(newPanel);
+  } catch (e) {
+    console.warn('[Dashboard] refreshAlertsPanel failed:', e.message);
+  }
+}
+
+/**
+ * Handle sync button click — no full re-render, just button state feedback.
  * @param {string} source - Source to sync ('imessage', 'whatsapp', 'notes')
  * @param {HTMLButtonElement|null} triggerButton - Invoking button for local loading state
  */
@@ -471,44 +508,80 @@ export async function handleSync(source, triggerButton = null) {
 
     await triggerSync(source);
 
-    if (button) button.textContent = '✅';
-    setTimeout(() => {
-      renderDashboard(); // Refresh dashboard
-    }, 1000);
+    if (button) {
+      button.textContent = '✅';
+      // Reset button after 3s — no full re-render
+      setTimeout(() => {
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+      }, 3000);
+    }
   } catch (error) {
     console.error(`Sync failed for ${source}: `, error);
-    alert(`Sync failed: ${error.message} `);
     if (button) {
       button.disabled = false;
       button.innerHTML = originalHtml;
     }
+    // Show inline error on button instead of alert()
+    if (button) {
+      button.textContent = '❌';
+      button.title = error.message;
+      setTimeout(() => {
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+        button.title = '';
+      }, 4000);
+    }
   }
 }
+
 /**
- * Handle service control action
+ * Handle service control action.
+ * For managed services: shows spinner → ✅ / ❌ inline.
+ * For ollama: shows spinner → polls health → updates alerts panel in-place.
  */
 export async function handleServiceControl(name, action, triggerButton = null) {
   const button = triggerButton || null;
   const originalHtml = button ? button.innerHTML : '';
+
+  const isOllama = name === 'ollama';
+  const pollDelay = isOllama ? 6000 : 3000; // Ollama needs longer to start
+
   try {
     if (button) {
       button.disabled = true;
-      button.textContent = '⏳';
+      button.textContent = isOllama ? '⏳ Starting…' : '⏳';
     }
 
     const { controlService } = await import('./api.js');
     await controlService(name, action);
 
-    if (button) button.textContent = '✅';
-    setTimeout(() => {
-      renderDashboard(); // Refresh dashboard
-    }, 1000);
+    if (button) {
+      button.textContent = isOllama ? '⏳ Checking…' : '✅';
+    }
+
+    // After a delay, refresh only the alerts panel to show updated status
+    setTimeout(async () => {
+      await refreshAlertsPanel();
+      // If button still exists and wasn't replaced by the re-render, restore it
+      if (button && button.isConnected && !isOllama) {
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+      }
+    }, pollDelay);
+
   } catch (error) {
     console.error(`Service control failed for ${name} ${action}: `, error);
-    alert(`Action failed: ${error.message} `);
     if (button) {
-      button.disabled = false;
-      button.innerHTML = originalHtml;
+      button.textContent = '❌ Failed';
+      button.title = error.message;
+      setTimeout(() => {
+        if (button.isConnected) {
+          button.disabled = false;
+          button.innerHTML = originalHtml;
+          button.title = '';
+        }
+      }, 4000);
     }
   }
 }
