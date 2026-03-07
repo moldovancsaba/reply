@@ -85,18 +85,17 @@ async function serveSystemHealth(req, res) {
     const notesStatus = readStatus("notes_sync_status.json");
     const kycStatus = readStatus("kyc_sync_status.json");
 
-    // Check Hatori/Ollama
-    let hatoriHealth = { status: "degraded", ollama: "offline", detail: "unreachable" };
+    // ── Check Hatori ────────────────────────────────────────────────────
+    // Hatori can be slow to respond while loading models — use a generous timeout.
+    let hatoriHealth = { status: "degraded", detail: "unreachable" };
     try {
         const hatoriPort = process.env.REPLY_HATORI_PORT || "23572";
         const hRes = await fetch(`http://127.0.0.1:${hatoriPort}/v1/health`, {
-            signal: AbortSignal.timeout(5000)
+            signal: AbortSignal.timeout(12000)   // 12s — Hatori loads models on first ping
         });
         if (hRes.ok) {
-            const hData = await hRes.json();
             hatoriConsecutiveFailures = 0;
             hatoriHealth.status = "online";
-            hatoriHealth.ollama = hData.runtime_status?.ollama?.ok ? "online" : "offline";
             hatoriHealth.detail = "ok";
         } else {
             hatoriConsecutiveFailures += 1;
@@ -109,8 +108,22 @@ async function serveSystemHealth(req, res) {
         hatoriHealth.detail = e?.name === "TimeoutError" ? "timeout" : "unreachable";
     }
 
-    // ── Hatori/Ollama watchdog ─────────────────────────────────────────
-    // After 3 consecutive failures, try to restart the hatori sidecar automatically.
+    // ── Check Ollama directly on :11434 ────────────────────────────────
+    // IMPORTANT: Do NOT derive Ollama status from Hatori — Hatori may time out
+    // even when Ollama is running fine. Check Ollama's own API directly.
+    let ollamaStatus = "offline";
+    try {
+        const ollamaPort = process.env.OLLAMA_PORT || "11434";
+        const oRes = await fetch(`http://127.0.0.1:${ollamaPort}/api/tags`, {
+            signal: AbortSignal.timeout(3000)
+        });
+        if (oRes.ok) ollamaStatus = "online";
+    } catch (e) {
+        ollamaStatus = "offline";
+    }
+
+    // ── Hatori watchdog ─────────────────────────────────────────────────
+    // After 3 consecutive Hatori failures, try to restart it automatically.
     if (hatoriConsecutiveFailures === 3) {
         const hatoriService = serviceManager.getStatus('hatori');
         if (hatoriService.status !== 'online' && hatoriService.status !== 'restarting') {
@@ -164,7 +177,7 @@ async function serveSystemHealth(req, res) {
     const repairAlerts = serviceManager.getRepairAlerts();
 
     // Add Ollama as a non-managed external alert if it's offline
-    if (hatoriHealth.ollama !== 'online') {
+    if (ollamaStatus !== 'online') {
         repairAlerts.push({
             service: 'ollama',
             severity: hatoriConsecutiveFailures >= 3 ? 'critical' : 'warning',
@@ -197,7 +210,7 @@ async function serveSystemHealth(req, res) {
         services: {
             ...services,
             hatori_api: { status: hatoriHealth.status, detail: hatoriHealth.detail },
-            ollama: { status: hatoriHealth.ollama }
+            ollama: { status: ollamaStatus }
         },
         channels: {
             imessage: { ...imessageStatus, processed: imessageCount, total: imessageCount },
