@@ -96,8 +96,8 @@ Logs are automatically written to `/tmp/reply-hub.log`.
 We supply a compiled Swift app identical to Hatori's to quickly observe database ingestion status and jump to specific URLs.
 
 ```bash
-make install-reply-toolbar
-make run-reply-toolbar # or open ~/Applications/reply-toolbar.app
+make install-ReplyMenubar
+make run-ReplyMenubar # or open ~/Applications/ReplyMenubar.app
 ```
 
 ### 3) Foreground Debugging
