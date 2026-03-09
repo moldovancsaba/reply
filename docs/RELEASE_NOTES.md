@@ -8,7 +8,7 @@ Completed work only. The [GitHub Project Board](https://github.com/users/moldova
 - **System Alerts Dashboard Panel**: New panel at the top of the dashboard appears only when a service is down. Shows severity (CRITICAL/WARNING), the exact error, an actionable hint (e.g. `ollama serve`), a "Try Again" button for managed services, and a "Copy Log Cmd" button.
 - **Hatori/Ollama Watchdog**: The health API now triggers an automatic Hatori restart after 3 consecutive health check failures. Ollama (unmanaged external) surfaces as a UI alert with terminal command instructions.
 - **Gmail Full-History Backfill**: Implemented `nextPageToken` paging in `gmail-connector.js` to progressively index the entire Gmail history (15+ years, 200K+ emails) in batches of 500 every 7 minutes, to avoid overloading the system.
-- **Toolbar v0.5.0**: Rebuilt and re-launched the macOS menu bar tool to reflect the new version.
+- **Menubar v0.5.0**: Rebuilt and re-launched the macOS menu bar tool to reflect the new version.
 
 ### Fixed
 - **Operator Token Errors**: Resolved `Missing or invalid operator token` errors blocking background worker and OpenClaw startup.

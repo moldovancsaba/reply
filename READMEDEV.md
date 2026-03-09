@@ -46,6 +46,7 @@ Before changing anything:
 1) Sync working context
 - Pull latest / sync branch state (if applicable).
 - Read: docs/PROJECT_MANAGEMENT.md, docs/HANDOVER.md, and the active SSOT issue/card.
+- To find your assigned SSOT issue, run: `gh issue list --repo moldovancsaba/mvp-factory-control --state open --assignee "@me" --search "{reply}" --limit 10`
 2) Establish the contract (write it explicitly)
 - Objective (1–2 lines)
 - Acceptance criteria (bullets)

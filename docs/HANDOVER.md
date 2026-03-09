@@ -2,7 +2,7 @@
 
 This file is onboarding + operational context. Keep it accurate when behavior/architecture changes.
 
-**Last Updated**: 2026-03-06 (v0.5.0 — Gmail backfill, self-repair watchdog, premium Settings UI, toolbar rebuild)
+**Last Updated**: 2026-03-06 (v0.5.0 — Gmail backfill, self-repair watchdog, premium Settings UI, menubar rebuild)
 
 **Current Version**: `0.5.0` (see `chat/package.json`)
 
@@ -25,6 +25,7 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
   - Naming: always use `{reply}` (no “Hub” or other renames).
   - Mandatory flow for every issue: create in SSOT repo -> add to Project 1 -> set board fields/status -> verify membership before ending task.
   - **CRITICAL RULE**: Never maintain local `task.md`, `IDEABANK.md`, `ROADMAP.md` or similar files in this repo. The GitHub Project Board is the ONLY truth.
+  - **FINDING WORK**: To find your assigned issues reliably, run: `gh issue list --repo moldovancsaba/mvp-factory-control --state open --assignee "@me" --search "{reply}"`
 
 ## Current Priorities (Board, 2026-02-22)
 
@@ -306,10 +307,10 @@ See detailed plans:
 - **SSOT:**
   - Work tracks against `mvp-factory-control#220` ({reply}: LinkedIn channel enablement).
 
-## Active Session Update (2026-02-28, Reply Toolbar & Naming Audit)
-- **Completed**: Fixed NBA inbound issues in `channel-bridge.js`. Hardened port block to `45311`. Migrated `ReplyMenu` to `reply-toolbar` Swift menu app, integrating `openclaw/status` and `hatori/health` dependencies. Fixed base64 WhatsApp 404 contact resolution bug.
+## Active Session Update (2026-02-28, Reply Menubar & Naming Audit)
+- **Completed**: Fixed NBA inbound issues in `channel-bridge.js`. Hardened port block to `45311`. Migrated `ReplyMenu` to `ReplyMenubar` Swift menu app, integrating `openclaw/status` and `hatori/health` dependencies. Fixed base64 WhatsApp 404 contact resolution bug.
 - **Project Consistency**: Audited entire codebase and documentation (README, LEARNINGS, INGESTION, RELEASE_NOTES, HANDOVER) to strictly enforce the `{reply}` SSOT product naming convention instead of `Reply` or `{reply} Workspace`.
-- **Status**: Issue `mvp-factory-control#283` ("Implement reply-toolbar and harden port 45311") successfully verified, pushed to `main`, and marked as **Done** on the MVP Factory Project Board.
+- **Status**: Issue `mvp-factory-control#283` ("Implement ReplyMenubar and harden port 45311") successfully verified, pushed to `main`, and marked as **Done** on the MVP Factory Project Board.
 
 ## Active Session Update (2026-02-28, {hatori} Intelligence Loop)
 - **Implemented all 4 components of the contextual draft + annotation loop:**
@@ -326,12 +327,12 @@ See detailed plans:
 - **Dashboard Triage Log Fix**: Resolved the "overload" issue where triage logs would overflow or duplicate. Added `max-height` and `overflow-y: auto` via CSS and ensured `innerHTML` is cleared before re-rendering in `js/dashboard.js`.
 - **Project Maintenance**: Synchronized version `0.4.4` across `package.json`, `README.md`, and `RELEASE_NOTES.md`. Updated GitHub Project 1 board statuses for Settings IA and Versioning.
  
-## Active Session Update (2026-03-02, Rich Status & Toolbar v0.4.4)
+## Active Session Update (2026-03-02, Rich Status & Menubar v0.4.4)
 - **Rich Status Reporting**: Enhanced `routes/system.js` and `server.js` to report aggregated health including "loading", "online", and "repair required" states.
 - **Service Management**: Added `cwd` support to `ServiceManager.js` and fixed Hatori auto-start in `server.js` by launching it directly from its project root via Python/uvicorn.
-- **Toolbar v0.4.4**: Rebuilt and installed a clean version of the macOS toolbar. Fixed version mismatch by performing a full `rm -rf` and `make install` sequence to resolve stale process issues.
+- **Menubar v0.4.4**: Rebuilt and installed a clean version of the macOS menubar. Fixed version mismatch by performing a full `rm -rf` and `make install` sequence to resolve stale process issues.
 - **SSOT Alignment**: Synchronized the GitHub Project Board (Project 1) by creating and closing issue **#334** with status `Done`, product `{reply}`, and release `v0.4.4`.
-- **Validation**: Verified richness of `/api/health` output and confirmed "orange" loading icon in toolbar during hub startup.
+- **Validation**: Verified richness of `/api/health` output and confirmed "orange" loading icon in menubar during hub startup.
 
 
 ## Active Session Update (2026-03-02, Release v0.4.5)
@@ -350,3 +351,10 @@ See detailed plans:
 - **Security Hardening**: Enforced `REPLY_SECURITY_REQUIRE_HUMAN_APPROVAL=true` in `.env`.
 - **Zero Shell Usage**: Confirmed that `server.js` contains no shell-based `exec()` patterns.
 - **Validation**: 28/28 tests passed. Security audit `critical=0`.
+
+## Active Session Update (2026-03-09, Menubar Harmonization & Icons)
+- **Completed**: Harmonized all 3 macOS menu bar apps (ReplyMenubar, HatoriMenubar, OpenClawMenubar).
+- **Renaming**: Globally renamed "toolbar" terminology to "menubar" across logic, docs, build scripts.
+- **Icons**: Generated multi-resolution `.icns` native macOS application icons and bundled them via `Info.plist`.
+- **Login Items**: Updated installation scripts to automatically clean up deprecated toolbars and securely register the new apps to launch at login via `osascript`.
+- **Status**: Issue `mvp-factory-control#362` successfully verified and marked as **Done** on the MVP Factory Project Board.

@@ -13,7 +13,7 @@ const RESTART_POLICIES = {
     worker: {
         maxRetries: 5,
         backoffMs: 30000,
-        actionHint: 'Check logs/worker.log for errors. You can also restart from the Advanced menu in the toolbar.'
+        actionHint: 'Check logs/worker.log for errors. You can also restart from the Advanced menu in the menubar.'
     },
     openclaw: {
         maxRetries: 3,
@@ -82,6 +82,7 @@ class ServiceManager {
             command: spawnCmd,
             args: spawnArgs,
             scriptPath: command,
+            originalArgs: args,
             spawnCwd: cwd,
             process: child,
             startTime: Date.now(),
@@ -149,7 +150,7 @@ class ServiceManager {
             // Only restart if still in crashed state
             if (!serviceInfo.process) {
                 console.log(`[ServiceManager] Auto-restart triggered for "${name}".`);
-                this.start(name, serviceInfo.scriptPath, serviceInfo.args.slice(1), serviceInfo.spawnCwd);
+                this.start(name, serviceInfo.scriptPath, serviceInfo.originalArgs, serviceInfo.spawnCwd);
             }
         }, backoff);
     }
@@ -196,9 +197,9 @@ class ServiceManager {
         service.repairRequired = false;
         service.lastError = null;
 
-        const { scriptPath, args, spawnCwd } = service;
+        const { scriptPath, originalArgs, spawnCwd } = service;
         await this.stop(name);
-        this.start(name, scriptPath, args.slice(scriptPath.endsWith('.js') ? 0 : 1), spawnCwd);
+        this.start(name, scriptPath, originalArgs, spawnCwd);
     }
 
     /**

@@ -201,7 +201,16 @@ async function serveSystemHealth(req, res) {
         services.openclaw = { name: "openclaw", status: "unknown" };
     }
 
+    let replyVersion = "unknown";
+    try {
+        const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
+        replyVersion = pkg.version;
+    } catch (e) { }
+
     const health = {
+        ok: true,
+        version: replyVersion,
+        statusMessage: systemStatus.status || "online",
         uptime: Math.floor(process.uptime()),
         status: systemStatus.status || "online",
         progress: systemStatus.progress || 100,

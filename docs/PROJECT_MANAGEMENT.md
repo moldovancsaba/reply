@@ -82,34 +82,18 @@ Accurate metadata is critical for filtering and finding work.
 5.  **Close:** Move to **Done**, set **DoD** to `Passed`.
 6.  **Document:** Update `HANDOVER.md` and `RELEASE_NOTES.md`.
 
-## Appendix: Board CLI (No external jq)
-Use `gh project item-list ... --jq ...` so you don't depend on a separate `jq` installation.
+## Appendix: SSOT CLI Commands
+**CRITICAL:** The default GitHub CLI `gh project item-list` does not expose custom board fields (like `product` or `status`) natively. To avoid JSON parse errors, always query the SSOT repo directly using `gh issue list`.
 
 ```bash
-# List active `{reply}` items (Ready/In Progress)
-gh project item-list 1 --owner moldovancsaba --format json --limit 200 \
-  --jq '.items[] | select(.product == "reply" and (.status == "Ready" or .status == "In Progress")) | {priority, status, title, url: (.content.url // null)}'
-```
+# 1) Find YOUR currently assigned SSOT issues
+gh issue list --repo moldovancsaba/mvp-factory-control --state open --assignee "@me" --search "{reply}" --limit 10
 
-### Top priorities (what to deliver next)
-This prints the top 3 `{reply}` items that are **not Done**, sorted by `Priority` first, then by workflow status.
+# 2) View all open {reply} issues
+gh issue list --repo moldovancsaba/mvp-factory-control --state open --search "{reply}" --limit 50 --json number,title,state,assignees
 
-```bash
-gh project item-list 1 --owner moldovancsaba --format json --limit 500 --jq '
-  .items
-  | map(select(.product=="reply" and .status != "Done"))
-  | map(. + {priorityRank: (if .priority=="P0" then 0 elif .priority=="P1" then 1 elif .priority=="P2" then 2 else 9 end)})
-  | map(. + {statusRank: (if .status=="In Progress" then 0 elif .status=="Ready" then 1 elif .status=="Review" then 2 elif .status=="Roadmap" then 3 elif .status=="Backlog" then 4 elif .status=="IDEA BANK" then 5 else 9 end)})
-  | sort_by(.priorityRank, .statusRank, .title)
-  | .[:3]
-  | map({priority, status, title, url:(.content.url // null)})
-'
-```
-
-### Idea bank (feature backlog)
-```bash
-gh project item-list 1 --owner moldovancsaba --format json --limit 500 \
-  --jq '.items[] | select(.product=="reply" and .status=="IDEA BANK") | {title, url:(.content.url // null)}'
+# 3) View details of a specific issue number
+gh issue view <issue-number> --repo moldovancsaba/mvp-factory-control
 ```
 
 ## Current Security Workstream Tracking (2026-02-18)

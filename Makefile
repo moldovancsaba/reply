@@ -1,20 +1,35 @@
 .PHONY: run
 run:
-	./runbook/start.sh
+	$(MAKE) install-service
 
 .PHONY: stop
 stop:
-	./runbook/stop.sh
+	@launchctl unload "$$HOME/Library/LaunchAgents/com.reply.hub.plist" >/dev/null 2>&1 || ./runbook/stop.sh
 
 .PHONY: status
 status:
 	./runbook/status.sh
 
-.PHONY: install-reply-toolbar
-install-reply-toolbar:
-	chmod +x ./tools/macos/reply-toolbar/install_menubar_app.sh
-	./tools/macos/reply-toolbar/install_menubar_app.sh
+.PHONY: install-ReplyMenubar
+install-ReplyMenubar:
+	chmod +x ./tools/macos/ReplyMenubar/install_ReplyMenubar.sh
+	./tools/macos/ReplyMenubar/install_ReplyMenubar.sh
 
-.PHONY: run-reply-toolbar
-run-reply-toolbar:
-	open "$$HOME/Applications/reply-toolbar.app"
+.PHONY: run-ReplyMenubar
+run-ReplyMenubar:
+	open "$$HOME/Applications/ReplyMenubar.app"
+
+.PHONY: install-service
+install-service:
+	chmod +x ./tools/scripts/reply_service.sh
+	@mkdir -p "$$HOME/Library/LaunchAgents" "$$HOME/Library/Logs/Reply"
+	@python3 -c 'from pathlib import Path; home=Path.home(); repo=Path.cwd(); template=(repo / "tools" / "launchd" / "com.reply.hub.plist").read_text(encoding="utf-8"); out=template.replace("__HOME__", str(home)).replace("__REPO_ROOT__", str(repo)); target=home / "Library" / "LaunchAgents" / "com.reply.hub.plist"; target.write_text(out, encoding="utf-8"); print("Wrote", target)'
+	@launchctl unload "$$HOME/Library/LaunchAgents/com.reply.hub.plist" >/dev/null 2>&1 || true
+	@launchctl load -w "$$HOME/Library/LaunchAgents/com.reply.hub.plist"
+	@echo "Service installed: com.reply.hub"
+
+.PHONY: uninstall-service
+uninstall-service:
+	@launchctl unload "$$HOME/Library/LaunchAgents/com.reply.hub.plist" >/dev/null 2>&1 || true
+	@rm -f "$$HOME/Library/LaunchAgents/com.reply.hub.plist"
+	@echo "Service removed: com.reply.hub"

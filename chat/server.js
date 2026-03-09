@@ -43,23 +43,29 @@ try {
   serviceManager.setStatus('worker', 'loading in queue');
 
   if (process.env.REPLY_USE_HATORI === '1' && fs.existsSync(HATORI_PROJECT_PATH)) {
-    statusManager.update("system", { progress: 30, message: "Starting Hatori sidecar..." });
-    // Check if Hatori is already running (e.g. toolbar daemon) before spawning
     const hatoriPort = process.env.REPLY_HATORI_PORT || '23572';
-    const hatoriHealthUrl = `http://127.0.0.1:${hatoriPort}/v1/health`;
-    fetch(hatoriHealthUrl, { signal: AbortSignal.timeout(3500) })
-      .then(r => {
-        if (r.ok) {
-          console.log(`[ServiceManager] Hatori already running on port ${hatoriPort} (external). Skipping spawn.`);
-          serviceManager.setStatus('hatori', 'external');
-        } else {
+
+    if (process.env.REPLY_HATORI_EXTERNAL === '1') {
+      console.log(`[ServiceManager] Hatori is managed externally. Skipping sidecar spawn.`);
+      serviceManager.setStatus('hatori', 'external');
+    } else {
+      statusManager.update("system", { progress: 30, message: "Starting Hatori sidecar..." });
+      // Check if Hatori is already running (e.g. menubar daemon) before spawning
+      const hatoriHealthUrl = `http://127.0.0.1:${hatoriPort}/v1/health`;
+      fetch(hatoriHealthUrl, { signal: AbortSignal.timeout(3500) })
+        .then(r => {
+          if (r.ok) {
+            console.log(`[ServiceManager] Hatori already running on port ${hatoriPort} (external). Skipping spawn.`);
+            serviceManager.setStatus('hatori', 'external');
+          } else {
+            spawnHatoriSidecar();
+          }
+        })
+        .catch(() => {
+          // Port not responding — safe to spawn our own sidecar
           spawnHatoriSidecar();
-        }
-      })
-      .catch(() => {
-        // Port not responding — safe to spawn our own sidecar
-        spawnHatoriSidecar();
-      });
+        });
+    }
 
     function spawnHatoriSidecar() {
       const venvPython = path.join(HATORI_PROJECT_PATH, '.venv/bin/python');
