@@ -20,7 +20,7 @@ async function migrate() {
     
     // Transform docs to include the new columns
     const migratedDocs = results.map(doc => {
-        let cleanDoc = doc.toJSON ? doc.toJSON() : doc;
+        const cleanDoc = doc.toJSON ? doc.toJSON() : doc;
         return {
             id: cleanDoc.id,
             text: cleanDoc.text,
