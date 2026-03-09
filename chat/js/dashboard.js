@@ -470,7 +470,7 @@ async function refreshAlertsPanel() {
     // Build repair list (same logic as main render)
     const repairs = Array.isArray(health.repair) ? health.repair : [];
     // Find or create the alerts panel root
-    let alertsRoot = dashboard.querySelector('.system-alerts-panel');
+    const alertsRoot = dashboard.querySelector('.system-alerts-panel');
     const newHtml = renderAlertsPanel(repairs);
     if (newHtml) {
       if (alertsRoot) {
