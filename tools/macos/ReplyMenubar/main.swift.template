@@ -69,6 +69,7 @@ final class ReplyMenubarApp: NSObject, NSApplicationDelegate {
         menu.addItem(item("Open UI /settings", #selector(openUISettings)))
         menu.addItem(item("Open UI /contacts", #selector(openUIContacts)))
         menu.addItem(item("Open API Health", #selector(openReplyHealth)))
+        menu.addItem(item("Documentation", #selector(openDocumentation)))
 
         menu.addItem(NSMenuItem.separator())
         menu.addItem(advancedHeaderItem)
@@ -231,7 +232,7 @@ final class ReplyMenubarApp: NSObject, NSApplicationDelegate {
         if isLoading {
             color = .systemOrange
         } else if isUp {
-            color = .systemBlue
+            color = .labelColor
         } else {
             color = .systemRed
         }
@@ -272,7 +273,11 @@ final class ReplyMenubarApp: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openUIContacts() {
-        NSWorkspace.shared.open(URL(string: "http://127.0.0.1:\(replyPort)/contacts.html")!)
+        NSWorkspace.shared.open(URL(string: "http://127.0.0.1:45311/contacts")!)
+    }
+
+    @objc private func openDocumentation() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/moldovancsaba/reply#readme")!)
     }
 
     @objc private func openReplyHealth() {
