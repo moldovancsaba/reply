@@ -80,7 +80,7 @@ function inferToneProfile(threadContext) {
   for (const m of arr.slice(-40)) {
     const t = String(m?.text || '').toLowerCase();
     if (!t) continue;
-    if (/[😀😅😂🤣😊❤️👍]/.test(t) || /\b(xd|lol|haha|köszi|koszi|szia)\b/.test(t)) informal += 1;
+    if (/(😀|😅|😂|🤣|😊|❤️|👍)/u.test(t) || /\b(xd|lol|haha|köszi|koszi|szia)\b/.test(t)) informal += 1;
     if (/\b(tisztelettel|köszönöm|udvozlettel|regards|dear|best regards)\b/.test(t)) formal += 1;
   }
   if (informal > formal + 1) return 'friendly';

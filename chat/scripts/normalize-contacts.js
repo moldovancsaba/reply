@@ -33,7 +33,7 @@ async function run() {
     let updatedContacts = 0;
     let updatedChannels = 0;
 
-    for (let c of contacts) {
+    for (const c of contacts) {
         if (c.handle && !c.handle.includes('@')) { // Assume handle might be a phone number
             const norm = chatUtils.normalizePhone(c.handle);
             if (norm && norm !== c.handle) {
@@ -53,7 +53,7 @@ async function run() {
         }
     }
 
-    for (let ch of channels) {
+    for (const ch of channels) {
         const norm = chatUtils.normalizePhone(ch.value);
         if (norm && norm !== ch.value) {
             console.log(`Normalizing phone channel: ${ch.value} -> ${norm}`);

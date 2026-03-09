@@ -87,7 +87,7 @@ async function serveSystemHealth(req, res) {
 
     // ── Check Hatori ────────────────────────────────────────────────────
     // Hatori can be slow to respond while loading models — use a generous timeout.
-    let hatoriHealth = { status: "degraded", detail: "unreachable" };
+    const hatoriHealth = { status: "degraded", detail: "unreachable" };
     try {
         const hatoriPort = process.env.REPLY_HATORI_PORT || "23572";
         const hRes = await fetch(`http://127.0.0.1:${hatoriPort}/v1/health`, {
@@ -193,7 +193,7 @@ async function serveSystemHealth(req, res) {
     // Simple DB check: if chat.db exists and is readable
     const dbPath = path.join(DATA_DIR, "chat.db");
     const dbExists = fs.existsSync(dbPath);
-    let dbStatus = dbExists ? "ok" : "repair_required";
+    const dbStatus = dbExists ? "ok" : "repair_required";
 
     // Inject OpenClaw status into services if it's not managed but found via health check
     // This allows the UI to see 'openclaw' in the services list for the "Start" button logic
