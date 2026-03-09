@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import CoreText
 
-final class MenuApp: NSObject, NSApplicationDelegate {
+final class ReplyMenubarApp: NSObject, NSApplicationDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let menu = NSMenu()
     
@@ -89,7 +89,7 @@ final class MenuApp: NSObject, NSApplicationDelegate {
         guard let button = statusItem.button else { return }
         let bundled = Bundle.main.url(forResource: "MaterialSymbolsOutlined", withExtension: "ttf")
         let fontURL = bundled ?? URL(fileURLWithPath: repoRoot)
-            .appendingPathComponent("tools/macos/reply-toolbar/MaterialSymbolsOutlined.ttf")
+            .appendingPathComponent("tools/macos/ReplyMenubar/MaterialSymbolsOutlined.ttf")
         
         if FileManager.default.fileExists(atPath: fontURL.path) {
             CTFontManagerRegisterFontsForURL(fontURL as CFURL, .process, nil)
@@ -186,7 +186,7 @@ final class MenuApp: NSObject, NSApplicationDelegate {
                 let waObj = (channels["whatsapp"] as? [String: Any]) ?? [:]
                 let mailObj = (channels["mail"] as? [String: Any]) ?? [:]
                 
-                let imsgProc = (imsgObj["processed"] as? Int) ?? 0
+                let imsgProc = (imsgObj["processed"] as? Int) ?? Int("\(imsgObj["processed"] ?? "0")") ?? 0
                 let waStatus = (waObj["status"] as? String) ?? (waObj["state"] as? String) ?? "ok"
                 let mailStatus = (mailObj["status"] as? String) ?? (mailObj["state"] as? String) ?? "ok"
 
@@ -280,15 +280,15 @@ final class MenuApp: NSObject, NSApplicationDelegate {
     }
 
     @objc private func startService() {
-        runShell("make run")
+        runShell("make install-service")
     }
     
     @objc private func restartService() {
-        runShell("make stop && make run")
+        runShell("make install-service && launchctl kickstart -k gui/$(id -u)/com.reply.hub")
     }
 
     @objc private func stopService() {
-        runShell("make stop")
+        runShell("launchctl unload \"$HOME/Library/LaunchAgents/com.reply.hub.plist\"")
     }
 
     @objc private func checkStatus() {
@@ -314,7 +314,7 @@ final class MenuApp: NSObject, NSApplicationDelegate {
 }
 
 let app = NSApplication.shared
-let delegate = MenuApp()
+let delegate = ReplyMenubarApp()
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
 app.run()
