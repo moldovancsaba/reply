@@ -358,3 +358,12 @@ See detailed plans:
 - **Icons**: Generated multi-resolution `.icns` native macOS application icons and bundled them via `Info.plist`.
 - **Login Items**: Updated installation scripts to automatically clean up deprecated toolbars and securely register the new apps to launch at login via `osascript`.
 - **Status**: Issue `mvp-factory-control#362` successfully verified and marked as **Done** on the MVP Factory Project Board.
+
+## Active Session Update (2026-03-10, Hatori Status & Bug Hunt)
+- **Hatori "No Internet" Bug Hunt**: 
+  - Investigated the persistence of the "Live internet search is not available" message.
+  - Verified that the `app.py` code *has* been successfully refactored on the `publish-main` branch (commit `ae68dbb`) to use an AI system hint instead of a hardcoded string. 
+  - Validated that `locales.json` is no longer incorrectly feeding this string into error triggers.
+  - Cleared all `.pyc` caches to eliminate compiled code propagation issues.
+- **Root Cause**: The most likely cause of the persistent error message in the UI is a stale Hatori `uvicorn` background process still running the old code logic in memory, or the LLM recalling old RAG records. 
+- **Next Steps**: Awaiting manual restart of the Hatori service via the Reply dashboard to flush the stale process, followed by validation.
