@@ -32,6 +32,7 @@ const settingsRoutes = require("./routes/settings.js");
 const bridgeRoutes = require("./routes/bridge.js");
 const contactRoutes = require("./routes/contacts.js");
 const systemRoutes = require("./routes/system.js");
+const trainingRoutes = require("./routes/training.js");
 const staticRoutes = require("./routes/static.js");
 const { serveKyc, serveAnalyzeContact } = require("./routes/kyc.js");
 const serviceManager = require("./service-manager.js");
@@ -167,8 +168,24 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/api/openclaw/status") return systemRoutes.serveOpenClawStatus(req, res);
   if (pathname === "/api/triage-log") return systemRoutes.serveTriageLog(req, res);
 
-  res.writeHead(404);
-  res.end("Not found");
+  // Training / golden examples (LanceDB)
+  if (pathname === "/api/training/annotations") {
+    if (req.method === "GET") {
+      return auth({ route: pathname, action: "read-training" }) && trainingRoutes.serveAnnotationsGet(req, res);
+    }
+    if (req.method === "DELETE") {
+      return auth({ route: pathname, action: "delete-training" }) && trainingRoutes.serveAnnotationsDelete(req, res);
+    }
+    res.writeHead(405, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Method not allowed" }));
+    return;
+  }
+  if (pathname === "/api/messages/annotate") {
+    return auth({ route: pathname, action: "annotate-message" }) && trainingRoutes.serveMessageAnnotate(req, res);
+  }
+
+  res.writeHead(404, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ error: "Not found", path: pathname }));
 });
 
 /**
@@ -189,7 +206,7 @@ function tryListen(port) {
 
   server.once("listening", () => {
     boundPort = server.address().port;
-    console.log(`{reply} POC server running at http://localhost:${boundPort}`);
+    console.log(`Reply POC server running at http://localhost:${boundPort}`);
   });
 
   server.listen(port, "127.0.0.1");

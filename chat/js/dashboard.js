@@ -5,6 +5,48 @@
 
 import { fetchSystemHealth, fetchTriageLogs, fetchBridgeSummary, fetchOpenClawStatus, triggerSync, buildSecurityHeaders } from './api.js';
 
+/**
+ * OpenClaw `gateway health --json` may expose `channels` as a number, array, or nested object — never interpolate raw objects.
+ */
+function formatOpenClawChannelsSummary(channels) {
+  if (channels == null || channels === '') return 'None';
+  if (typeof channels === 'number' && Number.isFinite(channels)) {
+    return channels === 0 ? 'None' : `${channels} channel${channels === 1 ? '' : 's'}`;
+  }
+  if (typeof channels === 'string') return channels;
+  if (Array.isArray(channels)) {
+    if (channels.length === 0) return 'None';
+    const labels = channels.map((c) => {
+      if (c == null) return '';
+      if (typeof c === 'string') return c;
+      return c.channel || c.name || c.id || c.label || '';
+    }).filter(Boolean);
+    return labels.length ? labels.join(', ') : `${channels.length} channel${channels.length === 1 ? '' : 's'}`;
+  }
+  if (typeof channels === 'object') {
+    const keys = Object.keys(channels);
+    if (keys.length === 0) return 'None';
+    const parts = [];
+    for (const k of keys) {
+      const v = channels[k];
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        const st = v.state ?? v.status ?? v.linked;
+        if (st === true || st === 'ok' || st === 'connected' || st === 'linked') parts.push(k);
+        else if (typeof st === 'string' && st) parts.push(`${k}: ${st}`);
+        else parts.push(k);
+      } else if (v === true) {
+        parts.push(k);
+      } else if (v != null && v !== '') {
+        parts.push(`${k}: ${v}`);
+      } else {
+        parts.push(k);
+      }
+    }
+    return parts.join(', ') || 'None';
+  }
+  return 'None';
+}
+
 function wireDashboardActions(root) {
   if (!root) return;
 
@@ -85,7 +127,9 @@ function renderHealthCard(config) {
 
   const metaHtml = meta.map(m => {
     const overflowClass = m.overflow ? 'health-card-meta-overflow' : '';
-    return `<div class="health-card-meta ${overflowClass}" ${m.title ? `title="${m.title}"` : ''}>${m.text}</div>`;
+    const wrapClass = m.wrap ? 'health-card-meta-wrap' : '';
+    const safeTitle = m.title ? String(m.title).replace(/"/g, '&quot;') : '';
+    return `<div class="health-card-meta ${overflowClass} ${wrapClass}" ${safeTitle ? `title="${safeTitle}"` : ''}>${m.text}</div>`;
   }).join('');
 
   const iconHtml = icon ? (icon.includes('.svg') || icon.includes('.png') || icon.includes('/')
@@ -203,7 +247,7 @@ export async function renderDashboard() {
     const openClawStatusClass = openClawStatus.status === 'online' ? 'tag-online' : 'tag-offline';
 
     const openClawMeta = [
-      { text: `Channels: ${openClawStatus.channels || 0} linked` },
+      { text: `Linked: ${formatOpenClawChannelsSummary(openClawStatus.channels)}` },
       { text: `Heartbeat: ${formatLastSync(openClawStatus.heartbeat)}` }
     ];
     const openClawActions = [
@@ -253,6 +297,7 @@ export async function renderDashboard() {
           workerActions.push({ type: 'service', name: 'worker', action: 'start', emoji: '🟢', title: 'Start Worker' });
         }
 
+        const startedLabel = worker.startedAt ? formatLastSync(worker.startedAt) : '—';
         return renderHealthCard({
           title: 'Background Worker',
           icon: '⚙️',
@@ -260,8 +305,12 @@ export async function renderDashboard() {
           statusText: `● Process ${worker.status}`,
           statusClass: worker.status === 'online' ? 'tag-online' : 'tag-offline',
           meta: [
-            { text: `PID: ${worker.pid || 'N/A'} | Uptime: ${workerUptime}` },
-            { text: `Last Pulse: ${formatLastSync(new Date().toISOString())}` }
+            { text: `PID: ${worker.pid ?? '—'} | Uptime: ${workerUptime}` },
+            {
+              text: `Started: ${startedLabel}`,
+              wrap: true,
+              title: worker.startedAt || ''
+            }
           ],
           actions: workerActions
         });
@@ -381,9 +430,12 @@ export async function renderDashboard() {
       })
       }
 
-  <div class="health-card" style="grid-column: 1 / -1;">
+  <div class="health-card health-card--span-full dashboard-triage-card">
     <div class="health-card-header">
       <h4><span class="health-card-icon">📋</span><span>Recent Triage Log</span></h4>
+    </div>
+    <div class="triage-log-header" aria-hidden="true">
+      <span>Time</span><span>Action</span><span>Contact / sender</span>
     </div>
     <div id="dashboard-triage-log" class="triage-log">
       <!-- Triage entries will be injected safely via JS -->
@@ -411,7 +463,9 @@ export async function renderDashboard() {
 
           const contact = document.createElement('span');
           contact.className = 'triage-contact';
-          contact.textContent = log.contact || 'N/A';
+          const who = (log.contact || log.sender || '').trim();
+          contact.textContent = who || '—';
+          contact.title = who || '';
           entry.appendChild(contact);
 
           triageContainer.appendChild(entry);

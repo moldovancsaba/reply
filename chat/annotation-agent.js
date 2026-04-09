@@ -1,8 +1,9 @@
 const { Ollama } = require('ollama');
 const ollama = new Ollama();
+const { getAnnotationOllamaModel } = require('./ollama-model.js');
 const { getUnannotatedDocuments, annotateDocument } = require('./vector-store.js');
 
-const MODEL = process.env.REPLY_ANNOTATION_MODEL || "llama3.2:3b";
+const MODEL = getAnnotationOllamaModel();
 const MAX_DOCS_PER_RUN = parseInt(process.env.REPLY_ANNOTATION_LIMIT || "50", 10);
 
 const PROMPT_TEMPLATE = `

@@ -138,7 +138,7 @@
 ```
 
 ### Issue Lifecycle (Mandatory)
-1. **Create** in SSOT repo (`moldovancsaba/mvp-factory-control`)
+1. **Create** in `moldovancsaba/reply` and add to [Project #7](https://github.com/users/moldovancsaba/projects/7) (for `{reply}` work)
 2. **Title format**: `{reply}: <short description>`
 3. **Add to board** (Project 1) immediately
 4. **Set fields**: Product=reply, Type, Priority, Status

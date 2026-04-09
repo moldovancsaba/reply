@@ -28,19 +28,19 @@ Every task, pull request, or commit must satisfy these criteria before being con
 *   **Zero Regressions:** Existing functionality (e.g., previous verifications) must still pass.
 
 ## 4. Project Management (GitHub Board) & Issues
-*   **Single Source of Truth:** The [GitHub Project Board](https://github.com/users/moldovancsaba/projects/1) is the sole authority for roadmap, backlog, and tasks.
-*   **No Local Tracking:** Do NOT create or maintain local `IDEABANK.md`, `ROADMAP.md`, `TASKLIST.md`, or similar tracking files. If they exist, they must only contain a link to the Board.
-*   **SSOT Repo Only:** All `{reply}` issues must be created and managed in `moldovancsaba/mvp-factory-control` (never in `moldovancsaba/reply`).
+*   **Single Source of Truth:** The [`{reply}` GitHub Project (#7)](https://github.com/users/moldovancsaba/projects/7) and issues in [`moldovancsaba/reply`](https://github.com/moldovancsaba/reply) are the authority for `{reply}` roadmap, backlog, and tasks.
+*   **No Local Tracking:** Do NOT create or maintain local `IDEABANK.md`, `ROADMAP.md`, `TASKLIST.md`, or similar tracking files as SSOT. If they exist, they must only contain a link to the project board.
+*   **Issues in this repo:** All **new** `{reply}` issues are created and managed in **`moldovancsaba/reply`** and linked to **Project #7** (not in `mvp-factory-control` for new work).
 *   **Issue Lifecycle:**
-    *   **Create:** Open issue in SSOT repo with title format `{reply}: <short description>`.
-    *   **Record:** Add issue to Project 1 immediately (mandatory).
-    *   **Start:** Assign issue to self, set board status to `In Progress`.
+    *   **Create:** Open issue in `moldovancsaba/reply` with title format `{reply}: <short description>`.
+    *   **Record:** Add issue to [Project #7](https://github.com/users/moldovancsaba/projects/7) immediately (mandatory).
+    *   **Start:** Assign issue to self, set board status to `In Progress` (or equivalent).
     *   **Finish:**
         *   Comment on the issue with a summary of changes and verification results.
         *   **User Testing Instructions:** Include a clear "How to Test" section for the User (e.g., specific commands, URL to visit, or file to check).
-        *   Ensure board status is `Done`.
-        *   Close the issue via GitHub CLI (`gh issue close <id>`).
-        *   Verify the issue still exists on Project 1.
+        *   Ensure board status is `Done` (or equivalent).
+        *   Close the issue via GitHub CLI (`gh issue close <id> --repo moldovancsaba/reply`).
+        *   Verify the issue remains visible on Project #7 as expected.
 
 ---
 *Created by the AI Developer to codify the Product Owner's requirements.*

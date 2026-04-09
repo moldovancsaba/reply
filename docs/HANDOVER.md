@@ -2,9 +2,11 @@
 
 This file is onboarding + operational context. Keep it accurate when behavior/architecture changes.
 
-**Last Updated**: 2026-03-06 (v0.5.0 — Gmail backfill, self-repair watchdog, premium Settings UI, menubar rebuild)
+**Last Updated**: 2026-04-09 (SSOT: `{reply}` issues + [Project #7](https://github.com/users/moldovancsaba/projects/7); v0.5.1 local deployment / hub hardening unchanged)
 
-**Current Version**: `0.5.0` (see `chat/package.json`)
+**Current Version**: `0.5.2` (see `chat/package.json`)
+
+**Local Mac ops (single source)**: [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md) — LaunchAgent, logs, `.env`, Ollama, Full Disk Access / `chat.db`, changelog of stability fixes.
 
 **Key changes in v0.5.0**:
 - `service-manager.js` — auto-restart watchdog with exponential backoff + `repair_required` state
@@ -14,18 +16,18 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
 - Settings page — premium glassmorphism redesign
 
 
-## SSOT (Work Tracking)
-- Board: https://github.com/users/moldovancsaba/projects/1
-- Issues repo: `moldovancsaba/mvp-factory-control`
+## SSOT (Work Tracking) — `{reply}` in this repository
+- **`{reply}` board:** https://github.com/users/moldovancsaba/projects/7
+- **Issues repo:** `moldovancsaba/reply`
 - Rules:
-  - Track `{reply}` work only as issues in `mvp-factory-control` and as items on the board.
-  - Do not create/manage issues in product repos (e.g. `moldovancsaba/reply`).
-  - Issues are disabled in `moldovancsaba/reply` to prevent SSOT drift.
-  - Issue title convention for Reply: `{reply}: <short description>`.
+  - Track `{reply}` work as **issues in `moldovancsaba/reply`** and as items on **Project #7**.
+  - Issue title convention: `{reply}: <short description>`.
   - Naming: always use `{reply}` (no “Hub” or other renames).
-  - Mandatory flow for every issue: create in SSOT repo -> add to Project 1 -> set board fields/status -> verify membership before ending task.
-  - **CRITICAL RULE**: Never maintain local `task.md`, `IDEABANK.md`, `ROADMAP.md` or similar files in this repo. The GitHub Project Board is the ONLY truth.
-  - **FINDING WORK**: To find your assigned issues reliably, run: `gh issue list --repo moldovancsaba/mvp-factory-control --state open --assignee "@me" --search "{reply}"`
+  - Mandatory flow: create issue in **`moldovancsaba/reply`** → add to **Project #7** → set Status (and labels as needed) → verify membership before ending task.
+  - **CRITICAL RULE:** Never maintain local `task.md`, `IDEABANK.md`, `ROADMAP.md` or similar files as SSOT. The **`{reply}` GitHub Project (#7)** plus **reply repo issues** are the truth for this product.
+  - **Portfolio / other products** may still use `mvp-factory-control` and [MVP Factory Project #1](https://github.com/users/moldovancsaba/projects/1); do not use that path for **new** `{reply}`-only delivery.
+  - **FINDING WORK:** `gh issue list --repo moldovancsaba/reply --state open --assignee "@me" --search "{reply}" --limit 20`
+- **Historical:** Older handover bullets below may cite `mvp-factory-control#…` issue numbers from before the move; prefer **reply** + **Project #7** for new work. See [`GITHUB_REPLY_PROJECT_MIGRATION.md`](GITHUB_REPLY_PROJECT_MIGRATION.md).
 
 ## Current Priorities (Board, 2026-02-22)
 
@@ -358,6 +360,19 @@ See detailed plans:
 - **Icons**: Generated multi-resolution `.icns` native macOS application icons and bundled them via `Info.plist`.
 - **Login Items**: Updated installation scripts to automatically clean up deprecated toolbars and securely register the new apps to launch at login via `osascript`.
 - **Status**: Issue `mvp-factory-control#362` successfully verified and marked as **Done** on the MVP Factory Project Board.
+
+## Active Session Update (2026-04-09, SSOT in `reply` + Project #7 & board migration)
+- **PO decision:** `{reply}` SSOT is **`moldovancsaba/reply` issues** + **[GitHub Project #7](https://github.com/users/moldovancsaba/projects/7)** for new work (not MVP Factory Project #1). Governance docs, `README.md` Contributing, `RELEASE_NOTES` **v0.5.2**, `chat/package.json` **0.5.2**.
+- **Legacy migration:** [`scripts/migrate-reply-github-board.mjs`](../scripts/migrate-reply-github-board.mjs) + [`GITHUB_REPLY_PROJECT_MIGRATION.md`](GITHUB_REPLY_PROJECT_MIGRATION.md) move cards off [MVP Factory view 14](https://github.com/users/moldovancsaba/projects/1/views/14). Issues enabled on `reply`; pilot **mvp-factory-control#173** → **reply#13**; dry-run **16** cards. Complete migration with owner PAT (`repo` + `project` + `read:project`) or scoped `gh auth refresh`; optional: match **Status** options on project #7 to MVP Factory in the UI.
+
+## Active Session Update (2026-04-08, Local deployment documentation & hub reliability)
+- **Documentation**: Added [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md) (install, LaunchAgent, `chat/.env`, Ollama `gemma4:e2b`, troubleshooting). Root `README.md` links Installation + Troubleshooting to it. Cross-linked from [ARCHITECTURE.md](ARCHITECTURE.md) (new “Runtime & deployment”), [APP_NAVIGATION.md](APP_NAVIGATION.md), [INGESTION.md](INGESTION.md) (iMessage subsection + env table fixes), README Run Modes / menubar; `tools/scripts/reply_service.sh` comment.
+- **ReplyMenubar**: [tools/macos/ReplyMenubar/README.md](../tools/macos/ReplyMenubar/README.md) + **`install_ReplyMenubar.sh`** (template → `swiftc` → `~/Applications/ReplyMenubar.app`); `LOCAL_MACHINE_DEPLOYMENT.md` updated (table + setup step 6).
+- **iMessage / hub**: `chat/sync-imessage.js` — lazy DB open, error handlers, `sync()` guard; hub no longer dies on missing or TCC-blocked `~/Library/Messages/chat.db`.
+- **Worker**: `chat/background-worker.js` — skip iMessage polling when DB unavailable.
+- **Contacts**: `chat/contact-store.js` — mkdir for DB parent dir; SQLite `error` listener.
+- **Ollama**: Default `gemma4:e2b`; refine aligned via `getReplyOllamaModel()` in `gemini-client.js`; `scripts/analyze-style.js` uses same helper.
+- **Release**: `docs/RELEASE_NOTES.md` **[0.5.1]**, `chat/package.json` → `0.5.1`, `READMEDEV.md` documentation map updated.
 
 ## Active Session Update (2026-03-10, Hatori Status & Bug Hunt)
 - **Hatori "No Internet" Bug Hunt**: 

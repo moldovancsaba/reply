@@ -3,10 +3,14 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 const { withDefaults, readSettings } = require('./settings-store.js');
+const { resolveIMessageDbPath } = require('./imessage-db-path.js');
 
-const DB_PATH = process.env.REPLY_IMESSAGE_DB_PATH || path.join(__dirname, 'data', 'chat.db');
+const DB_PATH = resolveIMessageDbPath();
 const STATE_FILE = path.join(__dirname, 'data', 'sync_state.json');
 const statusManager = require('./status-manager.js');
+
+/** @type {import('sqlite3').Database|null|false} false = open failed permanently this process */
+let _imessageDb = null;
 
 function updateStatus(status) {
     statusManager.update('imessage', status);
@@ -22,14 +26,38 @@ function readCurrentProcessed() {
     }
 }
 
-// Ensure DB exists
-if (!fs.existsSync(DB_PATH)) {
-    console.error("Database not found. Please copy chat.db to chat/data/");
-    updateStatus({ state: "error", message: "Database not found" });
-    process.exit(1);
-}
+/**
+ * Lazily open Apple's chat.db (readonly). Never runs at require() time — avoids crashing
+ * the hub when Messages DB is missing or blocked by TCC (hub must stay up for the UI).
+ */
+function getIMessageReadonlyDb() {
+    if (_imessageDb === false) return null;
+    if (_imessageDb) return _imessageDb;
 
-const db = new sqlite3.Database(DB_PATH, sqlite3.OPEN_READONLY);
+    if (!fs.existsSync(DB_PATH)) {
+        const hint =
+            process.platform === "darwin"
+                ? `iMessage database missing at ${DB_PATH}. Grant Full Disk Access to Terminal/your Node host, or set REPLY_IMESSAGE_DB_PATH in chat/.env to a readable chat.db.`
+                : `Database missing at ${DB_PATH}. Place chat.db under chat/data/ or set REPLY_IMESSAGE_DB_PATH.`;
+        console.warn("[sync-imessage]", hint);
+        updateStatus({ state: "error", message: "Database not found" });
+        _imessageDb = false;
+        return null;
+    }
+
+    const database = new sqlite3.Database(DB_PATH, sqlite3.OPEN_READONLY, (err) => {
+        if (err) {
+            console.error("[sync-imessage] Cannot open iMessage database:", err.message);
+            updateStatus({ state: "error", message: err.message });
+            if (_imessageDb === database) _imessageDb = false;
+        }
+    });
+    database.on("error", (e) => {
+        console.error("[sync-imessage] SQLite error:", e.message);
+    });
+    _imessageDb = database;
+    return database;
+}
 
 /**
  * Load sync state to resume from last message.
@@ -58,6 +86,15 @@ function convertDate(value) {
  * @returns {Promise<void>}
  */
 async function sync() {
+    const db = getIMessageReadonlyDb();
+    if (!db) {
+        const msg = fs.existsSync(DB_PATH)
+            ? `Cannot open iMessage database (permissions?): ${DB_PATH}`
+            : `iMessage database not found: ${DB_PATH}`;
+        updateStatus({ state: "error", message: msg });
+        throw new Error(msg);
+    }
+
     updateStatus({ state: "running", message: "Opening message database..." });
     const state = loadState();
     console.log(`Starting iMessage sync from ROWID > ${state.lastProcessedId}...`);
@@ -157,13 +194,17 @@ async function sync() {
 }
 
 if (require.main === module) {
-    sync().then(() => {
-        db.close();
-    }).catch(err => {
-        console.error("Sync failed:", err);
-        updateStatus({ state: "error", message: err.message });
-        db.close();
-    });
+    sync()
+        .then(() => {
+            const d = getIMessageReadonlyDb();
+            if (d && typeof d.close === "function") d.close();
+        })
+        .catch((err) => {
+            console.error("Sync failed:", err);
+            updateStatus({ state: "error", message: err.message });
+            const d = getIMessageReadonlyDb();
+            if (d && typeof d.close === "function") d.close();
+        });
 }
 
-module.exports = { sync };
+module.exports = { sync, getIMessageReadonlyDb };

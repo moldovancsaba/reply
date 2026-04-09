@@ -48,7 +48,15 @@
 }
 
 .settings-input::placeholder {
-    color: var(--text-tertiary);
+    color: rgba(255, 255, 255, 0.5);
+    opacity: 1;
+}
+
+@media (prefers-color-scheme: light) {
+    .settings-input::placeholder {
+        color: var(--text-tertiary);
+        opacity: 1;
+    }
 }
 
 .settings-hint {
@@ -110,9 +118,17 @@
     border-radius: var(--radius-md);
     padding: var(--space-md);
     border: 1px solid var(--border);
-    min-height: 180px;
+    min-height: 168px;
     gap: var(--space-xs);
     transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.dashboard .health-card:not(.health-card--span-full) {
+    min-height: 172px;
+}
+
+.health-card--span-full {
+    min-height: 0;
 }
 
 .health-card:hover {
@@ -135,10 +151,18 @@
 .health-card-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
+    gap: var(--space-sm);
     margin-bottom: var(--space-sm);
     min-height: 32px;
     /* Unify alignment of values below */
+}
+
+.health-card-header h4 {
+    min-width: 0;
+    flex: 1;
+    white-space: normal;
+    line-height: 1.25;
 }
 
 .health-card-icon {
@@ -157,8 +181,10 @@
 
 .health-card-actions {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     align-items: center;
+    flex-shrink: 0;
+    padding: 2px 0 0 4px;
 }
 
 .health-card-meta {
@@ -175,6 +201,13 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.health-card-meta-wrap {
+    white-space: normal;
+    word-break: break-word;
+    overflow: visible;
+    text-overflow: clip;
 }
 
 .health-value {
@@ -645,23 +678,43 @@
 /* ============================================
    Triage Log Components
    ============================================ */
+.triage-log-header {
+    display: grid;
+    grid-template-columns: 85px 110px 1fr;
+    gap: 12px;
+    padding: 6px 12px 8px;
+    margin: 0 calc(-1 * var(--space-xs));
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+}
+
 .triage-log {
     display: flex;
     flex-direction: column;
     padding: var(--space-sm) 0;
     max-height: 280px;
     overflow-y: auto;
+    scrollbar-color: rgba(255, 255, 255, 0.28) rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-sm);
 }
 
 .triage-entry {
     display: grid;
     grid-template-columns: 85px 110px 1fr;
     gap: 12px;
-    padding: 8px 12px;
+    padding: 9px 12px;
     font-size: 0.85rem;
     border-bottom: 1px solid var(--border);
     transition: background 0.2s ease;
     align-items: center;
+}
+
+.triage-entry:nth-child(even) {
+    background: rgba(255, 255, 255, 0.03);
 }
 
 .triage-entry:last-child {
