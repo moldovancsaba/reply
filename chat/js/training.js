@@ -1,41 +1,66 @@
 import { buildSecurityHeaders } from './api.js';
 
+function setDisplay(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = value;
+}
+
 export function openTrainingPage() {
-    document.getElementById('dashboard').style.display = 'none';
-    if (document.getElementById('messages')) document.getElementById('messages').style.display = 'none';
-    document.getElementById('settings-page').style.display = 'none';
-    document.getElementById('training-page').style.display = 'flex';
-    document.querySelector('.chat-header').style.display = 'none';
-    document.querySelector('.input-area').style.display = 'none';
+    setDisplay('dashboard', 'none');
+    setDisplay('messages', 'none');
+    setDisplay('settings-page', 'none');
+    setDisplay('training-page', 'flex');
+    const chatHeader = document.querySelector('.chat-header');
+    const inputArea = document.querySelector('.input-area');
+    if (chatHeader) chatHeader.style.display = 'none';
+    if (inputArea) inputArea.style.display = 'none';
 
     loadTrainingData();
 }
 
 export function closeTrainingPage() {
-    document.getElementById('training-page').style.display = 'none';
-    document.querySelector('.chat-header').style.display = 'flex';
-    document.querySelector('.input-area').style.display = 'flex';
+    setDisplay('training-page', 'none');
+    const header = document.querySelector('.chat-header');
+    const inputArea = document.querySelector('.input-area');
+    if (header) header.style.display = 'flex';
+    if (inputArea) inputArea.style.display = 'flex';
     if (window.currentHandle) {
-        document.getElementById('messages').style.display = 'flex';
+        setDisplay('messages', 'flex');
     } else {
-        document.getElementById('dashboard').style.display = 'flex';
+        setDisplay('dashboard', 'grid');
     }
 }
 
 async function loadTrainingData() {
     const container = document.getElementById('training-list-container');
+    if (!container) return;
     container.innerHTML = '<div style="text-align:center; padding: 20px;">Loading examples...</div>';
     try {
-        const res = await fetch('/api/training/annotations', { headers: buildSecurityHeaders() });
-        const data = await res.json();
+        const res = await fetch('/api/training/annotations', {
+            headers: buildSecurityHeaders({ includeJsonContentType: false }),
+        });
+        const raw = await res.text();
+        let data = {};
+        if (raw) {
+            try {
+                data = JSON.parse(raw);
+            } catch {
+                throw new Error(raw.slice(0, 120) || `HTTP ${res.status}`);
+            }
+        }
+        if (!res.ok) {
+            const msg = [data.error, data.message].map((v) => String(v || '').trim()).filter(Boolean).join(' ');
+            throw new Error(msg || `HTTP ${res.status}`);
+        }
         renderTrainingData(data.annotations || [], data.pending || []);
     } catch (e) {
-        container.innerHTML = `<div style="color:var(--danger); text-align:center; padding: 20px;">Error loading data: ${e.message}</div>`;
+        container.innerHTML = `<div style="color:var(--danger); text-align:center; padding: 20px;">Error loading data: ${escapeHtml(e.message)}</div>`;
     }
 }
 
 function renderTrainingData(annotations, pending) {
     const container = document.getElementById('training-list-container');
+    if (!container) return;
     container.innerHTML = '';
 
     // Render Pending

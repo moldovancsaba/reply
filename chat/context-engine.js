@@ -20,6 +20,37 @@ function loadStyleProfile() {
 }
 
 const contactStore = require('./contact-store.js');
+const { pathPrefixesForHandle } = require('./utils/chat-utils.js');
+const {
+    rankDocumentsByFreshnessAndRelevance,
+    freshnessBucket,
+    halfLifeDaysFromEnv
+} = require('./utils/context-freshness.js');
+
+function enrichAnnotatedDocText(d) {
+    let enrichedText = d.text;
+    if (d.is_annotated) {
+        const summary = d.annotation_summary ? `\nSummary: ${d.annotation_summary}` : "";
+        let tags = "";
+        try {
+            const parsedTags = JSON.parse(d.annotation_tags);
+            if (Array.isArray(parsedTags) && parsedTags.length > 0) {
+                tags = `\nTags: ${parsedTags.join(', ')}`;
+            }
+        } catch (e) { /* ignore */ }
+
+        let facts = "";
+        try {
+            const parsedFacts = JSON.parse(d.annotation_facts);
+            if (Array.isArray(parsedFacts) && parsedFacts.length > 0) {
+                facts = `\nKey Facts: ${parsedFacts.join(', ')}`;
+            }
+        } catch (e) { /* ignore */ }
+
+        enrichedText += `${summary}${tags}${facts}`;
+    }
+    return enrichedText;
+}
 
 /**
  * Assembles the context and system instructions for generating a reply.
@@ -110,78 +141,73 @@ ${historySnippets.map(s => `- [${s.date || 'Unknown Date'}] ${s.text.substring(0
  * Combines style, identity, historical snippets, and chronological interaction history.
  */
 async function assembleReplyContext(message, handle) {
-    const profile = loadStyleProfile();
-    const contact = contactStore.findContact(handle);
-
-    // 1. Identity & Style (Personas)
     const baseContext = await getContext(handle);
 
-    // 2. Semantic Search (RAG) for facts/examples
-    // We fetch a larger pool and then prune by relevance or diversity
-    const { search } = require('./vector-store.js');
-    let ragFacts = [];
+    const { search, getHistory, dedupeDocsByStableKey } = require('./vector-store.js');
+    let ragTraces = [];
+    let ragFactLines = [];
+
     try {
-        const rawDocs = await search(message, 10);
-        ragFacts = rawDocs
-            .filter(d => !d.text.includes('] Me: ')) // Focus on facts, not my own style here
-            .slice(0, 5)
-            .map(d => {
-                let enrichedText = d.text;
-                if (d.is_annotated) {
-                    const summary = d.annotation_summary ? `\nSummary: ${d.annotation_summary}` : "";
-                    let tags = "";
-                    try {
-                        const parsedTags = JSON.parse(d.annotation_tags);
-                        if (Array.isArray(parsedTags) && parsedTags.length > 0) {
-                            tags = `\nTags: ${parsedTags.join(', ')}`;
-                        }
-                    } catch (e) { }
-
-                    let facts = "";
-                    try {
-                        const parsedFacts = JSON.parse(d.annotation_facts);
-                        if (Array.isArray(parsedFacts) && parsedFacts.length > 0) {
-                            facts = `\nKey Facts: ${parsedFacts.join(', ')}`;
-                        }
-                    } catch (e) { }
-
-                    enrichedText += `${summary}${tags}${facts}`;
-                }
-                return { path: d.path, text: enrichedText };
-            });
+        const rawDocs = await search(message, 15);
+        const pool = rawDocs
+            .filter((d) => d.text && !d.text.includes("] Me: "))
+            .map((d, i) => ({ ...d, _rank: 1 / (1 + i) }));
+        const ranked = rankDocumentsByFreshnessAndRelevance(pool, Date.now());
+        ragTraces = ranked.slice(0, 8).map((x) => ({
+            path: x.doc.path,
+            source: x.doc.source,
+            freshness: Math.round(x.freshness * 1000) / 1000,
+            relevance: Math.round(x.relevance * 1000) / 1000,
+            combined: Math.round(x.combined * 1000) / 1000,
+            bucket: freshnessBucket(x.freshness),
+            mailLike: x.isMail,
+            approxAgeDays:
+                x.approxAgeDays != null ? Math.round(x.approxAgeDays * 10) / 10 : null
+        }));
+        ragFactLines = ranked.slice(0, 5).map((x) => {
+            const bucket = freshnessBucket(x.freshness);
+            const tag = `[ctx ${bucket} score=${Math.round(x.combined * 100)}%]`;
+            const body = enrichAnnotatedDocText(x.doc);
+            return `[Source: ${x.doc.path}] ${tag}\n${body}`;
+        });
     } catch (e) {
         console.error("ContextEngine RAG failed:", e.message);
     }
 
-    // 3. Chronological History (Immediate context)
-    const { getHistory } = require('./vector-store.js');
     let conversationHistory = "";
     try {
-        const allHistory = await getHistory(handle); // This handles prefixes internally
+        const handles = contactStore.getAllHandles(handle);
+        const prefixes = Array.from(new Set(handles.flatMap((h) => pathPrefixesForHandle(h))));
+        const batches = await Promise.all(prefixes.map((p) => getHistory(p)));
+        const allHistory = dedupeDocsByStableKey(batches.flat());
         const recent = allHistory
-            .map(d => ({
+            .map((d) => ({
                 text: d.text,
                 date: d.text.match(/\[(.*?)\]/)?.[1] || "0"
             }))
             .sort((a, b) => new Date(a.date) - new Date(b.date))
-            .slice(-10); // Last 10 messages
+            .slice(-10);
 
-        conversationHistory = recent.map(r => r.text).join('\n');
+        conversationHistory = recent.map((r) => r.text).join("\n");
     } catch (e) {
         console.error("ContextEngine history fetch failed:", e.message);
     }
 
-    // 4. Token Pruning (Manual but effective for 3.2B models)
-    // We prioritize: Identity > History > Style > RAG Facts
-    const contextBundle = {
+    return {
         identity: baseContext.identityContext,
         tone: baseContext.styleInstructions,
         history: conversationHistory || baseContext.history,
-        facts: ragFacts.map(f => `[Source: ${f.path}] ${f.text}`).join('\n\n'),
-        goldenExamples: baseContext.goldenExamples
+        facts: ragFactLines.join("\n\n"),
+        goldenExamples: baseContext.goldenExamples,
+        meta: {
+            rag: ragTraces,
+            halfLifeDays: halfLifeDaysFromEnv(),
+            freshnessWeights: {
+                relevance: String(process.env.REPLY_CONTEXT_RELEVANCE_WEIGHT || "0.45"),
+                freshness: String(process.env.REPLY_CONTEXT_FRESHNESS_WEIGHT || "0.55")
+            }
+        }
     };
-
-    return contextBundle;
 }
 
 module.exports = { getContext, assembleReplyContext };

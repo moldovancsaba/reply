@@ -36,13 +36,9 @@ async function countIngested(source) {
             db.serialize(() => {
                 db.run("PRAGMA journal_mode = WAL");
                 db.run("PRAGMA busy_timeout = 5000");
-                let query = "";
-                if (source === "iMessage") {
-                    query = "SELECT count(*) as count FROM message WHERE text IS NOT NULL AND text != ''";
-                } else {
-                    query = "SELECT count(*) as count FROM unified_messages WHERE source = ?";
-                }
-                db.get(query, source === "iMessage" ? [] : [source], (err, row) => {
+                // Local chat/data/chat.db holds unified_messages from sync, not necessarily Apple’s message schema
+                const query = "SELECT count(*) as count FROM unified_messages WHERE source = ?";
+                db.get(query, [source], (err, row) => {
                     db.close();
                     resolve(row?.count || 0);
                 });

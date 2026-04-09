@@ -51,6 +51,11 @@
 *   **Delta Sync (Gmail):** Tracks Gmail `historyId` in `chat/data/gmail_sync_state.json`.
 *   **Settings storage:** UI Settings are stored locally in `chat/data/settings.json` (not encrypted).
 
+### 5. iMessage (macOS)
+*   **Mechanism:** `chat/sync-imessage.js` (batch) and `chat/background-worker.js` (live poll) read Apple Messages SQLite **`chat.db`** and vectorize text into LanceDB; unified history also flows through `message-store.js` where applicable.
+*   **Default path:** `~/Library/Messages/chat.db` (override with `REPLY_IMESSAGE_DB_PATH` in `chat/.env`). Requires **Full Disk Access** (or equivalent) for the process running Node — see [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md).
+*   **Resilience:** The hub does not exit if `chat.db` is missing or cannot be opened; iMessage sync/polling is skipped until access is fixed.
+
 ---
 
 ## Configuration
@@ -59,7 +64,8 @@
 | :--- | :--- | :--- |
 | `REPLY_LANCEDB_URI` | Path to the Vector DB | `knowledge/lancedb` |
 | `REPLY_KNOWLEDGE_PATH` | Path for local text docs | `knowledge/documents` |
-| `PORT` | Chat Server Port | `3000` |
+| `PORT` | Chat server port | `45311` |
+| `REPLY_IMESSAGE_DB_PATH` | Absolute path to Apple Messages `chat.db` (optional) | macOS: `~/Library/Messages/chat.db` |
 | `REPLY_IMAP_HOST` | IMAP host (enables IMAP mail sync) | (unset) |
 | `REPLY_IMAP_PORT` | IMAP port | `993` |
 | `REPLY_IMAP_SECURE` | Use TLS for IMAP | `true` |

@@ -6,7 +6,7 @@
 <p align="center"><strong>A unified aggregation proxy and outbound transport engine for iMessage, WhatsApp, Mail, and LinkedIn.</strong></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.4.5-2563EB?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/version-v0.5.2-2563EB?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-0F172A?style=for-the-badge" alt="Platform">
   <img src="https://img.shields.io/badge/transport-OpenClaw%20%7C%20AppleScript-0EA5E9?style=for-the-badge" alt="Transports">
 </p>
@@ -47,6 +47,8 @@ Open:
 ---
 
 ## Installation
+
+**Running the full hub on this Mac (LaunchAgent, logs, `.env`, Ollama, iMessage DB permissions, and stability fixes added for local delivery)** is documented in **[docs/LOCAL_MACHINE_DEPLOYMENT.md](docs/LOCAL_MACHINE_DEPLOYMENT.md)**.
 
 ### Prerequisites
 
@@ -89,11 +91,11 @@ make run
 make stop
 make status
 ```
-Logs are automatically written to `/tmp/reply-hub.log`.
+Logs are automatically written to `/tmp/reply-hub.log`. **Install details, `.env`, Ollama, iMessage `chat.db` / Full Disk Access, and port behavior** are in **[docs/LOCAL_MACHINE_DEPLOYMENT.md](docs/LOCAL_MACHINE_DEPLOYMENT.md)**.
 
 ### 2) macOS Menu Bar App
 
-We supply a compiled Swift app identical to Hatori's to quickly observe database ingestion status and jump to specific URLs.
+We supply a compiled Swift app identical to Hatori's to quickly observe database ingestion status and jump to specific URLs. It complements the hub; **service install, health checks, and troubleshooting** still follow **[docs/LOCAL_MACHINE_DEPLOYMENT.md](docs/LOCAL_MACHINE_DEPLOYMENT.md)**. **Build prerequisites and rebuild-after-move** are in **[tools/macos/ReplyMenubar/README.md](tools/macos/ReplyMenubar/README.md)**.
 
 ```bash
 make install-ReplyMenubar
@@ -125,14 +127,17 @@ npm run dev
 
 ## Troubleshooting
 
+- **Hub exits or LaunchAgent loops; log shows `SQLITE_CANTOPEN`**: The hub is designed to stay up even when Apple’s `chat.db` is missing or blocked; see [docs/LOCAL_MACHINE_DEPLOYMENT.md](docs/LOCAL_MACHINE_DEPLOYMENT.md) (sections 4–5) for Full Disk Access, `REPLY_IMESSAGE_DB_PATH`, and what was fixed in `sync-imessage` / the worker.
 - **WhatsApp failing with "refactor pending" or AppleScript errors**: We recently scrubbed all legacy desktop automation fallbacks from the system. Ensure you are exclusively using `OpenClaw` and running the correct CLI.
 - **iMessage Missing?**: Go to System Settings -> Privacy & Security -> Full Disk Access -> Give Terminal / VSCode permissions.
 - **Hatori Magic is red?**: Hatori operates on `http://127.0.0.1:23572`. Check the Menu Bar App to see if it is down.
+- **Refine / suggestions need Ollama**: Default local model is `gemma4:e2b` (`ollama pull gemma4:e2b`). Details in [docs/LOCAL_MACHINE_DEPLOYMENT.md](docs/LOCAL_MACHINE_DEPLOYMENT.md).
 
 ## Contributing
-1. Create a feature branch.
-2. Run standard NPM linting.
-3. Keep hardware dependencies abstracted behind `interfaces/`.
+1. **Track work** in [`moldovancsaba/reply` issues](https://github.com/moldovancsaba/reply) and the [`{reply}` GitHub Project (#7)](https://github.com/users/moldovancsaba/projects/7). See [docs/PROJECT_MANAGEMENT.md](docs/PROJECT_MANAGEMENT.md).
+2. Create a feature branch.
+3. Run standard NPM linting.
+4. Keep hardware dependencies abstracted behind `interfaces/`.
 
 ## License
 Provided "as-is" for individual localhost ecosystem routing.

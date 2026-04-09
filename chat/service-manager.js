@@ -272,6 +272,7 @@ class ServiceManager {
             status,
             pid: service.process ? service.process.pid : null,
             uptime: isAlive ? Math.floor((Date.now() - service.startTime) / 1000) : 0,
+            startedAt: service.startTime ? new Date(service.startTime).toISOString() : null,
             exitCode: service.exitCode,
             restartAttempts: service.restartAttempts || 0,
             repairRequired: !!service.repairRequired,

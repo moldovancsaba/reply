@@ -45,8 +45,8 @@ PROHIBITED ❌ (Hard stops)
 Before changing anything:
 1) Sync working context
 - Pull latest / sync branch state (if applicable).
-- Read: docs/PROJECT_MANAGEMENT.md, docs/HANDOVER.md, and the active SSOT issue/card.
-- To find your assigned SSOT issue, run: `gh issue list --repo moldovancsaba/mvp-factory-control --state open --assignee "@me" --search "{reply}" --limit 10`
+- Read: docs/PROJECT_MANAGEMENT.md, docs/HANDOVER.md, and the active issue/card on [GitHub Project #7](https://github.com/users/moldovancsaba/projects/7) / `moldovancsaba/reply`.
+- To find your assigned `{reply}` issues, run: `gh issue list --repo moldovancsaba/reply --state open --assignee "@me" --search "{reply}" --limit 20`
 2) Establish the contract (write it explicitly)
 - Objective (1–2 lines)
 - Acceptance criteria (bullets)
@@ -134,6 +134,7 @@ When you change:
 - System behaviour/architecture → docs/ARCHITECTURE.md (+ dependency map if relevant)
 - UI flows / where things live → docs/APP_NAVIGATION.md
 - Operational gotchas/decisions/risks → docs/BRAIN_DUMP.md
+- **Local Mac hub (LaunchAgent, logs, `.env`, Ollama, iMessage `chat.db`, hub/worker stability)** → docs/LOCAL_MACHINE_DEPLOYMENT.md (keep in sync with code)
 - Running/setup/dev workflow → README.md and/or relevant ops docs
 - Ingestion/sync pipelines → docs/INGESTION.md
 - Board rules/fields/process → docs/PROJECT_MANAGEMENT.md

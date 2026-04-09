@@ -2,7 +2,7 @@ const { Ollama } = require('ollama');
 const ollama = new Ollama();
 const contactStore = require('./contact-store.js');
 const { mergeProfile } = require("./kyc-merge.js");
-const { getHistory } = require('./vector-store.js');
+const { getHistory, dedupeDocsByStableKey } = require('./vector-store.js');
 const { extractSignals } = require('./signal-extractor.js');
 const { withDefaults, readSettings } = require('./settings-store.js');
 const fs = require('fs');
@@ -242,9 +242,10 @@ async function analyzeContact(handleId) {
             const docs = await getHistory(p);
             if (docs && docs.length) allDocs.push(...docs);
         }
-        debugLog("Docs:", allDocs.length);
+        const uniqueDocs = dedupeDocsByStableKey(allDocs);
+        debugLog("Docs raw:", allDocs.length, "deduped:", uniqueDocs.length);
 
-        const messages = allDocs
+        const messages = uniqueDocs
             .map(d => {
                 const isFromMe = (d.text || "").includes("] Me:");
                 const dateObj = extractDateFromText(d.text || "");
@@ -264,8 +265,7 @@ async function analyzeContact(handleId) {
             return null;
         }
 
-        // Deterministic extraction across the FULL history (covers "from the beginning").
-        // We intentionally scan BOTH directions so older URLs/emails/phones can still be found.
+        // Deterministic extraction across the FULL deduped history (all messages, both directions).
         const linkSet = new Set();
         const emailSet = new Set();
         const phoneSet = new Set();
@@ -281,13 +281,13 @@ async function analyzeContact(handleId) {
             for (const v of (signals.addresses || [])) addressesSet.add(v);
         }
 
-        // LLM extraction for higher-level items (chunked to avoid prompt limits).
+        // LLM: suggestion-quality notes only (mergeProfile never applies company/linkedin from here).
         const notesSet = new Set();
-        let extractedCompany = null;
-        let extractedLinkedinUrl = null;
 
-        const maxLlmMessages = Math.max(50, parseInt(process.env.REPLY_KYC_LLM_MAX_MESSAGES || "400", 10) || 400);
-        const maxChunks = Math.max(1, parseInt(process.env.REPLY_KYC_LLM_MAX_CHUNKS || "8", 10) || 8);
+        const maxLlmMessages = Math.max(50, parseInt(process.env.REPLY_KYC_LLM_MAX_MESSAGES || "800", 10) || 800);
+        const maxChunksRaw = parseInt(process.env.REPLY_KYC_LLM_MAX_CHUNKS || "32", 10);
+        const maxChunks =
+            maxChunksRaw <= 0 ? Number.POSITIVE_INFINITY : Math.max(1, maxChunksRaw || 32);
 
         const llmEligible = contactMessages.filter(m => m.dateObj);
         const sampled = (() => {
@@ -313,34 +313,33 @@ async function analyzeContact(handleId) {
         }
         if (chunk.length) chunks.push(chunk.join('\n'));
 
+        const chunkLimit = Number.isFinite(maxChunks) ? Math.min(maxChunks, chunks.length) : chunks.length;
         let llmFailed = false;
-        for (const corpus of chunks.slice(0, maxChunks)) {
+        for (const corpus of chunks.slice(0, chunkLimit)) {
             const prompt = `
 You extract structured contact intelligence from chat logs.
 The log lines are ONLY messages from the contact (not from me).
 
-Extract ONLY what is explicitly mentioned:
-- "company": the name of the company they work for (string or null)
-- "linkedinUrl": their LinkedIn profile URL if mentioned (string or null)
-- "notes": durable facts worth remembering (strings)
+Extract ONLY what is explicitly mentioned as durable facts in "notes" (array of strings).
+Do NOT output company name, job title, relationship, or LinkedIn URLs — those are not accepted as auto-fields.
 
 Rules:
 - DO NOT infer names, profession, relationship.
 - NEVER include the user's name "Csaba" or "Moldovan" in any output.
-- If unsure, leave arrays empty or fields null.
+- If unsure, return an empty notes array.
 
 CHAT LOG:
 ${corpus}
 
 RETURN ONLY JSON:
-{ "company": null, "linkedinUrl": null, "notes": [] }`;
+{ "notes": [] }`;
 
             let response = null;
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout per chunk
 
             try {
-                console.log(`[KYC] Processing chunk ${chunks.indexOf(corpus) + 1}/${Math.min(chunks.length, maxChunks)} for ${handleId}...`);
+                console.log(`[KYC] Processing chunk ${chunks.indexOf(corpus) + 1}/${chunkLimit} for ${handleId}...`);
                 response = await ollama.chat({
                     model: MODEL,
                     messages: [{ role: 'user', content: prompt }],
@@ -357,9 +356,6 @@ RETURN ONLY JSON:
 
             let parsed = {};
             try { parsed = JSON.parse(response.message.content); } catch { parsed = {}; }
-
-            if (parsed.company && !extractedCompany) extractedCompany = String(parsed.company).trim();
-            if (parsed.linkedinUrl && !extractedLinkedinUrl) extractedLinkedinUrl = String(parsed.linkedinUrl).trim();
 
             const notes = Array.isArray(parsed.notes) ? parsed.notes : [];
 
@@ -385,8 +381,6 @@ RETURN ONLY JSON:
 
         const profile = {
             handle: handleId,
-            company: extractedCompany,
-            linkedinUrl: extractedLinkedinUrl,
             links: uniqueClean(Array.from(linkSet)),
             emails: uniqueClean(filteredEmails),
             phones: uniqueClean(filteredPhones),
@@ -395,6 +389,8 @@ RETURN ONLY JSON:
             notes: uniqueClean(Array.from(notesSet)),
             meta: {
                 analyzedAt: new Date().toISOString(),
+                lanceDocsRaw: allDocs.length,
+                lanceDocsDeduped: uniqueDocs.length,
                 totalMessages: messages.length,
                 totalContactMessages: contactMessages.length,
                 newestMessageAt: messages.filter(m => m.date).slice(-1)[0]?.date || null,
@@ -402,7 +398,8 @@ RETURN ONLY JSON:
                 llm: {
                     model: MODEL,
                     sampledMessages: sampled.length,
-                    chunks: Math.min(chunks.length, maxChunks),
+                    chunksTotal: chunks.length,
+                    chunksProcessed: chunkLimit,
                     failed: llmFailed
                 }
             }
