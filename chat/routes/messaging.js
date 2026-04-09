@@ -16,6 +16,109 @@ const {
     buildSearchHaystack,
     matchesQuery
 } = require("../utils/chat-utils");
+
+function conversationSearchHaystack(item) {
+    const c = item.contact;
+    const base = buildSearchHaystack(c, {
+        channel: item.channel,
+        source: item.source,
+        latestHandle: item.latestHandle
+    });
+    const notes = (c?.notes || []).map((n) => n.text).join(" ");
+    const sugs = (c?.pendingSuggestions || []).map((s) => s.content).join(" ");
+    const preview = item.lastMessage || "";
+    return `${base} ${notes} ${sugs} ${preview}`.toLowerCase();
+}
+
+const CONVERSATION_SORT_MODES = new Set([
+    "newest",
+    "oldest",
+    "freq",
+    "volume_in",
+    "volume_out",
+    "volume_total",
+    "recommendation"
+]);
+
+function normalizeConversationSort(raw) {
+    const s = String(raw || "newest").toLowerCase().trim();
+    return CONVERSATION_SORT_MODES.has(s) ? s : "newest";
+}
+
+function applyConversationSort(items, mode, nowMs) {
+    const tie = (a, b) =>
+        String(a.displayName || a.handle || "").localeCompare(String(b.displayName || b.handle || ""));
+    const safeTime = (x) => x.sortTime || 0;
+    const firstT = (x) => (x.firstTimestamp != null ? x.firstTimestamp : safeTime(x));
+    const volIn = (x) => x.countIn || 0;
+    const volOut = (x) => x.countOut || 0;
+    const vol = (x) => x.count || 0;
+
+    if (mode === "newest") {
+        items.sort((a, b) => safeTime(b) - safeTime(a) || tie(a, b));
+        return;
+    }
+    if (mode === "oldest") {
+        items.sort((a, b) => firstT(a) - firstT(b) || tie(a, b));
+        return;
+    }
+    if (mode === "volume_in") {
+        items.sort((a, b) => volIn(b) - volIn(a) || tie(a, b));
+        return;
+    }
+    if (mode === "volume_out") {
+        items.sort((a, b) => volOut(b) - volOut(a) || tie(a, b));
+        return;
+    }
+    if (mode === "volume_total") {
+        items.sort((a, b) => vol(b) - vol(a) || tie(a, b));
+        return;
+    }
+    if (mode === "freq") {
+        for (const it of items) {
+            const spanDays = Math.max(1, (nowMs - firstT(it)) / 86400000);
+            it._freq = vol(it) / spanDays;
+        }
+        items.sort((a, b) => (b._freq || 0) - (a._freq || 0) || tie(a, b));
+        return;
+    }
+    if (mode === "recommendation") {
+        const freqVals = items.map((it) => {
+            const spanDays = Math.max(1, (nowMs - firstT(it)) / 86400000);
+            return vol(it) / spanDays;
+        });
+        const recencyVals = items.map((x) => safeTime(x));
+        const volVals = items.map((x) => Math.log(1 + vol(x)));
+        const norm = (vals) => {
+            const min = Math.min(...vals);
+            const max = Math.max(...vals);
+            const sp = max - min || 1;
+            return vals.map((v) => (v - min) / sp);
+        };
+        const recencyN = norm(recencyVals);
+        const freqN = norm(freqVals);
+        const volN = norm(volVals);
+        for (let i = 0; i < items.length; i++) {
+            const score = 0.45 * recencyN[i] + 0.35 * freqN[i] + 0.2 * volN[i];
+            items[i]._recScore = score;
+            items[i]._rankTrace = {
+                recency: Math.round(recencyN[i] * 1000) / 1000,
+                frequency: Math.round(freqN[i] * 1000) / 1000,
+                volume: Math.round(volN[i] * 1000) / 1000,
+                score: Math.round(score * 1000) / 1000
+            };
+        }
+        items.sort((a, b) => (b._recScore || 0) - (a._recScore || 0) || tie(a, b));
+    }
+}
+
+function sanitizeConversationItemForApi(it, sort) {
+    const o = { ...it };
+    delete o._recScore;
+    delete o._freq;
+    if (sort !== "recommendation") delete o._rankTrace;
+    return o;
+}
 const { writeJson, readJsonBody, normalizeErrorText, parseJsonSafe } = require("../utils/server-utils");
 const {
     applyOpenClawWhatsAppGuard,
@@ -32,107 +135,128 @@ const { execFile, spawn } = require("child_process");
 const { readSettings, resolveWhatsAppSendTransport } = require("../settings-store");
 const messageStore = require("../message-store");
 const hatori = require("../hatori-client.js");
+const { checkOutboundAllowed, appendOutboundDenial } = require("../utils/outbound-policy.js");
 
 const CONVERSATION_STATS_TTL_MS = 60 * 1000;
 const CONVERSATION_PREVIEW_SAMPLE_ROWS = 200;
 const conversationStatsCache = new Map();
 
-// Local cache for conversations index
+// Local cache for conversations index (unsorted rows; sort applied per request)
 const conversationsIndexCache = {
     builtAtMs: 0,
     ttlMs: 5 * 1000,
-    buildPromise: null,
-    items: [],
+    rawItems: null
 };
 
-async function getConversationsIndexFresh(q = "") {
-    const now = Date.now();
+async function getConversationsIndexFresh(q = "", sortMode = "newest") {
+    const nowMs = Date.now();
+    const sort = normalizeConversationSort(sortMode);
     const { getUnifiedIndex } = require("../vector-store");
 
-    // Fetch unified stats from LanceDB
-    const statsIndex = await getUnifiedIndex();
-    const contacts = await contactStore.refresh();
+    let items;
 
-    // Map stats back to contacts or raw handles
-    const itemsMap = new Map();
+    const cacheOk =
+        !q &&
+        conversationsIndexCache.rawItems &&
+        nowMs - conversationsIndexCache.builtAtMs < conversationsIndexCache.ttlMs;
 
-    // 1. Process stats index to create base items
-    for (const [handle, stats] of statsIndex.entries()) {
-        const contact = contactStore.findContact(handle);
-        const key = contact?.id || handle;
+    if (cacheOk) {
+        items = conversationsIndexCache.rawItems.map((row) => ({ ...row }));
+    } else {
+        const statsIndex = await getUnifiedIndex();
+        const contacts = await contactStore.refresh();
+        const itemsMap = new Map();
 
-        if (!itemsMap.has(key)) {
-            itemsMap.set(key, {
-                key: key,
-                handle: handle, // Use handle from index as representative
-                latestHandle: stats.latestHandle || handle,
-                sortTime: stats.latestTimestamp,
-                channel: stats.latestChannel,
-                source: stats.latestSource,
-                contact: contact || null,
-                displayName: contact?.displayName || handle,
-                lastMessage: stats.latestMessage,
-                preview: stats.latestMessage,
-                previewDate: stats.latestTimestamp ? new Date(stats.latestTimestamp).toISOString() : null,
-                count: stats.count
-            });
-        } else {
-            // Merge stats if multiple handles map to same contact
-            const item = itemsMap.get(key);
-            item.count += stats.count;
-            if (stats.latestTimestamp > item.sortTime) {
-                item.sortTime = stats.latestTimestamp;
-                item.latestHandle = stats.latestHandle || handle;
-                item.channel = stats.latestChannel;
-                item.source = stats.latestSource;
-                item.lastMessage = stats.latestMessage;
-                item.preview = stats.latestMessage;
-                item.previewDate = stats.latestTimestamp ? new Date(stats.latestTimestamp).toISOString() : null;
+        for (const [handle, stats] of statsIndex.entries()) {
+            const contact = contactStore.findContact(handle);
+            const key = contact?.id || handle;
+
+            if (!itemsMap.has(key)) {
+                itemsMap.set(key, {
+                    key,
+                    handle,
+                    latestHandle: stats.latestHandle || handle,
+                    sortTime: stats.latestTimestamp,
+                    channel: stats.latestChannel,
+                    source: stats.latestSource,
+                    contact: contact || null,
+                    displayName: contact?.displayName || handle,
+                    lastMessage: stats.latestMessage,
+                    preview: stats.latestMessage,
+                    previewDate: stats.latestTimestamp
+                        ? new Date(stats.latestTimestamp).toISOString()
+                        : null,
+                    count: stats.count,
+                    countIn: stats.countIn || 0,
+                    countOut: stats.countOut || 0,
+                    firstTimestamp: stats.firstTimestamp != null ? stats.firstTimestamp : null
+                });
+            } else {
+                const item = itemsMap.get(key);
+                item.count += stats.count;
+                item.countIn = (item.countIn || 0) + (stats.countIn || 0);
+                item.countOut = (item.countOut || 0) + (stats.countOut || 0);
+                const fts = stats.firstTimestamp;
+                if (
+                    fts != null &&
+                    fts > 0 &&
+                    (item.firstTimestamp == null || fts < item.firstTimestamp)
+                ) {
+                    item.firstTimestamp = fts;
+                }
+                if (stats.latestTimestamp > item.sortTime) {
+                    item.sortTime = stats.latestTimestamp;
+                    item.latestHandle = stats.latestHandle || handle;
+                    item.channel = stats.latestChannel;
+                    item.source = stats.latestSource;
+                    item.lastMessage = stats.latestMessage;
+                    item.preview = stats.latestMessage;
+                    item.previewDate = stats.latestTimestamp
+                        ? new Date(stats.latestTimestamp).toISOString()
+                        : null;
+                }
             }
         }
-    }
 
-    // 2. Add contacts that don't have messages yet but exist in contact store
-    contacts.forEach(c => {
-        if (!itemsMap.has(c.id)) {
-            itemsMap.set(c.id, {
-                key: c.id,
-                handle: c.handle,
-                latestHandle: c.handle,
-                sortTime: safeDateMs(c.lastContacted),
-                channel: c.lastChannel || inferChannelFromHandle(c.handle),
-                source: inferSourceFromChannel(c.lastChannel || inferChannelFromHandle(c.handle)),
-                contact: c,
-                displayName: c.displayName,
-                lastMessage: "No recent messages",
-                preview: "No recent messages",
-                previewDate: c.lastContacted,
-                count: 0
-            });
-        }
-    });
-
-    let items = Array.from(itemsMap.values());
-
-    // 3. Filter if search active
-    if (q) {
-        const query = q.toLowerCase();
-        items = items.filter(item => {
-            return (item.displayName || "").toLowerCase().includes(query) ||
-                (item.handle || "").toLowerCase().includes(query) ||
-                (item.lastMessage || "").toLowerCase().includes(query);
+        contacts.forEach((c) => {
+            if (!itemsMap.has(c.id)) {
+                itemsMap.set(c.id, {
+                    key: c.id,
+                    handle: c.handle,
+                    latestHandle: c.handle,
+                    sortTime: safeDateMs(c.lastContacted),
+                    channel: c.lastChannel || inferChannelFromHandle(c.handle),
+                    source: inferSourceFromChannel(
+                        c.lastChannel || inferChannelFromHandle(c.handle)
+                    ),
+                    contact: c,
+                    displayName: c.displayName,
+                    lastMessage: "No recent messages",
+                    preview: "No recent messages",
+                    previewDate: c.lastContacted,
+                    count: 0,
+                    countIn: 0,
+                    countOut: 0,
+                    firstTimestamp: null
+                });
+            }
         });
+
+        items = Array.from(itemsMap.values());
+
+        if (!q) {
+            conversationsIndexCache.rawItems = items.map((row) => ({ ...row }));
+            conversationsIndexCache.builtAtMs = nowMs;
+        }
     }
 
-    // 4. Sort by time
-    items.sort((a, b) => (b.sortTime || 0) - (a.sortTime || 0));
-
-    if (!q) {
-        conversationsIndexCache.items = items;
-        conversationsIndexCache.builtAtMs = Date.now();
+    if (q) {
+        items = items.filter((item) => matchesQuery(conversationSearchHaystack(item), q));
     }
 
-    return { items };
+    applyConversationSort(items, sort, nowMs);
+
+    return { items, sort };
 }
 
 
@@ -141,15 +265,26 @@ async function serveConversations(req, res, url) {
     const limit = parseInt(url.searchParams.get("limit")) || 20;
     const offset = parseInt(url.searchParams.get("offset")) || 0;
     const q = (url.searchParams.get("q") || url.searchParams.get("query") || "").toString();
+    const sortRaw = (url.searchParams.get("sort") || url.searchParams.get("rank") || "newest").toString();
 
     try {
-        const { items } = await getConversationsIndexFresh(q);
-        const page = items.slice(offset, offset + limit);
+        const sort = normalizeConversationSort(sortRaw);
+        const { items } = await getConversationsIndexFresh(q, sort);
+        const page = items
+            .slice(offset, offset + limit)
+            .map((it) => sanitizeConversationItemForApi(it, sort));
 
         writeJson(res, 200, {
             contacts: page,
             hasMore: items.length > offset + limit,
             total: items.length,
+            meta: {
+                sort,
+                sortRequested: sortRaw,
+                sortValid: CONVERSATION_SORT_MODES.has(
+                    String(sortRaw || "").toLowerCase().trim()
+                )
+            }
         });
     } catch (err) {
         console.error("Error loading conversations:", err);
@@ -267,8 +402,9 @@ async function serveSuggest(req, res) {
         const suggestion = typeof suggestionResult === 'string' ? suggestionResult : (suggestionResult.suggestion || "");
         const explanation = suggestionResult.explanation || "";
         const hatori_id = suggestionResult.hatori_id || null;
+        const contextMeta = suggestionResult.contextMeta || null;
 
-        writeJson(res, 200, { suggestion, explanation, hatori_id });
+        writeJson(res, 200, { suggestion, explanation, hatori_id, contextMeta });
     } catch (e) {
         writeJson(res, 500, { error: e.message || "Suggest failed" });
     }
@@ -310,6 +446,23 @@ async function serveSendMessage(req, res, channel) {
 
         if (!handle || !text) {
             writeJson(res, 400, { error: "Missing handle or text" });
+            return;
+        }
+
+        const gate = checkOutboundAllowed(channel, handle);
+        if (!gate.allowed) {
+            appendOutboundDenial({
+                channel,
+                recipient: handle,
+                code: gate.code,
+                reason: gate.reason
+            });
+            writeJson(res, 403, {
+                error: gate.reason,
+                code: gate.code,
+                hint: gate.hint,
+                policy: "inbound_verified_required"
+            });
             return;
         }
 
@@ -446,6 +599,23 @@ async function serveSendWhatsApp(req, res) {
             return;
         }
 
+        const waGate = checkOutboundAllowed("whatsapp", recipientRaw);
+        if (!waGate.allowed) {
+            appendOutboundDenial({
+                channel: "whatsapp",
+                recipient: recipientRaw,
+                code: waGate.code,
+                reason: waGate.reason
+            });
+            writeJson(res, 403, {
+                error: waGate.reason,
+                code: waGate.code,
+                hint: waGate.hint,
+                policy: "inbound_verified_required"
+            });
+            return;
+        }
+
         const { sendWhatsAppViaOpenClawCli } = require("../utils/whatsapp-utils");
         const result = await sendWhatsAppViaOpenClawCli({ recipient, text, dryRun });
         await contactStore.clearDraft(recipientRaw);
@@ -453,7 +623,11 @@ async function serveSendWhatsApp(req, res) {
         return;
     } catch (e) {
         console.error("[DEBUG] OpenClaw Transport threw:", e.message, "\n---", e.stderr || "", "\n---", e.stdout || "");
-        writeJson(res, 500, { error: e.message || "WhatsApp send failed." });
+        const hint = e.hint || null;
+        writeJson(res, 500, {
+            error: e.message || "WhatsApp send failed.",
+            ...(hint ? { hint } : {})
+        });
     }
 }
 
@@ -488,6 +662,11 @@ module.exports = {
     serveHatoriOutcome,
     invalidateConversationsCache: () => {
         conversationsIndexCache.builtAtMs = 0;
+        conversationsIndexCache.rawItems = null;
         conversationStatsCache.clear();
+        try {
+            const { invalidateUnifiedIndexCache } = require("../vector-store.js");
+            invalidateUnifiedIndexCache();
+        } catch (_) { /* optional during tests */ }
     }
 };

@@ -10,47 +10,49 @@
 *   **zsh quoting:** In `zsh`, unquoted `{reply}` in commands can trigger brace-expansion parse errors. When using `gh issue create -t '{reply}: ...'` always wrap the title in **single quotes** (or escape braces).
 
 ## 2. The Single Source of Truth (SSOT)
-The **GitHub Project Board** is the ONLY source of truth for what is being worked on, and **all issues for `{reply}` live in the SSOT repo**:
+For **`{reply}` product work**, the **GitHub Project** and **issues** live in this repository:
 
-*   Board: https://github.com/users/moldovancsaba/projects/1
-*   SSOT Issues Repo: `moldovancsaba/mvp-factory-control`
+*   **Board (Project #7):** https://github.com/users/moldovancsaba/projects/7  
+*   **Issues repo:** `moldovancsaba/reply`
 
-*   **Rule:** If it's not on the board, it doesn't exist.
-*   **Rule:** The **Status Column** defines the state (Backlog, Ready, In Progress, Done). Do NOT put status in titles (e.g., `[Backlog] Issue Title` is ILLEGAL).
-*   **Rule:** Issue title convention for Reply: `{reply}: <short description>` (no status/prefix noise).
-*   **Rule:** Documentation (`HANDOVER.md`) must be updated *immediately* after a task is completed to match the board.
-*   **Rule:** Do **NOT** create/manage issues in product repositories (e.g. `moldovancsaba/reply`). Issues live in the SSOT repo (currently `moldovancsaba/mvp-factory-control`) and are tracked via the Project Board.
-*   **Rule:** Issues are disabled in `moldovancsaba/reply` to prevent accidental drift away from SSOT.
+Cross-portfolio governance and other products may still use [`moldovancsaba/mvp-factory-control`](https://github.com/moldovancsaba/mvp-factory-control) and [MVP Factory Board (Project #1)](https://github.com/users/moldovancsaba/projects/1); that is **not** where new `{reply}` tasks are opened.
+
+*   **Rule:** If it's not on **Project #7**, it isn't tracked for `{reply}` delivery.
+*   **Rule:** The **Status** field on the project defines workflow stage. Do NOT put status in titles (e.g. `[Backlog] Issue Title` is ILLEGAL).
+*   **Rule:** Issue title convention: `{reply}: <short description>` (no status/prefix noise).
+*   **Rule:** Documentation (`HANDOVER.md`) should be updated when a task is completed, in line with the board.
+*   **Rule:** Create and manage **`{reply}` issues in `moldovancsaba/reply`** and add them to **Project #7** immediately.
+*   **Rule:** Do not track `{reply}` tasks only in local `IDEABANK.md`, `ROADMAP.md`, `TASKLIST.md`, or similar files.
 
 ## 3. Mandatory Issue Recording & Management SOP
-Use this exact process for every `{reply}` task/idea/bug.
+Use this process for every `{reply}` task/idea/bug.
 
-1. **Create issue in SSOT repo only** (`moldovancsaba/mvp-factory-control`).
+1. **Create issue in** `moldovancsaba/reply`.
 2. **Use title format**: `{reply}: <short description>`.
-3. **Add issue to Project 1 immediately**: https://github.com/users/moldovancsaba/projects/1
-4. **Set required board fields**: `Product=reply`, correct `Type`, `Priority`, `Status`.
-5. **When work starts**: assign owner/agent and set `Status=In Progress`.
-6. **When work ends**: comment with what changed + verification + user test steps, then set `Status=Done` and close issue.
-7. **Verify board membership explicitly** before ending the task.
+3. **Add issue to Project #7 immediately:** https://github.com/users/moldovancsaba/projects/7
+4. **Set project fields** as applicable (**Status** required). Use **Labels** (or Milestone) for type/priority if the project has no separate custom fields.
+5. **When work starts:** assign owner and set `Status` to *In Progress* (or your board’s equivalent).
+6. **When work ends:** comment with what changed + verification + user test steps; set `Status=Done` (or equivalent) and close the issue.
+7. **Verify** the issue appears on Project #7 before ending the task.
 
 ### Mandatory CLI sequence (safe quoting)
 ```bash
 # 1) Create issue (single-quote title to avoid zsh brace expansion)
-gh issue create --repo moldovancsaba/mvp-factory-control \
+gh issue create --repo moldovancsaba/reply \
   --title '{reply}: <short description>' \
   --body-file /tmp/issue.md
 
-# 2) Add to Project 1 (MANDATORY)
-gh project item-add 1 --owner moldovancsaba --url <issue-url>
+# 2) Add to Project #7 (MANDATORY)
+gh project item-add 7 --owner moldovancsaba --url <issue-url>
 
 # 3) Verify item is on board (use high limit; default 30 can hide items)
-gh project item-list 1 --owner moldovancsaba -L 500 --format json
+gh project item-list 7 --owner moldovancsaba -L 500 --format json
 ```
 
 ### Prohibited
-- Do not create or manage issues in `moldovancsaba/reply`.
-- Do not track tasks in local `IDEABANK.md`, `ROADMAP.md`, `TASKLIST.md`, or similar files.
-- Do not leave an issue only in GitHub Issues without adding it to Project 1.
+- Do not open **new** `{reply}`-scoped work only in `mvp-factory-control` without also tracking it on **Project #7** in the `reply` repo (canonical path is **reply** + **Project #7**).
+- Do not track tasks in local `IDEABANK.md`, `ROADMAP.md`, `TASKLIST.md`, or similar files as SSOT.
+- Do not leave an issue out of Project #7 after creation.
 
 ## 4. Issue Structure (What good looks like)
 Every issue on the board must follow this structure to be "Ready":
@@ -68,7 +70,7 @@ Accurate metadata is critical for filtering and finding work.
 | :--- | :--- | :--- |
 | **Status** | The current workflow stage. | **Backlog**: Unsorted ideas. **Ready**: Fully defined & unblocked. **In Progress**: Active now. **Done**: Verified & Merged. |
 | **Agent** | Who is responsible? | Assign to **Agnes** (or relevant agent) when moving to "Ready". |
-| **Product** | Which app is this for? | Select `reply`, `amanoba`, etc. Strict separation. |
+| **Product** | (On MVP Factory board only.) | For `{reply}` work in **this** repo, the whole project **is** `{reply}` — use **Labels** if you need product tags elsewhere. |
 | **Type** | The nature of work. | `Feature` (New value), `Bug` (Fix), `Refactor` (Cleanup), `Docs` (Knowledge). |
 | **Priority** | Urgency. | `P0` (Critical/Blocker), `P1` (High), `P2` (Normal). |
 | **Release** | version/milestone. | Text field. Use semantic versioning (e.g., `v0.2.0`). |
@@ -82,27 +84,26 @@ Accurate metadata is critical for filtering and finding work.
 5.  **Close:** Move to **Done**, set **DoD** to `Passed`.
 6.  **Document:** Update `HANDOVER.md` and `RELEASE_NOTES.md`.
 
-## Appendix: SSOT CLI Commands
-**CRITICAL:** The default GitHub CLI `gh project item-list` does not expose custom board fields (like `product` or `status`) natively. To avoid JSON parse errors, always query the SSOT repo directly using `gh issue list`.
+## Appendix: SSOT CLI Commands (`{reply}`)
+**CRITICAL:** `gh project item-list` may not expose every custom field in JSON. Use `gh issue list` against **`moldovancsaba/reply`** for reliable triage.
 
 ```bash
-# 1) Find YOUR currently assigned SSOT issues
-gh issue list --repo moldovancsaba/mvp-factory-control --state open --assignee "@me" --search "{reply}" --limit 10
+# 1) Find YOUR currently assigned issues
+gh issue list --repo moldovancsaba/reply --state open --assignee "@me" --search "{reply}" --limit 20
 
-# 2) View all open {reply} issues
-gh issue list --repo moldovancsaba/mvp-factory-control --state open --search "{reply}" --limit 50 --json number,title,state,assignees
+# 2) View recent open issues
+gh issue list --repo moldovancsaba/reply --state open --search "{reply}" --limit 50 --json number,title,state,assignees
 
-# 3) View details of a specific issue number
-gh issue view <issue-number> --repo moldovancsaba/mvp-factory-control
+# 3) View a specific issue
+gh issue view <issue-number> --repo moldovancsaba/reply
 ```
 
-## Current Security Workstream Tracking (2026-02-18)
-- Active issues:
-  - `mvp-factory-control#199` (`{reply}: Adopt OpenClaw security policy + approvals baseline`)
-  - `mvp-factory-control#202` (`{reply}: Implement omnichannel routing + human-gated NBA orchestration`)
-- Mandatory verification for this workstream:
+## Historical note
+Older `{reply}` issues may still reference `mvp-factory-control#…` in docs and comments. Prefer **new** issues in **`moldovancsaba/reply`** on [Project #7](https://github.com/users/moldovancsaba/projects/7). Migration helper: [`GITHUB_REPLY_PROJECT_MIGRATION.md`](GITHUB_REPLY_PROJECT_MIGRATION.md).
+
+## Security verification (recurring)
 ```bash
-cd /Users/moldovancsaba/Projects/reply
-/opt/homebrew/bin/node chat/security-audit.js
-/opt/homebrew/bin/node chat/security-audit.js --fix
+cd /path/to/reply
+node chat/security-audit.js
+node chat/security-audit.js --fix
 ```

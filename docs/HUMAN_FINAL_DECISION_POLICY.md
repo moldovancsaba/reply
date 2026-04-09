@@ -66,5 +66,5 @@ Any KYC/intelligence fact must store:
 
 ## SSOT linkage
 - Policy changes are tracked in SSOT only:
-  - Board: <https://github.com/users/moldovancsaba/projects/1>
-  - Issues repo: `moldovancsaba/mvp-factory-control`
+  - `{reply}` board: <https://github.com/users/moldovancsaba/projects/7>
+  - `{reply}` issues: `moldovancsaba/reply`

@@ -4,6 +4,7 @@
  */
 
 import { fetchMessages, sendMessage, reportHatoriOutcome } from './api.js';
+import { APP_DISPLAY_NAME } from './branding.js';
 import { appendLinkedText, createPlatformIcon, resolvePlatformTarget } from './platform-icons.js';
 import { formatPleasant } from './message-formatter.js';
 
@@ -77,7 +78,7 @@ function setChannelPolicyHint(channel) {
     const v = String(channel || '').toLowerCase();
     if (DRAFT_ONLY_CHANNELS.has(v)) {
         hint.style.display = 'block';
-        hint.innerHTML = `<strong>Draft-only:</strong> ${channelLabel(v)} sending is disabled in {reply}. Copy/paste and send manually in the channel app.`;
+        hint.innerHTML = `<strong>Draft-only:</strong> ${channelLabel(v)} sending is disabled in ${APP_DISPLAY_NAME}. Copy/paste and send manually in the channel app.`;
         return;
     }
 
@@ -351,7 +352,7 @@ export async function handleSendMessage() {
         if (!SEND_CAPABLE_CHANNELS.has(channel)) {
             const copied = await copyToClipboard(text);
             const copyHint = copied ? '\n\nDraft copied to clipboard.' : '';
-            alert(`${channelLabel(channel)} is draft-only in {reply}.${copyHint}`);
+            alert(`${channelLabel(channel)} is draft-only in ${APP_DISPLAY_NAME}.${copyHint}`);
             return;
         }
 

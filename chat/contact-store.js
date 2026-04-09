@@ -1,5 +1,6 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
 
 const DB_PATH = process.env.REPLY_CONTACTS_DB_PATH || path.join(__dirname, 'data', 'contacts.db');
 
@@ -7,7 +8,18 @@ class ContactStore {
     constructor() {
         this._contacts = [];
         this._lastMtimeMs = null;
+        try {
+            const dir = path.dirname(DB_PATH);
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
+        } catch (e) {
+            console.error('[contact-store] Could not create data directory:', e.message);
+        }
         this._db = new sqlite3.Database(DB_PATH);
+        this._db.on('error', (err) => {
+            console.error('[contact-store] SQLite error:', err.message);
+        });
         this._readyPromise = this._initDb();
     }
 

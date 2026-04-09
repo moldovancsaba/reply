@@ -2,11 +2,11 @@
 
 ## Start / Stop
 1.  Navigate to the `{reply}` folder in Finder.
-2.  Double-click **`Launch Reply.command`**.
-3.  A terminal window will open (this is the local server).
-4.  Your browser opens to `http://localhost:3000` (or `http://localhost:3001` if port 3000 is in use — use the URL printed in the terminal).
+2.  Double-click **`Launch Reply.command`** (foreground dev-style run from `chat/`), **or** install the background hub with `make run` from the repo root (see [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md)).
+3.  A terminal window will open when using the `.command` launcher.
+4.  The UI is usually `http://localhost:45311/` (or the next port if `45311` is busy — use the URL printed in the terminal or check `~/Library/Logs/Reply/hub.log` when using LaunchAgent).
 
-To stop: close the terminal window.
+To stop: close the terminal window for the `.command` flow, or `make stop` / `launchctl unload` for the LaunchAgent flow (details in [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md)).
 
 ---
 
@@ -70,7 +70,7 @@ If Gmail is connected, selecting **Email** in the composer sends via the Gmail A
 *   **Prerequisites:** WhatsApp Desktop installed + logged in **and running**, and macOS **Accessibility** permission granted to the process running the server (System Settings → Privacy & Security → Accessibility).
 *   **Optional:** Set `WHATSAPP_APP_NAME` if your app name is not `WhatsApp` (e.g. `WhatsApp Beta`).
 *   **Behavior:** Best-effort UI automation; if sending fails, {reply} will show an error and offer a clipboard fallback.
-*   **Status:** Still flaky on some WhatsApp UI states; treat as “best effort” until `mvp-factory-control#196` is closed.
+*   **Status:** Still flaky on some WhatsApp UI states; treat as “best effort” (track fixes in [`moldovancsaba/reply`](https://github.com/moldovancsaba/reply) issues / [Project #7](https://github.com/users/moldovancsaba/projects/7)).
 
 ---
 

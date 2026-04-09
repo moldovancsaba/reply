@@ -18,6 +18,10 @@ async function _request(url, options = {}) {
             try {
                 const data = await res.json().catch(() => ({}));
                 errorMsg = data.error || data.message || errorMsg;
+                const hint = data.hint && String(data.hint).trim();
+                if (hint) {
+                    errorMsg = `${errorMsg}\n\n${hint}`;
+                }
             } catch (e) { }
             UI.showToast(errorMsg, 'error');
             throw new Error(errorMsg);
@@ -32,8 +36,16 @@ async function _request(url, options = {}) {
     }
 }
 
-export function buildSecurityHeaders() {
-    const headers = { 'Content-Type': 'application/json', 'X-Reply-Human-Approval': 'confirmed' };
+/**
+ * @param {{ includeJsonContentType?: boolean }} [options] - Set includeJsonContentType: false for GET requests (avoids odd browser behavior with JSON Content-Type on no-body requests).
+ */
+export function buildSecurityHeaders(options = {}) {
+    const opts = options && typeof options === 'object' ? options : {};
+    const includeJsonContentType = opts.includeJsonContentType !== false;
+    const headers = { 'X-Reply-Human-Approval': 'confirmed' };
+    if (includeJsonContentType) {
+        headers['Content-Type'] = 'application/json';
+    }
     const token = window.REPLY_OPERATOR_TOKEN || (window.localStorage && window.localStorage.getItem('replyOperatorToken'));
     if (token) headers['X-Reply-Operator-Token'] = token;
     return headers;
@@ -66,12 +78,15 @@ function normalizeErrorText(raw, fallback = '') {
  * @param {string} query - Optional search query
  * @returns {Promise<{contacts: Array, hasMore: boolean, total: number}>}
  */
-export async function fetchConversations(offset = 0, limit = 20, query = '') {
+export async function fetchConversations(offset = 0, limit = 20, query = '', sort = 'newest') {
     const q = (query || '').toString().trim();
-    const url = q
-        ? `${API_BASE}/api/conversations?offset=${offset}&limit=${limit}&q=${encodeURIComponent(q)}`
-        : `${API_BASE}/api/conversations?offset=${offset}&limit=${limit}`;
-    const res = await _request(url, { headers: buildSecurityHeaders(), _silent: true });
+    const s = (sort || 'newest').toString().trim() || 'newest';
+    const params = new URLSearchParams({ offset: String(offset), limit: String(limit), sort: s });
+    if (q) params.set('q', q);
+    const res = await _request(`${API_BASE}/api/conversations?${params.toString()}`, {
+        headers: buildSecurityHeaders(),
+        _silent: true
+    });
     return await res.json();
 }
 

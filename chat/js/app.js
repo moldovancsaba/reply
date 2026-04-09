@@ -3,7 +3,16 @@
  * Initializes the application and sets up event listeners
  */
 
-import { loadConversations, selectContact, setConversationsQuery } from './contacts.js';
+import {
+  loadConversations,
+  selectContact,
+  setConversationsQuery,
+  setConversationsSort,
+  applyConversationSortOnly,
+  normalizeConversationSort,
+  isValidConversationSortMode,
+  CONVERSATION_SORT_STORAGE_KEY,
+} from './contacts.js';
 import { handleSendMessage } from './messages.js';
 import { getSettings, buildSecurityHeaders, reportHatoriOutcome, reportDraftReplacement } from './api.js';
 import './dashboard.js?v=2.1';
@@ -22,7 +31,7 @@ let speechBaseText = '';
 let speechFinalText = '';
 
 async function init() {
-  console.log('🚀 {reply} initializing...');
+  console.log('🚀 Reply initializing...');
 
   setupEventListeners();
 
@@ -34,9 +43,31 @@ async function init() {
   }
 
   await loadConversations();
-  await selectContact(null); // dashboard
 
-  console.log('✅ {reply} ready!');
+  let pendingHandle = null;
+  try {
+    pendingHandle = sessionStorage.getItem('reply_open_handle');
+    if (pendingHandle) sessionStorage.removeItem('reply_open_handle');
+  } catch {
+    pendingHandle = null;
+  }
+
+  if (pendingHandle) {
+    await selectContact(pendingHandle);
+  } else {
+    await selectContact(null);
+  }
+
+  try {
+    if (sessionStorage.getItem('reply_open_training') === '1') {
+      sessionStorage.removeItem('reply_open_training');
+      openTrainingPage();
+    }
+  } catch {
+    /* ignore */
+  }
+
+  console.log('✅ Reply ready!');
 }
 
 function setupEventListeners() {
@@ -229,6 +260,34 @@ function setupEventListeners() {
         run();
         contactSearch.blur();
       }
+    });
+  }
+
+  const conversationSort = document.getElementById('conversation-sort');
+  if (conversationSort) {
+    try {
+      const saved = window.localStorage && window.localStorage.getItem(CONVERSATION_SORT_STORAGE_KEY);
+      if (saved && isValidConversationSortMode(saved)) {
+        const v = normalizeConversationSort(saved);
+        if ([...conversationSort.options].some((o) => o.value === v)) {
+          conversationSort.value = v;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    applyConversationSortOnly(conversationSort.value);
+    conversationSort.addEventListener('change', () => {
+      try {
+        if (window.localStorage) {
+          window.localStorage.setItem(CONVERSATION_SORT_STORAGE_KEY, conversationSort.value);
+        }
+      } catch {
+        /* ignore */
+      }
+      setConversationsSort(conversationSort.value).catch((e) =>
+        console.error('Sort reload failed:', e)
+      );
     });
   }
 

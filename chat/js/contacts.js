@@ -5,6 +5,15 @@
 
 import { fetchConversations } from './api.js';
 import { createPlatformIcon, resolvePlatformTarget } from './platform-icons.js';
+import { APP_DISPLAY_NAME } from './branding.js';
+
+/** Strip `{name}` wrapper used in some contact labels so the list doesn’t look like a template bug. */
+export function formatContactLabel(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return s;
+    const m = s.match(/^\{([^}]{1,128})\}$/);
+    return m ? m[1].trim() : s;
+}
 
 // State
 let contactOffset = 0;
@@ -12,6 +21,8 @@ let hasMoreContacts = true;
 const CONTACT_LIMIT = 20;
 export let conversations = []; // Global cache for contacts
 let conversationsQuery = '';
+/** @type {'newest'|'oldest'|'freq'|'volume_in'|'volume_out'|'volume_total'|'recommendation'} */
+let conversationsSort = 'newest';
 let contactObserver = null;
 let isLoadingContacts = false;
 
@@ -29,6 +40,42 @@ function formatBridgePolicyBadge(policy) {
  * Load conversations/contacts with pagination
  * @param {boolean} append - Whether to append to existing list or replace
  */
+const SORT_OPTIONS = new Set([
+    'newest',
+    'oldest',
+    'freq',
+    'volume_in',
+    'volume_out',
+    'volume_total',
+    'recommendation'
+]);
+
+/** LocalStorage key shared by dashboard and settings sidebars. */
+export const CONVERSATION_SORT_STORAGE_KEY = 'replyConversationsSort';
+
+export function normalizeConversationSort(mode) {
+    const m = String(mode || 'newest').toLowerCase().trim();
+    return SORT_OPTIONS.has(m) ? m : 'newest';
+}
+
+export function isValidConversationSortMode(mode) {
+    const m = String(mode || '').toLowerCase().trim();
+    return SORT_OPTIONS.has(m);
+}
+
+/** Update in-memory sort only (e.g. before the first `loadConversations`). */
+export function applyConversationSortOnly(mode) {
+    conversationsSort = normalizeConversationSort(mode);
+}
+
+/**
+ * Change list ordering (see /api/conversations?sort=…)
+ */
+export function setConversationsSort(mode) {
+    conversationsSort = normalizeConversationSort(mode);
+    return loadConversations(false);
+}
+
 export async function loadConversations(append = false) {
     const contactListEl = document.getElementById('contact-list');
     if (!contactListEl) return;
@@ -44,7 +91,7 @@ export async function loadConversations(append = false) {
         }
 
         // Fetch contacts from server
-        const data = await fetchConversations(contactOffset, CONTACT_LIMIT, conversationsQuery);
+        const data = await fetchConversations(contactOffset, CONTACT_LIMIT, conversationsQuery, conversationsSort);
         if (data?.meta?.mode === 'fallback') {
             console.warn('Contacts API in fallback mode:', data.meta);
         }
@@ -89,7 +136,7 @@ export async function loadConversations(append = false) {
             const name = document.createElement('div');
             name.className = 'contact-name';
             const channel = contact.lastChannel || contact.channel || contact.lastSource || contact.source || '';
-            const displayName = contact.displayName || contact.name || contact.handle;
+            const displayName = formatContactLabel(contact.displayName || contact.name || contact.handle);
             name.textContent = displayName;
 
             // Optional: Time would go here if available
@@ -126,8 +173,10 @@ export async function loadConversations(append = false) {
             // Only show preview if it exists and isn't the default placeholder
             if (contact.lastMessage && contact.lastMessage !== 'Click to see history') {
                 preview.textContent = contact.lastMessage;
+                preview.classList.remove('contact-preview--empty');
             } else {
                 preview.textContent = 'No recent messages';
+                preview.classList.add('contact-preview--empty');
             }
 
             info.appendChild(preview);
@@ -242,7 +291,7 @@ export async function selectContact(handle) {
         if (body) body.classList.add('mode-dashboard');
 
         // Show dashboard
-        activeNameEl.textContent = '{reply}';
+        activeNameEl.textContent = APP_DISPLAY_NAME;
         dashboardEl.style.display = 'grid';
         messagesEl.style.display = 'none';
         inputArea.style.display = 'none';
@@ -293,7 +342,7 @@ export async function selectContact(handle) {
         conversations.find(c => String(c.latestHandle || '') === String(handle)) ||
         null;
     if (contact) {
-        activeNameEl.textContent = contact.displayName || contact.name || contact.handle;
+        activeNameEl.textContent = formatContactLabel(contact.displayName || contact.name || contact.handle);
         if (typeof window.setSelectedChannel === 'function') {
             window.setSelectedChannel(contact.channel || (handle.includes('@') ? 'email' : 'imessage'));
         }

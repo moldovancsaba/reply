@@ -45,7 +45,12 @@ function buildOpenClawWhatsAppHint(rawErrorText, execErrorText, shortErrorText) 
         return "Install OpenClaw CLI or set OPENCLAW_BIN to the openclaw executable path.";
     }
     if (s.includes("no active whatsapp web listener")) {
-        return "Start OpenClaw gateway and link WhatsApp first (example: `openclaw channels login --channel whatsapp --account default`).";
+        const acct = openClawWhatsAppAccount();
+        return (
+            "1) Start the gateway: openclaw gateway (leave it running)\n" +
+            `2) Link WhatsApp: openclaw channels login --channel whatsapp --account ${acct}\n` +
+            "3) Retry send from Reply."
+        );
     }
     if (s.includes("gateway is running") || s.includes("start the gateway")) {
         return "Start OpenClaw gateway, then retry (example: `openclaw gateway`).";
@@ -73,13 +78,19 @@ function resolveWhatsAppSendTransport(rawTransport) {
     return "desktop";
 }
 
+function openClawWhatsAppAccount() {
+    const a = String(process.env.REPLY_WHATSAPP_OPENCLAW_ACCOUNT || "default").trim();
+    return a || "default";
+}
+
 function sendWhatsAppViaOpenClawCli({ recipient, text, dryRun = false }) {
     const bin = resolveOpenClawBinary();
+    const account = openClawWhatsAppAccount();
     const args = [
         "message",
         "send",
         "--channel", "whatsapp",
-        "--account", "default",
+        "--account", account,
         "--target", recipient,
         "--message", text,
         "--json"
@@ -118,5 +129,6 @@ module.exports = {
     resolveOpenClawBinary,
     buildOpenClawWhatsAppHint,
     resolveWhatsAppSendTransport,
+    openClawWhatsAppAccount,
     sendWhatsAppViaOpenClawCli
 };

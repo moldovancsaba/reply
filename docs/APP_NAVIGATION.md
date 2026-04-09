@@ -2,6 +2,8 @@
 
 This document answers: **“Where is X in the UI?”** and **“Where is X in the code?”**
 
+**Running the hub on this Mac** (LaunchAgent, default port, logs, Ollama, iMessage database permissions): [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md).
+
 ## UI Navigation
 
 ### Dashboard
@@ -53,7 +55,7 @@ This document answers: **“Where is X in the UI?”** and **“Where is X in th
 * `chat/background-worker.js` — unified poll loop (iMessage/WhatsApp + optional mail) + intelligence pipeline.
 
 ## SSOT (Work Tracking)
-* Project Board: https://github.com/users/moldovancsaba/projects/1
-* Issues live in: `moldovancsaba/mvp-factory-control`
-* Do not create/manage issues in product repos (e.g. `moldovancsaba/reply`).
-* Mandatory: every new `{reply}` issue must be added to Project 1 immediately after creation.
+* **`{reply}` project board:** https://github.com/users/moldovancsaba/projects/7
+* **Issues:** `moldovancsaba/reply`
+* Mandatory: every new `{reply}` issue must be added to **Project #7** immediately after creation.
+* Other products / portfolio items may still use [MVP Factory Project #1](https://github.com/users/moldovancsaba/projects/1) and `mvp-factory-control`.

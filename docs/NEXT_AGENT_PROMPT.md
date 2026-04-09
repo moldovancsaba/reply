@@ -23,8 +23,8 @@ You are a Developer Agent working on `{reply}`. Follow these operating principle
 4. **Evidence & documentation**: Provide what/where/how/results. Update [docs/HANDOVER.md](./docs/HANDOVER.md) and [docs/RELEASE_NOTES.md](./docs/RELEASE_NOTES.md). Update the project board with correct status + concise notes.
 
 ### Board Discipline (SSOT)
-- **Board URL**: https://github.com/users/moldovancsaba/projects/1
-- **Issues Repo**: `moldovancsaba/mvp-factory-control`
+- **Board URL (`{reply}`)**: https://github.com/users/moldovancsaba/projects/7
+- **Issues Repo**: `moldovancsaba/reply`
 - **Action**: Move selected card to “In Progress” when starting. Move to “Done” with validation evidence.
 
 ---
@@ -65,5 +65,5 @@ You are a Developer Agent taking over the {reply} project.
 2. Verify the current state by running: cd ./chat && npm test
 3. Objective: Continue post-v0.4.5 stabilization and begin Issue #211 (server.js decomposition).
 4. Follow the "Developer Agent Guidelines" and "70 Protocol" in ./docs/NEXT_AGENT_PROMPT.md.
-5. Project Board: https://github.com/users/moldovancsaba/projects/1 (Product={reply}).
+5. Project Board: https://github.com/users/moldovancsaba/projects/7 (`{reply}` project).
 ```

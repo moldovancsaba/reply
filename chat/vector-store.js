@@ -267,17 +267,26 @@ async function getHistory(pathPrefix) {
  * @param {number} limit 
  */
 async function getSnippets(identifier, limit = 5) {
-    const prefix = identifier.includes("@") ? `mailto:${identifier}` : `imessage://${identifier}`;
-    const docs = await getHistory(prefix);
-    // Sort by date (extracted from text "[Date] Me: ...") and take the most recent
-    return docs
-        .map(d => ({
+    const { rankDocumentsByFreshnessAndRelevance, freshnessBucket } = require("./utils/context-freshness.js");
+    const prefixes = identifier.includes("@")
+        ? [`mailto:${identifier}`]
+        : [`imessage://${identifier}`, `whatsapp://${identifier}`];
+    const batches = await Promise.all(prefixes.map((p) => getHistory(p)));
+    const docs = dedupeDocsByStableKey(batches.flat());
+    const dated = docs
+        .map((d) => ({
             ...d,
             date: d.text.match(/\[(.*?)\]/)?.[1] || "Unknown"
         }))
-        .filter(d => d.date !== "Unknown")
-        .sort((a, b) => new Date(b.date) - new Date(a.date))
-        .slice(0, limit);
+        .filter((d) => d.date !== "Unknown");
+    const withRank = dated.map((d, i) => ({ ...d, _rank: 1 / (1 + i) }));
+    const ranked = rankDocumentsByFreshnessAndRelevance(withRank, Date.now());
+    return ranked.slice(0, limit).map((x) => ({
+        ...x.doc,
+        date: x.doc.text.match(/\[(.*?)\]/)?.[1] || "Unknown",
+        _freshness: Math.round(x.freshness * 1000) / 1000,
+        _contextBucket: freshnessBucket(x.freshness)
+    }));
 }
 
 /**
@@ -393,54 +402,91 @@ async function deleteDocument(id) {
     }
 }
 
+/** Short-lived cache so `/api/conversations` does not rescan LanceDB on every poll. */
+let unifiedIndexCache = { builtAtMs: 0, map: null };
+const UNIFIED_INDEX_TTL_MS = Math.max(
+    0,
+    parseInt(process.env.REPLY_CONVERSATIONS_INDEX_TTL_MS || "12000", 10) || 12000
+);
+
+function invalidateUnifiedIndexCache() {
+    unifiedIndexCache = { builtAtMs: 0, map: null };
+}
+
 /**
  * Perform a columnar scan to build a unified index of all conversations.
- * Aggregates counts and latest message info in one pass.
+ * Aggregates counts and latest message info in one pass (with per-document dedupe).
  */
 async function getUnifiedIndex() {
+    const now = Date.now();
+    if (
+        UNIFIED_INDEX_TTL_MS > 0 &&
+        unifiedIndexCache.map &&
+        now - unifiedIndexCache.builtAtMs < UNIFIED_INDEX_TTL_MS
+    ) {
+        return unifiedIndexCache.map;
+    }
+
     const db = await connect();
     try {
         const table = await db.openTable(TABLE_NAME);
-        // Columnar selection of just what we need for the index
         const results = await table.query()
-            .select(["path", "text", "source"])
+            .select(["id", "path", "text", "source"])
             .execute();
 
         const stats = new Map();
+        const seenDocIds = new Set();
 
         const processBatch = (rows) => {
             for (const row of rows) {
-                const path = row.path || "";
+                const doc = row && row.toJSON ? row.toJSON() : row;
+                const path = doc.path || "";
                 if (!path) continue;
 
-                // Strip protocol to get a "canonical" handle
+                const id = String(doc.id || "").trim();
+                if (id) {
+                    if (seenDocIds.has(id)) continue;
+                    seenDocIds.add(id);
+                }
+
                 const handle = path.replace(/^(imessage:\/\/|whatsapp:\/\/|mailto:|telegram:\/\/|discord:\/\/|signal:\/\/|viber:\/\/|linkedin:\/\/)/i, "").trim();
-                const source = row.source || "";
+                const source = doc.source || "";
 
                 if (!stats.has(handle)) {
                     stats.set(handle, {
                         count: 0,
+                        countIn: 0,
+                        countOut: 0,
+                        firstTimestamp: null,
                         latestMessage: "",
                         latestTimestamp: 0,
                         latestChannel: "",
                         latestSource: "",
-                        path: path
+                        latestHandle: handle,
+                        path
                     });
                 }
 
                 const s = stats.get(handle);
                 s.count++;
+                const fromMe = (doc.text || "").includes("] Me:");
+                if (fromMe) s.countOut += 1;
+                else s.countIn += 1;
 
-                const dt = extractDetailedDateFromText(row.text || "");
+                const dt = extractDetailedDateFromText(doc.text || "");
                 const ts = dt ? dt.getTime() : 0;
+
+                if (ts > 0 && (s.firstTimestamp == null || ts < s.firstTimestamp)) {
+                    s.firstTimestamp = ts;
+                }
 
                 if (ts > s.latestTimestamp) {
                     s.latestTimestamp = ts;
-                    // Extract text after the "[Date] Me: " or "[Date] Contact: " prefix
-                    const text = (row.text || "").replace(/^\[.*?\]\s*.*?:/i, "").trim();
+                    const text = (doc.text || "").replace(/^\[.*?\]\s*.*?:/i, "").trim();
                     s.latestMessage = text;
                     s.latestSource = source;
-                    // Infer channel from path protocol
+                    s.latestHandle = handle;
+                    s.path = path;
                     if (path.startsWith("imessage://")) s.latestChannel = "imessage";
                     else if (path.startsWith("whatsapp://")) s.latestChannel = "whatsapp";
                     else if (path.startsWith("mailto:")) s.latestChannel = "email";
@@ -458,6 +504,7 @@ async function getUnifiedIndex() {
             }
         }
 
+        unifiedIndexCache = { builtAtMs: Date.now(), map: stats };
         return stats;
     } catch (e) {
         console.error("Unified index error:", e.message);
@@ -465,4 +512,22 @@ async function getUnifiedIndex() {
     }
 }
 
-module.exports = { getEmbedding, addDocuments, search, getHistory, getSnippets, getLatestSubject, annotateDocument, getUnannotatedDocuments, connect, getGoldenExamples, getPendingSuggestions, deleteDocument, getUnifiedIndex };
+module.exports = {
+    getEmbedding,
+    addDocuments,
+    search,
+    getHistory,
+    getSnippets,
+    getLatestSubject,
+    annotateDocument,
+    getUnannotatedDocuments,
+    connect,
+    getGoldenExamples,
+    getPendingSuggestions,
+    deleteDocument,
+    getUnifiedIndex,
+    invalidateUnifiedIndexCache,
+    dedupeDocsByStableKey,
+    /** Toggle golden-example flag on an existing LanceDB row (message star). */
+    setGoldenAnnotation: annotateDocumentLegacy,
+};

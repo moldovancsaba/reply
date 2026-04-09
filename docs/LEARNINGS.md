@@ -1,7 +1,7 @@
 # {reply} — Learnings & Decisions
 
 ## Product / Workflow
-* **SSOT:** Roadmap + tasks are tracked only in the GitHub Project Board and as issues in `moldovancsaba/mvp-factory-control`.
+* **SSOT (for `{reply}`):** Roadmap + tasks are tracked in [GitHub Project #7](https://github.com/users/moldovancsaba/projects/7) and as issues in **`moldovancsaba/reply`**.
 * **No product-repo issues:** Do not create/manage issues in `moldovancsaba/reply` (Issues are disabled there to prevent drift).
 * **Mandatory board add:** A `{reply}` issue is not valid until it is added to Project 1.
 * **CLI gotcha:** `gh project item-list` defaults to 30 items; use `-L 500` when verifying whether an issue is on the board.

@@ -1,7 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env'), override: true });
-const sqlite3 = require('sqlite3').verbose();
 
 // Log Rotation
 const LOG_FILE = path.join(__dirname, 'worker.out.log');
@@ -23,7 +22,7 @@ const { addDocuments } = require('./vector-store.js');
 const contactStore = require('./contact-store.js');
 const { generateReply } = require('./reply-engine.js');
 const { getSnippets } = require('./knowledge.js');
-const { sync: syncIMessage } = require('./sync-imessage.js');
+const { sync: syncIMessage, getIMessageReadonlyDb } = require('./sync-imessage.js');
 const { syncWhatsApp } = require('./sync-whatsapp.js');
 const { syncMail, isImapConfigured, isGmailConfigured } = require('./sync-mail.js');
 const triageEngine = require('./triage-engine.js');
@@ -74,9 +73,8 @@ process.on('exit', () => {
 process.on('SIGINT', () => process.exit());
 process.on('SIGTERM', () => process.exit());
 
-const os = require('os');
 const MESSAGE_LOOKBACK_SECONDS = 310;
-const CHAT_DB_PATH = path.join(os.homedir(), 'Library', 'Messages', 'chat.db');
+const { resolveIMessageDbPath } = require('./imessage-db-path.js');
 
 function getPollIntervalMs() {
     try {
@@ -289,14 +287,16 @@ async function poll() {
         console.error("Sync Error:", e);
     }
 
-    console.log(`[Worker] Polling chat.db at: ${CHAT_DB_PATH}`);
-    const db = new sqlite3.Database(CHAT_DB_PATH, sqlite3.OPEN_READONLY, (err) => {
-        if (err) {
-            console.error("Failed to open chat.db:", err.message);
-            isProcessing = false;
-            return;
-        }
-    });
+    const imDb = getIMessageReadonlyDb();
+    if (!imDb) {
+        console.warn(
+            "[Worker] iMessage live polling skipped (no readable chat.db). " +
+                "Grant Full Disk Access or set REPLY_IMESSAGE_DB_PATH in chat/.env."
+        );
+        isProcessing = false;
+        return;
+    }
+    console.log(`[Worker] Polling chat.db at: ${resolveIMessageDbPath()}`);
 
     const query = `
         SELECT 
@@ -313,15 +313,15 @@ async function poll() {
     `;
 
     await new Promise((resolve) => {
-        db.all(query, [MESSAGE_LOOKBACK_SECONDS], async (err, rows) => {
+        imDb.all(query, [MESSAGE_LOOKBACK_SECONDS], async (err, rows) => {
             if (err) {
                 console.error("SQL Query Error:", err.message);
-                db.close();
                 isProcessing = false;
                 resolve();
                 return;
             }
 
+            let ingestedLiveDocs = false;
             try {
                 for (const row of rows) {
                     const { guid: id, text, handle, is_from_me, formatted_date: date } = row;
@@ -345,6 +345,7 @@ async function poll() {
                         source: 'iMessage-live',
                         path: `imessage://${handle}`
                     }]);
+                    ingestedLiveDocs = true;
                     try {
                         const cur = statusManager.get('imessage') || {};
                         const processed = Number(cur.processed);
@@ -377,7 +378,12 @@ async function poll() {
             } catch (e) {
                 console.error("Worker Core Error:", e);
             } finally {
-                db.close();
+                if (ingestedLiveDocs) {
+                    try {
+                        const { invalidateUnifiedIndexCache } = require("./vector-store.js");
+                        invalidateUnifiedIndexCache();
+                    } catch (_) { /* ignore */ }
+                }
                 isProcessing = false;
                 resolve();
             }

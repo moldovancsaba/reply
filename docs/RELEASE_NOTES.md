@@ -1,6 +1,24 @@
 # {reply} — Release Notes
 
-Completed work only. The [GitHub Project Board](https://github.com/users/moldovancsaba/projects/1) is the source of truth for delivered items.
+Completed work only. For `{reply}`, the [GitHub Project (#7)](https://github.com/users/moldovancsaba/projects/7) and [`moldovancsaba/reply`](https://github.com/moldovancsaba/reply) issues are the source of truth for delivered items (portfolio board: [Project #1](https://github.com/users/moldovancsaba/projects/1)).
+
+## [0.5.2] - 2026-04-09
+### Changed
+- **SSOT / project management:** `{reply}` tasks and issues are **canonical in this repository** and [GitHub Project #7](https://github.com/users/moldovancsaba/projects/7), not only in `mvp-factory-control` / MVP Factory Project #1. Updated [`PROJECT_MANAGEMENT.md`](PROJECT_MANAGEMENT.md), [`DEFINITION_OF_DONE.md`](DEFINITION_OF_DONE.md), [`HANDOVER.md`](HANDOVER.md), [`CODING_STANDARDS.md`](CODING_STANDARDS.md), [`APP_NAVIGATION.md`](APP_NAVIGATION.md), and related docs; [`GITHUB_REPLY_PROJECT_MIGRATION.md`](GITHUB_REPLY_PROJECT_MIGRATION.md) is now framed as legacy migration from the portfolio board.
+
+## [0.5.1] - 2026-04-08
+### Added
+- **Local machine deployment guide**: [docs/LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md) documents macOS LaunchAgent install, `chat/.env`, Ollama (`gemma4:e2b`), log locations, port failover, and operational troubleshooting. Linked from the root [README.md](../README.md).
+- **Documentation cross-links**: [ARCHITECTURE.md](ARCHITECTURE.md) (runtime & deployment), [APP_NAVIGATION.md](APP_NAVIGATION.md) (hub install pointer), [INGESTION.md](INGESTION.md) (iMessage source + `REPLY_IMESSAGE_DB_PATH`, corrected default `PORT` in the config table), [README.md](../README.md) run modes / menubar; `tools/scripts/reply_service.sh` header comment points to the deployment guide.
+- **ReplyMenubar**: Added [tools/macos/ReplyMenubar/README.md](../tools/macos/ReplyMenubar/README.md) and **`install_ReplyMenubar.sh`** (generates `main.swift` from `main.swift.template`, compiles with `swiftc`, installs `~/Applications/ReplyMenubar.app`) so `make install-ReplyMenubar` works. [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md) lists the menubar in the topology table and first-time setup.
+
+### Fixed
+- **Hub stability / iMessage SQLite**: `chat/sync-imessage.js` opens Apple `chat.db` **lazily** via `getIMessageReadonlyDb()`, handles open failures and `database.on('error')`, and requires a valid DB in `sync()` before querying — avoids hub exit loops when the DB is missing or blocked by TCC (e.g. `SQLITE_CANTOPEN`).
+- **Background worker**: `chat/background-worker.js` skips iMessage live polling when `chat.db` is unreadable instead of calling SQLite on a null handle.
+- **Contacts database**: `chat/contact-store.js` creates the parent directory for the SQLite file (best-effort) and attaches a DB `error` listener.
+
+### Changed
+- **Ollama model defaults**: Default local tag is `gemma4:e2b` in `chat/ollama-model.js`. Refine (`chat/gemini-client.js`) uses `getReplyOllamaModel()` so suggestions and refine share `REPLY_OLLAMA_MODEL`. `scripts/analyze-style.js` uses the same resolver. `chat/.env.example` comments updated accordingly.
 
 ## [0.5.0] - 2026-03-06
 ### Added

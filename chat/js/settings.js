@@ -1,4 +1,13 @@
 import { getSettings, saveSettings, getGmailAuthUrl, disconnectGmail } from './api.js';
+import {
+  loadConversations,
+  setConversationsQuery,
+  setConversationsSort,
+  applyConversationSortOnly,
+  normalizeConversationSort,
+  isValidConversationSortMode,
+  CONVERSATION_SORT_STORAGE_KEY,
+} from './contacts.js';
 
 function el(id) {
   return document.getElementById(id);
@@ -60,6 +69,7 @@ function switchTab(tabId) {
 
 async function loadIntoForm() {
   const data = await getSettings();
+  applyReplyUiSettings(data);
   const imap = data?.imap || {};
   const gmail = data?.gmail || {};
   const gmailSync = gmail?.sync || {};
@@ -256,7 +266,7 @@ export function closeSettings() {
   if (page) page.style.display = 'none';
   document.body.classList.remove('mode-settings');
 
-  // If standalone, navigate back
+  // If standalone, return to main app (same sidebar shell as index)
   if (window.location.pathname.includes('settings.html')) {
     window.location.href = 'index.html';
     return;
@@ -267,12 +277,139 @@ export function closeSettings() {
   }
 }
 
+function isSettingsStandalonePage() {
+  return typeof window.location !== 'undefined' && window.location.pathname.includes('settings.html');
+}
+
+let standaloneHealthIntervalId = null;
+
+async function pollStandaloneServiceHealth() {
+  const dot = document.getElementById('services-health-dot');
+  const container = document.getElementById('services-health-status');
+  if (!dot || !container) return;
+  try {
+    const { fetchSystemHealth, fetchOpenClawStatus } = await import('./api.js');
+    const [health, openClaw] = await Promise.all([
+      fetchSystemHealth().catch(() => ({ status: 'offline' })),
+      fetchOpenClawStatus().catch(() => ({ status: 'offline' })),
+    ]);
+    const worker = health.services?.worker || { status: 'offline' };
+    const isOpenClawOffline = openClaw.status !== 'online';
+    const isWorkerOffline = worker.status !== 'online';
+    if (isOpenClawOffline || isWorkerOffline) {
+      dot.className = 'status-dot offline';
+      container.title = `Services offline: ${isWorkerOffline ? 'Worker ' : ''}${isOpenClawOffline ? 'OpenClaw' : ''}`.trim();
+    } else {
+      dot.className = 'status-dot online';
+      container.title = 'All services online.';
+    }
+  } catch {
+    dot.className = 'status-dot warning';
+    container.title = 'Health check failed.';
+  }
+}
+
+function startStandaloneServiceHealthPoll() {
+  if (standaloneHealthIntervalId != null) return;
+  pollStandaloneServiceHealth();
+  standaloneHealthIntervalId = setInterval(pollStandaloneServiceHealth, 15000);
+}
+
+/**
+ * Match index.html: contacts sidebar on the left, wire navigation into main app.
+ */
+function initStandaloneSettingsShell() {
+  if (!isSettingsStandalonePage() || document.body.dataset.replySettingsShell === '1') return;
+  document.body.dataset.replySettingsShell = '1';
+
+  window.selectContact = (handle) => {
+    if (handle == null || handle === '') {
+      window.location.href = 'index.html';
+      return;
+    }
+    try {
+      sessionStorage.setItem('reply_open_handle', String(handle));
+    } catch {
+      /* ignore */
+    }
+    window.location.href = 'index.html';
+  };
+
+  const btnDash = document.getElementById('btn-dash');
+  if (btnDash) btnDash.onclick = () => { window.location.href = 'index.html'; };
+
+  const btnSettings = document.getElementById('btn-settings');
+  if (btnSettings) btnSettings.onclick = () => {};
+
+  const btnTraining = document.getElementById('btn-training');
+  if (btnTraining) {
+    btnTraining.onclick = () => {
+      try {
+        sessionStorage.setItem('reply_open_training', '1');
+      } catch {
+        /* ignore */
+      }
+      window.location.href = 'index.html';
+    };
+  }
+
+  const contactSearch = document.getElementById('contact-search');
+  if (contactSearch) {
+    let timer = null;
+    const run = () => setConversationsQuery(contactSearch.value);
+    contactSearch.addEventListener('input', () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(run, 180);
+    });
+    contactSearch.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        contactSearch.value = '';
+        run();
+        contactSearch.blur();
+      }
+    });
+  }
+
+  const conversationSort = document.getElementById('conversation-sort');
+  if (conversationSort) {
+    try {
+      const saved = window.localStorage && window.localStorage.getItem(CONVERSATION_SORT_STORAGE_KEY);
+      if (saved && isValidConversationSortMode(saved)) {
+        const v = normalizeConversationSort(saved);
+        if ([...conversationSort.options].some((o) => o.value === v)) {
+          conversationSort.value = v;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    applyConversationSortOnly(conversationSort.value);
+    conversationSort.addEventListener('change', () => {
+      try {
+        if (window.localStorage) {
+          window.localStorage.setItem(CONVERSATION_SORT_STORAGE_KEY, conversationSort.value);
+        }
+      } catch {
+        /* ignore */
+      }
+      setConversationsSort(conversationSort.value).catch((e) =>
+        console.warn('[settings] Sort reload failed:', e)
+      );
+    });
+  }
+
+  startStandaloneServiceHealthPoll();
+  loadConversations(false).catch((e) => console.warn('[settings] contacts load failed:', e));
+}
+
 /**
  * Wire DOM events for settings
  */
 export async function wireDom() {
   const container = document.getElementById('settings-container');
   if (!container) return;
+
+  initStandaloneSettingsShell();
 
   // Lazy load the settings fragment if not already loaded
   const hasPage = !!document.getElementById('settings-page');

@@ -15,7 +15,7 @@
   </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{reply}</title>
+  <title>Reply</title>
   <link rel="stylesheet" href="css/global.css">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/app.css">
@@ -50,6 +50,17 @@
       <div class="sidebar-search">
         <input id="contact-search" class="sidebar-search-input" type="search" placeholder="Search contacts..."
           autocomplete="off" spellcheck="false">
+        <label class="u-sr-only" for="conversation-sort">Sort conversations</label>
+        <select id="conversation-sort" class="sidebar-sort-select" title="Conversation order"
+          aria-label="Sort conversations">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="freq">Interaction frequency</option>
+          <option value="volume_in">Volume (incoming)</option>
+          <option value="volume_out">Volume (outgoing)</option>
+          <option value="volume_total">Volume (total)</option>
+          <option value="recommendation">Recommended</option>
+        </select>
       </div>
       <div id="contact-list" class="contact-list">
         <!-- Contact Items will be injected here -->
@@ -113,9 +124,6 @@
               <button id="training-close" class="btn btn-secondary btn-sm">Close</button>
             </div>
           </div>
-          <div id="kyc-loader" class="u-text-center u-padding-20 u-display-none">
-            <div class="u-color-tertiary u-font-size-09">Loading KYC data...</div>
-          </div>
           <div id="training-list-container" class="u-flex-1 u-overflow-y-auto u-padding-top-20">
             <!-- Training Examples will be injected here -->
           </div>
@@ -127,7 +135,7 @@
     <!-- PANE C: KYC DATA -->
     <section class="kyc-pane">
       <div id="kyc-empty-state" class="kyc-empty">
-        <h3 class="kyc-empty-title">{reply} Overview</h3>
+        <h3 class="kyc-empty-title">Reply overview</h3>
         <p class="kyc-empty-text">Select a contact from the sidebar to view their profile and history.</p>
       </div>
 

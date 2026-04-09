@@ -2,14 +2,13 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { search } = require('./vector-store.js');
+const { getReplyOllamaModel } = require('./ollama-model.js');
 
 /**
  * Client for local drafting via Ollama (Replaces Gemini API for privacy/cost).
  * No external API key required.
  */
 
-// We use Gemma2:2b as it is blazing fast and excellent at text refinement
-const MODEL = "gemma2:2b";
 const OLLAMA_HOST = "127.0.0.1";
 const OLLAMA_PORT = 11434;
 
@@ -27,7 +26,7 @@ function getPersona() {
 }
 
 /**
- * Refines a drafted reply using local Gemma2:2b via Ollama.
+ * Refines a drafted reply using local Ollama (same model as REPLY_OLLAMA_MODEL / suggestions).
  * @param {string} draft - The initial draft.
  * @param {string} context - The context used to generate the draft (optional).
  * @returns {Promise<string>} - The refined text.
@@ -70,7 +69,7 @@ ${context.substring(0, 1000)}...
 REFINED VERSION:`;
 
     const payload = JSON.stringify({
-        model: MODEL,
+        model: getReplyOllamaModel(),
         system: systemPrompt,
         prompt: userPrompt,
         stream: false,
@@ -130,7 +129,7 @@ REFINED VERSION:`;
 async function testConnection() {
     try {
         const result = await refineReply("Hello world", "Test context");
-        return { success: true, message: "Connected to local Gemma2!", sample: result };
+        return { success: true, message: `Connected to local Ollama (${getReplyOllamaModel()})!`, sample: result };
     } catch (e) {
         return { success: false, message: e.message };
     }
