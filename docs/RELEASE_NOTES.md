@@ -2,6 +2,60 @@
 
 Completed work only. For `{reply}`, the [GitHub Project (#7)](https://github.com/users/moldovancsaba/projects/7) and [`moldovancsaba/reply`](https://github.com/moldovancsaba/reply) issues are the source of truth for delivered items (portfolio board: [Project #1](https://github.com/users/moldovancsaba/projects/1)).
 
+## [0.5.3] - 2026-04-10
+### Added
+- **Outbound policy (issue [#17](https://github.com/moldovancsaba/reply/issues/17)):** Send paths (`/api/send-imessage`, `/api/send-email`, `/api/send-linkedin`, `/api/send-whatsapp`) require an **inbound-verified** channel identity unless `REPLY_OUTBOUND_REQUIRE_INBOUND_VERIFIED=false`. Denied attempts append to `chat/data/outbound-policy-denials.jsonl` (gitignored). Responses use `403` with `policy: inbound_verified_required`, `hint`, and `code` where applicable. See `chat/utils/outbound-policy.js` and `chat/test/outbound-policy.test.js`.
+- **Conversation sort modes (issue [#15](https://github.com/moldovancsaba/reply/issues/15)):** `/api/conversations` accepts `sort` / `rank` (`newest`, `oldest`, `freq`, `volume_in`, `volume_out`, `volume_total`, `recommendation`). Response `meta` includes `sort`, `sortRequested`, `sortValid`. Recommendation mode exposes per-row `_rankTrace` after sanitization. Dashboard and Settings sidebars include a sort `<select>`; choice is persisted in `localStorage` under `replyConversationsSort`.
+- **Mail/context freshness (issue [#14](https://github.com/moldovancsaba/reply/issues/14)):** `chat/utils/context-freshness.js` blends vector relevance with recency (half-life via `REPLY_CONTEXT_HALF_LIFE_DAYS`, weights via `REPLY_CONTEXT_RELEVANCE_WEIGHT` / `REPLY_CONTEXT_FRESHNESS_WEIGHT`). `assembleReplyContext` and `/api/suggest` expose explainable `contextMeta` / RAG traces where applicable; snippet APIs attach freshness metadata.
+
+### Changed
+- **`chat/.gitignore`:** Ignores local SQLite files, sync cursor/state JSON, outbound denials, **`security_audit.jsonl`** (append-only security audit on disk — do not commit), and `logs/`.
+- **Repository hygiene:** `chat/data/worker.pid` and `chat/data/security_audit.jsonl` are no longer tracked; each machine keeps its own files.
+
+### GitHub — issue closure comments (copy-paste)
+
+Use when closing [#17](https://github.com/moldovancsaba/reply/issues/17), [#15](https://github.com/moldovancsaba/reply/issues/15), and [#14](https://github.com/moldovancsaba/reply/issues/14) after verifying on `main`.
+
+**[#17](https://github.com/moldovancsaba/reply/issues/17) — Reply-only outbound / inbound proof**
+
+```text
+Shipped on main (v0.5.3).
+
+- Outbound sends are gated on contact channel identities that have inbound proof (`verifiedChannels` / `contact_channels.inbound_verified_at`), with channel-specific matching (email, phone/WhatsApp digits, LinkedIn slug).
+- Opt-out for dev/special cases: `REPLY_OUTBOUND_REQUIRE_INBOUND_VERIFIED=false` (or `0`).
+- Denials are appended to `chat/data/outbound-policy-denials.jsonl` (local, gitignored).
+- API: HTTP 403 JSON includes `error`, `code`, `hint`, and `policy: "inbound_verified_required"` where applicable.
+- Tests: `chat/test/outbound-policy.test.js` (`npm test` in `chat/`).
+
+Closing as completed.
+```
+
+**[#15](https://github.com/moldovancsaba/reply/issues/15) — Conversation list sort / rank**
+
+```text
+Shipped on main (v0.5.3).
+
+- `GET /api/conversations?sort=…` (alias `rank`): newest | oldest | freq | volume_in | volume_out | volume_total | recommendation.
+- Response `meta.sort`, `meta.sortRequested`, `meta.sortValid`; recommendation mode returns `_rankTrace` on items for debugging/explainability.
+- UI: sort dropdown on dashboard (`index.html`) and settings sidebar (`settings.html`); persisted via localStorage key `replyConversationsSort`.
+- Vector index exposes per-handle counts/first timestamp for volume/frequency ordering.
+
+Closing as completed.
+```
+
+**[#14](https://github.com/moldovancsaba/reply/issues/14) — Gmail/mail context freshness**
+
+```text
+Shipped on main (v0.5.3).
+
+- `chat/utils/context-freshness.js`: exponential recency decay + blend with search relevance; tunable `REPLY_CONTEXT_HALF_LIFE_DAYS` (default 21), `REPLY_CONTEXT_RELEVANCE_WEIGHT`, `REPLY_CONTEXT_FRESHNESS_WEIGHT`.
+- RAG pool ranked before prompt assembly; facts/snippets labeled with freshness bucket and score where applicable.
+- `/api/suggest` includes `contextMeta` (traces, half-life, weights) for inspection.
+- `chat/.env.example` documents the new variables alongside outbound policy flags.
+
+Closing as completed.
+```
+
 ## [0.5.2] - 2026-04-09
 ### Changed
 - **SSOT / project management:** `{reply}` tasks and issues are **canonical in this repository** and [GitHub Project #7](https://github.com/users/moldovancsaba/projects/7), not only in `mvp-factory-control` / MVP Factory Project #1. Updated [`PROJECT_MANAGEMENT.md`](PROJECT_MANAGEMENT.md), [`DEFINITION_OF_DONE.md`](DEFINITION_OF_DONE.md), [`HANDOVER.md`](HANDOVER.md), [`CODING_STANDARDS.md`](CODING_STANDARDS.md), [`APP_NAVIGATION.md`](APP_NAVIGATION.md), and related docs; [`GITHUB_REPLY_PROJECT_MIGRATION.md`](GITHUB_REPLY_PROJECT_MIGRATION.md) is now framed as legacy migration from the portfolio board.
