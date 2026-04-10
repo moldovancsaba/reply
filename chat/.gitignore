@@ -6,6 +6,7 @@ data/*.db-shm
 data/*.db-wal
 data/worker.pid
 data/outbound-policy-denials.jsonl
+data/security_audit.jsonl
 data/*_sync_status.json
 data/sync_state.json
 data/kyc_auto_scan_cursor.json
