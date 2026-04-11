@@ -623,6 +623,7 @@
 .toast-message {
     font-size: 0.9rem;
     flex-grow: 1;
+    white-space: pre-wrap;
 }
 
 .toast-close {
