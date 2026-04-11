@@ -23,13 +23,22 @@ async function _request(url, options = {}) {
                     errorMsg = `${errorMsg}\n\n${hint}`;
                 }
             } catch (e) { }
+            const httpErr = new Error(errorMsg);
+            if (options.delegateErrorUI) {
+                throw httpErr;
+            }
             UI.showToast(errorMsg, 'error');
-            throw new Error(errorMsg);
+            httpErr._replyErrorUiShown = true;
+            throw httpErr;
         }
         return res;
     } catch (err) {
         const msg = err.message || 'Network error';
-        if (!options._silent) UI.showToast(msg, 'error');
+        const skipToast =
+            options._silent ||
+            options.delegateErrorUI ||
+            err._replyErrorUiShown;
+        if (!skipToast) UI.showToast(msg, 'error');
         throw err;
     } finally {
         if (isMutation) UI.hideLoading();
@@ -255,7 +264,9 @@ export async function sendMessage(handle, text, channel = 'imessage', hatoriCont
     const res = await _request(endpoint, {
         method: 'POST',
         headers: buildSecurityHeaders(),
-        body: JSON.stringify(withApproval(sendPayload, 'ui-send-message'))
+        body: JSON.stringify(withApproval(sendPayload, 'ui-send-message')),
+        /** Caller (`handleSendMessage`) shows one consolidated error toast */
+        delegateErrorUI: true,
     });
 
     const data = await res.json();

@@ -46,9 +46,11 @@ export const UI = {
 
         toast.innerHTML = `
       <span class="material-symbols-outlined toast-icon">${icons[type] || 'info'}</span>
-      <div class="toast-message">${message}</div>
+      <div class="toast-message"></div>
       <span class="material-symbols-outlined toast-close">close</span>
     `;
+        const msgEl = toast.querySelector('.toast-message');
+        if (msgEl) msgEl.textContent = message;
 
         // Click to dismiss
         const dismiss = () => {

@@ -5,6 +5,7 @@
 
 import { fetchMessages, sendMessage, reportHatoriOutcome } from './api.js';
 import { APP_DISPLAY_NAME } from './branding.js';
+import { UI } from './ui.js';
 import { appendLinkedText, createPlatformIcon, resolvePlatformTarget } from './platform-icons.js';
 import { formatPleasant } from './message-formatter.js';
 
@@ -398,7 +399,10 @@ export async function handleSendMessage() {
         console.log(`[SendMessage] Result status: ${result?.status}`);
 
         if (result?.status !== 'ok') {
-            alert(`Failed to send message via ${channel}: ${result?.error || 'unknown error'}`);
+            UI.showToast(
+                `Failed to send via ${channel}: ${result?.error || 'unknown error'}`,
+                'error'
+            );
             return;
         }
 
@@ -439,15 +443,16 @@ export async function handleSendMessage() {
 
     } catch (error) {
         console.error('Failed to send message:', error);
-        // WhatsApp send is best-effort; offer clipboard fallback.
         const channel = getSelectedChannel();
+        const base = error?.message || String(error);
+        // Single surface: composer errors use toast only (api layer does not toast for sends).
         if (channel === 'whatsapp') {
             const ok = await copyToClipboard(text);
             const extra = ok ? '\n\nCopied to clipboard as a fallback.' : '';
-            alert(`WhatsApp send failed: ${error?.message || String(error)}${extra}`);
+            UI.showToast(`WhatsApp send failed: ${base}${extra}`, 'error');
             return;
         }
-        alert('Error: ' + (error?.message || String(error)));
+        UI.showToast(base, 'error');
     }
 }
 

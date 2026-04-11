@@ -2,6 +2,13 @@
 
 Completed work only. For `{reply}`, the [GitHub Project (#7)](https://github.com/users/moldovancsaba/projects/7) and [`moldovancsaba/reply`](https://github.com/moldovancsaba/reply) issues are the source of truth for delivered items (portfolio board: [Project #1](https://github.com/users/moldovancsaba/projects/1)).
 
+## [0.5.4] - 2026-04-11
+### Fixed
+- **Send error UX:** Outbound `sendMessage` uses `delegateErrorUI` on the API layer so failed sends surface **one** error toast from `handleSendMessage` (no duplicate toast + alert). Toasts render message text via `textContent` with `pre-wrap` for multi-line policy hints.
+
+### Changed
+- **CI:** GitHub Actions workflow uses `actions/checkout@v4`, `actions/setup-node@v4`, Node **20**, `npm ci`, and npm cache keyed on `chat/package-lock.json`.
+
 ## [0.5.3] - 2026-04-10
 ### Added
 - **Outbound policy (issue [#17](https://github.com/moldovancsaba/reply/issues/17)):** Send paths (`/api/send-imessage`, `/api/send-email`, `/api/send-linkedin`, `/api/send-whatsapp`) require an **inbound-verified** channel identity unless `REPLY_OUTBOUND_REQUIRE_INBOUND_VERIFIED=false`. Denied attempts append to `chat/data/outbound-policy-denials.jsonl` (gitignored). Responses use `403` with `policy: inbound_verified_required`, `hint`, and `code` where applicable. See `chat/utils/outbound-policy.js` and `chat/test/outbound-policy.test.js`.
