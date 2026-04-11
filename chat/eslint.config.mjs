@@ -51,6 +51,7 @@ export default [
                 FormData: "readonly",
                 FileReader: "readonly",
                 localStorage: "readonly",
+                sessionStorage: "readonly",
                 navigator: "readonly",
                 MediaRecorder: "readonly",
                 SpeechRecognition: "readonly",
