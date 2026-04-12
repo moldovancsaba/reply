@@ -122,11 +122,13 @@ export async function fetchMessages(handle, offset = 0, limit = 30, showLoadingU
 
 /**
  * Fetch system health and sync status for dashboard
+ * @param {{ silent?: boolean }} [options] - silent: suppress error toasts (e.g. first-run onboarding probe).
  * @returns {Promise<Object>} System health data
  */
-export async function fetchSystemHealth() {
+export async function fetchSystemHealth(options = {}) {
     const res = await _request(`${API_BASE}/api/system-health`, {
         headers: buildSecurityHeaders(),
+        _silent: options.silent === true,
     });
     return await res.json();
 }

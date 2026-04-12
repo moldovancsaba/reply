@@ -20,6 +20,7 @@ import './kyc.js?v=2.1';
 import { applyReplyUiSettings } from './settings.js?v=2.1';
 import { openTrainingPage, closeTrainingPage } from './training.js?v=2.1';
 import { UI } from './ui.js';
+import { maybeShowOnboarding } from './onboarding.js?v=2.1';
 
 // Global state
 window.currentHandle = null;
@@ -67,6 +68,8 @@ async function init() {
   } catch {
     /* ignore */
   }
+
+  maybeShowOnboarding();
 
   console.log('✅ Reply ready!');
 }
