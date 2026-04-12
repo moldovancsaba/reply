@@ -2,13 +2,13 @@
 
 This file is onboarding + operational context. Keep it accurate when behavior/architecture changes.
 
-**Last Updated**: 2026-04-11 (security rotation doc + outbound merge tests + CI audit step; SSOT: `{reply}` issues + [Project #7](https://github.com/users/moldovancsaba/projects/7))
+**Last Updated**: 2026-04-12 (reply#32/#14/#34; SSOT: `{reply}` issues + [Project #7](https://github.com/users/moldovancsaba/projects/7))
 
 **Current Version**: `0.5.2` (see `chat/package.json`)
 
 **Local Mac ops (single source)**: [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md) — LaunchAgent, logs, `.env`, Ollama, Full Disk Access / `chat.db`, changelog of stability fixes.
 
-**Credential rotation (reply#34)**: Operator checklist and evidence table live in [SECURITY_ROTATION.md](SECURITY_ROTATION.md). Repository work added 2026-04-11: procedure + CI audit signal; **you must still rotate** any live keys that ever appeared in Git history and record dates in that doc.
+**Credential rotation (reply#34)**: Operator checklist (**§3**) and repo prevention checklist (**§3b**) live in [SECURITY_ROTATION.md](SECURITY_ROTATION.md). **§3b** is complete on `main` (2026-04-12). **§3** (provider rotation + dates) remains **operator-owned** for any keys that were ever exposed in Git history.
 
 **Key changes in v0.5.0**:
 - `service-manager.js` — auto-restart watchdog with exponential backoff + `repair_required` state
@@ -358,6 +358,12 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
 - **Tests + CI (reply#31):** New tests: `ensure-hub-worker.test.js`, `service-manager-worker-policy.test.js`, `conversations-meta.test.js`, `system-health-shape.test.js`. Exported `normalizeConversationSort` + `CONVERSATION_SORT_MODES` from `routes/messaging.js` for meta contract tests. `service-manager.js` exposes `isWorkerEarlyExitDuplicateCandidate` on singleton.
 - **Docs:** `docs/LOCAL_MACHINE_DEPLOYMENT.md` — Node 20 note aligned with CI.
 - **Validation:** `cd chat && npm test` and `npm run lint` (run during this change).
+
+## Active Session Update (2026-04-12, reply#32 / #14 / #34 closure)
+- **reply#32:** Gated `debug_token.log` behind `REPLY_DEBUG_SETTINGS`; default path writes **no** token material. Expanded `gemini-client.js` header (Ollama-only truth). `LOCAL_MACHINE_DEPLOYMENT.md` + `.env.example` + `chat/.gitignore`.
+- **reply#14:** `contextMeta.contextFreshnessSummary` from `summarizeRagFreshnessTraces`; regression tests for mail RAG ordering and decay.
+- **reply#34:** `SECURITY_ROTATION.md` §3b (repo prevention checklist dated). Issue closed: **provider rotation** remains in §3 for operators who had keys in history; **repo track** complete.
+- **Validation:** `cd chat && npm test` (53) + `npm run lint`; `node chat/security-audit.js` → `critical=0 warn=0`.
 
 ## Active Session Update (2026-04-11 continuation, reply#29 / #30 / board)
 - **reply#29 (SSOT docs):** Replaced stale “Current Priorities” / “Next Agent” / verification bullets in [HANDOVER.md](HANDOVER.md) with **Project #7**-first guidance. Rewrote [NEXT_AGENT_PROMPT.md](NEXT_AGENT_PROMPT.md) boot prompt (version-agnostic). Added doc-freshness framing to [BRAIN_DUMP.md](BRAIN_DUMP.md) and reconciled [DEPENDENCY_MAP.md](DEPENDENCY_MAP.md) Tier 1 / #211 / #224 / sync commands with **main** + **reply** repo reality (CI Node 20, `chat/routes/*`, `gh project` → project **7**). [INGESTION.md](INGESTION.md) §6 documents LinkedIn bridge.

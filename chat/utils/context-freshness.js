@@ -86,6 +86,43 @@ function freshnessBucket(freshScore) {
   return "archival";
 }
 
+/**
+ * Aggregate RAG trace rows for API/UI (`contextMeta`) — Gmail/mail-like rows flagged separately.
+ * @param {Array<{ bucket?: string, mailLike?: boolean }>} traces
+ */
+function summarizeRagFreshnessTraces(traces) {
+  const list = Array.isArray(traces) ? traces : [];
+  if (!list.length) {
+    return {
+      dominantBucket: null,
+      freshRatio: 0,
+      recentRatio: 0,
+      archivalRatio: 0,
+      mailLikeSnippetCount: 0,
+      traceCount: 0,
+    };
+  }
+  const counts = { fresh: 0, recent: 0, archival: 0 };
+  let mailLikeSnippetCount = 0;
+  for (const t of list) {
+    const b = t.bucket;
+    if (b === "fresh" || b === "recent" || b === "archival") counts[b] += 1;
+    if (t.mailLike) mailLikeSnippetCount += 1;
+  }
+  const n = list.length;
+  const ratio = (c) => Math.round((c / n) * 1000) / 1000;
+  const rankedBuckets = Object.entries(counts).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]);
+  const dominantBucket = rankedBuckets.length ? rankedBuckets[0][0] : null;
+  return {
+    dominantBucket,
+    freshRatio: ratio(counts.fresh),
+    recentRatio: ratio(counts.recent),
+    archivalRatio: ratio(counts.archival),
+    mailLikeSnippetCount,
+    traceCount: n,
+  };
+}
+
 module.exports = {
   parseBracketDateMs,
   freshnessScore,
@@ -93,4 +130,5 @@ module.exports = {
   freshnessBucket,
   isMailLikeSource,
   halfLifeDaysFromEnv,
+  summarizeRagFreshnessTraces,
 };
