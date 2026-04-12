@@ -84,38 +84,37 @@ curl -sfS http://127.0.0.1:45311/api/health
 
    See [tools/macos/ReplyMenubar/README.md](../tools/macos/ReplyMenubar/README.md) (rebuild if you move the repo).
 
-7. **Optional — `{hatori}` (local intelligence API):** `{reply}` can call **Hatori** on **`127.0.0.1:23572`** when enabled. Upstream repo: **[moldovancsaba/hatori](https://github.com/moldovancsaba/hatori)** (API contract and `make run` / `make bootstrap` live there).
+7. **Optional — `{hatori}` (local intelligence API):** `{reply}` can call **Hatori** on **`127.0.0.1:23572`** when enabled. Upstream repo: **[moldovancsaba/hatori](https://github.com/moldovancsaba/hatori)** (canonical bootstrap, API contract, and runbooks live there).
 
-   **Layout:** the hub resolves the Hatori **checkout** as **`../hatori`** from the **`chat/`** folder — i.e. a **sibling directory** of this **`reply`** repo. Example: `…/Projects/reply` and `…/Projects/hatori`.
+   **Layout:** the hub resolves the Hatori **checkout** as **`../hatori`** from the **`chat/`** folder — a **sibling** of this **`reply`** repo (e.g. `…/Projects/reply` and `…/Projects/hatori`).
 
-   **From `{reply}` repo root:**
-
-   ```bash
-   make hatori-clone       # once: clones https://github.com/moldovancsaba/hatori.git → ../hatori
-   make hatori-bootstrap   # Python venv + ui deps + ~/.config/hatori/hatori.env (token)
-   ```
-
-   **Docker** (Postgres + pgvector) must be reachable — start **Colima** or **Docker Desktop**, then:
+   **From `{reply}` repo root (recommended order):**
 
    ```bash
-   cd ../hatori && make up && make run
+   make hatori-clone       # once: git clone → ../hatori
+   make hatori-bootstrap   # official ./tools/scripts/hatori_bootstrap.sh in hatori: venv, make up, make reset, model pull, com.hatori LaunchAgent
+   make hatori-preflight   # optional: checks clone, ~/.config/hatori/hatori.env, Docker, API :23572, REPLY_USE_HATORI in .env / .env.local
    ```
 
-   Or install Hatori’s LaunchAgent from that repo (`make install-service` there).
+   **Docker** must be running before **`make hatori-bootstrap`** (Colima or Docker Desktop). If you prefer not to install Hatori’s LaunchAgent, skip the full bootstrap and run manually: `cd ../hatori && make up && make run`.
 
-   **Enable in `{reply}`:** add to **`chat/.env`**:
+   **Enable in `{reply}`** (restart hub after changes):
 
-   - `REPLY_USE_HATORI=1` — route `/api/suggest` through Hatori when healthy; otherwise code **falls back to Ollama**.
-   - Optional: `REPLY_HATORI_PORT=23572` (default), `REPLY_HATORI_EXTERNAL=1` if `{reply}` must **not** spawn Hatori (you run it only from the Hatori repo).
+   - **Preferred:** copy **`chat/.env.local.example`** → **`chat/.env.local`** and set **`REPLY_USE_HATORI=1`**. That file is **gitignored** and is loaded **after** **`chat/.env`** via **`load-env.js`** (hub + worker + `npm run verify:hatori`).
+   - Or set the same variables directly in **`chat/.env`**.
+   - Optional: **`REPLY_HATORI_PORT=23572`**, **`REPLY_HATORI_EXTERNAL=1`** when Hatori is **only** started by its own LaunchAgent and `{reply}` must not spawn uvicorn.
 
-   **`chat/hatori-client.js`** reads **`HATORI_API_TOKEN`** from **`~/.config/hatori/hatori.env`** (created by Hatori’s `hatori_env_init.sh`). Restart **`{reply}`** after changing flags (`make stop` / `make run`).
+   On startup, if **`REPLY_USE_HATORI=1`** but the sibling checkout is missing, the hub logs a **single warning** with the expected path.
 
-   Diagnostics: `make hatori-doctor` (runs **`make doctor`** in **`../hatori`** if present).
+   **`chat/hatori-client.js`** reads **`HATORI_API_TOKEN`** from **`~/.config/hatori/hatori.env`**.
+
+   **Diagnostics:** `make hatori-doctor` (Hatori’s **`make doctor`**), **`make hatori-preflight`** (Reply-side checks), **`cd chat && npm run verify:hatori`** (ingest + suggest smoke against a running API).
 
 ---
 
 ## 3. Configuration notes (`chat/.env`)
 
+- **`chat/.env.local`** (optional, gitignored) — Loaded **after** `.env` for machine-only overrides (see **`chat/.env.local.example`**, e.g. **`REPLY_USE_HATORI=1`**). Same mechanism is used by **`server.js`**, **`background-worker.js`**, and **`security-audit.js`** via **`chat/load-env.js`**.
 - **`PORT`** — Default `45311`. If that port is already bound, `server.js` tries the next port and logs it (`Port 45311 in use, trying 45312...`). Use the printed URL or free the port.
 - **`REPLY_NODE_BIN`** (optional) — Absolute path to the `node` binary for the LaunchAgent. Use when Node is not on the plist `PATH` (for example, only installed under a version manager without a symlink into `/opt/homebrew/bin`).
 - **`REPLY_OLLAMA_MODEL`** — Default in code is `gemma4:e2b` (lightest Gemma 4 edge tag on Ollama). Larger: `gemma4:e4b`, `gemma4:26b`, `gemma4:31b`.
