@@ -103,6 +103,67 @@ function normalizeChannelBridgeMode(value, fallback = "disabled") {
   return fallback;
 }
 
+/** One extra mailbox row for multi-account mail (reply#21). */
+function normalizeMailAccountEntry(raw, idx) {
+  if (!raw || typeof raw !== "object") return null;
+  const id =
+    typeof raw.id === "string" && raw.id.trim()
+      ? raw.id.trim()
+      : `mail-${idx}-${Date.now().toString(36)}`;
+  const provider = raw.provider === "gmail_oauth" ? "gmail_oauth" : "imap";
+  const im = raw.imap && typeof raw.imap === "object" ? raw.imap : {};
+  const imap =
+    provider === "imap"
+      ? {
+          host: String(im.host || "").trim(),
+          port: Math.max(1, Math.min(parseInt(im.port, 10) || 993, 65535)),
+          secure: im.secure !== false,
+          user: String(im.user || "").trim(),
+          mailbox: String(im.mailbox || "INBOX").trim() || "INBOX",
+          sentMailbox: String(im.sentMailbox || "").trim(),
+          limit: Math.max(1, Math.min(parseInt(im.limit, 10) || 200, 2000)),
+          sinceDays: Math.max(1, Math.min(parseInt(im.sinceDays, 10) || 30, 3650)),
+          selfEmails: String(im.selfEmails || "").trim(),
+          pass: typeof im.pass === "string" ? im.pass : "",
+        }
+      : {
+          host: "",
+          port: 993,
+          secure: true,
+          user: "",
+          mailbox: "INBOX",
+          sentMailbox: "",
+          limit: 200,
+          sinceDays: 30,
+          selfEmails: "",
+          pass: "",
+        };
+  return {
+    id,
+    label: String(raw.label || id).slice(0, 120),
+    provider,
+    enabled: raw.enabled !== false,
+    imap,
+    gmailAccountRef: typeof raw.gmailAccountRef === "string" ? raw.gmailAccountRef.trim().slice(0, 128) : "",
+  };
+}
+
+function mergeMailAccountsFromIncoming(incomingList, previousList) {
+  const prev = Array.isArray(previousList) ? previousList : [];
+  if (!Array.isArray(incomingList)) return prev;
+  const curMap = new Map(prev.map((a) => [a.id, a]));
+  return incomingList
+    .map((x, i) => normalizeMailAccountEntry(x, i))
+    .filter(Boolean)
+    .map((acc) => {
+      const was = curMap.get(acc.id);
+      if (was?.imap?.pass && (!acc.imap.pass || !String(acc.imap.pass).trim())) {
+        return { ...acc, imap: { ...acc.imap, pass: was.imap.pass } };
+      }
+      return acc;
+    });
+}
+
 function withDefaults(settings) {
   const s = settings && typeof settings === "object" ? settings : {};
   const bridgeChannels = {};
@@ -171,6 +232,13 @@ function withDefaults(settings) {
         },
       },
     },
+    mailAccounts: Array.isArray(s?.mailAccounts)
+      ? s.mailAccounts.map((x, i) => normalizeMailAccountEntry(x, i)).filter(Boolean)
+      : [],
+    defaultMailAccountId:
+      s?.defaultMailAccountId == null || s.defaultMailAccountId === ""
+        ? null
+        : String(s.defaultMailAccountId),
   };
 }
 
@@ -248,6 +316,32 @@ function maskSettingsForClient(settings) {
   const gmailClientSecret = maskSecret(gmail.clientSecret);
   const gmailRefresh = maskSecret(gmail.refreshToken);
 
+  const mailAccounts = (cfg.mailAccounts || []).map((a) => {
+    const passMask = maskSecret(a.imap?.pass);
+    return {
+      id: a.id,
+      label: a.label || a.id,
+      provider: a.provider || "imap",
+      enabled: a.enabled !== false,
+      gmailAccountRef: a.gmailAccountRef || "",
+      imap: a.imap
+        ? {
+            host: a.imap.host || "",
+            port: a.imap.port || 993,
+            secure: a.imap.secure !== false,
+            user: a.imap.user || "",
+            mailbox: a.imap.mailbox || "INBOX",
+            sentMailbox: a.imap.sentMailbox || "",
+            limit: a.imap.limit || 200,
+            sinceDays: a.imap.sinceDays || 30,
+            selfEmails: a.imap.selfEmails || "",
+            hasPass: passMask.has,
+            passHint: passMask.hint,
+          }
+        : {},
+    };
+  });
+
   return {
     imap: {
       host: imap.host || "",
@@ -290,6 +384,8 @@ function maskSettingsForClient(settings) {
       operatorTokenHint: maskSecret(cfg.global.operatorToken).hint,
     },
     ui: ui,
+    mailAccounts,
+    defaultMailAccountId: cfg.defaultMailAccountId ?? null,
   };
 }
 
@@ -383,6 +479,7 @@ module.exports = {
   readSettings,
   writeSettings,
   maskSettingsForClient,
+  mergeMailAccountsFromIncoming,
   isImapConfigured,
   isGmailConfigured,
   getChannelBridgeInboundMode,

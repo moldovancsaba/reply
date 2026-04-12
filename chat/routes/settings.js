@@ -9,6 +9,7 @@ const {
     writeSettings,
     maskSettingsForClient,
     withDefaults,
+    mergeMailAccountsFromIncoming,
     CHANNEL_BRIDGE_CHANNELS
 } = require("../settings-store");
 const { buildAuthUrl, connectGmailFromCallback, disconnectGmail, checkGmailConnection } = require("../gmail-connector");
@@ -100,6 +101,18 @@ async function handleUpdateSettings(req, res) {
                 if (q.gmail !== undefined) next.worker.quantities.gmail = clamp(q.gmail, current.worker.quantities.gmail, 500);
                 if (q.notes !== undefined) next.worker.quantities.notes = clamp(q.notes, current.worker.quantities.notes, 5000);
             }
+        }
+
+        if (Array.isArray(incoming?.mailAccounts)) {
+            next.mailAccounts = mergeMailAccountsFromIncoming(
+                incoming.mailAccounts,
+                current.mailAccounts || []
+            );
+        }
+        if (incoming && "defaultMailAccountId" in incoming) {
+            next.defaultMailAccountId = incoming.defaultMailAccountId
+                ? String(incoming.defaultMailAccountId).trim()
+                : null;
         }
 
         // UI
