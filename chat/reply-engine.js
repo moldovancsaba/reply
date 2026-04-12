@@ -1,5 +1,6 @@
 const { Ollama } = require('ollama');
 const { getReplyOllamaModel } = require('./ollama-model.js');
+const { resolveOllamaHttpBase, shouldRouteDraftToHatori } = require('./ai-runtime-config.js');
 const { assembleReplyContext, enrichAnnotatedDocText } = require('./context-engine.js');
 const { search, getGoldenExamples, getHistory } = require('./vector-store.js');
 const fs = require('fs');
@@ -89,13 +90,10 @@ function inferToneProfile(threadContext) {
   return 'balanced';
 }
 
-// Ollama: host from OLLAMA_HOST (e.g. http://127.0.0.1:11434); model from REPLY_OLLAMA_MODEL.
-const ollamaHost = (() => {
-  const raw = String(process.env.OLLAMA_HOST || "").trim();
-  if (raw) return raw.replace(/\/$/, "");
-  return "http://127.0.0.1:11434";
-})();
-const ollama = new Ollama({ host: ollamaHost });
+// Ollama: host from OLLAMA_HOST / Settings (see ai-runtime-config); model from REPLY_OLLAMA_MODEL.
+function getOllamaClient() {
+  return new Ollama({ host: resolveOllamaHttpBase() });
+}
 
 function getOllamaModel() {
   return getReplyOllamaModel();
@@ -119,8 +117,8 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
     return { suggestion: "Please provide a message to reply to.", explanation: "" };
   }
 
-  // OPTION: Route to Hatori if enabled
-  if (process.env.REPLY_USE_HATORI === '1') {
+  // OPTION: Route to Hatori when enabled and draft runtime is not Ollama-only
+  if (shouldRouteDraftToHatori()) {
     try {
       console.log(`[Hatori] Routing logic for ${recipient || 'unknown'}...`);
       // Build the stateless thread_context payload so {hatori} has guaranteed
@@ -216,7 +214,7 @@ OUTPUT FORMAT: JSON with "draft" and "explanation" fields.
 JSON:`;
 
   try {
-    const analyzerResponse = await ollama.chat({
+    const analyzerResponse = await getOllamaClient().chat({
       model: getOllamaModel(),
       messages: [{ role: 'user', content: analyzerPrompt }],
       format: 'json'
@@ -241,7 +239,7 @@ DRAFT:
 
 REPLY (Text only, 1-2 sentences max, no filler):`;
 
-    const copywriterResponse = await ollama.chat({
+    const copywriterResponse = await getOllamaClient().chat({
       model: getOllamaModel(),
       messages: [{ role: 'user', content: copywriterPrompt }]
     });
@@ -284,7 +282,7 @@ MESSAGE:
 JSON OUTPUT:`;
 
   try {
-    const response = await ollama.chat({
+    const response = await getOllamaClient().chat({
       model: getOllamaModel(),
       messages: [{ role: 'user', content: prompt }],
       format: 'json' // Ensure JSON output if supported by model/library
