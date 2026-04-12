@@ -6,7 +6,7 @@
 <p align="center"><strong>A unified aggregation proxy and outbound transport engine for iMessage, WhatsApp, Mail, and LinkedIn.</strong></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.5.9-2563EB?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/version-v0.5.10-2563EB?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-0F172A?style=for-the-badge" alt="Platform">
   <img src="https://img.shields.io/badge/transport-OpenClaw%20%7C%20AppleScript-0EA5E9?style=for-the-badge" alt="Transports">
 </p>
@@ -31,7 +31,7 @@ Capabilities:
 - **Context engine & voice:** Recipient-scoped history and hybrid RAG are assembled in **`chat/context-engine.js`** (see **[docs/CONTEXT_ENGINE.md](docs/CONTEXT_ENGINE.md)**). **Mic** in the hub uses the browser **Web Speech API** to fill the composer; pair with **Suggest** for an AI draft.
 - **Alias merge (reversible):** Merging contacts moves channels/notes to the primary and keeps the other SQLite row as an **`primary_contact_id` alias**. The KYC panel lists linked profiles with **Unlink**; APIs: **`GET /api/contacts/aliases?for=`** and **`POST /api/contacts/unlink-alias`** (`aliasContactId`). See **[reply#19](https://github.com/moldovancsaba/reply/issues/19)**.
 - **Auto-triage & zero-inbox hints:** Rule file **`chat/triage-rules.json`** drives `triage-engine.evaluate()` — each hit logs **`suggestedActions`** (`reply`, `archive`, `upload`) and **`priority`**. Dashboard shows a **priority queue** plus log columns; **`GET /api/triage-queue`**. See **[reply#24](https://github.com/moldovancsaba/reply/issues/24)**.
-
+- **{hatori} sensitivity contract:** Cross-system options and **`SensitivityMeta`** typedef for phased redaction/indexing — **[docs/HATORI_SENSITIVITY_CONTRACT.md](docs/HATORI_SENSITIVITY_CONTRACT.md)** ([reply#16](https://github.com/moldovancsaba/reply/issues/16)).
 ---
 
 ## Quick Start

@@ -6,6 +6,16 @@ const os = require('os');
 /**
  * {hatori} Client for local intelligence, annotation and drafting.
  * Base URL: http://127.0.0.1:23572
+ *
+ * ## Sensitivity contract (reply#16)
+ * Future payloads may include optional **SensitivityMeta** alongside message text.
+ * See `docs/HATORI_SENSITIVITY_CONTRACT.md`.
+ *
+ * @typedef {object} SensitivityMeta
+ * @property {'raw'|'redacted'|'display_safe'} [payload_class] - Trust level of associated text
+ * @property {string[]} [pii_classes] - Hint types present before redaction (e.g. email, phone)
+ * @property {boolean} [safe_to_index] - If false, must not be embedded in LanceDB / RAG
+ * @property {boolean} [channel_scoped_ids] - If true, do not correlate IDs across channels
  */
 
 let _token = null;
