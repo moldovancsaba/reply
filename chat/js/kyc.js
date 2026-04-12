@@ -32,6 +32,64 @@ function el(id) {
   return document.getElementById(id);
 }
 
+/** Show merged alias rows for this canonical profile (reply#19). */
+async function refreshKycAliasStrip(forKey) {
+  const strip = el('kyc-alias-strip');
+  const list = el('kyc-alias-list');
+  if (!strip || !list) return;
+  if (!forKey) {
+    strip.classList.add('u-display-none');
+    list.innerHTML = '';
+    return;
+  }
+  try {
+    const { listContactAliases } = await import('./api.js');
+    const data = await listContactAliases(forKey);
+    const aliases = data.aliases || [];
+    list.innerHTML = '';
+    if (!aliases.length) {
+      strip.classList.add('u-display-none');
+      return;
+    }
+    strip.classList.remove('u-display-none');
+    for (const a of aliases) {
+      const li = document.createElement('li');
+      li.style.marginBottom = '4px';
+      const label = document.createElement('span');
+      const h = a.handle || a.id;
+      label.textContent = `${a.displayName || h} (${h})`;
+      li.appendChild(label);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-ghost btn-sm';
+      btn.style.marginLeft = '8px';
+      btn.textContent = 'Unlink';
+      btn.onclick = () => {
+        unlinkKycAlias(a.id, forKey).catch((e) => console.error(e));
+      };
+      li.appendChild(btn);
+      list.appendChild(li);
+    }
+  } catch (e) {
+    console.warn('aliases strip:', e);
+    strip.classList.add('u-display-none');
+  }
+}
+
+async function unlinkKycAlias(aliasId, forKey) {
+  const { unlinkContactAlias } = await import('./api.js');
+  await unlinkContactAlias(aliasId);
+  UI.showToast('Alias unlinked', 'success', 2200);
+  await refreshKycAliasStrip(forKey);
+  if (typeof window.loadConversations === 'function') {
+    try {
+      await window.loadConversations(false);
+    } catch (err) {
+      console.warn('refresh conversations after unlink', err);
+    }
+  }
+}
+
 function buildSecurityHeaders(overrides = null) {
   const headers = { 'X-Reply-Human-Approval': 'confirmed' };
   if (overrides && typeof overrides === 'object') {
@@ -534,6 +592,7 @@ export async function loadKYCData(handle) {
   if (!handle) {
     setVisible(emptyState, true);
     setVisible(editor, false);
+    refreshKycAliasStrip(null).catch(() => {});
     return;
   }
 
@@ -586,6 +645,7 @@ export async function loadKYCData(handle) {
     renderConnectedServices(data, handle);
     renderSuggestions(handle, data.pendingSuggestions);
     updateChannelOptionsFromKyc(handle, data);
+    await refreshKycAliasStrip(data.contactId || handle);
   } catch (e) {
     console.warn('Failed to load KYC:', e);
     if (nameInput) {
@@ -614,6 +674,7 @@ export async function loadKYCData(handle) {
     renderConnectedServices(null, handle);
     renderSuggestions(handle, []);
     updateChannelOptionsFromKyc(handle, null);
+    await refreshKycAliasStrip(handle);
   }
 }
 

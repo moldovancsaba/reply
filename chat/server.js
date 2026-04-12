@@ -174,6 +174,12 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/api/kyc") return serveKyc(req, res, url, auth, () => messagingRoutes.invalidateConversationsCache());
   if (pathname === "/api/analyze-contact") return serveAnalyzeContact(req, res, auth, analysisInFlightByHandle);
   if (pathname === "/api/contacts/merge") return auth({ route: pathname, action: "merge-contact" }) && contactRoutes.serveMerge(req, res, () => messagingRoutes.invalidateConversationsCache());
+  if (pathname === "/api/contacts/aliases" && req.method === "GET") {
+    return auth({ route: pathname, action: "merge-contact", requireHumanApproval: false }) && contactRoutes.serveListAliases(req, res, url);
+  }
+  if (pathname === "/api/contacts/unlink-alias") {
+    return auth({ route: pathname, action: "merge-contact" }) && contactRoutes.serveUnlinkAlias(req, res, () => messagingRoutes.invalidateConversationsCache());
+  }
   if (pathname === "/api/contacts/update-status" || pathname === "/api/update-status" || pathname === "/api/status") return contactRoutes.serveUpdateStatus(req, res);
   if (pathname === "/api/update-contact") return auth({ route: pathname, action: "update-contact" }) && contactRoutes.serveUpdateContact(req, res);
   if (pathname === "/api/add-note") return auth({ route: pathname, action: "add-note" }) && contactRoutes.serveAddNote(req, res);
