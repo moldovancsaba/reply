@@ -96,7 +96,11 @@ curl -sfS http://127.0.0.1:45311/api/health
    make hatori-preflight   # optional: checks clone, ~/.config/hatori/hatori.env, Docker, API :23572, REPLY_USE_HATORI in .env / .env.local
    ```
 
-   **Docker** must be running before **`make hatori-bootstrap`** (Colima or Docker Desktop). If you prefer not to install Hatori’s LaunchAgent, skip the full bootstrap and run manually: `cd ../hatori && make up && make run`.
+   **Docker** must be running before **`make hatori-bootstrap`** (Colima or Docker Desktop). The Makefile runs **`make up`** then a short sleep so Postgres is ready before **`hatori_bootstrap.sh`** runs **`make reset`**. If **`make reset`** still fails with a DB connection error, run **`cd ../hatori && make reset`** once the **`hatori-pg`** container is **Up**. If Colima fails with **“disk … in use”**, run **`colima delete -f`** then **`colima start`**.
+
+   **Python:** Hatori’s API needs **Python 3.10+** (PEP 604 type hints). Recreate the sibling venv with Homebrew **`python3.11`** if LaunchAgent logs show **`TypeError: unsupported operand type(s) for |`**: `cd ../hatori && rm -rf .venv && /opt/homebrew/bin/python3.11 -m venv .venv && . .venv/bin/activate && pip install -r ui/requirements.txt`, then **`make install-service`** again.
+
+   If you prefer not to install Hatori’s LaunchAgent, skip the full bootstrap and run manually: `cd ../hatori && make up && make run`.
 
    **Enable in `{reply}`** (restart hub after changes):
 
