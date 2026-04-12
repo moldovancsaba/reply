@@ -84,6 +84,34 @@ curl -sfS http://127.0.0.1:45311/api/health
 
    See [tools/macos/ReplyMenubar/README.md](../tools/macos/ReplyMenubar/README.md) (rebuild if you move the repo).
 
+7. **Optional — `{hatori}` (local intelligence API):** `{reply}` can call **Hatori** on **`127.0.0.1:23572`** when enabled. Upstream repo: **[moldovancsaba/hatori](https://github.com/moldovancsaba/hatori)** (API contract and `make run` / `make bootstrap` live there).
+
+   **Layout:** the hub resolves the Hatori **checkout** as **`../hatori`** from the **`chat/`** folder — i.e. a **sibling directory** of this **`reply`** repo. Example: `…/Projects/reply` and `…/Projects/hatori`.
+
+   **From `{reply}` repo root:**
+
+   ```bash
+   make hatori-clone       # once: clones https://github.com/moldovancsaba/hatori.git → ../hatori
+   make hatori-bootstrap   # Python venv + ui deps + ~/.config/hatori/hatori.env (token)
+   ```
+
+   **Docker** (Postgres + pgvector) must be reachable — start **Colima** or **Docker Desktop**, then:
+
+   ```bash
+   cd ../hatori && make up && make run
+   ```
+
+   Or install Hatori’s LaunchAgent from that repo (`make install-service` there).
+
+   **Enable in `{reply}`:** add to **`chat/.env`**:
+
+   - `REPLY_USE_HATORI=1` — route `/api/suggest` through Hatori when healthy; otherwise code **falls back to Ollama**.
+   - Optional: `REPLY_HATORI_PORT=23572` (default), `REPLY_HATORI_EXTERNAL=1` if `{reply}` must **not** spawn Hatori (you run it only from the Hatori repo).
+
+   **`chat/hatori-client.js`** reads **`HATORI_API_TOKEN`** from **`~/.config/hatori/hatori.env`** (created by Hatori’s `hatori_env_init.sh`). Restart **`{reply}`** after changing flags (`make stop` / `make run`).
+
+   Diagnostics: `make hatori-doctor` (runs **`make doctor`** in **`../hatori`** if present).
+
 ---
 
 ## 3. Configuration notes (`chat/.env`)
