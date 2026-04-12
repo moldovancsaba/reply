@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env'), override: true });
+const { loadReplyEnv } = require('./load-env.js');
+loadReplyEnv();
 
 // Log Rotation
 const LOG_FILE = path.join(__dirname, 'worker.out.log');

@@ -13,7 +13,17 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, ".env"), override: true });
+const { loadReplyEnv } = require("./load-env.js");
+loadReplyEnv();
+
+const HATORI_PROJECT_PATH = path.join(__dirname, "..", "..", "hatori");
+if (String(process.env.REPLY_USE_HATORI || "").trim() === "1") {
+  if (!fs.existsSync(HATORI_PROJECT_PATH)) {
+    console.warn(
+      `[Hatori] REPLY_USE_HATORI=1 but no checkout at ${HATORI_PROJECT_PATH} — hub will not spawn the sidecar. Clone https://github.com/moldovancsaba/hatori as a sibling of this repo, or set REPLY_HATORI_EXTERNAL=1 if the API already runs elsewhere.`
+    );
+  }
+}
 
 /** Verbose hub `console.log` lines (reply#33). Errors/warnings stay on. */
 function replyHubDebugLog(...args) {
@@ -54,7 +64,6 @@ const { ensureWorkerCanStartFromHub } = require("./ensure-hub-worker.js");
 
 // Start Managed Services
 try {
-  const HATORI_PROJECT_PATH = path.join(__dirname, '..', '..', 'hatori');
   serviceManager.setStatus('hatori', 'loading in queue');
   serviceManager.setStatus('worker', 'loading in queue');
 
