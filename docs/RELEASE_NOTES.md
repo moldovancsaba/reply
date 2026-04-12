@@ -2,6 +2,11 @@
 
 Completed work only. For `{reply}`, the [GitHub Project (#7)](https://github.com/users/moldovancsaba/projects/7) and [`moldovancsaba/reply`](https://github.com/moldovancsaba/reply) issues are the source of truth for delivered items (portfolio board: [Project #1](https://github.com/users/moldovancsaba/projects/1)).
 
+## [0.5.5] - 2026-04-12
+### Added
+- **Local Ollama annotation pipeline ([reply#36](https://github.com/moldovancsaba/reply/issues/36)):** `npm run annotate` runs `annotation-agent.js` (loads `chat/.env` + `.env.local`). **Background worker** runs the same batch on a timer (default **30m**, configurable via `REPLY_ANNOTATION_INTERVAL_MS`; disable with `REPLY_ANNOTATION_DISABLE=1`). Exported `normalizeAnnotationFromOllama` + tests in `chat/test/annotation-agent.test.js`.
+- **Docs:** `docs/INGESTION.md` — *Ollama annotation* section; `chat/.env.example` — `REPLY_ANNOTATION_*` knobs; `README.md` — product bullet.
+
 ## [0.5.4] - 2026-04-11
 ### Fixed
 - **Send error UX:** Outbound `sendMessage` uses `delegateErrorUI` on the API layer so failed sends surface **one** error toast from `handleSendMessage` (no duplicate toast + alert). Toasts render message text via `textContent` with `pre-wrap` for multi-line policy hints.

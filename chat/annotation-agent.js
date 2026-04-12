@@ -1,10 +1,31 @@
-const { Ollama } = require('ollama');
+/**
+ * Local Ollama annotation batch (reply#36 — “digital me” metadata on LanceDB rows).
+ * Produces JSON { tags, summary, facts } per snippet and persists via vector-store.annotateDocument.
+ * Run on a timer from background-worker.js or manually: `npm run annotate` from chat/.
+ */
+const { loadReplyEnv } = require("./load-env.js");
+loadReplyEnv();
+
+const { Ollama } = require("ollama");
 const ollama = new Ollama();
-const { getAnnotationOllamaModel } = require('./ollama-model.js');
-const { getUnannotatedDocuments, annotateDocument } = require('./vector-store.js');
+const { getAnnotationOllamaModel } = require("./ollama-model.js");
+const { getUnannotatedDocuments, annotateDocument } = require("./vector-store.js");
 
 const MODEL = getAnnotationOllamaModel();
 const MAX_DOCS_PER_RUN = parseInt(process.env.REPLY_ANNOTATION_LIMIT || "50", 10);
+
+/**
+ * Normalize Ollama JSON (or partial JSON) into the shape stored on documents.
+ * Exported for unit tests; keeps LanceDB rows consistent when the model drifts.
+ */
+function normalizeAnnotationFromOllama(parsed) {
+    const p = parsed && typeof parsed === "object" ? parsed : {};
+    return {
+        tags: Array.isArray(p.tags) ? p.tags.map(String) : [],
+        summary: typeof p.summary === "string" ? p.summary : "",
+        facts: Array.isArray(p.facts) ? p.facts.map(String) : []
+    };
+}
 
 const PROMPT_TEMPLATE = `
 You are an expert knowledge annotator.
@@ -69,12 +90,7 @@ async function annotateBatch() {
                 continue;
             }
 
-            // Normalize fields
-            const annotationObj = {
-                tags: Array.isArray(parsed.tags) ? parsed.tags.map(String) : [],
-                summary: typeof parsed.summary === 'string' ? parsed.summary : "",
-                facts: Array.isArray(parsed.facts) ? parsed.facts.map(String) : []
-            };
+            const annotationObj = normalizeAnnotationFromOllama(parsed);
 
             const updated = await annotateDocument(doc.id, annotationObj);
 
@@ -101,4 +117,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { annotateBatch };
+module.exports = { annotateBatch, normalizeAnnotationFromOllama };
