@@ -366,25 +366,21 @@ async function serveServiceControl(req, res) {
 async function serveOpenClawStatus(req, res) {
     const { execFile } = require("child_process");
     const { resolveOpenClawBinary } = require("../utils/whatsapp-utils");
-    const os = require("os");
+    const { getOpenClawGatewayExecEnv, readGatewayTokenFromHomeConfig } = require("../openclaw-gateway-env.js");
 
-    // Read the gateway auth token from the OpenClaw config
-    let gatewayToken = null;
-    try {
-        const configPath = path.join(os.homedir(), ".openclaw", "openclaw.json");
-        if (fs.existsSync(configPath)) {
-            const cfg = JSON.parse(fs.readFileSync(configPath, "utf8"));
-            gatewayToken = cfg?.gateway?.auth?.token || null;
-        }
-    } catch (e) {
-        // Ignore — health check will fail gracefully
-    }
-
+    const childEnv = getOpenClawGatewayExecEnv();
     const bin = resolveOpenClawBinary();
     const args = ["gateway", "health", "--json"];
-    if (gatewayToken) args.push("--token", gatewayToken);
+    if (!childEnv.OPENCLAW_GATEWAY_URL) {
+        const tok =
+            String(process.env.REPLY_OPENCLAW_GATEWAY_TOKEN || "").trim() ||
+            readGatewayTokenFromHomeConfig();
+        if (tok) {
+            args.push("--token", tok);
+        }
+    }
 
-    execFile(bin, args, { timeout: 5000 }, (error, stdout, stderr) => {
+    execFile(bin, args, { timeout: 5000, env: childEnv }, (error, stdout, stderr) => {
         if (error) {
             console.error("OpenClaw CLI health check failed:", error.message);
             writeJson(res, 200, {

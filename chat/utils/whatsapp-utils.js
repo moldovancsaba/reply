@@ -5,6 +5,7 @@
 
 const { execFile } = require("child_process");
 const { enforceOpenClawWhatsAppGuard } = require("../openclaw-guard");
+const { getOpenClawGatewayExecEnv } = require("../openclaw-gateway-env.js");
 
 let openClawGuardLastCheckAtMs = 0;
 let openClawGuardLastResult = null;
@@ -98,7 +99,7 @@ function sendWhatsAppViaOpenClawCli({ recipient, text, dryRun = false }) {
     if (dryRun) args.push("--dry-run");
 
     return new Promise((resolve, reject) => {
-        execFile(bin, args, { timeout: 15000 }, (error, stdout, stderr) => {
+        execFile(bin, args, { timeout: 15000, env: getOpenClawGatewayExecEnv() }, (error, stdout, stderr) => {
             if (error) {
                 const hint = buildOpenClawWhatsAppHint(stdout, stderr, error.message);
                 const err = new Error(`OpenClaw send failed: ${error.message}`);
