@@ -221,10 +221,44 @@ function switchTab(tabId) {
     email: 'Email Configuration',
     messaging: 'Messaging & Bridges',
     worker: 'Background Worker',
+    'ai-status': 'AI & system status',
     security: 'Privacy & Security'
   };
   const titleEl = el('settings-tab-title');
   if (titleEl) titleEl.textContent = titles[tabId] || 'Settings';
+
+  if (tabId === 'ai-status') {
+    refreshAiProviderStatuses().catch((e) => console.warn('[settings] provider check:', e));
+  }
+}
+
+async function refreshAiProviderStatuses() {
+  const ollamaLine = el('settings-providers-ollama-line');
+  const ocLine = el('settings-providers-openclaw-line');
+  const hatLine = el('settings-providers-hatori-line');
+  if (!ollamaLine && !ocLine) return;
+  try {
+    const { fetchSystemHealth, fetchOpenClawStatus } = await import('./api.js');
+    const [health, oc] = await Promise.all([
+      fetchSystemHealth({ silent: true }).catch(() => ({})),
+      fetchOpenClawStatus().catch(() => ({ status: 'offline', error: 'unreachable' })),
+    ]);
+    if (ollamaLine) {
+      const o = health.services?.ollama?.status || 'unknown';
+      ollamaLine.textContent = `Status: ${o} — default port 11434 (OLLAMA_PORT overrides).`;
+    }
+    if (ocLine) {
+      const s = oc.status || 'unknown';
+      ocLine.textContent = `Status: ${s}${oc.error ? ` — ${oc.error}` : ''}${oc.detail ? ` (${oc.detail})` : ''}`;
+    }
+    if (hatLine) {
+      const h = health.services?.hatori_api?.status || 'unknown';
+      const d = health.services?.hatori_api?.detail || '';
+      hatLine.textContent = `Status: ${h}${d ? ` (${d})` : ''}`;
+    }
+  } catch (e) {
+    if (ollamaLine) ollamaLine.textContent = `Check failed: ${e?.message || e}`;
+  }
 }
 
 async function loadIntoForm() {
@@ -283,6 +317,24 @@ async function loadIntoForm() {
   setVal('settings-worker-whatsapp-max', worker.quantities?.whatsapp !== undefined ? String(worker.quantities.whatsapp) : '500');
   setVal('settings-worker-gmail-max', worker.quantities?.gmail !== undefined ? String(worker.quantities.gmail) : '100');
   setVal('settings-worker-notes-max', worker.quantities?.notes !== undefined ? String(worker.quantities.notes) : '0');
+
+  const health = data?.health || {};
+  setVal('settings-health-hatori-timeout', String(health.hatoriProbeTimeoutMs ?? 12000));
+  setVal('settings-health-ollama-timeout', String(health.ollamaProbeTimeoutMs ?? 3000));
+  setVal('settings-health-hatori-threshold', String(health.hatoriWatchdogFailureThreshold ?? 3));
+  setVal('settings-health-ui-poll', String(health.uiHealthPollIntervalMs ?? 15000));
+  standaloneHealthPollMs = Math.max(
+    5000,
+    Math.min(Number(health.uiHealthPollIntervalMs) || 15000, 300000)
+  );
+  restartStandaloneHealthPoll();
+
+  const rt = data?.runtime || {};
+  const hatWrap = el('settings-providers-hatori-wrap');
+  if (hatWrap) {
+    hatWrap.classList.toggle('u-display-none', !rt.useHatori);
+    hatWrap.style.display = rt.useHatori ? '' : 'none';
+  }
 
   // Security
   const localWrites = el('settings-global-local-writes');
@@ -349,6 +401,12 @@ async function onSave() {
           gmail: Number(el('settings-worker-gmail-max')?.value) || 100,
           notes: Number(el('settings-worker-notes-max')?.value) || 0,
         }
+      },
+      health: {
+        hatoriProbeTimeoutMs: Number(el('settings-health-hatori-timeout')?.value) || 12000,
+        ollamaProbeTimeoutMs: Number(el('settings-health-ollama-timeout')?.value) || 3000,
+        hatoriWatchdogFailureThreshold: Number(el('settings-health-hatori-threshold')?.value) || 3,
+        uiHealthPollIntervalMs: Number(el('settings-health-ui-poll')?.value) || 15000,
       },
       channelBridge: {
         channels: {
@@ -446,6 +504,17 @@ function isSettingsStandalonePage() {
 }
 
 let standaloneHealthIntervalId = null;
+let standaloneHealthPollMs = 15000;
+
+function restartStandaloneHealthPoll() {
+  if (!isSettingsStandalonePage()) return;
+  if (standaloneHealthIntervalId != null) {
+    clearInterval(standaloneHealthIntervalId);
+    standaloneHealthIntervalId = null;
+  }
+  pollStandaloneServiceHealth();
+  standaloneHealthIntervalId = setInterval(pollStandaloneServiceHealth, standaloneHealthPollMs);
+}
 
 async function pollStandaloneServiceHealth() {
   const dot = document.getElementById('services-health-dot');
@@ -474,9 +543,7 @@ async function pollStandaloneServiceHealth() {
 }
 
 function startStandaloneServiceHealthPoll() {
-  if (standaloneHealthIntervalId != null) return;
-  pollStandaloneServiceHealth();
-  standaloneHealthIntervalId = setInterval(pollStandaloneServiceHealth, 15000);
+  restartStandaloneHealthPoll();
 }
 
 /**
@@ -579,7 +646,7 @@ export async function wireDom() {
   const hasPage = !!document.getElementById('settings-page');
   if (!hasPage) {
     try {
-      const response = await fetch('fragments/settings-fragment.html');
+      const response = await fetch('fragments/settings-fragment.html?v=2.3');
       if (!response.ok) throw new Error('Failed to load settings fragment');
       const html = await response.text();
       container.innerHTML = html;
@@ -631,6 +698,19 @@ export async function wireDom() {
 
   navItems.forEach(btn => {
     btn.onclick = () => switchTab(btn.getAttribute('data-tab'));
+  });
+
+  el('settings-providers-check-ollama')?.addEventListener('click', () => {
+    refreshAiProviderStatuses().catch((e) => console.warn(e));
+  });
+  el('settings-providers-check-openclaw')?.addEventListener('click', () => {
+    refreshAiProviderStatuses().catch((e) => console.warn(e));
+  });
+  el('settings-providers-check-hatori')?.addEventListener('click', () => {
+    refreshAiProviderStatuses().catch((e) => console.warn(e));
+  });
+  el('settings-providers-check-all')?.addEventListener('click', () => {
+    refreshAiProviderStatuses().catch((e) => console.warn(e));
   });
 }
 

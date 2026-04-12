@@ -19,6 +19,9 @@
                 <button class="settings-nav-item" data-tab="worker">
                     <span class="material-symbols-outlined">cyclone</span> Worker
                 </button>
+                <button class="settings-nav-item" data-tab="ai-status">
+                    <span class="material-symbols-outlined">monitor_heart</span> AI &amp; status
+                </button>
                 <button class="settings-nav-item" data-tab="security">
                     <span class="material-symbols-outlined">lock</span> Privacy & Security
                 </button>
@@ -266,6 +269,78 @@
                                     title="Max Notes to Sync">
                             </div>
                         </div>
+                    </div>
+                </section>
+
+                <!-- TAB: AI & STATUS (reply#51 / #52) -->
+                <section id="tab-content-ai-status" class="settings-tab-content u-display-none">
+                    <div class="settings-card">
+                        <div class="settings-section-title">
+                            <span class="material-symbols-outlined">healing</span> Health monitor
+                        </div>
+                        <p class="settings-hint mb-md">Hub uses these values for <code>/api/system-health</code> probes
+                            and the Hatori watchdog. Save, then reopen the dashboard to apply.</p>
+                        <div class="settings-grid settings-grid-2">
+                            <div class="settings-field">
+                                <label class="settings-label" for="settings-health-hatori-timeout">Hatori probe timeout
+                                    (ms)</label>
+                                <input id="settings-health-hatori-timeout" type="number" class="settings-input"
+                                    min="3000" max="120000" value="12000" title="Single health request timeout">
+                            </div>
+                            <div class="settings-field">
+                                <label class="settings-label" for="settings-health-ollama-timeout">Ollama probe timeout
+                                    (ms)</label>
+                                <input id="settings-health-ollama-timeout" type="number" class="settings-input"
+                                    min="1000" max="30000" value="3000" title="Ollama /api/tags timeout">
+                            </div>
+                            <div class="settings-field">
+                                <label class="settings-label" for="settings-health-hatori-threshold">Hatori failures
+                                    before watchdog</label>
+                                <input id="settings-health-hatori-threshold" type="number" class="settings-input" min="1"
+                                    max="20" value="3" title="Consecutive failed checks">
+                            </div>
+                            <div class="settings-field">
+                                <label class="settings-label" for="settings-health-ui-poll">Settings sidebar health dot
+                                    interval (ms)</label>
+                                <input id="settings-health-ui-poll" type="number" class="settings-input" min="5000"
+                                    max="300000" value="15000" title="Standalone settings page poll">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <div class="settings-section-title">
+                            <span class="material-symbols-outlined">smart_toy</span> AI providers
+                        </div>
+                        <p class="settings-hint mb-md">Read-only checks against the running hub. Ollama/OpenClaw env
+                            (ports, binaries) still comes from your shell and <code>chat/.env</code>.</p>
+
+                        <div class="settings-list-premium">
+                            <div class="settings-list-item-premium" style="flex-direction:column;align-items:stretch;gap:10px;">
+                                <div class="u-flex-center-gap" style="justify-content:space-between;width:100%;">
+                                    <span class="u-font-weight-700">Ollama</span>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="settings-providers-check-ollama">Check</button>
+                                </div>
+                                <p id="settings-providers-ollama-line" class="settings-hint" style="margin:0">—</p>
+                            </div>
+                            <div class="settings-list-item-premium" style="flex-direction:column;align-items:stretch;gap:10px;">
+                                <div class="u-flex-center-gap" style="justify-content:space-between;width:100%;">
+                                    <span class="u-font-weight-700">OpenClaw gateway</span>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="settings-providers-check-openclaw">Check</button>
+                                </div>
+                                <p id="settings-providers-openclaw-line" class="settings-hint" style="margin:0">—</p>
+                            </div>
+                            <div id="settings-providers-hatori-wrap" class="settings-list-item-premium u-display-none"
+                                style="flex-direction:column;align-items:stretch;gap:10px;">
+                                <div class="u-flex-center-gap" style="justify-content:space-between;width:100%;">
+                                    <span class="u-font-weight-700">Hatori API</span>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="settings-providers-check-hatori">Check</button>
+                                </div>
+                                <p id="settings-providers-hatori-line" class="settings-hint" style="margin:0">—</p>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-primary mt-md" id="settings-providers-check-all">Run all
+                            checks</button>
                     </div>
                 </section>
 

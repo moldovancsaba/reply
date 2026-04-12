@@ -89,6 +89,19 @@ const serviceManager = require("../service-manager");
 
 async function serveSystemHealth(req, res) {
     const settings = readSettings();
+    const healthCfg = settings?.health || {};
+    const hatoriProbeMs = Math.max(
+        3000,
+        Math.min(parseInt(healthCfg.hatoriProbeTimeoutMs, 10) || 12000, 120000)
+    );
+    const ollamaProbeMs = Math.max(
+        1000,
+        Math.min(parseInt(healthCfg.ollamaProbeTimeoutMs, 10) || 3000, 30000)
+    );
+    const hatoriFailThresh = Math.max(
+        1,
+        Math.min(parseInt(healthCfg.hatoriWatchdogFailureThreshold, 10) || 3, 20)
+    );
     const mailStatus = readStatus("mail_sync_status.json");
     const gmailOk = isGmailConfigured(settings);
     const imapOk = isImapConfigured(settings);
@@ -117,7 +130,7 @@ async function serveSystemHealth(req, res) {
         try {
             const hatoriPort = process.env.REPLY_HATORI_PORT || "23572";
             const hRes = await fetch(`http://127.0.0.1:${hatoriPort}/v1/health`, {
-                signal: AbortSignal.timeout(12000) // 12s — Hatori loads models on first ping
+                signal: AbortSignal.timeout(hatoriProbeMs)
             });
             if (hRes.ok) {
                 hatoriConsecutiveFailures = 0;
@@ -125,12 +138,12 @@ async function serveSystemHealth(req, res) {
                 hatoriHealth.detail = "ok";
             } else {
                 hatoriConsecutiveFailures += 1;
-                hatoriHealth.status = hatoriConsecutiveFailures >= 3 ? "offline" : "degraded";
+                hatoriHealth.status = hatoriConsecutiveFailures >= hatoriFailThresh ? "offline" : "degraded";
                 hatoriHealth.detail = `http_${hRes.status}`;
             }
         } catch (e) {
             hatoriConsecutiveFailures += 1;
-            hatoriHealth.status = hatoriConsecutiveFailures >= 3 ? "offline" : "degraded";
+            hatoriHealth.status = hatoriConsecutiveFailures >= hatoriFailThresh ? "offline" : "degraded";
             hatoriHealth.detail = e?.name === "TimeoutError" ? "timeout" : "unreachable";
         }
     } else {
@@ -144,7 +157,7 @@ async function serveSystemHealth(req, res) {
     try {
         const ollamaPort = process.env.OLLAMA_PORT || "11434";
         const oRes = await fetch(`http://127.0.0.1:${ollamaPort}/api/tags`, {
-            signal: AbortSignal.timeout(3000)
+            signal: AbortSignal.timeout(ollamaProbeMs)
         });
         if (oRes.ok) ollamaStatus = "online";
     } catch (e) {
@@ -152,17 +165,26 @@ async function serveSystemHealth(req, res) {
     }
 
     // ── Hatori watchdog ─────────────────────────────────────────────────
-    // After 3 consecutive Hatori failures, try to restart the managed sidecar (only if enabled).
-    if (hatoriFeatureEnabled && hatoriConsecutiveFailures === 3) {
+    // After N consecutive Hatori failures: kickstart LaunchAgent if external, else restart managed uvicorn.
+    if (hatoriFeatureEnabled && hatoriConsecutiveFailures === hatoriFailThresh) {
         const hatoriService = serviceManager.getStatus("hatori");
         const st = hatoriService.status;
-        if (
+        if (st === "external") {
+            const { kickstartHatoriJob } = require("../hatori-lifecycle.js");
+            console.warn("[Watchdog] Hatori API failing while marked external — trying launchctl kickstart…");
+            try {
+                await kickstartHatoriJob();
+            } catch (e) {
+                console.error("[Watchdog] Hatori kickstart failed:", e.message);
+            }
+            hatoriConsecutiveFailures = 0;
+        } else if (
             st !== "online" &&
-            st !== "external" &&
             st !== "loading in queue" &&
-            !String(st).startsWith("restarting")
+            !String(st).startsWith("restarting") &&
+            st !== "skipped"
         ) {
-            console.warn("[Watchdog] Hatori unreachable for 3 checks — attempting auto-restart...");
+            console.warn(`[Watchdog] Hatori unreachable for ${hatoriFailThresh} checks — attempting auto-restart...`);
             try {
                 await serviceManager.restart("hatori");
             } catch (e) {
@@ -217,7 +239,7 @@ async function serveSystemHealth(req, res) {
     if (ollamaStatus !== 'online') {
         repairAlerts.push({
             service: 'ollama',
-            severity: hatoriConsecutiveFailures >= 3 ? 'critical' : 'warning',
+            severity: hatoriConsecutiveFailures >= hatoriFailThresh ? 'critical' : 'warning',
             message: 'Ollama is not running. AI features (suggestions, KYC) will be unavailable.',
             hint: 'Open Terminal and run: ollama serve',
             logPath: null,

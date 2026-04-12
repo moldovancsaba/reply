@@ -24,6 +24,8 @@ make doctor
 
 `make doctor` checks that `~/Library/LaunchAgents/com.reply.hub.plist` still points at **this** checkout (after moving the repo, run `make run` again).
 
+**One-liner from repo root:** [`runbook/start.sh`](../runbook/start.sh) runs `make run` (LaunchAgent install/reload; no `nohup` hub path — reply#65).
+
 Health check (default port; JSON includes **`httpPort`** / **`httpHost`** for the bound address):
 
 ```bash
@@ -115,6 +117,7 @@ curl -sfS http://127.0.0.1:45311/api/health
    - **Preferred:** copy **`chat/.env.local.example`** → **`chat/.env.local`** and set **`REPLY_USE_HATORI=1`**. That file is **gitignored** and is loaded **after** **`chat/.env`** via **`load-env.js`** (hub + worker + `npm run verify:hatori`).
    - Or set the same variables directly in **`chat/.env`**.
    - Optional: **`REPLY_HATORI_PORT=23572`**, **`REPLY_HATORI_EXTERNAL=1`** when Hatori is **only** started by its own LaunchAgent and `{reply}` must not spawn uvicorn.
+   - **Lifecycle (reply#66):** On macOS, after a failed health probe the hub runs **`launchctl kickstart -k gui/$UID/com.hatori`** before falling back to embedding uvicorn. Set **`REPLY_HATORI_SKIP_LAUNCHCTL=1`** to skip kickstart, or **`REPLY_HATORI_NO_UVICORN=1`** to never spawn uvicorn (only external/LaunchAgent). Override label with **`REPLY_HATORI_LAUNCHD_LABEL`**.
 
    On startup, if **`REPLY_USE_HATORI=1`** but the sibling checkout is missing, the hub logs a **single warning** with the expected path.
 

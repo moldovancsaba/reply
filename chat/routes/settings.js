@@ -20,7 +20,15 @@ let gmailOauthState = null;
 function serveSettings(req, res) {
     if (req.method === "GET") {
         const settings = readSettings();
-        writeJson(res, 200, maskSettingsForClient(settings));
+        const client = maskSettingsForClient(settings);
+        client.runtime = {
+            useHatori: process.env.REPLY_USE_HATORI === "1",
+            hatoriPort: process.env.REPLY_HATORI_PORT || "23572",
+            ollamaPort: process.env.OLLAMA_PORT || "11434",
+            platform: process.platform,
+            hatoriLaunchdLabel: process.env.REPLY_HATORI_LAUNCHD_LABEL || "com.hatori",
+        };
+        writeJson(res, 200, client);
         return;
     }
 
@@ -100,6 +108,27 @@ async function handleUpdateSettings(req, res) {
                 if (q.whatsapp !== undefined) next.worker.quantities.whatsapp = clamp(q.whatsapp, current.worker.quantities.whatsapp, 2000);
                 if (q.gmail !== undefined) next.worker.quantities.gmail = clamp(q.gmail, current.worker.quantities.gmail, 500);
                 if (q.notes !== undefined) next.worker.quantities.notes = clamp(q.notes, current.worker.quantities.notes, 5000);
+            }
+        }
+
+        const health = incoming?.health || {};
+        if (health && typeof health === "object") {
+            next.health = { ...(current.health || {}) };
+            const clamp = (v, min, max, def) => {
+                const n = parseInt(v, 10);
+                return Number.isFinite(n) ? Math.max(min, Math.min(n, max)) : def;
+            };
+            if (health.hatoriProbeTimeoutMs !== undefined) {
+                next.health.hatoriProbeTimeoutMs = clamp(health.hatoriProbeTimeoutMs, 3000, 120000, 12000);
+            }
+            if (health.ollamaProbeTimeoutMs !== undefined) {
+                next.health.ollamaProbeTimeoutMs = clamp(health.ollamaProbeTimeoutMs, 1000, 30000, 3000);
+            }
+            if (health.hatoriWatchdogFailureThreshold !== undefined) {
+                next.health.hatoriWatchdogFailureThreshold = clamp(health.hatoriWatchdogFailureThreshold, 1, 20, 3);
+            }
+            if (health.uiHealthPollIntervalMs !== undefined) {
+                next.health.uiHealthPollIntervalMs = clamp(health.uiHealthPollIntervalMs, 5000, 300000, 15000);
             }
         }
 
