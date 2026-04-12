@@ -2,6 +2,10 @@
 
 Completed work only. For `{reply}`, the [GitHub Project (#7)](https://github.com/users/moldovancsaba/projects/7) and [`moldovancsaba/reply`](https://github.com/moldovancsaba/reply) issues are the source of truth for delivered items (portfolio board: [Project #1](https://github.com/users/moldovancsaba/projects/1)).
 
+## [0.5.10] - 2026-04-12
+### Added
+- **{hatori} sensitivity / redaction contract ([reply#16](https://github.com/moldovancsaba/reply/issues/16)):** `docs/HATORI_SENSITIVITY_CONTRACT.md` (options 1–3, migration, `SensitivityMeta`). JSDoc typedef on `chat/hatori-client.js`.
+
 ## [0.5.9] - 2026-04-12
 ### Added
 - **Auto-triage / zero-inbox assistant ([reply#24](https://github.com/moldovancsaba/reply/issues/24)):** Shipped **`chat/triage-rules.json`**; `evaluate()` attaches `suggestedActions` + `priority`; **`getPriorityQueue()`** + **`GET /api/triage-queue`**. Dashboard: priority queue card + “Suggested” column on triage log. **`GET /api/triage-log?limit=`** now honors query limit.
