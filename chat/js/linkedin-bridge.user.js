@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Reply Brain - LinkedIn Bridge
 // @namespace    http://tampermonkey.net/
-// @version      1.1
-// @description  Automatically syncs LinkedIn messages to local Reply Brain (Ports 3000-3003)
+// @version      1.2
+// @description  Syncs LinkedIn messages to local {reply} hub (scans 45311-45326 then legacy 3000-3003)
 // @author       Reply Brain
 // @match        https://www.linkedin.com/messaging/*
 // @grant        GM_xmlhttpRequest
@@ -12,7 +12,15 @@
 (function () {
     'use strict';
 
-    const PORTS = [3000, 3001, 3002, 3003];
+    // MUST match chat/linkedin-hub-port-scan.js + chrome-extension/content.js (reply#30)
+    function buildLinkedInHubPortScanList() {
+        const out = [];
+        for (let p = 45311; p <= 45326; p++) out.push(p);
+        out.push(3000, 3001, 3002, 3003);
+        return out;
+    }
+
+    const PORTS = buildLinkedInHubPortScanList();
     const ENDPOINT = "/api/channel-bridge/inbound";
     let activePort = null;
     let isConnected = false;
@@ -92,6 +100,12 @@
 
         if (!success) {
             isConnected = false;
+            const label =
+                PORTS.length <= 10
+                    ? PORTS.join(", ")
+                    : `${PORTS.slice(0, 4).join(", ")} … ${PORTS.slice(-4).join(", ")} (${PORTS.length} ports)`;
+            console.error("Reply hub unreachable (tried):", label);
+            showToast(`Reply: hub not found (${label}). Start {reply} or check PORT.`, true);
         }
     }
 

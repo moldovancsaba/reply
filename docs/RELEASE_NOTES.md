@@ -6,8 +6,16 @@ Completed work only. For `{reply}`, the [GitHub Project (#7)](https://github.com
 ### Fixed
 - **Send error UX:** Outbound `sendMessage` uses `delegateErrorUI` on the API layer so failed sends surface **one** error toast from `handleSendMessage` (no duplicate toast + alert). Toasts render message text via `textContent` with `pre-wrap` for multi-line policy hints.
 
+### Added
+- **Credential rotation procedure ([reply#34](https://github.com/moldovancsaba/reply/issues/34)):** [`docs/SECURITY_ROTATION.md`](SECURITY_ROTATION.md) — operator checklist and evidence table (rotation itself is still manual at the provider).
+- **Tests ([reply#31](https://github.com/moldovancsaba/reply/issues/31)):** `chat/test/ensure-hub-worker.test.js`, `service-manager-worker-policy.test.js`, `conversations-meta.test.js`, `system-health-shape.test.js`.
+- **LinkedIn bridge port scan ([reply#30](https://github.com/moldovancsaba/reply/issues/30)):** `chat/linkedin-hub-port-scan.js` + tests; Chrome `content.js` and `js/linkedin-bridge.user.js` probe **45311–45326** then legacy **3000–3003**, with clearer failure toasts.
+- **Doc SSOT pass ([reply#29](https://github.com/moldovancsaba/reply/issues/29)):** Reconciled `HANDOVER.md`, `NEXT_AGENT_PROMPT.md`, `BRAIN_DUMP.md`, `DEPENDENCY_MAP.md`, `INGESTION.md` (LinkedIn section) with **Project #7** + current repo facts (CI Node 20, modular `chat/routes/*`, conversations `meta.*`).
+
 ### Changed
-- **CI:** GitHub Actions workflow uses `actions/checkout@v4`, `actions/setup-node@v4`, Node **20**, `npm ci`, and npm cache keyed on `chat/package-lock.json`.
+- **CI:** GitHub Actions workflow uses `actions/checkout@v4`, `actions/setup-node@v4`, Node **20**, `npm ci`, and npm cache keyed on `chat/package-lock.json`. Adds an **informational** `npm audit --audit-level=high` step (`continue-on-error: true`) until the dependency tree is clean enough to hard-fail.
+- **Outbound policy ([reply#17](https://github.com/moldovancsaba/reply/issues/17)):** Inbound-verified identities from **linked contacts** (`primary_contact_id` → primary) are merged when evaluating send gating. **LinkedIn** recipient must match a verified identity **exactly** after normalization (no substring unlock).
+- **Docs:** `docs/HANDOVER.md` and `docs/LOCAL_MACHINE_DEPLOYMENT.md` — link or align with the above (Node **20** in CI vs **18+** on the Mac).
 
 ## [0.5.3] - 2026-04-10
 ### Added
@@ -205,7 +213,7 @@ Closing as completed.
 
 ---
 - **Unified Background Worker**: Implemented a SQLite-based monitoring service (`background-worker.js`) that replaces older watchers.
-- **macOS Startup Integration**: Added `launchd` support via `com.reply.worker.plist` for "always-on" background intelligence.
+- **macOS Startup Integration**: Prefer **`com.reply.hub`** via `make run` (hub starts `background-worker.js`). A deprecated optional template is [`tools/launchd/com.reply.worker.plist.example`](../tools/launchd/com.reply.worker.plist.example); do not run both hub-managed and standalone worker LaunchAgents.
 - **Improved KYC & Drafting**: Background processes are now consolidated and throttled for high efficiency.
 - **{reply} web UI + Intelligence**: Message counts in sidebar, per-message timestamps in thread, real Mic dictation (SpeechRecognition), KYC-aware Suggest drafts, and a polished KYC pane (profile edit, channels, AI suggestions accept/decline, notes CRUD, and name propagation to feed + sidebar).
 - **Channel-aware Composer**: Added a channel dropdown in the composer; default channel follows the most recent inbound message. iMessage/email send normally; WhatsApp sends via Desktop automation with clipboard fallback on failure. Telegram/Discord/Signal/Viber/LinkedIn are draft-only.

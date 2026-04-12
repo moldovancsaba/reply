@@ -1,6 +1,14 @@
-// Reply Brain - LinkedIn Bridge Content Script
+// Reply Brain - LinkedIn Bridge Content Script (reply#30)
+// Port list MUST stay in sync with `chat/linkedin-hub-port-scan.js` and `js/linkedin-bridge.user.js`.
 
-const PORTS = [3000, 3001, 3002, 3003];
+function buildLinkedInHubPortScanList() {
+    const out = [];
+    for (let p = 45311; p <= 45326; p++) out.push(p);
+    out.push(3000, 3001, 3002, 3003);
+    return out;
+}
+
+const PORTS = buildLinkedInHubPortScanList();
 const ENDPOINT = "/api/channel-bridge/inbound";
 let activePort = null;
 let isConnected = false;
@@ -79,7 +87,12 @@ async function sendToLocal(payload) {
 
     if (!success) {
         isConnected = false;
-        console.error("❌ All ports failed to sync");
+        const label =
+            PORTS.length <= 10
+                ? PORTS.join(", ")
+                : `${PORTS.slice(0, 4).join(", ")} … ${PORTS.slice(-4).join(", ")} (${PORTS.length} ports)`;
+        console.error("❌ Reply hub unreachable on any scanned port:", label);
+        showToast(`Reply: hub not found (tried ${label}). Start {reply} or check PORT.`, true);
     }
 }
 

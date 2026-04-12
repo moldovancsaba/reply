@@ -1,47 +1,37 @@
 # {reply} Project Dependencies & Blocking Relationships
 
-**Document Status**: Live Planning Document  
-**Last Updated**: 2026-02-22  
+**Doc freshness:** 2026-04-11 — Planning map with **legacy mvp-factory-control issue IDs** in headings below. **Execution SSOT:** [Project #7](https://github.com/users/moldovancsaba/projects/7) + [`moldovancsaba/reply` issues](https://github.com/moldovancsaba/reply/issues). When this file disagrees with the board or `docs/HANDOVER.md`, update this file or add an explicit “historical” note.
+
+**Document Status**: Planning archive (critical path narrative)  
+**Last Updated**: 2026-04-11  
 **Owner**: AI Developer  
-**Sync Requirement**: Update after every board status change or issue completion
+**Sync Requirement**: Update when critical path assumptions change (not every card move).
 
 ---
 
 ## Critical Path Analysis
 
-This document maps all blocking relationships between {reply} issues to identify the critical path and prevent schedule slippage.
+This document maps **historical** blocking relationships between `{reply}`-themed issues (many originally filed in **mvp-factory-control**) to show how work was sequenced. It is **not** a substitute for the live GitHub board.
 
-### TIER 1: Foundation (Must complete first)
+### TIER 1: Foundation (legacy IDs)
 
 **#212: CI Pipeline (GitHub Actions lint + test)**
-- **Status**: Board says "Done" — **VERIFY REQUIRED**
-- **Blocks**: #211 (need tests to guard decomposition)
-- **Estimated Wait**: ~4 hours if verification needed
-- **Verification**: Check if `.github/workflows/ci.yml` exists; if not, create
+- **Status (2026-04):** **Verified on `moldovancsaba/reply` `main`** — `.github/workflows/ci.yml` runs Node **20**, `npm run lint`, `npm test`, informational `npm audit`.
+- **Blocks (historical):** Was a gate before large refactors.
 
 **#213: Parameterized SQL (security audit)**
-- **Status**: Board says "Done" — **VERIFY REQUIRED**
-- **Blocks**: #201 (secure memory index needs safe DB layer)
-- **Estimated Wait**: ~4-8 hours if audit needed
-- **Verification**: Run `grep -r "WHERE.*\${" chat/*.js`; document findings
+- **Status (2026-04):** **Verified safe** for the audited patterns (see HANDOVER / security history); treat new SQL as reviewable surface area.
 
 **#197: Conversation Indexing Cleanup**
-- **Status**: In Progress
-- **Blocks**: #221 (settings hub depends on stable indexing)
-- **Estimated Wait**: 2-3 days
-- **Critical Question**: Does server-side `q=` filter truly block #221? Or is client-side fallback acceptable?
+- **Status:** Historical “in progress” item — **current API** exposes `meta.sort` / `meta.sortRequested` / `meta.sortValid` on `/api/conversations`. Prefer new **reply** issues + Project #7 for remaining indexing/search work.
 
 ---
 
 ### TIER 2: Security & Architecture (High priority)
 
 **#211: Decompose server.js into route modules**
-- **Status**: Backlog
-- **Depends On**: #212 ✅, #213 ✅ (need tests + safe SQL)
-- **Blocks**: #214, #220, #221, #223, #224 (new features need modular routes)
-- **Estimated Duration**: 3-4 days
-- **Risk**: Regression if not properly tested
-- **Blocker For**: 5 downstream issues
+- **Status (2026-04):** **Largely delivered** in-repo (`chat/routes/*`, thin `chat/server.js`). Any open “#211” scope in **reply** should be **retitled** to concrete remaining work (new routes, split a specific module), not “decompose monolith” from scratch.
+- **Historical blocks:** #214, #220, #221, #223, #224 were described as depending on modular routes — validate each on the board before assuming blockers still apply.
 
 **#214: Loading States + Error Toasts**
 - **Status**: Backlog
@@ -66,9 +56,9 @@ This document maps all blocking relationships between {reply} issues to identify
 - **Blocks**: Nothing (integrator)
 - **Estimated Duration**: 1-2 days (after #223, #224)
 
-**#224: Per-Channel Settings Matrix**
-- **Status**: Backlog
-- **Depends On**: #223 (AI provider config must come first), #211 (channel routes)
+**#224: Smart Prompt Library (templates + chaining)** *(canonical title; was also described as “per-channel settings matrix” in older drafts)*
+- **Status**: Backlog (historical)
+- **Depends On**: #223 (AI provider config must come first), #211 (historical — routes now modular; re-validate)
 - **Blocks**: #221 (parent feature)
 - **Estimated Duration**: 2-3 days (after #211, #223)
 
@@ -133,8 +123,8 @@ This document maps all blocking relationships between {reply} issues to identify
          └────────────────┼────────────────┘
                           ▼
          ┌─────────────────────────────────┐
-         │ #211: Decompose server.js       │
-         │ (Refactor - enables all new)    │
+         │ #211: Routes modular (done)     │
+         │ (historical gate — validate)    │
          └────┬────────────────────────┬───┘
               │                        │
     ┌─────────┼───────────────────────┼─────────┐
@@ -165,7 +155,7 @@ This document maps all blocking relationships between {reply} issues to identify
 
 | Issue | Waiting For | Reason | Est. Wait |
 |-------|------------|--------|-----------|
-| #211 | #212 + #213 | Need tests + safe SQL before decomposing | 1 week |
+| #211 | (historical) | Monolith split largely done — open new reply issues for any remaining modularization | — |
 | #223 | #211 | Need clean routes for settings API | +1 week |
 | #224 | #223 + #211 | Channel routes + AI config must exist | +1 week |
 | #221 | #223 + #224 | Should decompose parent features first | +1 week |
@@ -212,9 +202,8 @@ This document maps all blocking relationships between {reply} issues to identify
 - ✅ Every Friday (weekly sync)
 
 **Sync checklist:**
-- [ ] Run `gh project item-list 1 --owner moldovancsaba --format json --limit 500 | jq '.items[] | select(.product == "reply")'`
-- [ ] Compare board status to this document
-- [ ] Update any discrepancies
-- [ ] Commit changes with message: `docs: sync dependency map with board status (SPRINT_X)`
+- [ ] Run `gh project item-list 7 --owner moldovancsaba --format json --limit 500` and compare to this document’s **assumptions** (not every card).
+- [ ] Update any material discrepancies or mark sections **historical**.
+- [ ] Commit changes with message: `docs: sync dependency map with board status`
 
-**Next scheduled update**: 2026-02-28 (end of Sprint 1)
+**Next scheduled update**: When critical path or foundation assumptions change
