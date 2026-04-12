@@ -1,6 +1,6 @@
 {
   "name": "reply-chat",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "description": "Reply POC — localhost chat to ask for reply suggestions",
   "main": "server.js",
   "scripts": {
@@ -9,6 +9,7 @@
     "analyze": "node kyc-agent.js",
     "security:audit": "node security-audit.js",
     "security:fix": "node security-audit.js --fix",
+    "annotate": "node annotation-agent.js",
     "channel-bridge:ingest": "node channel-bridge-sidecar.js",
     "linkedin:sync": "node linkedin-sidecar.js",
     "linkedin:install-browsers": "playwright install chromium",
