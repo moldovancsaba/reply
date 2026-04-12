@@ -150,6 +150,7 @@ export async function loadConversations(append = false) {
             const name = document.createElement('div');
             name.className = 'contact-name';
             const channel = contact.lastChannel || contact.channel || contact.lastSource || contact.source || '';
+            const handleForHint = contact.latestHandle || contact.handle || '';
             const displayName = formatContactLabel(contact.displayName || contact.name || contact.handle);
             name.textContent = displayName;
 
@@ -198,12 +199,15 @@ export async function loadConversations(append = false) {
             item.appendChild(statusDot);
             item.appendChild(info);
 
-            // Channel indicator (latest channel/source)
-            const iconHint = [contact.latestHandle, contact.handle, contact.lastMessage]
-                .filter(Boolean)
-                .join(' ');
-            const iconSeed = channel || iconHint;
-            const iconPlatform = resolvePlatformTarget(iconSeed, { channelHint: channel }).platform;
+            // Channel indicator: prefer API channel/source over message text (reply#42).
+            const iconHint = [handleForHint, contact.lastMessage].filter(Boolean).join(' ');
+            const waLidHint = /^[a-zA-Z0-9+/]+={0,2}$/.test(String(handleForHint)) && String(handleForHint).length >= 20;
+            const syntheticChannel =
+                channel ||
+                (waLidHint ? 'whatsapp' : '') ||
+                (String(handleForHint).includes('@') ? 'email' : '');
+            const iconSeed = syntheticChannel ? '' : iconHint;
+            const iconPlatform = resolvePlatformTarget(iconSeed, { channelHint: syntheticChannel || channel }).platform;
             const icon = createPlatformIcon(iconPlatform, channel || 'channel');
             icon.classList.add('channel-icon');
             const channelLabel = (contact.lastChannel || contact.channel || '').toString();

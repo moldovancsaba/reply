@@ -5,6 +5,16 @@
 const { writeJson, readJsonBody } = require("../utils/server-utils");
 const contactStore = require("../contact-store");
 
+function inferNoteKindFromText(text) {
+    const t = String(text || "").trim();
+    if (!t) return "note";
+    if (/^https?:\/\//i.test(t) || /^www\./i.test(t)) return "link";
+    if (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(t)) return "email";
+    if (/^\+?[\d\s().-]{8,}$/.test(t)) return "phone";
+    if (/^#\w/.test(t)) return "hashtag";
+    return "note";
+}
+
 /** Resolve UI merge endpoint id or handle to a concrete SQLite row (reply#19). */
 function resolveMergeParticipant(key) {
     if (key == null || key === "") return null;
@@ -67,12 +77,14 @@ async function serveUpdateContact(req, res) {
 
 async function serveAddNote(req, res) {
     try {
-        const { handle, text } = await readJsonBody(req);
+        const json = await readJsonBody(req);
+        const { handle, text } = json;
         if (!handle || !text) {
             writeJson(res, 400, { error: "Missing handle or text" });
             return;
         }
-        await contactStore.addNote(handle, text);
+        const kind = String(json.kind || inferNoteKindFromText(text)).toLowerCase();
+        await contactStore.addNote(handle, text, { kind });
         writeJson(res, 200, { status: "ok" });
     } catch (e) {
         writeJson(res, 500, { error: e.message });
@@ -81,12 +93,14 @@ async function serveAddNote(req, res) {
 
 async function serveUpdateNote(req, res) {
     try {
-        const { handle, id, text } = await readJsonBody(req);
+        const json = await readJsonBody(req);
+        const { handle, id, text } = json;
         if (!handle || !id) {
             writeJson(res, 400, { error: "Missing handle or id" });
             return;
         }
-        await contactStore.updateNote(handle, id, text);
+        const kind = json.kind != null ? String(json.kind).toLowerCase() : undefined;
+        await contactStore.updateNote(handle, id, text, kind ? { kind } : {});
         writeJson(res, 200, { status: "ok" });
     } catch (e) {
         writeJson(res, 500, { error: e.message });
@@ -117,8 +131,25 @@ async function serveAcceptSuggestion(req, res) {
                 if (suggestion.type === 'company' || suggestion.type === 'linkedinUrl') {
                     contact[suggestion.type] = suggestion.content;
                     updated = true;
-                } else if (suggestion.type === 'notes') {
-                    await contactStore.addNote(handle, suggestion.content);
+                } else if (suggestion.type === "notes") {
+                    await contactStore.addNote(handle, suggestion.content, { kind: "note" });
+                } else if (suggestion.type === "phones" || suggestion.type === "emails") {
+                    const kind = suggestion.type === "phones" ? "phone" : "email";
+                    await contactStore.addNote(handle, suggestion.content, { kind });
+                    const chKey = kind;
+                    if (!contact.channels) contact.channels = {};
+                    if (!contact.channels[chKey]) contact.channels[chKey] = [];
+                    if (!contact.channels[chKey].includes(suggestion.content)) {
+                        contact.channels[chKey].push(suggestion.content);
+                        updated = true;
+                    }
+                } else if (
+                    ["links", "addresses", "hashtags"].includes(suggestion.type)
+                ) {
+                    const map = { links: "link", addresses: "address", hashtags: "hashtag" };
+                    await contactStore.addNote(handle, suggestion.content, {
+                        kind: map[suggestion.type] || "note"
+                    });
                 } else {
                     if (!contact.channels) contact.channels = {};
                     if (!contact.channels[suggestion.type]) contact.channels[suggestion.type] = [];

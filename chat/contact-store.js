@@ -110,7 +110,25 @@ class ContactStore {
                                         }
                                     });
                                 }
-                                contact.notes = (notes || []).filter(n => n.contact_id === c.id);
+                                contact.notes = (notes || [])
+                                    .filter(n => n.contact_id === c.id)
+                                    .map((n) => {
+                                        const raw = String(n.text || "");
+                                        try {
+                                            const o = JSON.parse(raw);
+                                            if (o && typeof o === "object" && o.kind && typeof o.text === "string") {
+                                                return {
+                                                    ...n,
+                                                    kind: String(o.kind).toLowerCase(),
+                                                    text: o.text,
+                                                    value: o.text
+                                                };
+                                            }
+                                        } catch {
+                                            /* plain */
+                                        }
+                                        return { ...n, kind: "note", text: raw, value: raw };
+                                    });
                                 contact.pendingSuggestions = (sugs || []).filter(s => s.contact_id === c.id && s.status === 'pending');
                                 contact.rejectedSuggestions = (sugs || []).filter(s => s.contact_id === c.id && s.status === 'rejected').map(s => s.content);
                                 return contact;
@@ -304,6 +322,10 @@ class ContactStore {
             else if (/^\+?\d+$/.test(handle)) contact.channels.phone.push(handle);
             this._contacts.push(contact);
         }
+        if (data.channels && typeof data.channels === "object") {
+            contact.channels = { ...(contact.channels || {}), ...data.channels };
+            delete data.channels;
+        }
         Object.assign(contact, data);
         await this.saveContact(contact);
         return contact;
@@ -387,16 +409,29 @@ class ContactStore {
         await this.setDraft(handle, null);
     }
 
-    async addNote(handle, text) {
+    /**
+     * @param {string} handle
+     * @param {string} text
+     * @param {{ kind?: string }} [opts] - kind !== "note" stores JSON `{ kind, text }` in `text` column (reply#39).
+     */
+    async addNote(handle, text, opts = {}) {
         const contact = this.findContact(handle);
         if (contact) {
-            const noteId = 'note-' + Date.now() + Math.random().toString(36).substr(2, 5);
+            const kind = String(opts.kind || "note").toLowerCase();
+            const rowText =
+                kind === "note"
+                    ? String(text || "")
+                    : JSON.stringify({ kind, text: String(text || "") });
+            const noteId = "note-" + Date.now() + Math.random().toString(36).substr(2, 5);
             return new Promise((resolve, reject) => {
-                this._db.run("INSERT INTO contact_notes (id, contact_id, text, timestamp) VALUES (?, ?, ?, ?)",
-                    noteId, contact.id, text, new Date().toISOString(), (err) => {
+                this._db.run(
+                    "INSERT INTO contact_notes (id, contact_id, text, timestamp) VALUES (?, ?, ?, ?)",
+                    [noteId, contact.id, rowText, new Date().toISOString()],
+                    (err) => {
                         if (err) return reject(err);
                         this.refresh().then(resolve).catch(reject);
-                    });
+                    }
+                );
             });
         }
     }
@@ -464,9 +499,14 @@ class ContactStore {
         }
     }
 
-    async updateNote(handle, noteId, text) {
+    async updateNote(handle, noteId, text, opts = {}) {
+        const contact = this.findContact(handle);
+        const prev = contact?.notes?.find((n) => n.id === noteId);
+        const kind = String(opts.kind || prev?.kind || "note").toLowerCase();
+        const rowText =
+            kind === "note" ? String(text || "") : JSON.stringify({ kind, text: String(text || "") });
         return new Promise((resolve, reject) => {
-            this._db.run("UPDATE contact_notes SET text = ? WHERE id = ?", text, noteId, (err) => {
+            this._db.run("UPDATE contact_notes SET text = ? WHERE id = ?", [rowText, noteId], (err) => {
                 if (err) return reject(err);
                 this.refresh().then(resolve).catch(reject);
             });
