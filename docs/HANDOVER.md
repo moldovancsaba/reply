@@ -2,7 +2,7 @@
 
 This file is onboarding + operational context. Keep it accurate when behavior/architecture changes.
 
-**Last Updated**: 2026-04-12 (Hatori: load-env, official bootstrap, preflight, verify:hatori; SSOT: `{reply}` issues + [Project #7](https://github.com/users/moldovancsaba/projects/7))
+**Last Updated**: 2026-04-12 (Hatori stack live: Colima, com.hatori, .env.local, upstream cli fix; SSOT: `{reply}` issues + [Project #7](https://github.com/users/moldovancsaba/projects/7))
 
 **Current Version**: `0.5.2` (see `chat/package.json`)
 
