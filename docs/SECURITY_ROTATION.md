@@ -42,6 +42,17 @@ Record here **after** rotation (no live secrets):
 
 When the table is complete, close or update [reply#34](https://github.com/moldovancsaba/reply/issues/34) with a short comment pointing to this section (still redacted).
 
+### 3b. Repository / product prevention (no provider credentials)
+
+Track **code and policy** controls that reduce future leakage and support audits. These do **not** replace provider key rotation in §3.
+
+| Control | Done (Y/N) | Date (UTC) | Notes |
+|---------|------------|------------|--------|
+| Default path: no operator token fragments written to `debug_token.log` | Y | 2026-04-12 | Gated by `REPLY_DEBUG_SETTINGS` (reply#32); file gitignored |
+| `chat/data` created with strict mode where applicable | Y | 2026-04-12 | `status-manager`, `settings-store`, `security-policy`, etc. |
+| `npm test` + `npm run lint` on `main` | Y | 2026-04-12 | CI: `.github/workflows/ci.yml` |
+| `node chat/security-audit.js` clean on maintained installs | Y | 2026-04-12 | Run after `security-audit.js --fix` if data dir was loose |
+
 ## 4. Prevention
 
 - Never commit `chat/.env` (see `.gitignore`).

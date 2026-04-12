@@ -24,7 +24,8 @@ const { pathPrefixesForHandle } = require('./utils/chat-utils.js');
 const {
     rankDocumentsByFreshnessAndRelevance,
     freshnessBucket,
-    halfLifeDaysFromEnv
+    halfLifeDaysFromEnv,
+    summarizeRagFreshnessTraces
 } = require('./utils/context-freshness.js');
 
 function enrichAnnotatedDocText(d) {
@@ -201,6 +202,7 @@ async function assembleReplyContext(message, handle) {
         goldenExamples: baseContext.goldenExamples,
         meta: {
             rag: ragTraces,
+            contextFreshnessSummary: summarizeRagFreshnessTraces(ragTraces),
             halfLifeDays: halfLifeDaysFromEnv(),
             freshnessWeights: {
                 relevance: String(process.env.REPLY_CONTEXT_RELEVANCE_WEIGHT || "0.45"),
