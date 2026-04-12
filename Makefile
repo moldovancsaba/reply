@@ -31,7 +31,7 @@ run-ReplyMenubar:
 install-service:
 	chmod +x ./tools/scripts/reply_service.sh
 	@mkdir -p "$$HOME/Library/LaunchAgents" "$$HOME/Library/Logs/Reply"
-	@python3 -c 'from pathlib import Path; home=Path.home(); repo=Path.cwd(); template=(repo / "tools" / "launchd" / "com.reply.hub.plist").read_text(encoding="utf-8"); out=template.replace("__HOME__", str(home)).replace("__REPO_ROOT__", str(repo)); target=home / "Library" / "LaunchAgents" / "com.reply.hub.plist"; target.write_text(out, encoding="utf-8"); print("Wrote", target)'
+	@python3 -c 'from pathlib import Path; import shutil; home=Path.home(); repo=Path.cwd(); cand=[shutil.which("node") or "", "/opt/homebrew/bin/node", "/usr/local/bin/node"]; node_bin=next((c for c in cand if c and Path(c).is_file()), cand[1]); template=(repo / "tools" / "launchd" / "com.reply.hub.plist").read_text(encoding="utf-8"); out=template.replace("__HOME__", str(home)).replace("__REPO_ROOT__", str(repo)).replace("__REPLY_NODE_BIN__", node_bin); target=home / "Library" / "LaunchAgents" / "com.reply.hub.plist"; target.write_text(out, encoding="utf-8"); print("Wrote", target, "| REPLY_NODE_BIN=" + node_bin)'
 	@launchctl unload "$$HOME/Library/LaunchAgents/com.reply.hub.plist" >/dev/null 2>&1 || true
 	@launchctl load -w "$$HOME/Library/LaunchAgents/com.reply.hub.plist"
 	@echo "Service installed: com.reply.hub"
