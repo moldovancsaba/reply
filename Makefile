@@ -42,3 +42,23 @@ uninstall-service:
 	@launchctl unload "$$HOME/Library/LaunchAgents/com.reply.hub.plist" >/dev/null 2>&1 || true
 	@rm -f "$$HOME/Library/LaunchAgents/com.reply.hub.plist"
 	@echo "Service removed: com.reply.hub"
+
+# --- {hatori} sibling (https://github.com/moldovancsaba/hatori) — expected at ../hatori from this repo root ---
+.PHONY: hatori-clone
+hatori-clone:
+	@if [ -d "$$(cd .. && pwd)/hatori/.git" ]; then echo "Already present: $$(cd .. && pwd)/hatori"; \
+	else echo "Cloning moldovancsaba/hatori -> $$(cd .. && pwd)/hatori ..." && git clone https://github.com/moldovancsaba/hatori.git "$$(cd .. && pwd)/hatori"; fi
+
+.PHONY: hatori-bootstrap
+hatori-bootstrap:
+	@HATORI_ROOT="$$(cd .. && pwd)/hatori"; \
+	test -d "$$HATORI_ROOT/.git" || (echo "Missing $$HATORI_ROOT — run: make hatori-clone" && exit 1); \
+	cd "$$HATORI_ROOT" && \
+	(test -d .venv || python3 -m venv .venv) && \
+	. .venv/bin/activate && pip install -q --upgrade pip && pip install -q -r ui/requirements.txt && \
+	./tools/scripts/hatori_env_init.sh && \
+	echo "Hatori deps ready. Start Docker/Colima, then: cd $$HATORI_ROOT && make up && make run"
+
+.PHONY: hatori-doctor
+hatori-doctor:
+	@test -d "$$(cd .. && pwd)/hatori" && (cd "$$(cd .. && pwd)/hatori" && $(MAKE) doctor) || echo "No ../hatori — run: make hatori-clone"
