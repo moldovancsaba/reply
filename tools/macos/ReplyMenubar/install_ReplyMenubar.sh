@@ -23,7 +23,7 @@ if [[ ! -f "$TEMPLATE" || ! -f "$CORE" ]]; then
   exit 1
 fi
 
-VERSION="0.5.1"
+VERSION="0.5.13"
 if [[ -f "$CHAT_PKG" ]] && command -v node >/dev/null 2>&1; then
   VERSION="$(node -p "require('$CHAT_PKG').version" 2>/dev/null || echo "$VERSION")"
 fi
