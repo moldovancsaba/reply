@@ -2,6 +2,12 @@
 
 Completed work only. For `{reply}`, the [GitHub Project (#7)](https://github.com/users/moldovancsaba/projects/7) and [`moldovancsaba/reply`](https://github.com/moldovancsaba/reply) issues are the source of truth for delivered items (portfolio board: [Project #1](https://github.com/users/moldovancsaba/projects/1)).
 
+## [0.5.7] - 2026-04-12
+### Changed
+- **Context engine ([reply#38](https://github.com/moldovancsaba/reply/issues/38)):** Chronological recipient thread in `assembleReplyContext` uses `formatChronologicalHistoryLines` so each message includes Ollama annotation metadata. `getContext` past-interaction snippets use the same enrichment before clipping.
+### Added
+- **`docs/CONTEXT_ENGINE.md`** — recipient awareness, RAG facts, Web Speech “Mic” voice-to-composer flow (`chat/js/app.js`).
+
 ## [0.5.6] - 2026-04-12
 ### Changed
 - **Suggest-reply + annotations ([reply#37](https://github.com/moldovancsaba/reply/issues/37)):** `/api/suggest-reply` `snippets` now include `is_annotated`, `annotation_summary`, `annotation_tags`, `annotation_facts` when present. Analyzer fallback context in `reply-engine.js` uses `enrichAnnotatedDocText` for `contextSnippets` (aligned with `context-engine` RAG facts).
