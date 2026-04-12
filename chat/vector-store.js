@@ -1,6 +1,7 @@
 const lancedb = require("@lancedb/lancedb");
 const path = require("path");
 const fs = require("fs");
+const { channelFromDoc } = require("./utils/chat-utils");
 
 function escapeSqlString(value) {
     return String(value ?? "").replace(/'/g, "''");
@@ -491,7 +492,7 @@ async function getUnifiedIndex() {
                     else if (path.startsWith("whatsapp://")) s.latestChannel = "whatsapp";
                     else if (path.startsWith("mailto:")) s.latestChannel = "email";
                     else if (path.startsWith("linkedin://")) s.latestChannel = "linkedin";
-                    else s.latestChannel = source;
+                    else s.latestChannel = channelFromDoc({ path, source });
                 }
             }
         };

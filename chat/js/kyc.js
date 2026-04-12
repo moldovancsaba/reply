@@ -245,7 +245,12 @@ function renderNotes(notes) {
         await fetchJson('/api/update-note', {
           method: 'POST',
           headers: buildSecurityHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify(withApproval({ handle, id: n.id, text: next }, 'ui-update-note')),
+          body: JSON.stringify(withApproval({
+            handle,
+            id: n.id,
+            text: next,
+            kind: n.kind || 'note'
+          }, 'ui-update-note')),
         });
         await loadKYCData(handle);
       };
@@ -308,6 +313,22 @@ function renderNotes(notes) {
   }
 }
 
+async function persistChannels(mutator) {
+  const handle = el('kyc-handle-input')?.value?.trim();
+  if (!handle) return;
+  const cur = await fetchJson(`/api/kyc?handle=${encodeURIComponent(handle)}`, {
+    headers: buildSecurityHeaders()
+  });
+  const base = { phone: [], email: [], ...(cur.channels || {}) };
+  mutator(base);
+  await fetchJson('/api/kyc', {
+    method: 'POST',
+    headers: buildSecurityHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(withApproval({ handle, channels: base }, 'ui-channels'))
+  });
+  await loadKYCData(handle);
+}
+
 function renderChannels(channels) {
   const root = el('kyc-channels');
   if (!root) return;
@@ -316,35 +337,86 @@ function renderChannels(channels) {
   const phone = Array.isArray(channels?.phone) ? channels.phone : [];
   const email = Array.isArray(channels?.email) ? channels.email : [];
 
-  if (phone.length === 0 && email.length === 0) {
-    root.appendChild(createEmptyRow('No channels saved.'));
-    return;
-  }
-
   const wrap = document.createElement('div');
-  wrap.className = 'kyc-chip-wrap';
+  wrap.className = 'kyc-channel-editor';
 
-  const addChip = (label, value, channelHint) => {
+  const list = document.createElement('div');
+  list.className = 'kyc-channel-list';
+
+  const row = (label, value, kind, onRemove) => {
+    const r = document.createElement('div');
+    r.className = 'kyc-channel-row';
     const chip = createPlatformValueNode(value, {
-      channelHint,
-      showText: false,
+      channelHint: kind,
+      showText: true,
       showIcon: true,
       showFallbackIcon: true,
-      className: 'kyc-chip',
+      className: 'kyc-chip kyc-chip--row'
     });
-    const labelEl = document.createElement('span');
-    labelEl.textContent = `${label}:`;
-    const valueEl = document.createElement('span');
-    valueEl.textContent = value;
-    chip.appendChild(labelEl);
-    chip.appendChild(valueEl);
-    chip.title = value;
-    wrap.appendChild(chip);
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.className = 'btn btn-ghost btn-sm kyc-channel-remove';
+    rm.textContent = 'Remove';
+    rm.title = `Remove ${label}`;
+    rm.onclick = () => onRemove().catch((e) => UI.showToast(e.message || 'Remove failed', 'error'));
+    r.appendChild(chip);
+    r.appendChild(rm);
+    list.appendChild(r);
   };
 
-  for (const p of phone) addChip('Phone', p, 'phone');
-  for (const e of email) addChip('Email', e, 'email');
+  phone.forEach((p) =>
+    row('Phone', p, 'phone', async () => {
+      await persistChannels((ch) => {
+        ch.phone = (ch.phone || []).filter((x) => x !== p);
+      });
+    })
+  );
+  email.forEach((em) =>
+    row('Email', em, 'email', async () => {
+      await persistChannels((ch) => {
+        ch.email = (ch.email || []).filter((x) => x !== em);
+      });
+    })
+  );
 
+  if (phone.length === 0 && email.length === 0) {
+    list.appendChild(createEmptyRow('No phone/email rows yet — add below.'));
+  }
+
+  const addBar = document.createElement('div');
+  addBar.className = 'kyc-channel-add';
+  const typeSel = document.createElement('select');
+  typeSel.className = 'kyc-channel-add-type';
+  typeSel.innerHTML = '<option value="phone">Phone</option><option value="email">Email</option>';
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.className = 'kyc-field-input kyc-channel-add-input';
+  inp.placeholder = '+36… or name@domain';
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'btn btn-secondary btn-sm';
+  addBtn.textContent = 'Add';
+  addBtn.onclick = async () => {
+    const v = inp.value.trim();
+    if (!v) return;
+    const t = typeSel.value === 'email' ? 'email' : 'phone';
+    try {
+      await persistChannels((ch) => {
+        const key = t === 'email' ? 'email' : 'phone';
+        if (!ch[key]) ch[key] = [];
+        if (!ch[key].includes(v)) ch[key].push(v);
+      });
+      inp.value = '';
+    } catch (e) {
+      UI.showToast(e.message || 'Add failed', 'error');
+    }
+  };
+  addBar.appendChild(typeSel);
+  addBar.appendChild(inp);
+  addBar.appendChild(addBtn);
+
+  wrap.appendChild(list);
+  wrap.appendChild(addBar);
   root.appendChild(wrap);
 }
 
@@ -955,6 +1027,7 @@ function wireLocalIntelligenceInput() {
   input.dataset.wired = '1';
   input.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
+    if (e.shiftKey) return;
     e.preventDefault();
     window.addNote?.();
   });

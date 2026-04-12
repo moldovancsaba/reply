@@ -273,8 +273,8 @@ export async function sendMessage(handle, text, channel = 'imessage', hatoriCont
     };
     const sendPayload = { recipient: handle, text, trigger: sendTrigger };
     if (ch === 'whatsapp') {
-        sendPayload.transport = 'openclaw_cli';
-        sendPayload.allowDesktopFallback = false;
+        // Server picks transport from REPLY_WHATSAPP_SEND_TRANSPORT (default: desktop); OpenClaw may fall back to desktop.
+        sendPayload.allowDesktopFallback = true;
     }
 
     const res = await _request(endpoint, {
