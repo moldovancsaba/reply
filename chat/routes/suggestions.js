@@ -67,6 +67,41 @@ function stripMessagePrefix(text) {
   return idx >= 0 ? text.slice(idx + 2) : text;
 }
 
+/**
+ * Maps a LanceDB document to the JSON shape returned on `/api/suggest-reply` under `snippets`.
+ * When `is_annotated` is true, includes summary/tags/facts for UI or clients (reply#37).
+ * @param {object} doc - Row from vector store (may include annotation_* fields).
+ * @returns {{ source: string, path: string, text: string, is_annotated: boolean, annotation_summary?: string, annotation_tags?: string[], annotation_facts?: string[] }}
+ */
+function snippetShapeForSuggestReply(doc) {
+  const raw = doc.text || "";
+  const preview = raw.slice(0, 200) + (raw.length > 200 ? "…" : "");
+  const isAnnotated = Boolean(doc.is_annotated);
+  const base = {
+    source: doc.source,
+    path: doc.path,
+    text: preview,
+    is_annotated: isAnnotated
+  };
+  if (!isAnnotated) return base;
+  let tags = [];
+  let facts = [];
+  try {
+    const t = JSON.parse(doc.annotation_tags || "[]");
+    if (Array.isArray(t)) tags = t.map(String);
+  } catch { /* ignore */ }
+  try {
+    const f = JSON.parse(doc.annotation_facts || "[]");
+    if (Array.isArray(f)) facts = f.map(String);
+  } catch { /* ignore */ }
+  return {
+    ...base,
+    annotation_summary: doc.annotation_summary || "",
+    annotation_tags: tags,
+    annotation_facts: facts
+  };
+}
+
 function normalizePhone(phone) {
   if (!phone) return null;
   const raw = String(phone).trim();
@@ -209,15 +244,12 @@ async function serveSuggestReply(req, res) {
   writeJson(res, 200, {
     suggestion,
     contact: contact ? { displayName: contact.displayName, profession: contact.profession } : null,
-    snippets: snippets.map((s) => ({
-      source: s.source,
-      path: s.path,
-      text: s.text.slice(0, 200) + (s.text.length > 200 ? "…" : "")
-    }))
+    snippets: snippets.map(snippetShapeForSuggestReply)
   });
 }
 
 module.exports = {
   serveSuggest,
   serveSuggestReply,
+  snippetShapeForSuggestReply
 };
