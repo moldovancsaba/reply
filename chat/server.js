@@ -1,8 +1,13 @@
 /**
- * Reply POC — Localhost Chat Server
- * 
- * This server provides the backend for the "Local Brain" chat interface.
- * Refactored into specialized route modules for better maintainability.
+ * {reply} hub — HTTP API + static UI for the local chat / sync surface.
+ *
+ * Routing lives under `routes/*` (messaging, sync, system, …). Managed children (worker,
+ * optional Hatori) go through `service-manager.js`. Before starting the worker, the hub calls
+ * `ensure-hub-worker.js` so a stale `data/worker.pid` or duplicate worker does not exit 0
+ * immediately. `hub-runtime.js` records the bound port for `/api/health` (`httpPort`/`httpHost`).
+ *
+ * Shutdown: `SIGINT` / `SIGTERM` trigger `gracefulShutdown()` → `serviceManager.shutdownAllAsync()`
+ * then `server.close()` (see bottom of this file).
  */
 
 const http = require("http");
@@ -36,6 +41,8 @@ const trainingRoutes = require("./routes/training.js");
 const staticRoutes = require("./routes/static.js");
 const { serveKyc, serveAnalyzeContact } = require("./routes/kyc.js");
 const serviceManager = require("./service-manager.js");
+const hubRuntime = require("./hub-runtime.js");
+const { ensureWorkerCanStartFromHub } = require("./ensure-hub-worker.js");
 
 // Start Managed Services
 try {
@@ -80,6 +87,7 @@ try {
   }
 
   statusManager.update("system", { progress: 50, message: "Launching background worker..." });
+  ensureWorkerCanStartFromHub(__dirname);
   serviceManager.start('worker', path.join(__dirname, 'background-worker.js'));
   statusManager.update("system", { status: "online", progress: 100, message: "All systems ready" });
 } catch (e) {
@@ -206,6 +214,7 @@ function tryListen(port) {
 
   server.once("listening", () => {
     boundPort = server.address().port;
+    hubRuntime.setListenInfo(boundPort, "127.0.0.1");
     console.log(`Reply POC server running at http://localhost:${boundPort}`);
   });
 
@@ -214,7 +223,8 @@ function tryListen(port) {
 
 // Background sync loop for continuous learning
 const SYNC_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
-setInterval(() => {
+let autoSyncIntervalId = null;
+autoSyncIntervalId = setInterval(() => {
   console.log("[Auto-Sync] Running background sync for continuous learning...");
   Promise.all([
     syncWhatsApp().catch(err => console.error("[Auto-Sync] WhatsApp failed:", err.message)),
@@ -231,5 +241,35 @@ try {
 } catch (e) {
   console.warn("OpenClaw guard enforcement failed on startup:", e.message);
 }
+
+let shuttingDown = false;
+async function gracefulShutdown(trigger) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[Hub] ${trigger} received; closing HTTP server and stopping managed services...`);
+  if (autoSyncIntervalId) {
+    clearInterval(autoSyncIntervalId);
+    autoSyncIntervalId = null;
+  }
+  try {
+    await serviceManager.shutdownAllAsync();
+  } catch (e) {
+    console.error("[Hub] shutdownAllAsync error:", e.message);
+  }
+  await new Promise((resolve) => {
+    server.close((err) => {
+      if (err) console.error("[Hub] server.close:", err.message);
+      resolve();
+    });
+  });
+  process.exit(0);
+}
+
+process.once("SIGTERM", () => {
+  gracefulShutdown("SIGTERM").catch((e) => console.error("[Hub] gracefulShutdown:", e));
+});
+process.once("SIGINT", () => {
+  gracefulShutdown("SIGINT").catch((e) => console.error("[Hub] gracefulShutdown:", e));
+});
 
 tryListen(PORT_MIN);

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  DEPRECATED — do not use for normal operation.
+
+  Supported 24/7 setup: install only com.reply.hub via `make run` from the repo root.
+  The hub (chat/server.js) starts background-worker.js itself.
+
+  This template exists only for exceptional debugging. Copy to ~/Library/LaunchAgents/,
+  replace placeholders manually, then `launchctl load -w` — and remove it again when done.
+
+  Placeholders:
+    __NODE_BIN__     absolute path to node (e.g. output of `which node`)
+    __REPO_ROOT__    absolute path to this repository root (contains chat/)
+    __HOME__         your home directory path
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.reply.worker</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__NODE_BIN__</string>
+        <string>__REPO_ROOT__/chat/background-worker.js</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/Reply/worker-standalone.err.log</string>
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/Reply/worker-standalone.out.log</string>
+    <key>WorkingDirectory</key>
+    <string>__REPO_ROOT__/chat</string>
+</dict>
+</plist>

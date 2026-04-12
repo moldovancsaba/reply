@@ -9,8 +9,11 @@ const contactStore = require("../contact-store");
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
+const hubRuntime = require("../hub-runtime");
+const { ensureWorkerCanStartFromHub } = require("../ensure-hub-worker.js");
 
 const DATA_DIR = path.join(__dirname, "..", "data");
+const CHAT_DIR = path.join(__dirname, "..");
 let hatoriConsecutiveFailures = 0;
 
 function readStatus(filename) {
@@ -33,14 +36,33 @@ async function countIngested(source) {
 
         const db = new sqlite3.Database(CHAT_DB);
         return new Promise((resolve) => {
+            let settled = false;
+            const finish = (value) => {
+                if (settled) return;
+                settled = true;
+                try {
+                    db.close();
+                } catch {
+                    /* ignore */
+                }
+                resolve(value);
+            };
+            db.on("error", (err) => {
+                console.error(`[system/health] unified chat.db SQLite error (${source} count):`, err.message);
+                finish(0);
+            });
             db.serialize(() => {
                 db.run("PRAGMA journal_mode = WAL");
                 db.run("PRAGMA busy_timeout = 5000");
-                // Local chat/data/chat.db holds unified_messages from sync, not necessarily Apple’s message schema
+                // Local data/chat.db holds unified_messages from sync, not necessarily Apple’s message schema
                 const query = "SELECT count(*) as count FROM unified_messages WHERE source = ?";
                 db.get(query, [source], (err, row) => {
-                    db.close();
-                    resolve(row?.count || 0);
+                    if (err) {
+                        console.error(`Error counting ${source}:`, err);
+                        finish(0);
+                        return;
+                    }
+                    finish(row?.count || 0);
                 });
             });
         });
@@ -82,26 +104,37 @@ async function serveSystemHealth(req, res) {
     const kycStatus = readStatus("kyc_sync_status.json");
 
     // ── Check Hatori ────────────────────────────────────────────────────
-    // Hatori can be slow to respond while loading models — use a generous timeout.
-    const hatoriHealth = { status: "degraded", detail: "unreachable" };
-    try {
-        const hatoriPort = process.env.REPLY_HATORI_PORT || "23572";
-        const hRes = await fetch(`http://127.0.0.1:${hatoriPort}/v1/health`, {
-            signal: AbortSignal.timeout(12000)   // 12s — Hatori loads models on first ping
-        });
-        if (hRes.ok) {
-            hatoriConsecutiveFailures = 0;
-            hatoriHealth.status = "online";
-            hatoriHealth.detail = "ok";
-        } else {
+    // Only ping when this hub is configured to use Hatori (same gate as server.js sidecar).
+    // Match chat/server.js: from `chat/`, two levels up then `hatori/`.
+    const hatoriProjectPath = path.join(__dirname, "..", "..", "..", "hatori");
+    const hatoriFeatureEnabled =
+        process.env.REPLY_USE_HATORI === "1" && fs.existsSync(hatoriProjectPath);
+    const hatoriHealth = hatoriFeatureEnabled
+        ? { status: "degraded", detail: "unreachable" }
+        : { status: "skipped", detail: "REPLY_USE_HATORI not enabled or ../hatori missing" };
+
+    if (hatoriFeatureEnabled) {
+        try {
+            const hatoriPort = process.env.REPLY_HATORI_PORT || "23572";
+            const hRes = await fetch(`http://127.0.0.1:${hatoriPort}/v1/health`, {
+                signal: AbortSignal.timeout(12000) // 12s — Hatori loads models on first ping
+            });
+            if (hRes.ok) {
+                hatoriConsecutiveFailures = 0;
+                hatoriHealth.status = "online";
+                hatoriHealth.detail = "ok";
+            } else {
+                hatoriConsecutiveFailures += 1;
+                hatoriHealth.status = hatoriConsecutiveFailures >= 3 ? "offline" : "degraded";
+                hatoriHealth.detail = `http_${hRes.status}`;
+            }
+        } catch (e) {
             hatoriConsecutiveFailures += 1;
             hatoriHealth.status = hatoriConsecutiveFailures >= 3 ? "offline" : "degraded";
-            hatoriHealth.detail = `http_${hRes.status}`;
+            hatoriHealth.detail = e?.name === "TimeoutError" ? "timeout" : "unreachable";
         }
-    } catch (e) {
-        hatoriConsecutiveFailures += 1;
-        hatoriHealth.status = hatoriConsecutiveFailures >= 3 ? "offline" : "degraded";
-        hatoriHealth.detail = e?.name === "TimeoutError" ? "timeout" : "unreachable";
+    } else {
+        hatoriConsecutiveFailures = 0;
     }
 
     // ── Check Ollama directly on :11434 ────────────────────────────────
@@ -119,13 +152,21 @@ async function serveSystemHealth(req, res) {
     }
 
     // ── Hatori watchdog ─────────────────────────────────────────────────
-    // After 3 consecutive Hatori failures, try to restart it automatically.
-    if (hatoriConsecutiveFailures === 3) {
-        const hatoriService = serviceManager.getStatus('hatori');
-        if (hatoriService.status !== 'online' && hatoriService.status !== 'restarting') {
-            console.warn('[Watchdog] Hatori unreachable for 3 checks — attempting auto-restart...');
-            try { await serviceManager.restart('hatori'); } catch (e) {
-                console.error('[Watchdog] Hatori auto-restart failed:', e.message);
+    // After 3 consecutive Hatori failures, try to restart the managed sidecar (only if enabled).
+    if (hatoriFeatureEnabled && hatoriConsecutiveFailures === 3) {
+        const hatoriService = serviceManager.getStatus("hatori");
+        const st = hatoriService.status;
+        if (
+            st !== "online" &&
+            st !== "external" &&
+            st !== "loading in queue" &&
+            !String(st).startsWith("restarting")
+        ) {
+            console.warn("[Watchdog] Hatori unreachable for 3 checks — attempting auto-restart...");
+            try {
+                await serviceManager.restart("hatori");
+            } catch (e) {
+                console.error("[Watchdog] Hatori auto-restart failed:", e.message);
             }
         }
     }
@@ -203,6 +244,9 @@ async function serveSystemHealth(req, res) {
         replyVersion = pkg.version;
     } catch (e) { }
 
+    // Bound listen address (reply#31): see `hub-runtime.js`; null until server.listen() runs.
+    const { httpPort, httpHost } = hubRuntime.getListenInfo();
+
     const health = {
         ok: true,
         version: replyVersion,
@@ -247,7 +291,9 @@ async function serveSystemHealth(req, res) {
             kyc: kycStatus
         },
         stats: await contactStore.getStats(),
-        lastCheck: new Date().toISOString()
+        lastCheck: new Date().toISOString(),
+        httpPort,
+        httpHost
     };
 
     writeJson(res, 200, health);
@@ -266,6 +312,9 @@ async function serveServiceControl(req, res) {
         console.log(`[SystemControl] Service: ${name}, Action: ${action}`);
 
         if (action === "restart") {
+            if (name === "worker") {
+                ensureWorkerCanStartFromHub(CHAT_DIR);
+            }
             await serviceManager.restart(name);
         } else if (action === "stop") {
             await serviceManager.stop(name);
@@ -274,8 +323,9 @@ async function serveServiceControl(req, res) {
             let script = null;
             let args = [];
 
-            if (name === 'worker') {
-                script = path.join(__dirname, '..', 'background-worker.js');
+            if (name === "worker") {
+                ensureWorkerCanStartFromHub(CHAT_DIR);
+                script = path.join(__dirname, "..", "background-worker.js");
             } else if (name === 'openclaw') {
                 script = resolveOpenClawBinary();
                 args = ['gateway'];

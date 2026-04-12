@@ -31,3 +31,8 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      # reply#34 / reply#31: surface high+ vulns without failing the job until the tree is clean enough to gate.
+      - name: npm audit (high; informational)
+        run: npm audit --audit-level=high
+        continue-on-error: true

@@ -8,6 +8,8 @@
   <true/>
   <key>KeepAlive</key>
   <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
   <key>WorkingDirectory</key>
   <string>__REPO_ROOT__</string>
   <key>ProgramArguments</key>

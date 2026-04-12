@@ -5,11 +5,22 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const DB_PATH = path.join(__dirname, 'data', 'chat.db');
 
+function openMessageStoreDb(mode) {
+    const db =
+        mode === undefined
+            ? new sqlite3.Database(DB_PATH)
+            : new sqlite3.Database(DB_PATH, mode);
+    db.on('error', (err) => {
+        console.error('[message-store] SQLite error:', err.message);
+    });
+    return db;
+}
+
 /**
  * Initialize the unified messages table
  */
 function initialize() {
-    const db = new sqlite3.Database(DB_PATH);
+    const db = openMessageStoreDb();
     db.serialize(() => {
         db.run("PRAGMA journal_mode = WAL");
         db.run("PRAGMA busy_timeout = 5000");
@@ -34,7 +45,7 @@ function initialize() {
 async function saveMessages(messages) {
     if (!messages || messages.length === 0) return;
 
-    const db = new sqlite3.Database(DB_PATH);
+    const db = openMessageStoreDb();
     return new Promise((resolve, reject) => {
         db.serialize(() => {
             db.run("PRAGMA journal_mode = WAL");
@@ -64,7 +75,7 @@ async function saveMessages(messages) {
  * @param {Object} filter - {source, handle, limit, offset}
  */
 async function getMessages(filter = {}) {
-    const db = new sqlite3.Database(DB_PATH, sqlite3.OPEN_READONLY);
+    const db = openMessageStoreDb(sqlite3.OPEN_READONLY);
     db.run("PRAGMA busy_timeout = 5000");
     let query = "SELECT * FROM unified_messages WHERE 1=1";
     const params = [];
@@ -104,7 +115,7 @@ async function getMessages(filter = {}) {
  * @param {Object} filter - {limit, offset, q}
  */
 async function getRecentConversations(filter = {}) {
-    const db = new sqlite3.Database(DB_PATH, sqlite3.OPEN_READONLY);
+    const db = openMessageStoreDb(sqlite3.OPEN_READONLY);
     db.run("PRAGMA busy_timeout = 5000");
 
     let query = `

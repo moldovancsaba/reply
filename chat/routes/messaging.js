@@ -30,6 +30,7 @@ function conversationSearchHaystack(item) {
     return `${base} ${notes} ${sugs} ${preview}`.toLowerCase();
 }
 
+/** Allowed `sort` / `rank` query values for `GET /api/conversations` (reply#15; meta contract tests in reply#31). */
 const CONVERSATION_SORT_MODES = new Set([
     "newest",
     "oldest",
@@ -40,6 +41,7 @@ const CONVERSATION_SORT_MODES = new Set([
     "recommendation"
 ]);
 
+/** Invalid modes fall back to `newest`; exported for API contract tests. */
 function normalizeConversationSort(raw) {
     const s = String(raw || "newest").toLowerCase().trim();
     return CONVERSATION_SORT_MODES.has(s) ? s : "newest";
@@ -274,6 +276,7 @@ async function serveConversations(req, res, url) {
             .slice(offset, offset + limit)
             .map((it) => sanitizeConversationItemForApi(it, sort));
 
+        // `meta` keys are stable API surface (reply#31): sort, sortRequested, sortValid — no legacy `mode`.
         writeJson(res, 200, {
             contacts: page,
             hasMore: items.length > offset + limit,
@@ -438,6 +441,10 @@ async function serveFeedback(req, res) {
     }
 }
 
+/**
+ * Shared send handler for iMessage, email, LinkedIn (WhatsApp uses `serveSendWhatsApp`).
+ * Inbound-verified gate (reply#17) runs before any channel-specific send logic.
+ */
 async function serveSendMessage(req, res, channel) {
     try {
         const json = await readJsonBody(req);
@@ -449,6 +456,7 @@ async function serveSendMessage(req, res, channel) {
             return;
         }
 
+        // reply#17: `chat/utils/outbound-policy.js` — merged profiles + per-channel identity match
         const gate = checkOutboundAllowed(channel, handle);
         if (!gate.allowed) {
             appendOutboundDenial({
@@ -599,6 +607,7 @@ async function serveSendWhatsApp(req, res) {
             return;
         }
 
+        // reply#17 — same inbound-verified gate as `serveSendMessage`
         const waGate = checkOutboundAllowed("whatsapp", recipientRaw);
         if (!waGate.allowed) {
             appendOutboundDenial({
@@ -651,6 +660,7 @@ async function serveHatoriOutcome(req, res) {
     }
 }
 
+// `normalizeConversationSort` + `CONVERSATION_SORT_MODES`: exported for `chat/test/conversations-meta.test.js` (reply#31).
 module.exports = {
     serveConversations,
     serveThread,
@@ -660,6 +670,8 @@ module.exports = {
     serveSendMessage,
     serveSendWhatsApp,
     serveHatoriOutcome,
+    normalizeConversationSort,
+    CONVERSATION_SORT_MODES,
     invalidateConversationsCache: () => {
         conversationsIndexCache.builtAtMs = 0;
         conversationsIndexCache.rawItems = null;

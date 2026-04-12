@@ -1,12 +1,29 @@
 /**
  * {reply} - Service Manager
- * Handles orchestration of background processes (Worker, sidecars, etc.)
- * Includes self-repair watchdog with auto-restart and actionable error hints.
+ *
+ * Orchestrates background processes (worker, OpenClaw, Hatori) with restart backoff
+ * and `repair_required` when limits are hit. Worker duplicate detection: if the worker
+ * exits with code 0 almost immediately (see `isWorkerEarlyExitDuplicateCandidate`), we
+ * treat it as a stale PID / duplicate worker case and retry a few times (reply#31 tests).
  */
 
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+
+const WORKER_EARLY_EXIT_MS = 5000;
+const WORKER_DUPLICATE_RETRY_MAX = 2;
+const WORKER_DUPLICATE_RETRY_DELAY_MS = 4000;
+
+/** Exported for unit tests — worker exited immediately with success (duplicate / stale lock). */
+function isWorkerEarlyExitDuplicateCandidate(name, code, signal, uptimeMs) {
+    return (
+        name === "worker" &&
+        code === 0 &&
+        signal !== "SIGTERM" &&
+        uptimeMs < WORKER_EARLY_EXIT_MS
+    );
+}
 
 // Per-service restart policies
 const RESTART_POLICIES = {
@@ -88,6 +105,7 @@ class ServiceManager {
             startTime: Date.now(),
             logPath,
             restartAttempts: existing.restartAttempts || 0,
+            workerDuplicateRetries: existing.workerDuplicateRetries || 0,
             lastError: existing.lastError || null,
             repairRequired: false,
             customStatus: null
@@ -99,11 +117,41 @@ class ServiceManager {
             serviceInfo.exitSignal = signal;
             serviceInfo.process = null;
 
+            const uptimeMs = Date.now() - (serviceInfo.startTime || 0);
+            const workerDuplicateSuspect = isWorkerEarlyExitDuplicateCandidate(name, code, signal, uptimeMs);
+
+            if (!workerDuplicateSuspect) {
+                serviceInfo.workerDuplicateRetries = 0;
+            }
+
             // Non-zero exit or killed without SIGTERM = unexpected crash
-            const isCrash = code !== 0 && signal !== 'SIGTERM';
+            const isCrash = code !== 0 && signal !== "SIGTERM";
             if (isCrash) {
                 serviceInfo.lastError = `Exited with code ${code}`;
                 this._attemptAutoRestart(name, serviceInfo);
+            } else if (workerDuplicateSuspect) {
+                const n = (serviceInfo.workerDuplicateRetries || 0) + 1;
+                serviceInfo.workerDuplicateRetries = n;
+                if (n <= WORKER_DUPLICATE_RETRY_MAX) {
+                    serviceInfo.lastError =
+                        "Worker exited immediately (code 0). Often duplicate background-worker or stale PID lock; see docs/LOCAL_MACHINE_DEPLOYMENT.md and runbook/unload-legacy-worker-launchagent.sh";
+                    console.warn(
+                        `[ServiceManager] Worker duplicate/early-exit suspected (attempt ${n}/${WORKER_DUPLICATE_RETRY_MAX}). ` +
+                            `Retrying in ${WORKER_DUPLICATE_RETRY_DELAY_MS / 1000}s...`
+                    );
+                    serviceInfo.customStatus = `restarting (duplicate-exit retry ${n}/${WORKER_DUPLICATE_RETRY_MAX})`;
+                    setTimeout(() => {
+                        if (!serviceInfo.process) {
+                            this.start(name, serviceInfo.scriptPath, serviceInfo.originalArgs, serviceInfo.spawnCwd);
+                        }
+                    }, WORKER_DUPLICATE_RETRY_DELAY_MS);
+                } else {
+                    console.error(
+                        `[ServiceManager] Worker still exiting early after ${WORKER_DUPLICATE_RETRY_MAX} retries. Marking repair_required.`
+                    );
+                    serviceInfo.repairRequired = true;
+                    serviceInfo.customStatus = "repair_required";
+                }
             }
         });
 
@@ -191,6 +239,13 @@ class ServiceManager {
     async restart(name) {
         const service = this.services.get(name);
         if (!service) return;
+
+        if (!service.scriptPath) {
+            console.warn(
+                `[ServiceManager] restart("${name}"): skipped — no managed process in this hub session (never spawned).`
+            );
+            return;
+        }
 
         // Reset repair counters so manual restart gives a fresh chance
         service.restartAttempts = 0;
@@ -282,16 +337,27 @@ class ServiceManager {
     }
 
     /**
-     * Clean up all services on exit
+     * Clean up all services on exit (SIGTERM only; does not wait)
      */
     shutdownAll() {
         console.log('[ServiceManager] Shutting down all services...');
-        for (const [name, service] of this.services.entries()) {
+        for (const [, service] of this.services.entries()) {
             if (service.process) {
                 service.process.kill('SIGTERM');
             }
         }
     }
+
+    /**
+     * Stop every managed child and wait for processes to exit (hub graceful shutdown).
+     */
+    async shutdownAllAsync() {
+        const names = [...this.services.keys()];
+        await Promise.all(names.map((n) => this.stop(n)));
+    }
 }
 
-module.exports = new ServiceManager();
+// Singleton used by `server.js` / routes; predicate attached for unit tests (reply#31).
+const serviceManagerSingleton = new ServiceManager();
+serviceManagerSingleton.isWorkerEarlyExitDuplicateCandidate = isWorkerEarlyExitDuplicateCandidate;
+module.exports = serviceManagerSingleton;

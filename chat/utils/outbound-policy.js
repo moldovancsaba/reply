@@ -1,6 +1,14 @@
 /**
- * Reply-only outbound: allow sends only to identities that have inbound proof
- * (contact_channels.inbound_verified_at via hydrated verifiedChannels).
+ * Reply-only outbound policy (GitHub: moldovancsaba/reply#17).
+ *
+ * Sends are allowed only to channel identities that already have inbound proof
+ * (`contact_channels.inbound_verified_at`, surfaced on contacts as `verifiedChannels`).
+ * Alias / merged rows (`primary_contact_id` pointing at the canonical contact) contribute
+ * their verified addresses to the same gate. LinkedIn requires an exact match after
+ * `normalizeLinkedinKey()` (scheme + URL stripping only — no substring unlock).
+ *
+ * Opt-out for local dev: `REPLY_OUTBOUND_REQUIRE_INBOUND_VERIFIED=false` (see `chat/.env.example`).
+ * Denials are logged via `appendOutboundDenial()` to `chat/data/outbound-policy-denials.jsonl`.
  */
 const fs = require("fs");
 const path = require("path");
@@ -25,15 +33,42 @@ function normalizeLinkedinKey(s) {
   return String(s || "")
     .trim()
     .toLowerCase()
-    .replace(/^linkedin:\/\//i, "");
+    .replace(/^linkedin:\/\//i, "")
+    .replace(/^https?:\/\/(www\.)?linkedin\.com\/in\//i, "")
+    .replace(/\/$/, "");
 }
 
 /**
+ * Union inbound-verified identities for a canonical contact plus any rows linked via
+ * `primary_contact_id` (merged profiles / aliases).
+ *
+ * @param {{ id?: string, verifiedChannels?: Record<string, string> } | null} contact
+ * @param {Array<{ id?: string, primary_contact_id?: string, verifiedChannels?: Record<string, string> }>} allContacts
+ */
+function mergeVerifiedChannelMaps(contact, allContacts) {
+  const merged = { ...(contact?.verifiedChannels || {}) };
+  if (!contact?.id || !Array.isArray(allContacts)) return merged;
+  for (const c of allContacts) {
+    if (!c || c.id === contact.id) continue;
+    if (c.primary_contact_id !== contact.id) continue;
+    for (const [addr, ts] of Object.entries(c.verifiedChannels || {})) {
+      if (ts) merged[addr] = merged[addr] || ts;
+    }
+  }
+  return merged;
+}
+
+/**
+ * Core gate used by `checkOutboundAllowed()` after resolving the contact.
+ *
  * @param {string} channel
  * @param {string} recipientRaw
- * @param {{ verifiedChannels?: Record<string, string> } | null} contact
+ * @param {{ verifiedChannels?: Record<string, string>, id?: string } | null} contact
+ * @param {{ contactsRoster?: Array<{ id?: string, primary_contact_id?: string, verifiedChannels?: Record<string, string> }> }} [options]
+ *        When `contactsRoster` is set, it replaces `contactStore.contacts` for merge-only
+ *        (unit tests). Production callers omit it.
  */
-function checkOutboundAllowedForContact(channel, recipientRaw, contact) {
+function checkOutboundAllowedForContact(channel, recipientRaw, contact, options = {}) {
   const ch = String(channel || "").toLowerCase();
   const raw = String(recipientRaw || "").trim();
   if (!raw) {
@@ -54,7 +89,8 @@ function checkOutboundAllowedForContact(channel, recipientRaw, contact) {
     };
   }
 
-  const verified = contact.verifiedChannels || {};
+  const roster = options.contactsRoster || contactStore.contacts;
+  const verified = mergeVerifiedChannelMaps(contact, roster);
   const keys = Object.entries(verified).filter(([, ts]) => Boolean(ts));
   if (keys.length === 0) {
     return {
@@ -106,7 +142,7 @@ function checkOutboundAllowedForContact(channel, recipientRaw, contact) {
     for (const [addr] of keys) {
       const k = normalizeLinkedinKey(addr);
       if (!k) continue;
-      if (k === want || k.includes(want) || want.includes(k)) {
+      if (k === want) {
         return { allowed: true, code: "ok" };
       }
     }
@@ -164,5 +200,6 @@ module.exports = {
   policyEnabled,
   checkOutboundAllowed,
   checkOutboundAllowedForContact,
+  mergeVerifiedChannelMaps,
   appendOutboundDenial,
 };
