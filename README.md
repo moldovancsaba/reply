@@ -59,7 +59,7 @@ Required:
 
 External Dependencies:
 - **OpenClaw** (for WhatsApp routing)
-- **`{hatori}`** (for AI summarization and suggestions)
+- **`{hatori}`** (optional; for AI drafting via the Hatori API). Clone as a **sibling** of this repo and enable `REPLY_USE_HATORI=1` — see **[docs/LOCAL_MACHINE_DEPLOYMENT.md](docs/LOCAL_MACHINE_DEPLOYMENT.md)** (section *Optional — `{hatori}`*) and **[moldovancsaba/hatori](https://github.com/moldovancsaba/hatori)**.
 
 ### 1. Environment Bootstrap
 
@@ -68,7 +68,7 @@ Copy the example file:
 cd chat
 cp .env.example .env
 ```
-Ensure your ports line up with what your ecosystem expects (default: `PORT=45311`). Make sure `REPLY_USE_HATORI=1` is set if you want the magic wand UI to work.
+Ensure your ports line up with what your ecosystem expects (default: `PORT=45311`). For Hatori-backed suggest, install the sibling repo and set `REPLY_USE_HATORI=1` (see [LOCAL_MACHINE_DEPLOYMENT.md](docs/LOCAL_MACHINE_DEPLOYMENT.md)); otherwise suggestions use **Ollama** only.
 
 ### 2. Configure Hardware Routing
 
