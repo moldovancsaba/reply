@@ -57,7 +57,7 @@ curl -sfS http://127.0.0.1:45311/api/health
 4. **iMessage database access** (macOS):
 
    - Default path: `~/Library/Messages/chat.db` (see `chat/imessage-db-path.js`).
-   - Grant **Full Disk Access** to the app that runs Node (Terminal, iTerm, Cursor, `node` if launched from a GUI wrapper, etc.).
+   - Grant **Full Disk Access** to the **`node` binary** your hub actually runs (for example `/opt/homebrew/bin/node`). The LaunchAgent runs `reply_service.sh` → `exec node server.js`; **Terminal/Cursor alone are not enough** if the hub is started by `launchd`.
    - Optional override: `REPLY_IMESSAGE_DB_PATH` in `chat/.env`.
 
 5. **Install the LaunchAgent** (from repo root):
@@ -84,7 +84,15 @@ curl -sfS http://127.0.0.1:45311/api/health
 
    See [tools/macos/ReplyMenubar/README.md](../tools/macos/ReplyMenubar/README.md) (rebuild if you move the repo).
 
-7. **Optional — `{hatori}` (local intelligence API):** `{reply}` can call **Hatori** on **`127.0.0.1:23572`** when enabled. Upstream repo: **[moldovancsaba/hatori](https://github.com/moldovancsaba/hatori)** (canonical bootstrap, API contract, and runbooks live there).
+7. **Optional — LinkedIn message sidecar:** depends on **`playwright`**. After `npm install` in `chat/`, install Chromium once:
+
+   ```bash
+   cd chat && npm run linkedin:install-browsers
+   ```
+
+   The scraper uses a **visible** browser window by default (`linkedin-sidecar.js`); it must reach `REPLY_BRIDGE_ENDPOINT` (see `chat/.env.example`).
+
+8. **Optional — `{hatori}` (local intelligence API):** `{reply}` can call **Hatori** on **`127.0.0.1:23572`** when enabled. Upstream repo: **[moldovancsaba/hatori](https://github.com/moldovancsaba/hatori)** (canonical bootstrap, API contract, and runbooks live there).
 
    **Layout:** the hub resolves the Hatori **checkout** as **`../hatori`** from the **`chat/`** folder — a **sibling** of this **`reply`** repo (e.g. `…/Projects/reply` and `…/Projects/hatori`).
 
@@ -136,7 +144,9 @@ curl -sfS http://127.0.0.1:45311/api/health
 
 | Symptom | Likely cause | What to do |
 |--------|----------------|------------|
-| Hub restart loop; log shows `SQLITE_CANTOPEN` for Messages DB | TCC / Full Disk Access, wrong path, or missing file | Fix FDA for the Node host; set `REPLY_IMESSAGE_DB_PATH` if needed. The hub should still start; iMessage sync/polling degrades gracefully (see section 5.1). |
+| Hub restart loop; log shows `SQLITE_CANTOPEN` for Messages DB | TCC / Full Disk Access, wrong path, or missing file | Fix **Full Disk Access for the same `node` binary** the LaunchAgent uses (see §2 step 4); set `REPLY_IMESSAGE_DB_PATH` if needed. The hub should still start; iMessage sync/polling degrades gracefully (see section 5.1). |
+| WhatsApp channel: `Database not found` | No **WhatsApp Desktop** `ChatStorage.sqlite` at the default path | Install/sync WhatsApp on the Mac, or set **`REPLY_WHATSAPP_DB_PATH`** in `chat/.env` to the real file. |
+| LinkedIn messages: `Exited with code 1` | Missing **`playwright`** / Chromium, or bridge URL unreachable | Run **`cd chat && npm install`** then **`npm run linkedin:install-browsers`**; confirm **`REPLY_BRIDGE_ENDPOINT`** matches the hub (see `chat/.env.example`). |
 | `Worker already running (PID …). Exiting.` | Stale `chat/data/worker.pid` or second worker | The hub runs [`chat/ensure-hub-worker.js`](../chat/ensure-hub-worker.js) before spawn: it removes a bogus PID file, or **SIGTERM**s an orphaned `background-worker.js` for this checkout. Reload the hub (`make run` or **Restart Worker**). Manually: stop extra `node …/chat/background-worker.js` processes, delete `chat/data/worker.pid` only if none are running. |
 | Health check fails on 45311 | Another process owns the port or server chose 45312+ | Check console log for actual port; `lsof -i :45311`. |
 | Hub exits / restarts with `SQLITE_CANTOPEN` right after `/api/health` | Unified `data/chat.db` missing, unreadable, or SQLite `error` events on a short-lived connection | Fix permissions on `data/`; ensure disk is available. Health counting uses `data/chat.db` and now handles errors without crashing the hub. |
