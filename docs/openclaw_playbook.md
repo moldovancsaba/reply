@@ -39,7 +39,9 @@ This playbook documents the architecture, state locations, and common troublesho
 
 2. **Bind mount looks empty inside the container** (`docker exec … ls /home/node/.openclaw` shows almost nothing). On **Docker Desktop for Mac**, directories under **`/Users/Shared/...`** are often **not shared** with the Linux VM, so the mount appears empty and OpenClaw never sees your real `openclaw.json`. Fix: either add **`/Users/Shared`** under **Docker Desktop → Settings → Resources → File sharing**, or set **`OPENCLAW_HOST_CONFIG_DIR`** in **`mvp-factory-control/.env`** to a **copy** of `openclaw_config` under your home directory (for example `~/.mvp-factory/openclaw_config`) and point Compose at that path (see `mvp-factory-control/docker-compose.yml`).
 
-3. **Port `18789` already in use on the Mac** (for example another process or an SSH remote forward). Fix: stop the conflicting listener or change **`CLAWDBOT_GATEWAY_PORT`** in Compose and point Reply/OpenClaw clients at the new port.
+3. **Port `18789` already in use on the Mac** (for example another process or an SSH remote forward). Fix: stop the conflicting listener, or map a different **host** port to container **`18789`** (for example **`CLAWDBOT_GATEWAY_PORT=18790`** with **`18790:18789`** in Compose) and set **`REPLY_OPENCLAW_GATEWAY_URL=ws://127.0.0.1:18790`** plus **`REPLY_OPENCLAW_GATEWAY_TOKEN`** in **`chat/.env.local`** (see **`chat/openclaw-gateway-env.js`**).
+
+4. **Gateway never binds / `healthz` refuses inside the container** while **`OPENAI_API_BASE`** points at **`host.docker.internal:11434`**. If Ollama on the host is down, slow, or unreachable from Docker, OpenClaw can sit at high CPU before listening. Fix: start Ollama on the Mac, or remove **`OPENAI_API_BASE`** from the **`openclaw-gateway`** service until the model host is reliable (see **`mvp-factory-control/docker-compose.yml`** comments).
 
 ### B. The "Token Mismatch" or "Token Missing" Error (Browser Dashboard)
 **Symptom**: Opening the Control UI (`http://127.0.0.1:18789/overview`) in a browser returns `unauthorized: gateway token missing` or `gateway token mismatch`.
