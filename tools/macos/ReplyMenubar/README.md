@@ -50,7 +50,7 @@ If you add `MaterialSymbolsOutlined.ttf` next to this README (`tools/macos/Reply
 
 ## Port note
 
-The template defaults the hub to port **45311**. If you change `PORT` in `chat/.env`, the menubar health URL may not match until the Swift template is updated to read your port (or you keep the default).
+The menubar reads **`PORT`** from `chat/.env` at the baked-in repo root, then probes **`PORT`…`PORT+15`** for `/api/health`. When the hub returns **`httpPort`** in JSON, that canonical port is used for “Open UI” and OpenClaw URLs. Rebuild the app after changing repo location (`make install-ReplyMenubar`).
 
 ## Source layout
 

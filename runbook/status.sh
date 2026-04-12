@@ -2,6 +2,10 @@
 # Quick operational snapshot for `make status` and the Reply menubar app.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ENV_FILE="${REPO_ROOT}/chat/.env"
+
 UID_NUM="$(id -u)"
 LABEL="gui/${UID_NUM}/com.reply.hub"
 
@@ -12,12 +16,41 @@ else
   echo "(not loaded — run: make run from the repo root)"
 fi
 
+BASE_PORT="45311"
+if [[ -f "$ENV_FILE" ]]; then
+  line="$(grep -E '^[[:space:]]*PORT[[:space:]]*=' "$ENV_FILE" | tail -1 || true)"
+  if [[ -n "${line}" ]]; then
+    val="${line#*=}"
+    val="${val// /}"
+    val="${val//\"/}"
+    val="${val//\'/}"
+    if [[ -n "${val}" ]] && [[ "${val}" =~ ^[0-9]+$ ]]; then
+      BASE_PORT="${val}"
+    fi
+  fi
+fi
+
+# After launchctl load the hub may need a second or two before bind (avoid false "unreachable").
+HEALTH_PORT=""
+for _attempt in 1 2 3 4 5 6; do
+  for delta in $(seq 0 15); do
+    p=$((BASE_PORT + delta))
+    if curl -sfS --max-time 2 "http://127.0.0.1:${p}/api/health" >/dev/null 2>&1; then
+      HEALTH_PORT="$p"
+      break 2
+    fi
+  done
+  sleep 1
+done
+
 echo ""
-echo "=== http://127.0.0.1:45311/api/health ==="
-if curl -sfS --max-time 3 "http://127.0.0.1:45311/api/health" 2>/dev/null; then
+if [[ -n "$HEALTH_PORT" ]]; then
+  echo "=== http://127.0.0.1:${HEALTH_PORT}/api/health ==="
+  curl -sfS --max-time 3 "http://127.0.0.1:${HEALTH_PORT}/api/health" || true
   echo ""
 else
-  echo "(unreachable)"
+  echo "=== http://127.0.0.1:${BASE_PORT}–$((BASE_PORT + 15))/api/health ==="
+  echo "(unreachable — check PORT in chat/.env and hub.log)"
 fi
 
 echo ""
