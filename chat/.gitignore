@@ -1,5 +1,6 @@
 node_modules/
 .env
+.env.local
 .vercel
 data/*.db
 data/*.db-shm

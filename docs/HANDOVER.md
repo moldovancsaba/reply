@@ -2,7 +2,7 @@
 
 This file is onboarding + operational context. Keep it accurate when behavior/architecture changes.
 
-**Last Updated**: 2026-04-12 (Hatori sibling clone + Makefile/docs; reply#15/#33/#46 pack; SSOT: `{reply}` issues + [Project #7](https://github.com/users/moldovancsaba/projects/7))
+**Last Updated**: 2026-04-12 (Hatori: load-env, official bootstrap, preflight, verify:hatori; SSOT: `{reply}` issues + [Project #7](https://github.com/users/moldovancsaba/projects/7))
 
 **Current Version**: `0.5.2` (see `chat/package.json`)
 
@@ -365,10 +365,12 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
 - **reply#34:** `SECURITY_ROTATION.md` §3b (repo prevention checklist dated). Issue closed: **provider rotation** remains in §3 for operators who had keys in history; **repo track** complete.
 - **Validation:** `cd chat && npm test` (53) + `npm run lint`; `node chat/security-audit.js` → `critical=0 warn=0`.
 
-## Active Session Update (2026-04-12, Hatori sibling + docs)
-- **Clone:** [moldovancsaba/hatori](https://github.com/moldovancsaba/hatori) lives as **`/Users/Shared/Projects/hatori`** (sibling of **`reply`**). `~/.config/hatori/hatori.env` created via `hatori_env_init.sh` during bootstrap.
-- **Reply repo:** `Makefile` targets `hatori-clone`, `hatori-bootstrap`, `hatori-doctor`; **`docs/LOCAL_MACHINE_DEPLOYMENT.md`** step 7 + **`chat/.env.example`** Hatori block + **`README.md`** dependency note.
-- **Runtime:** Hatori **`make up`** requires **Docker/Colima**; if the daemon is stopped, run `colima start` (or Docker Desktop), then `cd ../hatori && make up && make run`, then set **`REPLY_USE_HATORI=1`** in `chat/.env` and restart the Reply hub.
+## Active Session Update (2026-04-12, Hatori — clone + proper wiring)
+- **Clone:** [moldovancsaba/hatori](https://github.com/moldovancsaba/hatori) as sibling **`…/Projects/hatori`** next to **`reply`**. Token file **`~/.config/hatori/hatori.env`** from Hatori’s **`hatori_env_init.sh`** (or full **`hatori_bootstrap.sh`**).
+- **`chat/load-env.js`:** `.env` then optional **`.env.local`** (gitignored). Wired into **`server.js`**, **`background-worker.js`**, **`security-audit.js`**, **`test-hatori-verify.js`**. **`chat/.env.local.example`**; hub warns if **`REPLY_USE_HATORI=1`** but sibling checkout missing.
+- **Makefile:** **`make hatori-bootstrap`** → upstream **`./tools/scripts/hatori_bootstrap.sh`**; **`make hatori-preflight`** → **`tools/scripts/reply_hatori_preflight.sh`**; **`make hatori-doctor`**. **`cd chat && npm run verify:hatori`** for smoke.
+- **Docs:** **`LOCAL_MACHINE_DEPLOYMENT.md`** §3 + §7; **`RELEASE_NOTES`** [0.5.4] Hatori ops line.
+- **Runtime:** needs **Docker/Colima** healthy; if VM start fails locally, fix Colima/Docker then re-run **`make hatori-bootstrap`** or **`cd ../hatori && make up && make run`**, then **`REPLY_USE_HATORI=1`** in **`.env.local`** and restart Reply hub.
 
 ## Active Session Update (2026-04-12, reply#15 / #33 / #46 pack)
 - **reply#15:** `meta.availableSortModes` on `GET /api/conversations`; `chat/test/conversation-sort-determinism.test.js`; invalid client sort surfaces as a **toast** in `js/contacts.js` (still uses `newest` from server).

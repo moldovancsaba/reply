@@ -51,14 +51,17 @@ hatori-clone:
 
 .PHONY: hatori-bootstrap
 hatori-bootstrap:
+	@$(MAKE) hatori-clone
 	@HATORI_ROOT="$$(cd .. && pwd)/hatori"; \
 	test -d "$$HATORI_ROOT/.git" || (echo "Missing $$HATORI_ROOT — run: make hatori-clone" && exit 1); \
-	cd "$$HATORI_ROOT" && \
-	(test -d .venv || python3 -m venv .venv) && \
-	. .venv/bin/activate && pip install -q --upgrade pip && pip install -q -r ui/requirements.txt && \
-	./tools/scripts/hatori_env_init.sh && \
-	echo "Hatori deps ready. Start Docker/Colima, then: cd $$HATORI_ROOT && make up && make run"
+	echo "Running official Hatori bootstrap (venv, DB reset, models, LaunchAgent)…"; \
+	cd "$$HATORI_ROOT" && ./tools/scripts/hatori_bootstrap.sh
 
 .PHONY: hatori-doctor
 hatori-doctor:
 	@test -d "$$(cd .. && pwd)/hatori" && (cd "$$(cd .. && pwd)/hatori" && $(MAKE) doctor) || echo "No ../hatori — run: make hatori-clone"
+
+.PHONY: hatori-preflight
+hatori-preflight:
+	@chmod +x ./tools/scripts/reply_hatori_preflight.sh
+	@./tools/scripts/reply_hatori_preflight.sh

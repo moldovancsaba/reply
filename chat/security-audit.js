@@ -2,7 +2,8 @@
 
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, ".env") });
+const { loadReplyEnv } = require("./load-env.js");
+loadReplyEnv();
 const {
   getSecurityPolicy,
   AUDIT_LOG_PATH,

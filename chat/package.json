@@ -13,7 +13,8 @@
     "linkedin:sync": "node linkedin-sidecar.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "verify:hatori": "node test-hatori-verify.js"
   },
   "engines": {
     "node": ">=18"

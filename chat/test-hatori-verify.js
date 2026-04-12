@@ -1,4 +1,5 @@
-require('dotenv').config();
+const { loadReplyEnv } = require('./load-env.js');
+loadReplyEnv();
 const hatori = require('./hatori-client.js');
 const { generateReply } = require('./reply-engine.js');
 
