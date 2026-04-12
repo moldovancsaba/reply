@@ -150,6 +150,13 @@
           </div>
         </div>
 
+        <div id="kyc-alias-strip" class="kyc-alias-strip u-display-none"
+          style="margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2, #f4f4f5); font-size: 0.85rem; color: var(--text-secondary);">
+          <div style="font-weight:600; margin-bottom:6px;">Linked profiles (alias merge)</div>
+          <ul id="kyc-alias-list" style="margin:0;padding-left:18px;"></ul>
+          <p style="margin:8px 0 0;font-size:0.8rem;">Unlink detaches the row; channel rows already moved to the primary stay there.</p>
+        </div>
+
         <div class="kyc-card">
           <div class="kyc-field">
             <label class="kyc-field-label" for="kyc-name-input">Display Name</label>
@@ -226,7 +233,7 @@
     <div class="modal-content">
       <h3 class="mt-0">Merge Contact</h3>
       <p class="mb-md" style="font-size: 0.9rem; color: var(--text-secondary);">Select the primary identity to merge
-        <strong id="merge-source-handle"></strong> into. All channels and history will be transferred.
+        <strong id="merge-source-handle"></strong> into. Channels and notes move to the primary; the other row stays as a reversible <strong>alias</strong> (unlink from the profile panel).
       </p>
       <div class="settings-field mt-0">
         <label class="settings-label">Target Primary Handle:</label>

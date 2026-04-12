@@ -338,6 +338,30 @@ export async function mergeContacts(targetId, sourceId) {
 }
 
 /**
+ * List alias rows (`primary_contact_id`) for the canonical profile behind this handle/id (reply#19).
+ * @param {string} forKey - `kyc-handle-input` value or row id (`id-…`)
+ */
+export async function listContactAliases(forKey) {
+    const res = await _request(`${API_BASE}/api/contacts/aliases?for=${encodeURIComponent(forKey)}`, {
+        method: 'GET',
+        headers: buildSecurityHeaders({ includeJsonContentType: false }),
+        _silent: true,
+        _showLoading: false
+    });
+    return res.json();
+}
+
+/** Clear merge link on one alias row (channels stay on primary). */
+export async function unlinkContactAlias(aliasContactId) {
+    const res = await _request(`${API_BASE}/api/contacts/unlink-alias`, {
+        method: 'POST',
+        headers: buildSecurityHeaders(),
+        body: JSON.stringify(withApproval({ aliasContactId }, 'ui-unlink-contact-alias'))
+    });
+    return res.json();
+}
+
+/**
  * Trigger a sync for a specific source
  * @param {string} source - Source to sync ('imessage', 'whatsapp', 'notes')
  * @returns {Promise<Object>} Sync result
