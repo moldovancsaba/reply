@@ -2,7 +2,7 @@
 
 This file is onboarding + operational context. Keep it accurate when behavior/architecture changes.
 
-**Last Updated**: 2026-04-12 (reply#32/#14/#34; SSOT: `{reply}` issues + [Project #7](https://github.com/users/moldovancsaba/projects/7))
+**Last Updated**: 2026-04-12 (reply#15/#33/#46 pack; SSOT: `{reply}` issues + [Project #7](https://github.com/users/moldovancsaba/projects/7))
 
 **Current Version**: `0.5.2` (see `chat/package.json`)
 
@@ -364,6 +364,11 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
 - **reply#14:** `contextMeta.contextFreshnessSummary` from `summarizeRagFreshnessTraces`; regression tests for mail RAG ordering and decay.
 - **reply#34:** `SECURITY_ROTATION.md` §3b (repo prevention checklist dated). Issue closed: **provider rotation** remains in §3 for operators who had keys in history; **repo track** complete.
 - **Validation:** `cd chat && npm test` (53) + `npm run lint`; `node chat/security-audit.js` → `critical=0 warn=0`.
+
+## Active Session Update (2026-04-12, reply#15 / #33 / #46 pack)
+- **reply#15:** `meta.availableSortModes` on `GET /api/conversations`; `chat/test/conversation-sort-determinism.test.js`; invalid client sort surfaces as a **toast** in `js/contacts.js` (still uses `newest` from server).
+- **reply#33:** Repro scripts → `chat/scripts/dev/` + README; `REPLY_DEBUG` + `replyHubDebugLog` in `chat/server.js`; menubar template `fetchHatoriDirectHealth()` (`/v1/health`, `REPLY_HATORI_PORT` from `.env`); `READMEDEV.md` / `DEFINITION_OF_DONE.md` / `LOCAL_MACHINE_DEPLOYMENT.md` / `.env.example`.
+- **reply#46:** `_showLoading` on conversation + thread fetches; dashboard `UI.showLoading` + error toast; sync failure toast; suggest + KYC analyze loading/toasts; KYC save/merge use toasts instead of `alert()`.
 
 ## Active Session Update (2026-04-11 continuation, reply#29 / #30 / board)
 - **reply#29 (SSOT docs):** Replaced stale “Current Priorities” / “Next Agent” / verification bullets in [HANDOVER.md](HANDOVER.md) with **Project #7**-first guidance. Rewrote [NEXT_AGENT_PROMPT.md](NEXT_AGENT_PROMPT.md) boot prompt (version-agnostic). Added doc-freshness framing to [BRAIN_DUMP.md](BRAIN_DUMP.md) and reconciled [DEPENDENCY_MAP.md](DEPENDENCY_MAP.md) Tier 1 / #211 / #224 / sync commands with **main** + **reply** repo reality (CI Node 20, `chat/routes/*`, `gh project` → project **7**). [INGESTION.md](INGESTION.md) §6 documents LinkedIn bridge.

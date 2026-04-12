@@ -190,7 +190,7 @@ export async function loadMessages(handle, append = false) {
         }
 
         // Fetch messages
-        const messages = await fetchMessages(handle, messageOffset, MESSAGE_LIMIT);
+        const messages = await fetchMessages(handle, messageOffset, MESSAGE_LIMIT, !append);
 
         // Update state
         hasMoreMessages = messages.length === MESSAGE_LIMIT;
@@ -312,6 +312,7 @@ export async function loadMessages(handle, append = false) {
 
     } catch (error) {
         console.error('Failed to load messages:', error);
+        UI.showToast(error?.message || 'Failed to load messages', 'error');
         messagesEl.innerHTML = '';
         const errorContainer = document.createElement('div');
         errorContainer.style.padding = '40px';

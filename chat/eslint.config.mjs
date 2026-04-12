@@ -86,6 +86,7 @@ export default [
             "data/**",
             "*.completed.js",
             "repro-*.js",
+            "scripts/dev/**",
             "test-*.js",
             "eslint.config.mjs",
         ],

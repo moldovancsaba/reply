@@ -1,9 +1,7 @@
 
-const { ingestInboundEvent, readBridgeEventLog } = require("./channel-bridge.js");
-const contactStore = require("./contact-store.js");
-const { getHistory } = require("./vector-store.js");
-const fs = require("fs");
-const path = require("path");
+const { ingestInboundEvent, readBridgeEventLog } = require("../../channel-bridge.js");
+const contactStore = require("../../contact-store.js");
+const { getHistory } = require("../../vector-store.js");
 
 async function run() {
     console.log("--- Starting LinkedIn Ingestion Repro ---");

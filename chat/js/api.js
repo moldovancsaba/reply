@@ -9,7 +9,8 @@ const API_BASE = '';
 
 async function _request(url, options = {}) {
     const isMutation = options.method && options.method !== 'GET';
-    if (isMutation) UI.showLoading();
+    const showLoading = Boolean(options._showLoading) || isMutation;
+    if (showLoading) UI.showLoading();
 
     try {
         const res = await fetch(url, options);
@@ -41,7 +42,7 @@ async function _request(url, options = {}) {
         if (!skipToast) UI.showToast(msg, 'error');
         throw err;
     } finally {
-        if (isMutation) UI.hideLoading();
+        if (showLoading) UI.hideLoading();
     }
 }
 
@@ -85,16 +86,18 @@ function normalizeErrorText(raw, fallback = '') {
  * @param {number} offset - Starting index for pagination
  * @param {number} limit - Number of contacts to fetch
  * @param {string} query - Optional search query
+ * @param {boolean} [showLoadingUi=true] — Set false for pagination appends (no global spinner).
  * @returns {Promise<{contacts: Array, hasMore: boolean, total: number}>}
  */
-export async function fetchConversations(offset = 0, limit = 20, query = '', sort = 'newest') {
+export async function fetchConversations(offset = 0, limit = 20, query = '', sort = 'newest', showLoadingUi = true) {
     const q = (query || '').toString().trim();
     const s = (sort || 'newest').toString().trim() || 'newest';
     const params = new URLSearchParams({ offset: String(offset), limit: String(limit), sort: s });
     if (q) params.set('q', q);
     const res = await _request(`${API_BASE}/api/conversations?${params.toString()}`, {
         headers: buildSecurityHeaders(),
-        _silent: true
+        _silent: true,
+        _showLoading: !!showLoadingUi,
     });
     return await res.json();
 }
@@ -104,12 +107,14 @@ export async function fetchConversations(offset = 0, limit = 20, query = '', sor
  * @param {string} handle - Contact handle (phone/email)
  * @param {number} offset - Starting index for pagination
  * @param {number} limit - Number of messages to fetch
+ * @param {boolean} [showLoadingUi=true] — Set false when appending older messages (infinite scroll).
  * @returns {Promise<Array>} Array of message objects
  */
-export async function fetchMessages(handle, offset = 0, limit = 30) {
+export async function fetchMessages(handle, offset = 0, limit = 30, showLoadingUi = true) {
     const res = await _request(`${API_BASE}/api/thread?handle=${encodeURIComponent(handle)}&offset=${offset}&limit=${limit}`, {
         headers: buildSecurityHeaders(),
-        _silent: true
+        _silent: true,
+        _showLoading: !!showLoadingUi,
     });
     const data = await res.json();
     return data.messages || [];

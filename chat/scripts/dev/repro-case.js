@@ -1,7 +1,7 @@
 
-const { ingestInboundEvent } = require("./channel-bridge.js");
-const { getHistory } = require("./vector-store.js");
-const contactStore = require("./contact-store.js");
+const { ingestInboundEvent } = require("../../channel-bridge.js");
+const { getHistory } = require("../../vector-store.js");
+const contactStore = require("../../contact-store.js");
 
 async function run() {
     console.log("--- Starting LinkedIn Case-Sensitivity Repro ---");
