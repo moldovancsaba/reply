@@ -1,3 +1,8 @@
+/**
+ * Context engine — recipient-aware style/history + hybrid RAG for reply generation (reply#38).
+ * Voice-to-draft in the hub UI is client-side (Web Speech API → composer); this module supplies
+ * the structured prompt bundle consumed by `reply-engine.js` (`assembleReplyContext`).
+ */
 const fs = require('fs');
 const path = require('path');
 const { getSnippets, getGoldenExamples } = require('./vector-store.js');
@@ -51,6 +56,24 @@ function enrichAnnotatedDocText(d) {
         enrichedText += `${summary}${tags}${facts}`;
     }
     return enrichedText;
+}
+
+/**
+ * Builds the chronological thread block for the active recipient, newest slice last.
+ * Uses full LanceDB rows so Ollama metadata (tags/summary/facts) is visible in-thread (reply#38).
+ * @param {object[]} docs - Typically `dedupeDocsByStableKey` output from `getHistory` prefixes.
+ * @param {number} maxLines
+ * @returns {string}
+ */
+function formatChronologicalHistoryLines(docs, maxLines = 10) {
+    const recent = (docs || [])
+        .map((d) => ({
+            doc: d,
+            date: (d.text || "").match(/\[(.*?)\]/)?.[1] || "0"
+        }))
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
+        .slice(-maxLines);
+    return recent.map((r) => enrichAnnotatedDocText(r.doc)).join("\n");
 }
 
 /**
@@ -114,7 +137,11 @@ ${relationshipTone}
             if (historySnippets.length > 0) {
                 history = `
 ### PAST INTERACTIONS WITH ${recipient}
-${historySnippets.map(s => `- [${s.date || 'Unknown Date'}] ${s.text.substring(0, 300)}...`).join('\n')}
+${historySnippets.map((s) => {
+                    const body = enrichAnnotatedDocText(s);
+                    const clip = body.length > 360 ? `${body.slice(0, 360)}…` : body;
+                    return `- [${s.date || "Unknown Date"}] ${clip}`;
+                }).join("\n")}
 `;
             }
         } catch (e) {
@@ -181,15 +208,7 @@ async function assembleReplyContext(message, handle) {
         const prefixes = Array.from(new Set(handles.flatMap((h) => pathPrefixesForHandle(h))));
         const batches = await Promise.all(prefixes.map((p) => getHistory(p)));
         const allHistory = dedupeDocsByStableKey(batches.flat());
-        const recent = allHistory
-            .map((d) => ({
-                text: d.text,
-                date: d.text.match(/\[(.*?)\]/)?.[1] || "0"
-            }))
-            .sort((a, b) => new Date(a.date) - new Date(b.date))
-            .slice(-10);
-
-        conversationHistory = recent.map((r) => r.text).join("\n");
+        conversationHistory = formatChronologicalHistoryLines(allHistory, 10);
     } catch (e) {
         console.error("ContextEngine history fetch failed:", e.message);
     }
@@ -212,4 +231,9 @@ async function assembleReplyContext(message, handle) {
     };
 }
 
-module.exports = { getContext, assembleReplyContext, enrichAnnotatedDocText };
+module.exports = {
+    getContext,
+    assembleReplyContext,
+    enrichAnnotatedDocText,
+    formatChronologicalHistoryLines
+};

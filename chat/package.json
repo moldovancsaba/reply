@@ -1,6 +1,6 @@
 {
   "name": "reply-chat",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "description": "Reply POC — localhost chat to ask for reply suggestions",
   "main": "server.js",
   "scripts": {
