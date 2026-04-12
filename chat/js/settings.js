@@ -245,7 +245,8 @@ async function refreshAiProviderStatuses() {
     ]);
     if (ollamaLine) {
       const o = health.services?.ollama?.status || 'unknown';
-      ollamaLine.textContent = `Status: ${o} — default port 11434 (OLLAMA_PORT overrides).`;
+      const rt = window.replySettingsRuntimeCache || {};
+      ollamaLine.textContent = `Status: ${o} — effective base ${rt.effectiveOllamaBase || '(load settings)'} · draft mode ${rt.draftRuntime || '?'}`;
     }
     if (ocLine) {
       const s = oc.status || 'unknown';
@@ -329,7 +330,31 @@ async function loadIntoForm() {
   );
   restartStandaloneHealthPoll();
 
+  const ai = data?.ai || {};
+  const draftSel = el('settings-ai-draft-runtime');
+  if (draftSel) {
+    const v = ai.draftRuntime === 'ollama' || ai.draftRuntime === 'hatori' ? ai.draftRuntime : 'auto';
+    draftSel.value = v;
+  }
+  setVal('settings-ai-ollama-host', ai.ollamaHost || '');
+  setVal('settings-ai-ollama-port', ai.ollamaPort ? String(ai.ollamaPort) : '0');
+  setVal('settings-ai-ollama-model', ai.ollamaModel || '');
+  setVal('settings-ai-openclaw-bin', ai.openclawBinary || '');
+  setVal('settings-ai-openclaw-gateway-url', ai.openclawGatewayUrl || '');
+  const ocTok = el('settings-ai-openclaw-gateway-token');
+  if (ocTok) ocTok.value = '';
+  const ocHint = el('settings-ai-openclaw-gateway-token-hint');
+  if (ocHint) {
+    ocHint.textContent = ai.hasOpenclawGatewayToken ? `Saved: ${maskHint(ai.openclawGatewayTokenHint)}` : 'Not set';
+  }
+  setVal('settings-ai-hatori-url', ai.hatoriApiUrl || '');
+
   const rt = data?.runtime || {};
+  try {
+    window.replySettingsRuntimeCache = rt;
+  } catch {
+    /* ignore */
+  }
   const hatWrap = el('settings-providers-hatori-wrap');
   if (hatWrap) {
     hatWrap.classList.toggle('u-display-none', !rt.useHatori);
@@ -407,6 +432,16 @@ async function onSave() {
         ollamaProbeTimeoutMs: Number(el('settings-health-ollama-timeout')?.value) || 3000,
         hatoriWatchdogFailureThreshold: Number(el('settings-health-hatori-threshold')?.value) || 3,
         uiHealthPollIntervalMs: Number(el('settings-health-ui-poll')?.value) || 15000,
+      },
+      ai: {
+        draftRuntime: el('settings-ai-draft-runtime')?.value || 'auto',
+        ollamaHost: el('settings-ai-ollama-host')?.value?.trim() || '',
+        ollamaPort: Number(el('settings-ai-ollama-port')?.value) || 0,
+        ollamaModel: el('settings-ai-ollama-model')?.value?.trim() || '',
+        openclawBinary: el('settings-ai-openclaw-bin')?.value?.trim() || '',
+        openclawGatewayUrl: el('settings-ai-openclaw-gateway-url')?.value?.trim() || '',
+        openclawGatewayToken: el('settings-ai-openclaw-gateway-token')?.value || null,
+        hatoriApiUrl: el('settings-ai-hatori-url')?.value?.trim() || '',
       },
       channelBridge: {
         channels: {
@@ -646,7 +681,7 @@ export async function wireDom() {
   const hasPage = !!document.getElementById('settings-page');
   if (!hasPage) {
     try {
-      const response = await fetch('fragments/settings-fragment.html?v=2.3');
+      const response = await fetch('fragments/settings-fragment.html?v=2.4');
       if (!response.ok) throw new Error('Failed to load settings fragment');
       const html = await response.text();
       container.innerHTML = html;
