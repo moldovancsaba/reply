@@ -56,6 +56,14 @@
 *   **Default path:** `~/Library/Messages/chat.db` (override with `REPLY_IMESSAGE_DB_PATH` in `chat/.env`). Requires **Full Disk Access** (or equivalent) for the process running Node — see [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md).
 *   **Resilience:** The hub does not exit if `chat.db` is missing or cannot be opened; iMessage sync/polling is skipped until access is fixed.
 
+### 6. LinkedIn (browser → channel bridge)
+*   **Purpose:** While logged into LinkedIn messaging in the browser, scrape visible thread snippets and `POST` them to the local hub as normalized bridge events (`channel: linkedin`).
+*   **Chrome:** Unpacked extension — `chat/chrome-extension/content.js` (load the folder in `chrome://extensions` → Developer mode → Load unpacked).
+*   **Userscript:** Tampermonkey (or compatible) — install `chat/js/linkedin-bridge.user.js`.
+*   **Port discovery (reply#30):** Both paths probe `http://localhost:<port>/api/channel-bridge/inbound` over **`45311`–`45326` first** (default hub `PORT` and common shifts), then legacy dev ports **`3000`–`3003`**. The canonical list is implemented in `chat/linkedin-hub-port-scan.js` (Node tests); browser copies **must stay in sync** with that file’s numeric range.
+*   **Failure UX:** If no port responds, the extension/userscript shows a toast listing the scan summary (check hub is running and `PORT` in `chat/.env`).
+*   **Auth:** Inbound bridge may require operator token / local policy — see [CHANNEL_BRIDGE.md](CHANNEL_BRIDGE.md) and [HUMAN_FINAL_DECISION_POLICY.md](HUMAN_FINAL_DECISION_POLICY.md).
+
 ---
 
 ## Configuration

@@ -1,8 +1,8 @@
 # Next Agent Continuation Prompt
 
-**Project:** {reply}
-**Last Updated:** 2026-03-02 19:42 UTC
-**Status:** v0.4.5 Released (Fixes: Settings Persistence, Sync Depth, KYC Speed)
+**Doc freshness:** 2026-04-11 — `{reply}` SSOT is **[Project #7](https://github.com/users/moldovancsaba/projects/7)** + **[moldovancsaba/reply](https://github.com/moldovancsaba/reply) issues** + **[HANDOVER.md](./HANDOVER.md)** (especially “Active Session Update”). This file is a **boot prompt**, not a backlog.
+
+**Product / release:** See `chat/package.json` `version` and [RELEASE_NOTES.md](./RELEASE_NOTES.md) for shipped facts.
 
 ---
 
@@ -14,18 +14,18 @@ You are a Developer Agent working on `{reply}`. Follow these operating principle
 - **Be explicit, evidence-driven, and reversible**: small edits, minimal blast radius, clear rollback.
 - **Prefer “prove it” over “trust me”**: include commands run + outputs/observations.
 - **Keep the board and handover current** as you work (not at the end).
-- **Absolute Mandate – Documentation = Code**: Documentation must be maintained with the same rigor as code. Never use placeholders. Every logic/file/feature update must trigger an immediate documentation refresh.
+- **Documentation = code**: when behavior changes, update the same PR: `docs/HANDOVER.md`, and `docs/RELEASE_NOTES.md` **only** for shipped user-visible changes.
 
 ### Definition of Done (DoD)
 1. **Scope & acceptance**: Match the issue/card acceptance criteria explicitly.
-2. **Quality gates**: Build passes, tests pass, no new warnings/errors.
-3. **Implementation hygiene**: Minimal, coherent changes. No secrets committed.
-4. **Evidence & documentation**: Provide what/where/how/results. Update [docs/HANDOVER.md](./docs/HANDOVER.md) and [docs/RELEASE_NOTES.md](./docs/RELEASE_NOTES.md). Update the project board with correct status + concise notes.
+2. **Quality gates**: `cd chat && npm test` and `npm run lint` pass on touched code.
+3. **No secrets** in commits, logs, or docs.
+4. **Evidence**: comment on the issue + move the Project #7 card with a one-line validation note.
 
 ### Board Discipline (SSOT)
-- **Board URL (`{reply}`)**: https://github.com/users/moldovancsaba/projects/7
-- **Issues Repo**: `moldovancsaba/reply`
-- **Action**: Move selected card to “In Progress” when starting. Move to “Done” with validation evidence.
+- **Board:** https://github.com/users/moldovancsaba/projects/7
+- **Issues:** https://github.com/moldovancsaba/reply/issues
+- Move card to **In Progress** when starting; **Done** only with verification.
 
 ---
 
@@ -34,36 +34,32 @@ You are a Developer Agent working on `{reply}`. Follow these operating principle
 **Trigger:** Context usage reaching threshold.
 
 ### A) Session Snapshot
-- **Branch:** `main`
-- **Objective:** Fix Gmail sync depth, settings persistence (API key loss), and KYC speed.
-- **Status:** **DONE**. Version 0.4.5 is fully released and verified.
+- **Branch:** `main` (unless PO says otherwise).
+- **Objective:** (one line — copy from the card you are doing.)
+- **Status:** In progress / blocked / done.
 
-### B) What Changed in this Session
-- **Settings Persistence Fixed**: Resolved bug in `settings-store.js:withDefaults` that wiped secrets during security token updates.
-- **Gmail Sync Depth**: Increased limit to 10,000 messages in `gmail-connector.js`.
-- **KYC Performance**: Increased auto-scan speed to 20/hr (cap 60/hr) via `.env`.
-- **Standalone Settings**: Completed migration to `settings.html` + `settings-fragment.html`.
-- **Operator Token**: Transitioned to automatic injection via `server.js`.
+### B) What changed
+- Bullets + file paths.
 
-### C) Immediate Next Actions
-1. **Gmail Reconnect**: **USER ACTION REQUIRED**. Re-authenticate Gmail in Settings to restore the secrets wiped during today's upgrade.
-2. **Monitor KYC**: Confirm that contact intelligence advances at the new rate of ~480/day.
-3. **Refactor server.js**: (Issue #211) Decompose monolithic routes into modules.
+### C) Immediate next actions
+- 1–3 bullets for the **next** agent (usually: next card on Project #7).
 
-### D) Validation Commands
-- `cd ./chat && npm test`
-- `curl -s http://127.0.0.1:45311/api/health | jq`
-- `make status`
+### D) Validation commands
+```bash
+cd chat && npm test
+cd chat && npm run lint
+curl -s "http://127.0.0.1:45311/api/health" | head -c 500   # hub must be running; port from PORT / .env
+```
 
 ---
 
-## Copy-Paste Prompt For The Next Agent
+## Copy-paste prompt for the next agent
 
 ```text
-You are a Developer Agent taking over the {reply} project.
-1. Read ./docs/HANDOVER.md and ./docs/PROJECT_MANAGEMENT.md first.
-2. Verify the current state by running: cd ./chat && npm test
-3. Objective: Continue post-v0.4.5 stabilization and begin Issue #211 (server.js decomposition).
-4. Follow the "Developer Agent Guidelines" and "70 Protocol" in ./docs/NEXT_AGENT_PROMPT.md.
-5. Project Board: https://github.com/users/moldovancsaba/projects/7 (`{reply}` project).
+You are a Developer Agent taking over {reply}.
+1. Read docs/HANDOVER.md (Active Session + SSOT section) and docs/PROJECT_MANAGEMENT.md.
+2. Open https://github.com/users/moldovancsaba/projects/7 — pick the highest-priority open card.
+3. Run: cd chat && npm test
+4. Implement the card; update HANDOVER.md; comment on the issue; move the card on Project #7.
+5. Do not redo completed foundation work (CI, modular routes) unless a new issue explicitly reopens it.
 ```
