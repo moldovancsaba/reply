@@ -41,7 +41,8 @@ const SENSITIVE_FIELDS = [
   "gmail.clientSecret",
   "gmail.refreshToken",
   "global.googleApiKey",
-  "global.operatorToken"
+  "global.operatorToken",
+  "ai.openclawGatewayToken",
 ];
 
 function encrypt(text) {
@@ -250,6 +251,23 @@ function withDefaults(settings) {
         },
       },
     },
+    ai: (() => {
+      const a = s?.ai || {};
+      const dr = String(a.draftRuntime || "auto").toLowerCase();
+      const draftRuntime = dr === "ollama" || dr === "hatori" ? dr : "auto";
+      const port = Number(a.ollamaPort);
+      return {
+        draftRuntime,
+        ollamaHost: String(a.ollamaHost || "").trim().slice(0, 512),
+        ollamaPort: Number.isFinite(port) ? Math.max(0, Math.min(port, 65535)) : 0,
+        ollamaModel: String(a.ollamaModel || "").trim().slice(0, 160),
+        openclawBinary: String(a.openclawBinary || "").trim().slice(0, 512),
+        openclawGatewayUrl: String(a.openclawGatewayUrl || "").trim().slice(0, 512),
+        openclawGatewayToken:
+          a.openclawGatewayToken === null ? null : String(a.openclawGatewayToken || ""),
+        hatoriApiUrl: String(a.hatoriApiUrl || "").trim().slice(0, 512),
+      };
+    })(),
     mailAccounts: Array.isArray(s?.mailAccounts)
       ? s.mailAccounts.map((x, i) => normalizeMailAccountEntry(x, i)).filter(Boolean)
       : [],
@@ -334,6 +352,7 @@ function maskSettingsForClient(settings) {
   const gmailClientSecret = maskSecret(gmail.clientSecret);
   const gmailRefresh = maskSecret(gmail.refreshToken);
 
+  const ocTok = maskSecret(cfg.ai?.openclawGatewayToken);
   const mailAccounts = (cfg.mailAccounts || []).map((a) => {
     const passMask = maskSecret(a.imap?.pass);
     return {
@@ -397,6 +416,17 @@ function maskSettingsForClient(settings) {
       hatoriWatchdogFailureThreshold: cfg.health?.hatoriWatchdogFailureThreshold ?? 3,
       uiHealthPollIntervalMs: cfg.health?.uiHealthPollIntervalMs ?? 15000,
     },
+    ai: {
+      draftRuntime: cfg.ai?.draftRuntime || "auto",
+      ollamaHost: cfg.ai?.ollamaHost || "",
+      ollamaPort: cfg.ai?.ollamaPort || 0,
+      ollamaModel: cfg.ai?.ollamaModel || "",
+      openclawBinary: cfg.ai?.openclawBinary || "",
+      openclawGatewayUrl: cfg.ai?.openclawGatewayUrl || "",
+      hasOpenclawGatewayToken: ocTok.has,
+      openclawGatewayTokenHint: ocTok.hint,
+      hatoriApiUrl: cfg.ai?.hatoriApiUrl || "",
+    },
     channelBridge: channelBridge,
     global: {
       ...cfg.global,
@@ -457,11 +487,42 @@ function syncToEnv(settings) {
       "REPLY_WHATSAPP_ALLOW_OPENCLAW_SEND": global.allowOpenClaw
     };
 
-    // FILTER out fields that failed decryption (null) or still look encrypted (contain a colon)
-    // to prevent corrupting the .env with encrypted master keys or secrets.
+    const ai = cfg.ai || {};
+    if (ai.ollamaHost && String(ai.ollamaHost).trim()) {
+      let h = String(ai.ollamaHost).trim();
+      if (!/^https?:\/\//i.test(h)) h = `http://${h}`;
+      mapping.OLLAMA_HOST = h.replace(/\/$/, "");
+    } else if (Number(ai.ollamaPort) > 0) {
+      mapping.OLLAMA_HOST = `http://127.0.0.1:${ai.ollamaPort}`;
+    }
+    if (ai.ollamaModel && String(ai.ollamaModel).trim()) {
+      mapping.REPLY_OLLAMA_MODEL = String(ai.ollamaModel).trim();
+    }
+    if (ai.openclawBinary && String(ai.openclawBinary).trim()) {
+      mapping.OPENCLAW_BIN = String(ai.openclawBinary).trim();
+    }
+    if (ai.openclawGatewayUrl && String(ai.openclawGatewayUrl).trim()) {
+      mapping.REPLY_OPENCLAW_GATEWAY_URL = String(ai.openclawGatewayUrl).trim();
+    }
+    const ocPlain = decrypt(ai.openclawGatewayToken);
+    if (ocPlain && String(ocPlain).trim()) {
+      mapping.REPLY_OPENCLAW_GATEWAY_TOKEN = String(ocPlain).trim();
+    }
+    if (ai.hatoriApiUrl && String(ai.hatoriApiUrl).trim()) {
+      let u = String(ai.hatoriApiUrl).trim();
+      if (!/^https?:\/\//i.test(u)) u = `http://${u}`;
+      mapping.HATORI_API_URL = u.replace(/\/$/, "");
+    }
+
+    // Drop nulls and values that still look AES-encrypted (iv:hex), not URLs like http://...
     for (const key of Object.keys(mapping)) {
       const val = mapping[key];
-      if (val === null || (typeof val === 'string' && val.includes(':'))) {
+      if (val === null) {
+        delete mapping[key];
+      } else if (
+        typeof val === "string" &&
+        /^[0-9a-f]{16,}:[0-9a-f]+$/i.test(val.trim())
+      ) {
         delete mapping[key];
       }
     }

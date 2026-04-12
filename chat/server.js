@@ -15,6 +15,9 @@ const fs = require("fs");
 const path = require("path");
 const { loadReplyEnv } = require("./load-env.js");
 loadReplyEnv();
+const { readSettings } = require("./settings-store.js");
+const { applyAiSettingsToProcessEnv } = require("./ai-runtime-config.js");
+applyAiSettingsToProcessEnv(readSettings());
 
 const HATORI_PROJECT_PATH = path.join(__dirname, "..", "..", "hatori");
 const { resolveHatoriForHubStart } = require("./hatori-lifecycle.js");

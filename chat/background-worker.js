@@ -3,6 +3,10 @@ const path = require('path');
 const { loadReplyEnv } = require('./load-env.js');
 loadReplyEnv();
 
+const { withDefaults, readSettings } = require('./settings-store.js');
+const { applyAiSettingsToProcessEnv } = require('./ai-runtime-config.js');
+applyAiSettingsToProcessEnv(readSettings());
+
 // Log Rotation
 const LOG_FILE = path.join(__dirname, 'worker.out.log');
 const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB
@@ -27,7 +31,6 @@ const { sync: syncIMessage, getIMessageReadonlyDb } = require('./sync-imessage.j
 const { syncWhatsApp } = require('./sync-whatsapp.js');
 const { syncMail, isImapConfigured, isGmailConfigured } = require('./sync-mail.js');
 const triageEngine = require('./triage-engine.js');
-const { withDefaults, readSettings } = require('./settings-store.js');
 const { extractSignals } = require('./signal-extractor.js');
 const { mergeProfile } = require('./kyc-merge.js');
 const { execFile } = require('child_process');

@@ -310,10 +310,65 @@
 
                     <div class="settings-card">
                         <div class="settings-section-title">
+                            <span class="material-symbols-outlined">tune</span> Draft runtime &amp; endpoints
+                        </div>
+                        <p class="settings-hint mb-md">Saved to <code>settings.json</code> and synced to
+                            <code>chat/.env</code> where applicable. <strong>Restart the background worker</strong> so
+                            it picks up URL/model changes. Hub applies on Save.</p>
+                        <div class="settings-field">
+                            <label class="settings-label" for="settings-ai-draft-runtime">Suggest / draft runtime</label>
+                            <select id="settings-ai-draft-runtime" class="settings-input" title="Hatori vs local Ollama pipeline">
+                                <option value="auto">Auto — Hatori when REPLY_USE_HATORI=1, else Ollama</option>
+                                <option value="ollama">Ollama only (skip Hatori routing)</option>
+                                <option value="hatori">Hatori when enabled (same as auto if Hatori off)</option>
+                            </select>
+                        </div>
+                        <div class="settings-grid settings-grid-2">
+                            <div class="settings-field">
+                                <label class="settings-label" for="settings-ai-ollama-host">Ollama base URL (optional)</label>
+                                <input id="settings-ai-ollama-host" type="text" class="settings-input"
+                                    placeholder="http://127.0.0.1:11434" title="Overrides OLLAMA_HOST when set">
+                            </div>
+                            <div class="settings-field">
+                                <label class="settings-label" for="settings-ai-ollama-port">Ollama port (if no URL)</label>
+                                <input id="settings-ai-ollama-port" type="number" class="settings-input" min="0" max="65535"
+                                    placeholder="0 = use URL or env" title="Used only when base URL is empty">
+                            </div>
+                            <div class="settings-field" style="grid-column:1/-1;">
+                                <label class="settings-label" for="settings-ai-ollama-model">Ollama model tag</label>
+                                <input id="settings-ai-ollama-model" type="text" class="settings-input"
+                                    placeholder="e.g. gemma4:e2b (REPLY_OLLAMA_MODEL)" title="Model for suggest/KYC-style paths">
+                            </div>
+                            <div class="settings-field" style="grid-column:1/-1;">
+                                <label class="settings-label" for="settings-ai-openclaw-bin">OpenClaw CLI path (optional)</label>
+                                <input id="settings-ai-openclaw-bin" type="text" class="settings-input"
+                                    placeholder="openclaw or absolute path → OPENCLAW_BIN" title="Binary for gateway health / WhatsApp CLI">
+                            </div>
+                            <div class="settings-field" style="grid-column:1/-1;">
+                                <label class="settings-label" for="settings-ai-openclaw-gateway-url">OpenClaw gateway URL (optional)</label>
+                                <input id="settings-ai-openclaw-gateway-url" type="text" class="settings-input"
+                                    placeholder="ws://127.0.0.1:18790" title="REPLY_OPENCLAW_GATEWAY_URL">
+                            </div>
+                            <div class="settings-field" style="grid-column:1/-1;">
+                                <label class="settings-label" for="settings-ai-openclaw-gateway-token">Gateway token (optional)</label>
+                                <input id="settings-ai-openclaw-gateway-token" type="password" class="settings-input"
+                                    placeholder="leave blank to keep saved" title="REPLY_OPENCLAW_GATEWAY_TOKEN">
+                                <div id="settings-ai-openclaw-gateway-token-hint" class="settings-hint"></div>
+                            </div>
+                            <div class="settings-field" style="grid-column:1/-1;">
+                                <label class="settings-label" for="settings-ai-hatori-url">Hatori API base (optional)</label>
+                                <input id="settings-ai-hatori-url" type="text" class="settings-input"
+                                    placeholder="http://127.0.0.1:23572" title="HATORI_API_URL — overrides default port">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <div class="settings-section-title">
                             <span class="material-symbols-outlined">smart_toy</span> AI providers
                         </div>
-                        <p class="settings-hint mb-md">Read-only checks against the running hub. Ollama/OpenClaw env
-                            (ports, binaries) still comes from your shell and <code>chat/.env</code>.</p>
+                        <p class="settings-hint mb-md">Read-only checks against the running hub. Values above override env
+                            for this hub process after Save.</p>
 
                         <div class="settings-list-premium">
                             <div class="settings-list-item-premium" style="flex-direction:column;align-items:stretch;gap:10px;">

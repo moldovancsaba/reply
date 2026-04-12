@@ -130,6 +130,7 @@ curl -sfS http://127.0.0.1:45311/api/health
 ## 3. Configuration notes (`chat/.env`)
 
 - **`chat/.env.local`** (optional, gitignored) — Loaded **after** `.env` for machine-only overrides (see **`chat/.env.local.example`**, e.g. **`REPLY_USE_HATORI=1`**). Same mechanism is used by **`server.js`**, **`background-worker.js`**, and **`security-audit.js`** via **`chat/load-env.js`**.
+- **Settings UI → “AI & status”** — Persists **`ai.*`** (draft runtime `auto` / `ollama` / `hatori`, Ollama base URL or port + model tag, OpenClaw CLI path + gateway URL/token, Hatori API base). The hub applies these to **`process.env`** on **Save**; **`syncToEnv`** mirrors overlapping keys into **`chat/.env`** so the **background worker** picks them up after **restart** (LaunchAgent / `make run` / menubar restart).
 - **`PORT`** — Default `45311`. If that port is already bound, `server.js` tries the next port and logs it (`Port 45311 in use, trying 45312...`). Use the printed URL or free the port.
 - **`REPLY_NODE_BIN`** (optional) — Absolute path to the `node` binary for the LaunchAgent. Use when Node is not on the plist `PATH` (for example, only installed under a version manager without a symlink into `/opt/homebrew/bin`).
 - **`REPLY_OLLAMA_MODEL`** — Default in code is `gemma4:e2b` (lightest Gemma 4 edge tag on Ollama). Larger: `gemma4:e4b`, `gemma4:26b`, `gemma4:31b`.

@@ -47,7 +47,10 @@ function loadHatoriToken() {
     return null;
 }
 
-const HATORI_API_URL = process.env.HATORI_API_URL || 'http://127.0.0.1:23572';
+function getHatoriApiBase() {
+    const u = String(process.env.HATORI_API_URL || "http://127.0.0.1:23572").trim() || "http://127.0.0.1:23572";
+    return u.replace(/\/$/, "");
+}
 
 /**
  * Default cross-system sensitivity hints (reply#16 Phase B — carried in `metadata.sensitivity`).
@@ -74,7 +77,7 @@ function mergeMetadataSensitivity(metadata, kind) {
 
 async function request(path, method = 'GET', body = null) {
     const token = loadHatoriToken();
-    const url = new URL(path, HATORI_API_URL);
+    const url = new URL(path, `${getHatoriApiBase()}/`);
     const options = {
         method,
         headers: {

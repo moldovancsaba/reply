@@ -2,6 +2,7 @@ const { generateReply } = require('../reply-engine.js');
 const { getSnippets, getGoldenExamples, getHistory } = require("../vector-store.js");
 const contactStore = require("../contact-store.js");
 const hatori = require("../hatori-client.js");
+const { shouldRunHatoriIngestBeforeSuggest } = require("../ai-runtime-config.js");
 
 
 // Helper functions from server.js
@@ -166,8 +167,8 @@ async function serveSuggest(req, res) {
     const snippets = await getSnippets(message, 3);
     const goldenExamples = await getGoldenExamples(5);
 
-    // Ingest into Hatori before suggestion if enabled
-    if (process.env.REPLY_USE_HATORI === '1') {
+    // Ingest into Hatori before suggestion when Hatori is enabled and not ollama-only runtime
+    if (shouldRunHatoriIngestBeforeSuggest()) {
       try {
         await hatori.ingestEvent({
           external_event_id: `reply:msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
