@@ -44,7 +44,7 @@ If `{hatori}` classifies or redacts PII, every integrator must know:
 
 1. **Adopt option 2 first**, design fields so they can map cleanly to option 3 later (`payload_class` ≈ which blob would apply).
 2. **Phase A (documentation + types):** JSDoc / OpenAPI-style typedefs in `{reply}` (`hatori-client.js`) and mirrored in `{hatori}` OpenAPI — no breaking changes.
-3. **Phase B (write path):** `{reply}` sends `SensitivityMeta` on `ingestEvent` / `getResponse` where available (starts as optional).
+3. **Phase B (write path):** `{reply}` injects **`metadata.sensitivity`** on `ingestEvent` / `getResponse` via `chat/hatori-client.js` (`defaultSensitivityMeta` / `mergeMetadataSensitivity`). Callers may override fields; unknown keys should be ignored by `{hatori}` until it adopts the contract.
 4. **Phase C (read path):** UI and LanceDB ingestion branches on `safe_to_index` and `payload_class`.
 5. **Phase D (option 3):** Introduce parallel `display_body` / `index_body` only where audits require it.
 

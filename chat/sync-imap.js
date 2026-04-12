@@ -29,13 +29,27 @@ function parseBool(val, defaultValue = false) {
   return defaultValue;
 }
 
+function migrateImapState(raw) {
+  if (!raw || typeof raw !== 'object') return { accounts: {} };
+  if (raw.accounts && typeof raw.accounts === 'object') return raw;
+  const mailboxes = raw.mailboxes && typeof raw.mailboxes === 'object' ? { ...raw.mailboxes } : {};
+  return {
+    accounts: {
+      default: {
+        mailboxes,
+        lastSync: raw.lastSync || null,
+      },
+    },
+  };
+}
+
 function loadState() {
   ensureDataDir();
-  if (!fs.existsSync(STATE_FILE)) return { mailboxes: {}, lastSync: null };
+  if (!fs.existsSync(STATE_FILE)) return { accounts: {} };
   try {
-    return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    return migrateImapState(JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')));
   } catch {
-    return { mailboxes: {}, lastSync: null };
+    return { accounts: {} };
   }
 }
 
@@ -106,13 +120,15 @@ function mailboxKey(name) {
 
 async function syncMailbox(client, mailboxName, opts) {
   const key = mailboxKey(mailboxName);
-  const state = opts.state;
+  const accountState = opts.accountState;
+  const accountKey = String(opts.accountKey || 'default');
   const selfEmails = opts.selfEmails;
 
   const limit = Math.max(1, Math.min(Number(opts.limit) || 200, 2000));
   const sinceDays = Math.max(1, Math.min(Number(opts.sinceDays) || 30, 3650));
 
-  const mState = state.mailboxes?.[key] || { lastUid: 0 };
+  if (!accountState.mailboxes) accountState.mailboxes = {};
+  const mState = accountState.mailboxes[key] || { lastUid: 0 };
   const lastUid = Number(mState.lastUid) || 0;
 
   let lock;
@@ -195,7 +211,7 @@ async function syncMailbox(client, mailboxName, opts) {
       const body = text.length > 2000 ? `${text.slice(0, 2000)}…` : text;
 
       docs.push({
-        id: `imap-${key}-${uid}`,
+        id: `imap-${accountKey}-${key}-${uid}`,
         text: `[${date}] ${isFromMe ? 'Me' : counterparty}: ${safeSubject}${finalText}`,
         source: 'IMAP',
         path: `mailto:${counterparty}`,
@@ -209,6 +225,127 @@ async function syncMailbox(client, mailboxName, opts) {
     return { fetched: docs.length, maxUid: maxUidSeen };
   } finally {
     lock.release();
+  }
+}
+
+function selfEmailsFromOptions(user, selfEmailsCsv) {
+  const fromCsv = String(selfEmailsCsv || '')
+    .split(',')
+    .map((s) => normalizeEmail(s))
+    .filter(Boolean);
+  const imapUser = normalizeEmail(user);
+  return new Set([...fromCsv, ...(imapUser ? [imapUser] : [])]);
+}
+
+/**
+ * Sync one IMAP account (primary or `settings.mailAccounts[]`) with isolated UID state.
+ * @param {object} opts
+ * @param {string} [opts.accountId] - Stable id for state + vector keys (default: `default`)
+ * @param {string} opts.host
+ * @param {string} opts.user
+ * @param {string} opts.pass
+ * @param {number} [opts.port]
+ * @param {boolean} [opts.secure]
+ * @param {string} [opts.mailbox]
+ * @param {string} [opts.sentMailbox]
+ * @param {number} [opts.limit]
+ * @param {number} [opts.sinceDays]
+ * @param {string} [opts.selfEmails] - comma-separated
+ * @param {string} [opts.label] - for status messages only
+ */
+async function syncImapWithOptions(opts) {
+  const host = String(opts.host || '').trim();
+  const user = String(opts.user || '').trim();
+  const pass = String(opts.pass || '').trim();
+
+  if (!host || !user || !pass) {
+    const msg = 'Missing IMAP host, user, or password';
+    updateMailStatus({ state: 'error', message: msg, connector: 'imap' });
+    throw new Error(msg);
+  }
+
+  const port = Number(opts.port) || 993;
+  const secure = opts.secure !== false;
+  const mailbox = String(opts.mailbox || 'INBOX').trim() || 'INBOX';
+  const sentMailbox = String(opts.sentMailbox || '').trim();
+  const limit = Number(opts.limit) || 200;
+  const sinceDays = Number(opts.sinceDays) || 30;
+  const accountKey = String(opts.accountId || 'default').replace(/[^a-zA-Z0-9_-]/g, '_') || 'default';
+  const label = opts.label || accountKey;
+
+  updateMailStatus({
+    state: 'running',
+    message: `Connecting to IMAP (${label})…`,
+    connector: 'imap',
+    host,
+    account: accountKey,
+  });
+
+  const client = new ImapFlow({
+    host,
+    port,
+    secure,
+    auth: { user, pass },
+    logger: false,
+  });
+
+  const fullState = loadState();
+  fullState.accounts = fullState.accounts || {};
+  if (!fullState.accounts[accountKey]) {
+    fullState.accounts[accountKey] = { mailboxes: {}, lastSync: null };
+  }
+  const accountState = fullState.accounts[accountKey];
+  const selfEmails = selfEmailsFromOptions(user, opts.selfEmails);
+
+  let fetchedTotal = 0;
+  try {
+    await client.connect();
+
+    updateMailStatus({ state: 'running', progress: 10, message: `Syncing ${mailbox} (${label})…`, connector: 'imap' });
+    const inboxRes = await syncMailbox(client, mailbox, {
+      accountState,
+      accountKey,
+      selfEmails,
+      limit,
+      sinceDays,
+    });
+    fetchedTotal += inboxRes.fetched;
+    accountState.mailboxes = accountState.mailboxes || {};
+    accountState.mailboxes[mailboxKey(mailbox)] = { lastUid: inboxRes.maxUid };
+
+    if (sentMailbox) {
+      updateMailStatus({ state: 'running', progress: 60, message: `Syncing ${sentMailbox} (${label})…`, connector: 'imap' });
+      const sentRes = await syncMailbox(client, sentMailbox, {
+        accountState,
+        accountKey,
+        selfEmails,
+        limit,
+        sinceDays,
+      });
+      fetchedTotal += sentRes.fetched;
+      accountState.mailboxes[mailboxKey(sentMailbox)] = { lastUid: sentRes.maxUid };
+    }
+
+    accountState.lastSync = new Date().toISOString();
+    saveState(fullState);
+
+    const currentStatus = statusManager.get('mail');
+    const currentCount = Number(currentStatus.processed) || 0;
+
+    updateMailStatus({
+      state: 'idle',
+      lastSync: accountState.lastSync,
+      processed: currentCount + fetchedTotal,
+      connector: 'imap',
+      message: fetchedTotal > 0 ? `Synced ${fetchedTotal} emails (${label})` : `No new emails (${label})`,
+    });
+
+    return fetchedTotal;
+  } catch (e) {
+    updateMailStatus({ state: 'error', message: e.message, connector: 'imap', account: accountKey });
+    throw e;
+  } finally {
+    try { await client.logout(); } catch { }
   }
 }
 
@@ -246,61 +383,25 @@ async function syncImap() {
   const sentMailbox = String(envOrSetting('REPLY_IMAP_SENT_MAILBOX', '') || '').trim();
   const limit = Number(envOrSetting('REPLY_IMAP_LIMIT')) || 200;
   const sinceDays = Number(envOrSetting('REPLY_IMAP_SINCE_DAYS')) || 30;
+  const selfEmails = envOrSetting('REPLY_SELF_EMAILS', '') || '';
 
-  updateMailStatus({ state: 'running', message: 'Connecting to IMAP…', connector: 'imap', host });
-
-  const client = new ImapFlow({
+  return syncImapWithOptions({
+    accountId: 'default',
+    label: 'Primary IMAP',
     host,
+    user,
+    pass,
     port,
     secure,
-    auth: { user, pass },
-    logger: false,
+    mailbox,
+    sentMailbox,
+    limit,
+    sinceDays,
+    selfEmails,
   });
-
-  const state = loadState();
-  const selfEmails = getSelfEmails();
-
-  let fetchedTotal = 0;
-  try {
-    await client.connect();
-
-    updateMailStatus({ state: 'running', progress: 10, message: `Syncing ${mailbox}…`, connector: 'imap' });
-    const inboxRes = await syncMailbox(client, mailbox, { state, selfEmails, limit, sinceDays });
-    fetchedTotal += inboxRes.fetched;
-    state.mailboxes = state.mailboxes || {};
-    state.mailboxes[mailboxKey(mailbox)] = { lastUid: inboxRes.maxUid };
-
-    if (sentMailbox) {
-      updateMailStatus({ state: 'running', progress: 60, message: `Syncing ${sentMailbox}…`, connector: 'imap' });
-      const sentRes = await syncMailbox(client, sentMailbox, { state, selfEmails, limit, sinceDays });
-      fetchedTotal += sentRes.fetched;
-      state.mailboxes[mailboxKey(sentMailbox)] = { lastUid: sentRes.maxUid };
-    }
-
-    state.lastSync = new Date().toISOString();
-    saveState(state);
-
-    const currentStatus = statusManager.get('mail');
-    const currentCount = Number(currentStatus.processed) || 0;
-
-    updateMailStatus({
-      state: 'idle',
-      lastSync: state.lastSync,
-      processed: currentCount + fetchedTotal,
-      connector: 'imap',
-      message: fetchedTotal > 0 ? `Synced ${fetchedTotal} emails` : 'No new emails',
-    });
-
-    return fetchedTotal;
-  } catch (e) {
-    updateMailStatus({ state: 'error', message: e.message, connector: 'imap' });
-    throw e;
-  } finally {
-    try { await client.logout(); } catch { }
-  }
 }
 
-module.exports = { syncImap };
+module.exports = { syncImap, syncImapWithOptions };
 
 if (require.main === module) {
   syncImap()
