@@ -365,6 +365,12 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
 - **reply#34:** `SECURITY_ROTATION.md` §3b (repo prevention checklist dated). Issue closed: **provider rotation** remains in §3 for operators who had keys in history; **repo track** complete.
 - **Validation:** `cd chat && npm test` (53) + `npm run lint`; `node chat/security-audit.js` → `critical=0 warn=0`.
 
+## Active Session Update (2026-04-12, Hatori — executed on Mac)
+- **Colima:** `colima delete -f` cleared stuck VZ disk attach; **`colima start`** then **`make hatori-bootstrap`** path (with **`make reset`** after **`make up`** when DB was cold).
+- **Hatori:** venv rebuilt with **`/opt/homebrew/bin/python3.11`**; **`hatori/cli.py`** f-string fix for Python 3.11 committed and **pushed to [moldovancsaba/hatori](https://github.com/moldovancsaba/hatori) `main`** (`5984bd2`). **`com.hatori`** LaunchAgent loaded; API **`/v1/health`** OK.
+- **Reply:** **`chat/.env.local`** created (gitignored) with **`REPLY_USE_HATORI=1`** + **`REPLY_HATORI_EXTERNAL=1`**; **`launchctl kickstart`** **`com.reply.hub`** — **`/api/health`** shows **`services.hatori.status: external`**. **`ollama pull gemma4:e2b`** for local fallback. **`make hatori-preflight`** + **`npm run verify:hatori`** (ingest OK; Hatori **respond** path may still 500 for empty test-user thread — Ollama fallback succeeds).
+- **Makefile:** **`hatori-bootstrap`** now runs **`make up && sleep 6`** before **`hatori_bootstrap.sh`**.
+
 ## Active Session Update (2026-04-12, Hatori — clone + proper wiring)
 - **Clone:** [moldovancsaba/hatori](https://github.com/moldovancsaba/hatori) as sibling **`…/Projects/hatori`** next to **`reply`**. Token file **`~/.config/hatori/hatori.env`** from Hatori’s **`hatori_env_init.sh`** (or full **`hatori_bootstrap.sh`**).
 - **`chat/load-env.js`:** `.env` then optional **`.env.local`** (gitignored). Wired into **`server.js`**, **`background-worker.js`**, **`security-audit.js`**, **`test-hatori-verify.js`**. **`chat/.env.local.example`**; hub warns if **`REPLY_USE_HATORI=1`** but sibling checkout missing.

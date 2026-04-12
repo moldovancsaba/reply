@@ -55,7 +55,7 @@ hatori-bootstrap:
 	@HATORI_ROOT="$$(cd .. && pwd)/hatori"; \
 	test -d "$$HATORI_ROOT/.git" || (echo "Missing $$HATORI_ROOT — run: make hatori-clone" && exit 1); \
 	echo "Running official Hatori bootstrap (venv, DB reset, models, LaunchAgent)…"; \
-	cd "$$HATORI_ROOT" && ./tools/scripts/hatori_bootstrap.sh
+	cd "$$HATORI_ROOT" && make up && sleep 6 && ./tools/scripts/hatori_bootstrap.sh
 
 .PHONY: hatori-doctor
 hatori-doctor:
