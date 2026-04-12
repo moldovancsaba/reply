@@ -157,6 +157,17 @@ export async function fetchTriageLogs(limit = 10) {
     return data.logs || [];
 }
 
+/** Priority-sorted triage queue (deduped by sender) for dashboard zero-inbox (reply#24). */
+export async function fetchTriageQueue(limit = 15) {
+    const res = await _request(`${API_BASE}/api/triage-queue?limit=${limit}`, {
+        headers: buildSecurityHeaders(),
+        _silent: true,
+        _showLoading: false
+    });
+    const data = await res.json();
+    return data.queue || [];
+}
+
 export async function fetchBridgeEvents(limit = 20) {
     const n = Math.max(1, Math.min(Number(limit) || 20, 500));
     const res = await _request(`${API_BASE}/api/channel-bridge/events?limit=${n}`, {

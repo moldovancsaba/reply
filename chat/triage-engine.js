@@ -7,6 +7,30 @@ const LOG_FILE = path.join(__dirname, 'triage.log');
 let rules = [];
 
 /**
+ * Derive zero-inbox action chips when a rule omits `suggestedActions` (reply#24).
+ * @param {{ action?: string, suggestedActions?: string[] }} rule
+ * @returns {string[]}
+ */
+function inferSuggestedActions(rule) {
+    if (Array.isArray(rule.suggestedActions) && rule.suggestedActions.length) {
+        return [...new Set(rule.suggestedActions.map((x) => String(x).toLowerCase()))].filter(Boolean);
+    }
+    const a = String(rule.action || "").toLowerCase();
+    const s = new Set();
+    if (a.includes("archive") || a.includes("promo") || a.includes("junk") || a.includes("spam") || a.includes("noise")) {
+        s.add("archive");
+    }
+    if (a.includes("upload") || a.includes("file") || a.includes("photo") || a.includes("attachment")) {
+        s.add("upload");
+    }
+    if (a.includes("reply") || a.includes("respond") || a.includes("answer")) {
+        s.add("reply");
+    }
+    if (s.size === 0) s.add("reply");
+    return Array.from(s);
+}
+
+/**
  * Load triage rules from JSON file.
  */
 function loadRules() {
@@ -47,6 +71,8 @@ function evaluate(text, sender) {
         const match = rule.keywords.some(keyword => lowerText.includes(keyword.toLowerCase()));
 
         if (match) {
+            const suggestedActions = inferSuggestedActions(rule);
+            const priority = typeof rule.priority === "number" && !Number.isNaN(rule.priority) ? rule.priority : 50;
             const result = {
                 timestamp: new Date().toISOString(),
                 ruleId: rule.id,
@@ -54,7 +80,9 @@ function evaluate(text, sender) {
                 tag: rule.tag,
                 sender: sender,
                 contact: sender,  // alias for UI compatibility (dashboard.js reads log.contact)
-                preview: text.substring(0, 50) + "..."
+                preview: text.substring(0, 50) + "...",
+                suggestedActions,
+                priority
             };
 
             logAction(result);
@@ -99,11 +127,61 @@ function getLogs(limit = 20) {
     }
 }
 
+/**
+ * Read up to `maxLines` JSONL events from disk (oldest→newest order in array).
+ * @param {number} maxLines
+ */
+function readLogTailEntries(maxLines = 800) {
+    if (!fs.existsSync(LOG_FILE)) return [];
+    try {
+        const data = fs.readFileSync(LOG_FILE, "utf8");
+        const lines = data.trim().split("\n").filter(Boolean);
+        const slice = lines.slice(-maxLines);
+        const out = [];
+        for (const line of slice) {
+            try {
+                out.push(JSON.parse(line));
+            } catch { /* skip */ }
+        }
+        return out;
+    } catch (e) {
+        console.error("[Triage] readLogTailEntries:", e.message);
+        return [];
+    }
+}
+
+/**
+ * Deduplicated “inbox” view: one row per contact/sender, highest `priority` wins (reply#24).
+ * @param {number} limit
+ */
+function getPriorityQueue(limit = 15) {
+    const raw = readLogTailEntries(800);
+    const byKey = new Map();
+    for (const row of raw) {
+        if (!row || !row.timestamp) continue;
+        const key = String(row.contact || row.sender || "").trim() || "_unknown";
+        const pri = typeof row.priority === "number" ? row.priority : 0;
+        const prev = byKey.get(key);
+        if (!prev || pri > prev.priority || (pri === prev.priority && String(row.timestamp) > String(prev.timestamp))) {
+            byKey.set(key, { ...row, _queueKey: key });
+        }
+    }
+    return [...byKey.values()]
+        .sort((a, b) => {
+            const d = (b.priority || 0) - (a.priority || 0);
+            if (d !== 0) return d;
+            return String(b.timestamp).localeCompare(String(a.timestamp));
+        })
+        .slice(0, Math.max(1, limit));
+}
+
 // Initial load
 loadRules();
 
 module.exports = {
     evaluate,
     loadRules,
-    getLogs
+    getLogs,
+    getPriorityQueue,
+    inferSuggestedActions
 };

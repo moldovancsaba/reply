@@ -3,7 +3,7 @@
  * Renders system health dashboard with sync status and triage log
  */
 
-import { fetchSystemHealth, fetchTriageLogs, fetchBridgeSummary, fetchOpenClawStatus, triggerSync, buildSecurityHeaders } from './api.js';
+import { fetchSystemHealth, fetchTriageLogs, fetchTriageQueue, fetchBridgeSummary, fetchOpenClawStatus, triggerSync, buildSecurityHeaders } from './api.js';
 import { UI } from './ui.js';
 
 /**
@@ -207,9 +207,10 @@ export async function renderDashboard() {
 
   try {
     // Fetch dashboard data safely
-    const [health, logs, bridgeData, openClawStatus] = await Promise.all([
+    const [health, logs, triageQueue, bridgeData, openClawStatus] = await Promise.all([
       fetchSystemHealth().catch(e => ({ stats: {}, uptime: 0, channels: {} })),
       fetchTriageLogs(10).catch(e => []),
+      fetchTriageQueue(12).catch(() => []),
       fetchBridgeSummary(5000).catch(e => ({ summary: {} })),
       fetchOpenClawStatus().catch(e => ({ status: 'offline', error: 'Failed to fetch status' }))
     ]);
@@ -434,16 +435,71 @@ export async function renderDashboard() {
 
   <div class="health-card health-card--span-full dashboard-triage-card">
     <div class="health-card-header">
+      <h4><span class="health-card-icon">📌</span><span>Triage queue (priority)</span></h4>
+    </div>
+    <div class="triage-log-header triage-log-header--4" aria-hidden="true">
+      <span>Priority</span><span>Actions</span><span>Rule</span><span>Contact</span>
+    </div>
+    <div id="dashboard-triage-queue" class="triage-log triage-log--4">
+    </div>
+  </div>
+
+  <div class="health-card health-card--span-full dashboard-triage-card">
+    <div class="health-card-header">
       <h4><span class="health-card-icon">📋</span><span>Recent Triage Log</span></h4>
     </div>
-    <div class="triage-log-header" aria-hidden="true">
-      <span>Time</span><span>Action</span><span>Contact / sender</span>
+    <div class="triage-log-header triage-log-header--4" aria-hidden="true">
+      <span>Time</span><span>Action</span><span>Suggested</span><span>Contact</span>
     </div>
-    <div id="dashboard-triage-log" class="triage-log">
+    <div id="dashboard-triage-log" class="triage-log triage-log--4">
       <!-- Triage entries will be injected safely via JS -->
     </div>
   </div>
   `;
+    const queueContainer = dashboard.querySelector('#dashboard-triage-queue');
+    if (queueContainer) {
+      queueContainer.innerHTML = '';
+      const q = Array.isArray(triageQueue) ? triageQueue : [];
+      if (q.length > 0) {
+        q.forEach((row) => {
+          const entry = document.createElement('div');
+          entry.className = 'triage-entry';
+
+          const pri = document.createElement('span');
+          pri.className = 'triage-time';
+          pri.textContent = row.priority != null ? String(row.priority) : '—';
+          entry.appendChild(pri);
+
+          const chips = document.createElement('span');
+          chips.className = 'triage-action';
+          chips.textContent = (Array.isArray(row.suggestedActions) && row.suggestedActions.length)
+            ? row.suggestedActions.join(', ')
+            : '—';
+          entry.appendChild(chips);
+
+          const rule = document.createElement('span');
+          rule.className = 'triage-action';
+          rule.textContent = row.ruleId || row.tag || '—';
+          entry.appendChild(rule);
+
+          const contact = document.createElement('span');
+          contact.className = 'triage-contact';
+          const who = (row.contact || row.sender || '').trim();
+          contact.textContent = who || '—';
+          contact.title = who || '';
+          entry.appendChild(contact);
+
+          queueContainer.appendChild(entry);
+        });
+      } else {
+        const empty = document.createElement('div');
+        empty.style.color = '#888';
+        empty.style.padding = '1rem';
+        empty.textContent = 'No triage matches yet — rules live in chat/triage-rules.json';
+        queueContainer.appendChild(empty);
+      }
+    }
+
     // Safe injection of triage logs
     const triageContainer = dashboard.querySelector('#dashboard-triage-log');
     if (triageContainer) {
@@ -462,6 +518,13 @@ export async function renderDashboard() {
           action.className = 'triage-action';
           action.textContent = log.action;
           entry.appendChild(action);
+
+          const suggested = document.createElement('span');
+          suggested.className = 'triage-action';
+          suggested.textContent = (Array.isArray(log.suggestedActions) && log.suggestedActions.length)
+            ? log.suggestedActions.join(', ')
+            : '—';
+          entry.appendChild(suggested);
 
           const contact = document.createElement('span');
           contact.className = 'triage-contact';
