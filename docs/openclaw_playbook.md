@@ -27,6 +27,20 @@ This playbook documents the architecture, state locations, and common troublesho
 **Fix Applied**: `server.js` has been updated to filter out `WARN` and `gateway.bind` lines from `stderr` before throwing exceptions.
 **Recovery**: If it happens again, verify that `sendWhatsAppViaOpenClawCli` in `server.js` is properly filtering `stderr` output.
 
+### C. Docker `openclaw-gateway` restart loop (`allowedOrigins` / empty config)
+
+**Symptom:** `docker logs openclaw-gateway` repeats:
+
+> `Gateway failed to start: Error: non-loopback Control UI requires gateway.controlUi.allowedOrigins …`
+
+**Common causes:**
+
+1. **`gateway.controlUi.allowedOrigins` missing** while the process is started with a **non-loopback bind** (for example Docker Compose using `gateway --bind lan`). Fix: add `gateway.controlUi.allowedOrigins` in the mounted `openclaw.json` (include at least `http://127.0.0.1:18789` and `http://localhost:18789`), or follow OpenClaw’s documented `dangerouslyAllowHostHeaderOriginFallback` option if appropriate for your threat model.
+
+2. **Bind mount looks empty inside the container** (`docker exec … ls /home/node/.openclaw` shows almost nothing). On **Docker Desktop for Mac**, directories under **`/Users/Shared/...`** are often **not shared** with the Linux VM, so the mount appears empty and OpenClaw never sees your real `openclaw.json`. Fix: either add **`/Users/Shared`** under **Docker Desktop → Settings → Resources → File sharing**, or set **`OPENCLAW_HOST_CONFIG_DIR`** in **`mvp-factory-control/.env`** to a **copy** of `openclaw_config` under your home directory (for example `~/.mvp-factory/openclaw_config`) and point Compose at that path (see `mvp-factory-control/docker-compose.yml`).
+
+3. **Port `18789` already in use on the Mac** (for example another process or an SSH remote forward). Fix: stop the conflicting listener or change **`CLAWDBOT_GATEWAY_PORT`** in Compose and point Reply/OpenClaw clients at the new port.
+
 ### B. The "Token Mismatch" or "Token Missing" Error (Browser Dashboard)
 **Symptom**: Opening the Control UI (`http://127.0.0.1:18789/overview`) in a browser returns `unauthorized: gateway token missing` or `gateway token mismatch`.
 **Root Cause**: The gateway regenerates its authentication token upon a fresh setup. The web browser caches the *old* token in LocalStorage, specifically attached to the exact hostname (`127.0.0.1` vs `localhost`).
