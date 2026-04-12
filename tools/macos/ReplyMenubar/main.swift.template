@@ -27,7 +27,8 @@ final class ReplyMenubarApp: NSObject, NSApplicationDelegate {
     private let repoRoot = "__REPO_ROOT__"
     private var iconFont: NSFont?
     
-    private let replyPort = "45311"
+    /// Hub HTTP port (updated after successful /api/health; may shift if PORT+1 bind).
+    private var replyPort = "45311"
     private let hatoriPort = "23572"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -126,14 +127,41 @@ final class ReplyMenubarApp: NSObject, NSApplicationDelegate {
     }
 
     @objc private func refreshHealth() {
-        fetchReplyHealth()
+        fetchReplyHealth {
+            // OpenClaw route is on the same hub port; run after probe updates `replyPort`.
+            self.fetchOpenClawHealth()
+        }
         fetchHatoriHealth()
-        fetchOpenClawHealth()
     }
 
-    private func fetchReplyHealth() {
-        guard let url = URL(string: "http://127.0.0.1:\(replyPort)/api/health") else { return }
-        let task = URLSession.shared.dataTask(with: url) { data, response, _ in
+    /// Default 45311; override with `PORT=` in `chat/.env` at repo root.
+    private func readBasePortFromEnv() -> Int {
+        let envPath = "\(repoRoot)/chat/.env"
+        guard let contents = try? String(contentsOfFile: envPath, encoding: .utf8) else { return 45311 }
+        for line in contents.split(separator: "\n", omittingEmptySubsequences: false) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.first != "#" else { continue }
+            if trimmed.hasPrefix("PORT=") {
+                let rest = String(trimmed.dropFirst(5)).trimmingCharacters(in: .whitespaces)
+                let cleaned = rest.replacingOccurrences(of: "\"", with: "").replacingOccurrences(of: "'", with: "")
+                if let n = Int(cleaned), n > 0, n < 65536 { return n }
+            }
+        }
+        return 45311
+    }
+
+    /// Try BASE…BASE+15 until /api/health returns 200; prefer `httpPort` from JSON when present.
+    private func probeHubPort(base: Int, offset: Int, completion: @escaping ((String, [String: Any])?) -> Void) {
+        if offset > 15 {
+            completion(nil)
+            return
+        }
+        let port = base + offset
+        guard let url = URL(string: "http://127.0.0.1:\(port)/api/health") else {
+            probeHubPort(base: base, offset: offset + 1, completion: completion)
+            return
+        }
+        URLSession.shared.dataTask(with: url) { data, response, _ in
             DispatchQueue.main.async {
                 guard
                     let http = response as? HTTPURLResponse,
@@ -141,62 +169,82 @@ final class ReplyMenubarApp: NSObject, NSApplicationDelegate {
                     let data = data,
                     let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                 else {
-                    self.updateIconColor(isUp: false, isLoading: false)
-                    self.healthItem.title = "Health: API down"
-                    self.detailItem.title = "DB: unknown  Hub: \(self.replyPort)"
-                    self.hatoriItem.title = "Hatori API: down"
-                    self.ollamaItem.title = "Ollama: down"
-                    self.imessageItem.title = "iMessage: down"
-                    self.whatsappItem.title = "WhatsApp: down"
-                    self.mailItem.title = "Mail: down"
+                    self.probeHubPort(base: base, offset: offset + 1, completion: completion)
                     return
                 }
-
-                let status = (obj["status"] as? String) ?? "online"
-                let progress = (obj["progress"] as? Int) ?? 100
-                let db = (obj["db"] as? [String: Any]) ?? [:]
-                let dbStatus = (db["status"] as? String) ?? "ok"
-                let services = (obj["services"] as? [String: Any]) ?? [:]
-                let channels = (obj["channels"] as? [String: Any]) ?? [:]
-
-                self.updateIconColor(isUp: status == "online", isLoading: status == "loading")
-                
-                if status == "loading" {
-                    self.healthItem.title = "Health: API loading \(progress)%"
+                let portStr: String
+                if let n = obj["httpPort"] as? Int {
+                    portStr = String(n)
+                } else if let s = obj["httpPort"] as? String, let n = Int(s) {
+                    portStr = String(n)
                 } else {
-                    self.healthItem.title = "Health: API \(status)"
+                    portStr = String(port)
                 }
-                
-                self.detailItem.title = "DB: \(dbStatus.replacingOccurrences(of: "_", with: " "))  Hub: \(self.replyPort)"
-                
-                // Dependencies status
-                let hatoriObj = (services["hatori"] as? [String: Any]) ?? [:]
-                let hatoriApiObj = (services["hatori_api"] as? [String: Any]) ?? [:]
-                let ollamaObj = (services["ollama"] as? [String: Any]) ?? [:]
-                
-                // Prefer direct API dependency state over sidecar process state.
-                // A managed sidecar can be "crashed" while API is still reachable via external supervisor.
-                let hatoriStatus = (hatoriApiObj["status"] as? String) ?? (hatoriObj["status"] as? String) ?? "down"
-                let ollamaStatus = (ollamaObj["status"] as? String) ?? "down"
-                
-                self.hatoriItem.title = "Hatori API: \(hatoriStatus.replacingOccurrences(of: "_", with: " "))"
-                self.ollamaItem.title = "Ollama: \(ollamaStatus.replacingOccurrences(of: "_", with: " "))"
-
-                // Ingests status
-                let imsgObj = (channels["imessage"] as? [String: Any]) ?? [:]
-                let waObj = (channels["whatsapp"] as? [String: Any]) ?? [:]
-                let mailObj = (channels["mail"] as? [String: Any]) ?? [:]
-                
-                let imsgProc = (imsgObj["processed"] as? Int) ?? Int("\(imsgObj["processed"] ?? "0")") ?? 0
-                let waStatus = (waObj["status"] as? String) ?? (waObj["state"] as? String) ?? "ok"
-                let mailStatus = (mailObj["status"] as? String) ?? (mailObj["state"] as? String) ?? "ok"
-
-                self.imessageItem.title = "iMessage: \(imsgProc > 0 ? "OK" : "idle")"
-                self.whatsappItem.title = "WhatsApp: \(waStatus.replacingOccurrences(of: "_", with: " "))"
-                self.mailItem.title = "Mail: \(mailStatus.replacingOccurrences(of: "_", with: " "))"
+                completion((portStr, obj))
             }
+        }.resume()
+    }
+
+    private func applyReplyHealthJSON(_ obj: [String: Any]) {
+        let status = (obj["status"] as? String) ?? "online"
+        let progress = (obj["progress"] as? Int) ?? 100
+        let db = (obj["db"] as? [String: Any]) ?? [:]
+        let dbStatus = (db["status"] as? String) ?? "ok"
+        let services = (obj["services"] as? [String: Any]) ?? [:]
+        let channels = (obj["channels"] as? [String: Any]) ?? [:]
+
+        updateIconColor(isUp: status == "online", isLoading: status == "loading")
+
+        if status == "loading" {
+            healthItem.title = "Health: API loading \(progress)%"
+        } else {
+            healthItem.title = "Health: API \(status)"
         }
-        task.resume()
+
+        detailItem.title = "DB: \(dbStatus.replacingOccurrences(of: "_", with: " "))  Hub: \(replyPort)"
+
+        let hatoriObj = (services["hatori"] as? [String: Any]) ?? [:]
+        let hatoriApiObj = (services["hatori_api"] as? [String: Any]) ?? [:]
+        let ollamaObj = (services["ollama"] as? [String: Any]) ?? [:]
+
+        let hatoriStatus = (hatoriApiObj["status"] as? String) ?? (hatoriObj["status"] as? String) ?? "down"
+        let ollamaStatus = (ollamaObj["status"] as? String) ?? "down"
+
+        hatoriItem.title = "Hatori API: \(hatoriStatus.replacingOccurrences(of: "_", with: " "))"
+        ollamaItem.title = "Ollama: \(ollamaStatus.replacingOccurrences(of: "_", with: " "))"
+
+        let imsgObj = (channels["imessage"] as? [String: Any]) ?? [:]
+        let waObj = (channels["whatsapp"] as? [String: Any]) ?? [:]
+        let mailObj = (channels["mail"] as? [String: Any]) ?? [:]
+
+        let imsgProc = (imsgObj["processed"] as? Int) ?? Int("\(imsgObj["processed"] ?? "0")") ?? 0
+        let waStatus = (waObj["status"] as? String) ?? (waObj["state"] as? String) ?? "ok"
+        let mailStatus = (mailObj["status"] as? String) ?? (mailObj["state"] as? String) ?? "ok"
+
+        imessageItem.title = "iMessage: \(imsgProc > 0 ? "OK" : "idle")"
+        whatsappItem.title = "WhatsApp: \(waStatus.replacingOccurrences(of: "_", with: " "))"
+        mailItem.title = "Mail: \(mailStatus.replacingOccurrences(of: "_", with: " "))"
+    }
+
+    private func fetchReplyHealth(completion: (() -> Void)? = nil) {
+        let base = readBasePortFromEnv()
+        probeHubPort(base: base, offset: 0) { result in
+            guard let (portStr, obj) = result else {
+                self.updateIconColor(isUp: false, isLoading: false)
+                self.healthItem.title = "Health: API down"
+                self.detailItem.title = "DB: unknown  Hub: \(base)…\(base + 15)"
+                self.hatoriItem.title = "Hatori API: down"
+                self.ollamaItem.title = "Ollama: down"
+                self.imessageItem.title = "iMessage: down"
+                self.whatsappItem.title = "WhatsApp: down"
+                self.mailItem.title = "Mail: down"
+                completion?()
+                return
+            }
+            self.replyPort = portStr
+            self.applyReplyHealthJSON(obj)
+            completion?()
+        }
     }
     
     private func fetchHatoriHealth() {
@@ -273,7 +321,7 @@ final class ReplyMenubarApp: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openUIContacts() {
-        NSWorkspace.shared.open(URL(string: "http://127.0.0.1:45311/contacts")!)
+        NSWorkspace.shared.open(URL(string: "http://127.0.0.1:\(replyPort)/contacts")!)
     }
 
     @objc private func openDocumentation() {
@@ -293,7 +341,7 @@ final class ReplyMenubarApp: NSObject, NSApplicationDelegate {
     }
 
     @objc private func stopService() {
-        runShell("launchctl unload \"$HOME/Library/LaunchAgents/com.reply.hub.plist\"")
+        runShell("make stop")
     }
 
     @objc private func checkStatus() {

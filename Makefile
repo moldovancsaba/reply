@@ -1,14 +1,22 @@
+# Local deploy (macOS): `make run` installs/reloads `com.reply.hub` LaunchAgent from this repo.
+# Validate plist vs checkout: `make doctor`. CI build gate: `cd chat && npm test && npm run lint`.
 .PHONY: run
 run:
 	$(MAKE) install-service
 
 .PHONY: stop
 stop:
-	@launchctl unload "$$HOME/Library/LaunchAgents/com.reply.hub.plist" >/dev/null 2>&1 || ./runbook/stop.sh
+	@chmod +x ./runbook/stop.sh
+	@./runbook/stop.sh
 
 .PHONY: status
 status:
 	./runbook/status.sh
+
+.PHONY: doctor
+doctor:
+	chmod +x ./runbook/doctor.sh
+	./runbook/doctor.sh
 
 .PHONY: install-ReplyMenubar
 install-ReplyMenubar:
@@ -27,6 +35,7 @@ install-service:
 	@launchctl unload "$$HOME/Library/LaunchAgents/com.reply.hub.plist" >/dev/null 2>&1 || true
 	@launchctl load -w "$$HOME/Library/LaunchAgents/com.reply.hub.plist"
 	@echo "Service installed: com.reply.hub"
+	@echo "If you moved this repo, run \`make run\` again from the new root (see also: make doctor)."
 
 .PHONY: uninstall-service
 uninstall-service:
