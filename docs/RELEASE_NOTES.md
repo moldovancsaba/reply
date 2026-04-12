@@ -2,6 +2,12 @@
 
 Completed work only. For `{reply}`, the [GitHub Project (#7)](https://github.com/users/moldovancsaba/projects/7) and [`moldovancsaba/reply`](https://github.com/moldovancsaba/reply) issues are the source of truth for delivered items (portfolio board: [Project #1](https://github.com/users/moldovancsaba/projects/1)).
 
+## [0.5.13] - 2026-04-12
+### Added
+- **Multi-mailbox IMAP sync:** `sync-mail.js` runs `syncImapWithOptions` per `settings.mailAccounts` IMAP row; `sync-imap.js` namespaced state (`accounts.*`) and vector ids `imap-<account>-<box>-<uid>`.
+- **Settings UI:** Email tab — additional IMAP mailboxes, default selector (reserved), Add/Remove rows.
+- **Hatori Phase B (reply):** `hatori-client.js` injects `metadata.sensitivity` on `ingestEvent` / `getResponse`; tests in `chat/test/hatori-sensitivity.test.js`. Docs updated (`HATORI_SENSITIVITY_CONTRACT.md`, `MULTI_MAILBOX.md`).
+
 ## [0.5.12] - 2026-04-12
 ### Added
 - **Multiple mailboxes — settings layer ([reply#21](https://github.com/moldovancsaba/reply/issues/21)):** `mailAccounts` + `defaultMailAccountId` in `settings-store` / `maskSettingsForClient` / `POST /api/settings`. `docs/MULTI_MAILBOX.md`.

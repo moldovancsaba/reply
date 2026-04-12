@@ -8,7 +8,7 @@ const os = require('os');
  * Base URL: http://127.0.0.1:23572
  *
  * ## Sensitivity contract (reply#16)
- * Future payloads may include optional **SensitivityMeta** alongside message text.
+ * **`metadata.sensitivity`** (`SensitivityMeta`) is merged on `ingestEvent` / `getResponse` unless the caller already set it.
  * See `docs/HATORI_SENSITIVITY_CONTRACT.md`.
  *
  * @typedef {object} SensitivityMeta
@@ -48,6 +48,29 @@ function loadHatoriToken() {
 }
 
 const HATORI_API_URL = process.env.HATORI_API_URL || 'http://127.0.0.1:23572';
+
+/**
+ * Default cross-system sensitivity hints (reply#16 Phase B — carried in `metadata.sensitivity`).
+ * @param {string} [kind]
+ * @param {object} [overrides]
+ * @returns {SensitivityMeta}
+ */
+function defaultSensitivityMeta(kind, overrides = {}) {
+  const o = overrides && typeof overrides === 'object' ? overrides : {};
+  return {
+    payload_class: o.payload_class || 'raw',
+    pii_classes: Array.isArray(o.pii_classes) ? o.pii_classes : [],
+    safe_to_index: o.safe_to_index !== false,
+    channel_scoped_ids: o.channel_scoped_ids !== false,
+  };
+}
+
+function mergeMetadataSensitivity(metadata, kind) {
+  const meta = metadata && typeof metadata === 'object' ? { ...metadata } : {};
+  const existing = meta.sensitivity && typeof meta.sensitivity === 'object' ? meta.sensitivity : {};
+  meta.sensitivity = { ...defaultSensitivityMeta(kind), ...existing };
+  return meta;
+}
 
 async function request(path, method = 'GET', body = null) {
     const token = loadHatoriToken();
@@ -94,7 +117,9 @@ async function getHealth() {
  * @param {object} params - { external_event_id, kind, conversation_id, sender_id, content, metadata }
  */
 async function ingestEvent(params) {
-    return request('/v1/ingest/event', 'POST', params);
+    const kind = params.kind || 'other';
+    const metadata = mergeMetadataSensitivity(params.metadata, kind);
+    return request('/v1/ingest/event', 'POST', { ...params, metadata });
 }
 
 /**
@@ -102,9 +127,12 @@ async function ingestEvent(params) {
  * @param {object} params - { conversation_id, message_id, sender_id, message, metadata, mode }
  */
 async function getResponse(params) {
+    const hintKind = params.metadata?.channel || params.kind || 'chat';
+    const metadata = mergeMetadataSensitivity(params.metadata, hintKind);
     return request('/v1/agent/respond', 'POST', {
         mode: 'chat',
-        ...params
+        ...params,
+        metadata,
     });
 }
 
@@ -147,5 +175,7 @@ module.exports = {
     ingestEvent,
     getResponse,
     getNBA,
-    reportOutcome
+    reportOutcome,
+    defaultSensitivityMeta,
+    mergeMetadataSensitivity,
 };

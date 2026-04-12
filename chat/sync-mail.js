@@ -74,11 +74,56 @@ async function syncMail() {
         }
     }
 
-    // Prefer IMAP connector (supports Gmail via IMAP/App Password) when configured.
+    // IMAP: primary settings + optional extra `mailAccounts` rows (reply#21 follow-up).
+    const { withDefaults, readSettings } = require('./settings-store.js');
+    const settings = withDefaults(readSettings());
+    const { syncImap, syncImapWithOptions } = require('./sync-imap.js');
+
+    let imapTotal = 0;
     if (hasImapConfig()) {
-        const { syncImap } = require('./sync-imap.js');
         const added = await syncImap();
-        return { added: Number(added) || 0, hasMore: false };
+        imapTotal += Number(added) || 0;
+    }
+
+    const extra = (settings.mailAccounts || []).filter(
+        (a) => a && a.enabled !== false && a.provider === 'imap' && a.imap?.host && a.imap?.user && a.imap?.pass
+    );
+
+    const primaryUser = (settings.imap?.user || '').trim().toLowerCase();
+    const primaryHost = (settings.imap?.host || '').trim().toLowerCase();
+
+    for (const acct of extra) {
+        const im = acct.imap;
+        const h = String(im.host || '').trim().toLowerCase();
+        const u = String(im.user || '').trim().toLowerCase();
+        if (hasImapConfig() && h === primaryHost && u === primaryUser) {
+            console.log(`[Mail Sync] Skipping extra account ${acct.id} (same as primary IMAP)`);
+            continue;
+        }
+        try {
+            const n = await syncImapWithOptions({
+                accountId: acct.id,
+                label: acct.label || acct.id,
+                host: im.host,
+                user: im.user,
+                pass: im.pass,
+                port: im.port,
+                secure: im.secure !== false,
+                mailbox: im.mailbox || 'INBOX',
+                sentMailbox: im.sentMailbox || '',
+                limit: im.limit || 200,
+                sinceDays: im.sinceDays || 30,
+                selfEmails: im.selfEmails || '',
+            });
+            imapTotal += Number(n) || 0;
+        } catch (e) {
+            console.error(`[Mail Sync] Extra IMAP account ${acct.id} failed:`, e.message);
+            updateStatus({ state: 'error', message: `IMAP ${acct.label || acct.id}: ${e.message}`, connector: 'imap' });
+        }
+    }
+
+    if (hasImapConfig() || extra.length > 0) {
+        return { added: imapTotal, hasMore: false };
     }
 
     console.log("Synchronizing Apple Mail...");
