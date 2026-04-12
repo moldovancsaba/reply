@@ -43,6 +43,8 @@ This playbook documents the architecture, state locations, and common troublesho
 
 4. **Gateway never binds / `healthz` refuses inside the container** while **`OPENAI_API_BASE`** points at **`host.docker.internal:11434`**. If Ollama on the host is down, slow, or unreachable from Docker, OpenClaw can sit at high CPU before listening. Fix: start Ollama on the Mac, or remove **`OPENAI_API_BASE`** from the **`openclaw-gateway`** service until the model host is reliable (see **`mvp-factory-control/docker-compose.yml`** comments).
 
+5. **`openclaw gateway health` reports `pairing required` (1008)** while **`curl http://127.0.0.1:18789/healthz`** returns **`{"ok":true}`**. The WS health path can require pairing even when the HTTP health endpoint is fine. **`{reply}`** probes **`http://…/healthz`** when **`REPLY_OPENCLAW_GATEWAY_URL`** is **`ws://` / `wss://`** so **`/api/health`** and **`/api/openclaw/status`** stay accurate for Docker gateways.
+
 ### B. The "Token Mismatch" or "Token Missing" Error (Browser Dashboard)
 **Symptom**: Opening the Control UI (`http://127.0.0.1:18789/overview`) in a browser returns `unauthorized: gateway token missing` or `gateway token mismatch`.
 **Root Cause**: The gateway regenerates its authentication token upon a fresh setup. The web browser caches the *old* token in LocalStorage, specifically attached to the exact hostname (`127.0.0.1` vs `localhost`).

@@ -238,6 +238,28 @@ async function serveSystemHealth(req, res) {
         services.openclaw = { name: "openclaw", status: "unknown" };
     }
 
+    // External gateway (e.g. Docker): no hub-managed PID — probe via CLI so /api/health matches reality.
+    if (!services.openclaw?.pid) {
+        try {
+            const { resolveOpenClawBinary } = require("../utils/whatsapp-utils");
+            const { probeOpenClawGatewayHealth } = require("../openclaw-gateway-env.js");
+            const data = await probeOpenClawGatewayHealth(resolveOpenClawBinary(), { timeoutMs: 4000 });
+            services.openclaw = {
+                ...services.openclaw,
+                name: "openclaw",
+                status: data.ok ? "online" : "offline",
+                detail: data.ok ? "gateway health ok" : "gateway health not ok"
+            };
+        } catch (e) {
+            services.openclaw = {
+                ...services.openclaw,
+                name: "openclaw",
+                status: "offline",
+                lastError: e.message
+            };
+        }
+    }
+
     let replyVersion = "unknown";
     try {
         const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
@@ -364,53 +386,23 @@ async function serveServiceControl(req, res) {
 }
 
 async function serveOpenClawStatus(req, res) {
-    const { execFile } = require("child_process");
     const { resolveOpenClawBinary } = require("../utils/whatsapp-utils");
-    const { getOpenClawGatewayExecEnv, readGatewayTokenFromHomeConfig } = require("../openclaw-gateway-env.js");
+    const { probeOpenClawGatewayHealth } = require("../openclaw-gateway-env.js");
 
-    const childEnv = getOpenClawGatewayExecEnv();
-    const bin = resolveOpenClawBinary();
-    const args = ["gateway", "health", "--json"];
-    if (!childEnv.OPENCLAW_GATEWAY_URL) {
-        const tok =
-            String(process.env.REPLY_OPENCLAW_GATEWAY_TOKEN || "").trim() ||
-            readGatewayTokenFromHomeConfig();
-        if (tok) {
-            args.push("--token", tok);
-        }
+    try {
+        const data = await probeOpenClawGatewayHealth(resolveOpenClawBinary());
+        writeJson(res, 200, {
+            status: data.ok ? "online" : "offline",
+            ...data
+        });
+    } catch (error) {
+        console.error("OpenClaw CLI health check failed:", error.message);
+        writeJson(res, 200, {
+            status: "offline",
+            error: "OpenClaw health check failed",
+            detail: error.message
+        });
     }
-
-    execFile(bin, args, { timeout: 5000, env: childEnv }, (error, stdout, stderr) => {
-        if (error) {
-            console.error("OpenClaw CLI health check failed:", error.message);
-            writeJson(res, 200, {
-                status: "offline",
-                error: "OpenClaw health check failed",
-                detail: error.message
-            });
-            return;
-        }
-
-        try {
-            // Robust parsing: find the first '{' to skip any banners (like lobster)
-            const jsonStart = stdout.indexOf('{');
-            if (jsonStart === -1) throw new Error("No JSON object found in output");
-            const data = JSON.parse(stdout.slice(jsonStart));
-
-            writeJson(res, 200, {
-                status: data.ok ? "online" : "offline",
-                ...data
-            });
-        } catch (e) {
-            console.error("Failed to parse OpenClaw health JSON:", e.message);
-            writeJson(res, 200, {
-                status: "offline",
-                error: "Invalid JSON from OpenClaw CLI",
-                stdout_preview: stdout.slice(0, 200),
-                detail: e.message
-            });
-        }
-    });
 }
 
 async function serveTriageLog(req, res) {
