@@ -207,6 +207,53 @@ class ContactStore {
         });
     }
 
+    /**
+     * Raw row lookup (no `primary_contact_id` follow). Used for merge/alias APIs (reply#19).
+     * @param {string} id
+     * @returns {object|null}
+     */
+    findById(id) {
+        if (!id) return null;
+        return this._contacts.find((c) => c.id === id) || null;
+    }
+
+    /** Match on `handle` column only (no alias resolution). Used by merge API (reply#19). */
+    getContactRowByHandle(handle) {
+        const search = String(handle || "").trim().toLowerCase();
+        if (!search) return null;
+        return this._contacts.find((c) => (c.handle || "").toLowerCase().trim() === search) || null;
+    }
+
+    /**
+     * Contacts linked to this canonical profile (`primary_contact_id` pointer).
+     * @param {string} canonicalId - Primary row `id`
+     */
+    listAliasesForCanonical(canonicalId) {
+        if (!canonicalId) return [];
+        return this._contacts.filter((c) => c.primary_contact_id === canonicalId);
+    }
+
+    /**
+     * Clears `primary_contact_id` on one merged row (rollback link, not channel move) — reply#19.
+     * @param {string} aliasContactId - SQLite row id of the alias profile
+     */
+    async unlinkAlias(aliasContactId) {
+        const row = this.findById(aliasContactId);
+        if (!row || !row.primary_contact_id) {
+            throw new Error("Contact is not a linked alias");
+        }
+        return new Promise((resolve, reject) => {
+            this._db.run(
+                "UPDATE contacts SET primary_contact_id = NULL WHERE id = ?",
+                [aliasContactId],
+                (err) => {
+                    if (err) return reject(err);
+                    this.refresh().then(resolve).catch(reject);
+                }
+            );
+        });
+    }
+
     findContact(identifier) {
         if (!identifier) return null;
         const search = identifier.toLowerCase().trim();
@@ -460,6 +507,10 @@ class ContactStore {
         });
     }
 
+    /**
+     * Alias-based merge (reply#19): moves child data onto the canonical row and sets
+     * `primary_contact_id` on the source so lookups resolve to the primary without deleting history keys.
+     */
     async mergeContacts(targetId, sourceId) {
         if (!targetId || !sourceId || targetId === sourceId) return;
         return new Promise((resolve, reject) => {
@@ -481,7 +532,7 @@ class ContactStore {
                 this._db.run("UPDATE contact_notes SET contact_id = ? WHERE contact_id = ?", [targetId, sourceId], handleError);
                 this._db.run("UPDATE contact_suggestions SET contact_id = ? WHERE contact_id = ?", [targetId, sourceId], handleError);
 
-                // Set alias pointer on the source profile
+                // Source row remains as a reversible alias → canonical (see unlinkAlias)
                 this._db.run("UPDATE contacts SET primary_contact_id = ? WHERE id = ?", [targetId, sourceId], handleError);
 
                 if (hasError) {

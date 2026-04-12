@@ -5,6 +5,16 @@
 const { writeJson, readJsonBody } = require("../utils/server-utils");
 const contactStore = require("../contact-store");
 
+/** Resolve UI merge endpoint id or handle to a concrete SQLite row (reply#19). */
+function resolveMergeParticipant(key) {
+    if (key == null || key === "") return null;
+    const k = String(key).trim();
+    if (k.startsWith("id-")) return contactStore.findById(k);
+    const byHandle = contactStore.getContactRowByHandle(k);
+    if (byHandle) return byHandle;
+    return contactStore.findContact(k);
+}
+
 async function serveMerge(req, res, invalidateCaches) {
     try {
         const payload = await readJsonBody(req);
@@ -12,14 +22,23 @@ async function serveMerge(req, res, invalidateCaches) {
             writeJson(res, 400, { error: "targetId and sourceId are required" });
             return;
         }
-        const sourceContact = contactStore.findContact(payload.sourceId);
-        const targetContact = contactStore.findContact(payload.targetId);
+        await contactStore.waitUntilReady();
+        let targetContact = resolveMergeParticipant(payload.targetId);
+        const sourceContact = resolveMergeParticipant(payload.sourceId);
         if (!sourceContact || !targetContact) {
             writeJson(res, 404, { error: "Source or Target contact not found" });
             return;
         }
+        if (targetContact.primary_contact_id) {
+            const p = contactStore.findById(targetContact.primary_contact_id);
+            if (p) targetContact = p;
+        }
         if (sourceContact.id === targetContact.id) {
             writeJson(res, 400, { error: "Cannot merge a contact into itself" });
+            return;
+        }
+        if (sourceContact.primary_contact_id === targetContact.id) {
+            writeJson(res, 400, { error: "Source is already linked to this primary" });
             return;
         }
 
@@ -133,8 +152,65 @@ async function serveDeclineSuggestion(req, res) {
     }
 }
 
+/**
+ * GET /api/contacts/aliases?for=<handle|id> — rows pointing at this canonical via `primary_contact_id`.
+ */
+async function serveListAliases(req, res, url) {
+    try {
+        await contactStore.waitUntilReady();
+        const forParam = (url.searchParams.get("for") || "").trim();
+        if (!forParam) {
+            writeJson(res, 400, { error: "Missing query: for" });
+            return;
+        }
+        const row = contactStore.findById(forParam) || contactStore.getContactRowByHandle(forParam) || contactStore.findContact(forParam);
+        if (!row) {
+            writeJson(res, 404, { error: "Contact not found" });
+            return;
+        }
+        let canonical = row;
+        if (row.primary_contact_id) {
+            const p = contactStore.findById(row.primary_contact_id);
+            if (p) canonical = p;
+        }
+        const raw = contactStore.listAliasesForCanonical(canonical.id);
+        const aliases = raw.map((c) => ({
+            id: c.id,
+            handle: c.handle,
+            displayName: c.displayName || c.handle
+        }));
+        writeJson(res, 200, { canonicalId: canonical.id, aliases });
+    } catch (e) {
+        console.error("[contacts/aliases]", e);
+        writeJson(res, 500, { error: e.message });
+    }
+}
+
+/**
+ * POST /api/contacts/unlink-alias { aliasContactId } — clear merge pointer (reply#19).
+ */
+async function serveUnlinkAlias(req, res, invalidateCaches) {
+    try {
+        const payload = await readJsonBody(req);
+        const aliasContactId = payload.aliasContactId || payload.aliasId;
+        if (!aliasContactId) {
+            writeJson(res, 400, { error: "aliasContactId is required" });
+            return;
+        }
+        await contactStore.waitUntilReady();
+        await contactStore.unlinkAlias(aliasContactId);
+        if (invalidateCaches) invalidateCaches();
+        writeJson(res, 200, { status: "unlinked", aliasContactId });
+    } catch (e) {
+        console.error("[contacts/unlink-alias]", e);
+        writeJson(res, 400, { error: e.message || "Unlink failed" });
+    }
+}
+
 module.exports = {
     serveMerge,
+    serveListAliases,
+    serveUnlinkAlias,
     serveUpdateContact,
     serveAddNote,
     serveUpdateNote,

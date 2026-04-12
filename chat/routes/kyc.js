@@ -54,6 +54,7 @@ async function serveKyc(req, res, url, authorizeSensitiveRoute, onUpdate, bodyDa
     }
     writeJson(res, 200, {
       handle,
+      contactId: contact?.id || null,
       displayName: contact?.displayName || contact?.name || handle,
       profession: contact?.profession || "",
       relationship: contact?.relationship || "",
