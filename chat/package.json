@@ -11,6 +11,7 @@
     "security:fix": "node security-audit.js --fix",
     "channel-bridge:ingest": "node channel-bridge-sidecar.js",
     "linkedin:sync": "node linkedin-sidecar.js",
+    "linkedin:install-browsers": "playwright install chromium",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "node --test test/*.test.js",
@@ -28,6 +29,7 @@
     "mailparser": "^3.9.3",
     "mbox-reader": "^1.2.0",
     "ollama": "^0.6.3",
+    "playwright": "^1.49.1",
     "sqlite3": "^5.1.7",
     "tar": "6.2.1"
   },
