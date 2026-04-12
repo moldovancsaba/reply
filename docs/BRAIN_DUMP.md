@@ -1,66 +1,24 @@
 # {reply} Brain Dump — Live Knowledge Repository
 
-**Purpose**: Single source of truth for all accumulated knowledge, decisions, context, and operational state.  
+**Doc freshness:** 2026-04-11 — This file is a **long-form archive** of decisions and older sprint context. It is **not** the execution SSOT.
+
+**Where truth lives for work today**
+- **Backlog + status:** [GitHub Project #7](https://github.com/users/moldovancsaba/projects/7) and [`moldovancsaba/reply` issues](https://github.com/moldovancsaba/reply/issues).
+- **Current narrative:** [HANDOVER.md](./HANDOVER.md) (especially **Active Session Update** at the bottom).
+
 **Owner**: AI Developer  
-**Last Updated**: 2026-02-22  
-**Update Frequency**: After every issue completion + weekly sync
+**Last Updated**: 2026-04-11  
+**Update Frequency**: After major milestones; do not duplicate the board here—summarize patterns only.
 
 ---
 
-## Current Operational State (2026-02-22)
+## Current operational state (summary)
 
-### Active Work (This Sprint)
-- **Sprint 1 & 2 Planning**: Complete (docs created: DEPENDENCY_MAP, BACKLOG_PRIORITIZATION, SPRINT_PLAN_2W)
-- **Foundation Verification**: #212 (CI Pipeline), #213 (SQL Audit) — status unknown, marked for verification
-- **In Progress**: #197 (Conversation Indexing), #194 (Message Counts Fix — likely complete but needs confirmation), #202 (Omnichannel Routing)
-- **Ready to Start**: #214 (Loading States + Error Toasts) — independent, no blockers
+- **CI on `main`:** `.github/workflows/ci.yml` runs Node **20**, `npm run lint`, `npm test`, and an informational `npm audit --audit-level=high` (see reply#31).
+- **HTTP routing:** Feature routes live under `chat/routes/*`; `chat/server.js` is the composition root (legacy “decompose server.js” is largely complete).
+- **Conversations API:** `GET /api/conversations` exposes `meta.sort`, `meta.sortRequested`, `meta.sortValid` — do not document or code against `meta.mode` for new work.
 
-### Board Status Summary (as of 2026-02-22)
-- **Total {reply} issues**: 64
-- **Done**: 23 issues (mostly completed by Agnes)
-- **In Progress**: 3 issues (#194, #197, #202)
-- **Review**: 4 issues (#187, #188, #189, #193)
-- **Ready**: 1 issue (#174 Context Engine)
-- **Roadmap**: 1 issue (#167 Local Ollama agent)
-- **Backlog**: 22 issues (#211–#224, etc.)
-- **IDEA BANK**: 13 issues (future features, low priority)
-- **Unspecified Status**: 1 issue (#171 Ingestion, #172 Hybrid Search, #173 Unified Brain)
-
-### Critical Issues Identified
-
-#### Verification Completed ✅
-1. **#212 (CI Pipeline)** — ✅ VERIFIED WORKING
-   - Status: `.github/workflows/ci.yml` exists and configured correctly
-   - Runs: ESLint + Jest tests on push/PR to main branch
-   - Node: v18 (matches team standard)
-   - Impact: **No blocker** — #211 refactor can proceed
-
-2. **#213 (SQL Audit)** — ✅ VERIFIED SAFE
-   - Findings: 4 instances of string-interpolated SQL in vector-store.js + channel-bridge.js
-   - Mitigation: ALL use `escapeSqlString()` function (escapes single quotes)
-   - Assessment: No injection vulnerability detected (LanceDB syntax validated)
-   - Impact: **No blocker** — safe to proceed with #211
-
-3. **#194 (Message Count Fix)** — Verification Pending
-   - Action: Check UI counts vs LanceDB source vs email API
-   - Status: Code inspection shows 2026-02-18 fix applied
-   - Next: Functional verification required
-
-#### Major Upcoming Work
-1. **#211 (Decompose server.js)** — ~3-4 days
-   - Blocked by: #212, #213 verification
-   - Unblocks: 5 downstream features (#214, #220, #221, #223, #224)
-   - Risk: High (large refactor, need full test coverage)
-
-2. **#223 (AI Provider Cards)** — ~2-3 days implementation
-   - Depends on: #211 complete
-   - Why: Need clean routes for settings API
-   - Unblocks: #221, #224 (settings features)
-
-3. **#214 (Loading States + Toasts)** — ~1-2 days
-   - Independent: Can start now (no blockers)
-   - Quick win: UX improvement, low risk
-   - Recommended: Start in parallel with #211 prep
+The sections below retain **2026-02-22** planning detail for archaeology. When they conflict with HANDOVER or the board, **HANDOVER + Project #7 win**.
 
 ---
 

@@ -92,8 +92,8 @@ export async function loadConversations(append = false) {
 
         // Fetch contacts from server
         const data = await fetchConversations(contactOffset, CONTACT_LIMIT, conversationsQuery, conversationsSort);
-        if (data?.meta?.mode === 'fallback') {
-            console.warn('Contacts API in fallback mode:', data.meta);
+        if (data?.meta && data.meta.sortValid === false) {
+            console.warn('Contacts API: unknown sort requested; server fell back to newest.', data.meta);
         }
 
         // Update state

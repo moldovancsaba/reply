@@ -2,11 +2,13 @@
 
 This file is onboarding + operational context. Keep it accurate when behavior/architecture changes.
 
-**Last Updated**: 2026-04-09 (SSOT: `{reply}` issues + [Project #7](https://github.com/users/moldovancsaba/projects/7); v0.5.1 local deployment / hub hardening unchanged)
+**Last Updated**: 2026-04-11 (security rotation doc + outbound merge tests + CI audit step; SSOT: `{reply}` issues + [Project #7](https://github.com/users/moldovancsaba/projects/7))
 
 **Current Version**: `0.5.2` (see `chat/package.json`)
 
 **Local Mac ops (single source)**: [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md) — LaunchAgent, logs, `.env`, Ollama, Full Disk Access / `chat.db`, changelog of stability fixes.
+
+**Credential rotation (reply#34)**: Operator checklist and evidence table live in [SECURITY_ROTATION.md](SECURITY_ROTATION.md). Repository work added 2026-04-11: procedure + CI audit signal; **you must still rotate** any live keys that ever appeared in Git history and record dates in that doc.
 
 **Key changes in v0.5.0**:
 - `service-manager.js` — auto-restart watchdog with exponential backoff + `repair_required` state
@@ -29,39 +31,18 @@ This file is onboarding + operational context. Keep it accurate when behavior/ar
   - **FINDING WORK:** `gh issue list --repo moldovancsaba/reply --state open --assignee "@me" --search "{reply}" --limit 20`
 - **Historical:** Older handover bullets below may cite `mvp-factory-control#…` issue numbers from before the move; prefer **reply** + **Project #7** for new work. See [`GITHUB_REPLY_PROJECT_MIGRATION.md`](GITHUB_REPLY_PROJECT_MIGRATION.md).
 
-## Current Priorities (Board, 2026-02-22)
+## Current priorities (SSOT)
 
-### Foundation Verification — COMPLETE ✅
-- **#212 (CI Pipeline)** — ✅ VERIFIED: `.github/workflows/ci.yml` working, runs ESLint + Jest
-- **#213 (SQL Audit)** — ✅ VERIFIED: All 4 string-interpolated SQL calls use `escapeSqlString()`, no injection risk
+**Live backlog:** [GitHub Project #7](https://github.com/users/moldovancsaba/projects/7) + [`moldovancsaba/reply` issues](https://github.com/moldovancsaba/reply/issues). Do not treat this file’s historical bullets as the task list.
 
-### 2-Week Sprint Plan (Sprint 1 + Sprint 2)
-See detailed plans:
-- **[DEPENDENCY_MAP.md](DEPENDENCY_MAP.md)** — Blocking relationships, critical path, 3-4 week timeline
-- **[BACKLOG_PRIORITIZATION.md](BACKLOG_PRIORITIZATION.md)** — ROI-scored ranking (16 = #212, 5.0 = #213, #223)
-- **[SPRINT_PLAN_2W.md](SPRINT_PLAN_2W.md)** — Day-by-day execution plan (Sprint 1: foundation, Sprint 2: refactor + settings)
+**Foundation (verified on `main`, 2026-04):**
+- **CI:** [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) — Node **20**, `npm ci`, `npm run lint`, `npm test`, informational `npm audit --audit-level=high`.
+- **Routing:** HTTP handlers live under `chat/routes/*`; `chat/server.js` wires paths (legacy “decompose monolith” work is largely done—new work is issue-scoped in **reply**, not unbounded “#211”).
+- **Conversations API:** `GET /api/conversations` response `meta` uses `sort`, `sortRequested`, `sortValid` (not `meta.mode`).
 
-### Knowledge Base
-- **[BRAIN_DUMP.md](BRAIN_DUMP.md)** — Operational state, technical decisions, gotchas, risk registry (syncs after every issue)
+**Planning archives (historical IDs):** [DEPENDENCY_MAP.md](DEPENDENCY_MAP.md), [SPRINT_PLAN_2W.md](SPRINT_PLAN_2W.md), [BACKLOG_PRIORITIZATION.md](BACKLOG_PRIORITIZATION.md) may cite **mvp-factory-control** issue numbers from before the move. For execution, use **Project #7** only.
 
-### Active Issues
-- ✅ P0 Done: `mvp-factory-control#196` — `{reply}: Stabilize WhatsApp Desktop send (⌘N flow)` *(closed 2026-02-18)*
-- 🔄 P1 In Progress: `mvp-factory-control#197` — `{reply}: Conversation list indexing (order/search/counts) cleanup`
-- 🔄 P1 In Progress: `mvp-factory-control#202` — `{reply}: Implement omnichannel routing + human-gated NBA orchestration`
-- 🟡 P1 Ready: `mvp-factory-control#214` — `{reply}: Add loading states and error toast notifications` (independent, start immediately)
-- 🔴 P1 Backlog: `mvp-factory-control#211` — `{reply}: Decompose server.js into route modules` (unblocks #223, #224, #221, #220)
-- ✅ P0 Done: `mvp-factory-control#212` — `{reply}: Add CI pipeline (GitHub Actions lint + test)` (verified working 2026-02-22)
-- ✅ P0 Done: `mvp-factory-control#213` — `{reply}: Replace string-interpolated SQL with parameterized queries` (verified safe 2026-02-22)
-- 🟡 P2 Backlog: `mvp-factory-control#215` — `{reply}: First-run onboarding wizard`
-- 🟡 P2 Backlog: `mvp-factory-control#216` — `{reply}: Mobile responsiveness and accessibility improvements`
-- 🟡 P2 Backlog: `mvp-factory-control#217` — `{reply}: Local analytics instrumentation`
-- 🟡 P2 Backlog: `mvp-factory-control#218` — `{reply}: Data export CLI for portability`
-- 🟡 P2 Backlog: `mvp-factory-control#219` — `{reply}: Version strategy and changelog`
-- 🟡 P2 Backlog: `mvp-factory-control#223` — `{reply}: AI Provider Cards (Ollama + OpenClaw selector)` (depends on #211)
-- 🟡 P2 Backlog: `mvp-factory-control#224` — `{reply}: Smart Prompt Library (templates + chaining)` (depends on #211)
-- 🟡 P2 Backlog: `mvp-factory-control#221` — `{reply}: Settings Hub (consolidated provider config)` (depends on #211, clarify #197 blocker)
-- 🟡 P2 Backlog: `mvp-factory-control#220` — `{reply}: Scope LinkedIn send capability (API vs clipboard)` (ADR required)
-- ✅ P0 Done: `mvp-factory-control#199` — `{reply}: Adopt OpenClaw security policy + approvals baseline` *(closed 2026-02-18)*
+**Knowledge base:** [BRAIN_DUMP.md](BRAIN_DUMP.md) — long-form notes; cross-check [HANDOVER.md](HANDOVER.md) “Active Session Update” for what is current.
 
 ## Docs Index
 - `README.md` — quickstart
@@ -251,30 +232,18 @@ See detailed plans:
 - CORS blocking confirmed via curl ✅
 - Security headers confirmed on all responses ✅
 
-## Current Status / Known Issues (SSOT)
-- `mvp-factory-control#196` — WhatsApp Desktop send still flaky (UI automation). Status: In Progress.
-- `mvp-factory-control#197` — `/api/conversations` runs in `meta.mode = fallback`; server-side `q=` filtering disabled. WIP branch `codex/wip-conversations-index` (commit `788e3f3`) exists. Status: In Progress.
-- `mvp-factory-control#202` — Omnichannel routing + NBA orchestration. Status: In Progress.
-- `mvp-factory-control#211` — Decompose `server.js` into route modules. Status: Backlog. **Recommended next P1 task.**
-- `mvp-factory-control#212` — CI pipeline (GitHub Actions). Status: Backlog. **Quick win — do before #211.**
-- `mvp-factory-control#213` — Parameterized SQL. Status: Backlog.
-- `mvp-factory-control#214–#219` — UX + business value items. Status: Backlog.
-- ⚠️ Board fields for #211–#219 not yet set (rate limit issue). Set via https://github.com/users/moldovancsaba/projects/1
-
 ## Quick Verification (dev)
-- Security baseline: `cd /Users/moldovancsaba/Projects/reply && node chat/security-audit.js`
-- Tests: `cd /Users/moldovancsaba/Projects/reply/chat && npm test`
-- Lint: `cd /Users/moldovancsaba/Projects/reply/chat && npm run lint`
+- Security baseline: `node chat/security-audit.js` (from repo root)
+- Tests: `cd chat && npm test`
+- Lint: `cd chat && npm run lint`
 - Channel bridge CLI: `node chat/channel-bridge-sidecar.js --event '{"channel":"telegram","peer":{"handle":"@qa"},"text":"hello"}' --dry-run`
-- Contacts list: `GET /api/conversations?offset=0&limit=10` → expects `meta.mode = fallback` until #197 done.
+- Conversations: `curl -s "http://127.0.0.1:45311/api/conversations?limit=5" | head -c 400` → response includes `meta.sort` / `meta.sortRequested` / `meta.sortValid` (no reliance on `meta.mode`).
 - WhatsApp send (safe): `POST /api/send-whatsapp` with `{"recipient":"+3670...","text":"...","dryRun":true}`
 
-## Next Agent Recommendations (priority order)
-1. **Set board fields for #211–#219** — visit https://github.com/users/moldovancsaba/projects/1 and set Product=reply, Type, Priority, Status=Backlog for each.
-2. **Add CI pipeline** (`mvp-factory-control#212`) — create `.github/workflows/ci.yml` running `npm run lint` + `npm test` on push/PR. Fast win, ~30 min.
-3. **Parameterized SQL** (`mvp-factory-control#213`) — grep for string-interpolated SQL in `server.js` WhatsApp ID resolution and replace with `?` placeholders.
-4. **Decompose server.js** (`mvp-factory-control#211`) — biggest refactor. Do #212 + #213 first so CI catches regressions.
-5. **Rotate secrets** — `GOOGLE_API_KEY` and `REPLY_OPERATOR_TOKEN` were committed in Git history. Must be rotated.
+## Next agent recommendations
+1. **Board:** [Project #7](https://github.com/users/moldovancsaba/projects/7) — pick the next open card; move to **In Progress** when starting.
+2. **Secrets:** If not done, follow [SECURITY_ROTATION.md](SECURITY_ROTATION.md) and close [reply#34](https://github.com/moldovancsaba/reply/issues/34) with evidence.
+3. **Deep planning docs:** Refresh [DEPENDENCY_MAP.md](DEPENDENCY_MAP.md) / [BRAIN_DUMP.md](BRAIN_DUMP.md) when board state materially changes (do not duplicate the board in prose here).
 
 ## Active Session Update (2026-02-19, OpenClaw WhatsApp integration pattern)
 - Added reusable case study doc: `docs/CHANNEL_INTEGRATION_CASE_STUDY.md`.
@@ -300,8 +269,8 @@ See detailed plans:
 ## Active Session Update (2026-02-19, LinkedIn Bridge & Robustness)
 - **LinkedIn Inbound:**
   - **Chrome Extension (Recommended):** Created `chat/chrome-extension/`. Connects to local server to sync LinkedIn messages.
-  - **Port Failover:** Extension now scans ports `3000, 3001, 3002, 3003` to find the active server.
-  - **UserScript (Alternative):** `js/linkedin-bridge.user.js` updated with same port failover logic.
+  - **Port Failover (historical):** At the time, only `3000–3003` was scanned. **2026-04-11 (reply#30):** scans **`45311`–`45326` first**, then legacy `3000–3003` — see `chat/linkedin-hub-port-scan.js` and [INGESTION.md](INGESTION.md) §6.
+  - **UserScript (Alternative):** `js/linkedin-bridge.user.js` — same discovery order as the extension.
   - **Manual Script Removed:** Removed embedded script from `dashboard.js` to prevent syntax crashes and encourage extension use.
 - **Dashboard Stability:**
   - Fixed `dashboard.js` crash caused by unescaped template literals in the embedded script string.
@@ -382,3 +351,15 @@ See detailed plans:
   - Cleared all `.pyc` caches to eliminate compiled code propagation issues.
 - **Root Cause**: The most likely cause of the persistent error message in the UI is a stale Hatori `uvicorn` background process still running the old code logic in memory, or the LLM recalling old RAG records. 
 - **Next Steps**: Awaiting manual restart of the Hatori service via the Reply dashboard to flush the stale process, followed by validation.
+
+## Active Session Update (2026-04-11, reply#34 / #17 / #31 delivery)
+- **Security (reply#34):** Added [SECURITY_ROTATION.md](SECURITY_ROTATION.md) (operator checklist + evidence table). Linked from this handover. CI: `npm audit --audit-level=high` as informational step in `.github/workflows/ci.yml`. Actual key rotation remains operator-owned; record dates in `SECURITY_ROTATION.md` (section “Evidence”).
+- **Outbound policy (reply#17):** `chat/utils/outbound-policy.js` — merge `verifiedChannels` from linked profiles (`primary_contact_id` → primary); LinkedIn match is **exact** normalized identity (no substring unlock). Optional `contactsRoster` on `checkOutboundAllowedForContact` for tests. Extended tests in `chat/test/outbound-policy.test.js`.
+- **Tests + CI (reply#31):** New tests: `ensure-hub-worker.test.js`, `service-manager-worker-policy.test.js`, `conversations-meta.test.js`, `system-health-shape.test.js`. Exported `normalizeConversationSort` + `CONVERSATION_SORT_MODES` from `routes/messaging.js` for meta contract tests. `service-manager.js` exposes `isWorkerEarlyExitDuplicateCandidate` on singleton.
+- **Docs:** `docs/LOCAL_MACHINE_DEPLOYMENT.md` — Node 20 note aligned with CI.
+- **Validation:** `cd chat && npm test` and `npm run lint` (run during this change).
+
+## Active Session Update (2026-04-11 continuation, reply#29 / #30 / board)
+- **reply#29 (SSOT docs):** Replaced stale “Current Priorities” / “Next Agent” / verification bullets in [HANDOVER.md](HANDOVER.md) with **Project #7**-first guidance. Rewrote [NEXT_AGENT_PROMPT.md](NEXT_AGENT_PROMPT.md) boot prompt (version-agnostic). Added doc-freshness framing to [BRAIN_DUMP.md](BRAIN_DUMP.md) and reconciled [DEPENDENCY_MAP.md](DEPENDENCY_MAP.md) Tier 1 / #211 / #224 / sync commands with **main** + **reply** repo reality (CI Node 20, `chat/routes/*`, `gh project` → project **7**). [INGESTION.md](INGESTION.md) §6 documents LinkedIn bridge.
+- **reply#30 (LinkedIn ports):** [linkedin-hub-port-scan.js](../chat/linkedin-hub-port-scan.js) + tests; [chrome-extension/content.js](../chat/chrome-extension/content.js) and [js/linkedin-bridge.user.js](../chat/js/linkedin-bridge.user.js) scan **45311–45326** then **3000–3003**; failure toasts list scan summary. [contacts.js](../chat/js/contacts.js) — removed dead `meta.mode === 'fallback'` check; warn on `meta.sortValid === false`.
+- **Project #7:** Cards for **reply#17**, **#29**, **#30**, **#31** set to **Done** after validation (`npm test` / `npm run lint`).
