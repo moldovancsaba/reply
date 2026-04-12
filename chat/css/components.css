@@ -679,6 +679,14 @@
 /* ============================================
    Triage Log Components
    ============================================ */
+.triage-log-header--4 {
+    grid-template-columns: 72px minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.2fr);
+}
+
+.triage-log--4 .triage-entry {
+    grid-template-columns: 72px minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.2fr);
+}
+
 .triage-log-header {
     display: grid;
     grid-template-columns: 85px 110px 1fr;
