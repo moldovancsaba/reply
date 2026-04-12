@@ -207,6 +207,24 @@ function withDefaults(settings) {
         notes: Number(s?.worker?.quantities?.notes) || 0,
       },
     },
+    health: {
+      hatoriProbeTimeoutMs: Math.max(
+        3000,
+        Math.min(Number(s?.health?.hatoriProbeTimeoutMs) || 12000, 120000)
+      ),
+      ollamaProbeTimeoutMs: Math.max(
+        1000,
+        Math.min(Number(s?.health?.ollamaProbeTimeoutMs) || 3000, 30000)
+      ),
+      hatoriWatchdogFailureThreshold: Math.max(
+        1,
+        Math.min(Number(s?.health?.hatoriWatchdogFailureThreshold) || 3, 20)
+      ),
+      uiHealthPollIntervalMs: Math.max(
+        5000,
+        Math.min(Number(s?.health?.uiHealthPollIntervalMs) || 15000, 300000)
+      ),
+    },
     ui: {
       channels: {
         imessage: {
@@ -372,6 +390,12 @@ function maskSettingsForClient(settings) {
     worker: {
       pollIntervalSeconds: worker.pollIntervalSeconds,
       quantities: worker.quantities,
+    },
+    health: {
+      hatoriProbeTimeoutMs: cfg.health?.hatoriProbeTimeoutMs ?? 12000,
+      ollamaProbeTimeoutMs: cfg.health?.ollamaProbeTimeoutMs ?? 3000,
+      hatoriWatchdogFailureThreshold: cfg.health?.hatoriWatchdogFailureThreshold ?? 3,
+      uiHealthPollIntervalMs: cfg.health?.uiHealthPollIntervalMs ?? 15000,
     },
     channelBridge: channelBridge,
     global: {

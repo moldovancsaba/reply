@@ -17,6 +17,7 @@ const { loadReplyEnv } = require("./load-env.js");
 loadReplyEnv();
 
 const HATORI_PROJECT_PATH = path.join(__dirname, "..", "..", "hatori");
+const { resolveHatoriForHubStart } = require("./hatori-lifecycle.js");
 if (String(process.env.REPLY_USE_HATORI || "").trim() === "1") {
   if (!fs.existsSync(HATORI_PROJECT_PATH)) {
     console.warn(
@@ -62,55 +63,48 @@ const serviceManager = require("./service-manager.js");
 const hubRuntime = require("./hub-runtime.js");
 const { ensureWorkerCanStartFromHub } = require("./ensure-hub-worker.js");
 
-// Start Managed Services
-try {
-  serviceManager.setStatus('hatori', 'loading in queue');
-  serviceManager.setStatus('worker', 'loading in queue');
+// Start managed services (Hatori: probe → launchctl kickstart on macOS → optional uvicorn; reply#66)
+async function startManagedServices() {
+  try {
+    serviceManager.setStatus("hatori", "loading in queue");
+    serviceManager.setStatus("worker", "loading in queue");
 
-    if (process.env.REPLY_USE_HATORI === '1' && fs.existsSync(HATORI_PROJECT_PATH)) {
-      const hatoriPort = process.env.REPLY_HATORI_PORT || '23572';
-
-      if (process.env.REPLY_HATORI_EXTERNAL === '1') {
-        replyHubDebugLog(`[ServiceManager] Hatori is managed externally. Skipping sidecar spawn.`);
-        serviceManager.setStatus('hatori', 'external');
-      } else {
-        statusManager.update("system", { progress: 30, message: "Starting Hatori sidecar..." });
-        // Check if Hatori is already running (e.g. menubar daemon) before spawning
-        const hatoriHealthUrl = `http://127.0.0.1:${hatoriPort}/v1/health`;
-        fetch(hatoriHealthUrl, { signal: AbortSignal.timeout(3500) })
-          .then(r => {
-            if (r.ok) {
-              replyHubDebugLog(`[ServiceManager] Hatori already running on port ${hatoriPort} (external). Skipping spawn.`);
-              serviceManager.setStatus('hatori', 'external');
-          } else {
-            spawnHatoriSidecar();
-          }
-        })
-        .catch(() => {
-          // Port not responding — safe to spawn our own sidecar
-          spawnHatoriSidecar();
-        });
+    if (process.env.REPLY_USE_HATORI !== "1" || !fs.existsSync(HATORI_PROJECT_PATH)) {
+      serviceManager.setStatus("hatori", "skipped");
     }
 
-    function spawnHatoriSidecar() {
-      const venvPython = path.join(HATORI_PROJECT_PATH, '.venv/bin/python');
-      const pythonCmd = fs.existsSync(venvPython) ? venvPython : 'python3';
-      serviceManager.start('hatori', pythonCmd, [
-        '-m', 'uvicorn', 'api.app:app',
-        '--host', '127.0.0.1',
-        '--port', hatoriPort
-      ], HATORI_PROJECT_PATH);
+    if (process.env.REPLY_USE_HATORI === "1" && fs.existsSync(HATORI_PROJECT_PATH)) {
+      const hatoriPort = process.env.REPLY_HATORI_PORT || "23572";
+      statusManager.update("system", { progress: 30, message: "Resolving Hatori…" });
+      function spawnHatoriSidecar() {
+        const venvPython = path.join(HATORI_PROJECT_PATH, ".venv/bin/python");
+        const pythonCmd = fs.existsSync(venvPython) ? venvPython : "python3";
+        serviceManager.start("hatori", pythonCmd, [
+          "-m", "uvicorn", "api.app:app",
+          "--host", "127.0.0.1",
+          "--port", String(hatoriPort),
+        ], HATORI_PROJECT_PATH);
+      }
+      await resolveHatoriForHubStart({
+        serviceManager,
+        hatoriPort,
+        hatoriProjectPath: HATORI_PROJECT_PATH,
+        spawnUvicorn: spawnHatoriSidecar,
+        debugLog: replyHubDebugLog,
+      });
     }
+
+    statusManager.update("system", { progress: 50, message: "Launching background worker..." });
+    ensureWorkerCanStartFromHub(__dirname);
+    serviceManager.start("worker", path.join(__dirname, "background-worker.js"));
+    statusManager.update("system", { status: "online", progress: 100, message: "All systems ready" });
+  } catch (e) {
+    console.error("[Startup Error]", e);
+    statusManager.update("system", { status: "error", message: e.message });
   }
-
-  statusManager.update("system", { progress: 50, message: "Launching background worker..." });
-  ensureWorkerCanStartFromHub(__dirname);
-  serviceManager.start('worker', path.join(__dirname, 'background-worker.js'));
-  statusManager.update("system", { status: "online", progress: 100, message: "All systems ready" });
-} catch (e) {
-  console.error("[Startup Error]", e);
-  statusManager.update("system", { status: "error", message: e.message });
 }
+
+startManagedServices();
 
 const PORT_MIN = parseInt(process.env.PORT || "45311", 10);
 let boundPort = PORT_MIN;
