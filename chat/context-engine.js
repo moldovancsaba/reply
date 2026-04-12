@@ -212,4 +212,4 @@ async function assembleReplyContext(message, handle) {
     };
 }
 
-module.exports = { getContext, assembleReplyContext };
+module.exports = { getContext, assembleReplyContext, enrichAnnotatedDocText };

@@ -9,11 +9,13 @@
 *   **Storage:** Local LanceDB instance at `knowledge/lancedb` (or configured via `REPLY_LANCEDB_URI`).
 *   **Schema:** `{ id, source, path, text, vector }`.
 *   **Search:** **Hybrid Search** (Vector Similarity + Full-Text Keyword Search) for maximum accuracy.
-*   **Annotation (Ollama, local):** After text lands in LanceDB, `chat/annotation-agent.js` can attach **`tags`**, a one-line **`summary`**, and **`facts`** (JSON) to each row (`is_annotated`, `annotation_*` columns). Suggest-reply already consumes these via `context-engine.js` when building hybrid snippets.
+*   **Annotation (Ollama, local):** After text lands in LanceDB, `chat/annotation-agent.js` can attach **`tags`**, a one-line **`summary`**, and **`facts`** (JSON) to each row (`is_annotated`, `annotation_*` columns). **`assembleReplyContext`** (`context-engine.js`) injects that metadata into the LLM “facts” block; **`/api/suggest-reply`** also returns each snippet with optional `annotation_summary`, `annotation_tags`, and `annotation_facts` when the row is annotated (reply#37).
 
 ---
 
 ## Ollama annotation (reply#36 / reply#37)
+
+**Recommended order:** `npm run ingest` (or your sync path) → **`npm run annotate`** (optional but improves suggest quality). The worker can annotate on a timer instead.
 
 1. **Ingest first** (Notes, mail, iMessage, files, etc.) so rows exist in LanceDB.
 2. **Annotate:** `cd chat && npm run annotate` **or** wait for the **background worker** (default: every **30 minutes**, first run ~90s after worker start).

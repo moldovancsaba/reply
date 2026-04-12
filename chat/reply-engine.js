@@ -1,6 +1,6 @@
 const { Ollama } = require('ollama');
 const { getReplyOllamaModel } = require('./ollama-model.js');
-const { assembleReplyContext } = require('./context-engine.js');
+const { assembleReplyContext, enrichAnnotatedDocText } = require('./context-engine.js');
 const { search, getGoldenExamples, getHistory } = require('./vector-store.js');
 const fs = require('fs');
 const path = require('path');
@@ -207,7 +207,7 @@ Draft a response that is helpful and factually correct based ONLY on the provide
 Also, provide a brief explanation of why you chose this response (tone, language, historical context).
 
 CONTEXT (Factual Snippets):
-${facts || contextSnippets.map((s) => `[Source: ${s.path}]\n${s.text}`).join("\n\n---\n\n") || "No relevant notes discovered."}
+${facts || contextSnippets.map((s) => `[Source: ${s.path}]\n${enrichAnnotatedDocText(s)}`).join("\n\n---\n\n") || "No relevant notes discovered."}
 
 INCOMING MESSAGE:
 "${message}"
