@@ -2,6 +2,10 @@
 
 Completed work only. For `{reply}`, the [GitHub Project (#7)](https://github.com/users/moldovancsaba/projects/7) and [`moldovancsaba/reply`](https://github.com/moldovancsaba/reply) issues are the source of truth for delivered items (portfolio board: [Project #1](https://github.com/users/moldovancsaba/projects/1)).
 
+## [0.5.12] - 2026-04-12
+### Added
+- **Multiple mailboxes — settings layer ([reply#21](https://github.com/moldovancsaba/reply/issues/21)):** `mailAccounts` + `defaultMailAccountId` in `settings-store` / `maskSettingsForClient` / `POST /api/settings`. `docs/MULTI_MAILBOX.md`.
+
 ## [0.5.11] - 2026-04-12
 ### Added
 - **Unified brain scaffolding ([reply#12](https://github.com/moldovancsaba/reply/issues/12)):** `docs/UNIFIED_BRAIN.md`, `npm run fingerprint` → `chat/unified-brain-report.js`.
