@@ -6,7 +6,7 @@
 <p align="center"><strong>A unified aggregation proxy and outbound transport engine for iMessage, WhatsApp, Mail, and LinkedIn.</strong></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.5.5-2563EB?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/version-v0.5.6-2563EB?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-0F172A?style=for-the-badge" alt="Platform">
   <img src="https://img.shields.io/badge/transport-OpenClaw%20%7C%20AppleScript-0EA5E9?style=for-the-badge" alt="Transports">
 </p>
@@ -27,7 +27,7 @@ Capabilities:
 - **iMessage Scraping**: Scans `~/Library/Messages/chat.db` every few minutes.
 - **Unified RAG Search**: Semantically search your multi-channel history.
 - **AI Suggest & Magic**: Hooks up to `23572` (Hatori) to draft, refine, and plan messages.
-- **Knowledge annotation (Ollama, local):** After messages and notes are in LanceDB, run **`cd chat && npm run annotate`** (or rely on the **background worker**, which batches annotations on a timer). Tags, summaries, and facts are stored on each vector row and folded into **suggest-reply** context. See **[docs/INGESTION.md](docs/INGESTION.md)** (*Ollama annotation*) and `REPLY_ANNOTATION_*` in **`chat/.env.example`**.
+- **Knowledge annotation (Ollama, local):** Ingest first, then run **`cd chat && npm run annotate`** (or rely on the **background worker** timer). Tags, summaries, and facts land on each LanceDB row; **`/api/suggest-reply`** returns them on each `snippets[]` item when annotated, and the reply pipeline uses the same enriched text as **`context-engine`** RAG facts. See **[docs/INGESTION.md](docs/INGESTION.md)** and `REPLY_ANNOTATION_*` in **`chat/.env.example`**.
 
 ---
 
