@@ -405,13 +405,27 @@ async function serveOpenClawStatus(req, res) {
     }
 }
 
-async function serveTriageLog(req, res) {
+async function serveTriageLog(req, res, url) {
     try {
         const triageEngine = require('../triage-engine.js');
-        const logs = triageEngine.getLogs(20);
+        const n = Math.max(1, Math.min(Number(url.searchParams.get("limit")) || 20, 200));
+        const logs = triageEngine.getLogs(n);
         writeJson(res, 200, { logs });
     } catch (e) {
         console.error("[TriageLog Error]", e);
+        writeJson(res, 500, { error: e.message });
+    }
+}
+
+/** Deduped high-priority triage rows for zero-inbox UI (reply#24). */
+async function serveTriageQueue(req, res, url) {
+    try {
+        const triageEngine = require('../triage-engine.js');
+        const n = Math.max(1, Math.min(Number(url.searchParams.get("limit")) || 15, 100));
+        const queue = triageEngine.getPriorityQueue(n);
+        writeJson(res, 200, { queue });
+    } catch (e) {
+        console.error("[TriageQueue Error]", e);
         writeJson(res, 500, { error: e.message });
     }
 }
@@ -420,5 +434,6 @@ module.exports = {
     serveSystemHealth,
     serveServiceControl,
     serveOpenClawStatus,
-    serveTriageLog
+    serveTriageLog,
+    serveTriageQueue
 };

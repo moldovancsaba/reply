@@ -197,7 +197,8 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/api/health" || pathname === "/api/system-health" || pathname === "/api/system/services") return systemRoutes.serveSystemHealth(req, res);
   if (pathname === "/api/system/service/control") return auth({ route: pathname, action: "service-control" }) && systemRoutes.serveServiceControl(req, res);
   if (pathname === "/api/openclaw/status") return systemRoutes.serveOpenClawStatus(req, res);
-  if (pathname === "/api/triage-log") return systemRoutes.serveTriageLog(req, res);
+  if (pathname === "/api/triage-log") return systemRoutes.serveTriageLog(req, res, url);
+  if (pathname === "/api/triage-queue") return systemRoutes.serveTriageQueue(req, res, url);
 
   // Training / golden examples (LanceDB)
   if (pathname === "/api/training/annotations") {

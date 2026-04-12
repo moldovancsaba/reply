@@ -6,7 +6,7 @@
 <p align="center"><strong>A unified aggregation proxy and outbound transport engine for iMessage, WhatsApp, Mail, and LinkedIn.</strong></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.5.8-2563EB?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/version-v0.5.9-2563EB?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-0F172A?style=for-the-badge" alt="Platform">
   <img src="https://img.shields.io/badge/transport-OpenClaw%20%7C%20AppleScript-0EA5E9?style=for-the-badge" alt="Transports">
 </p>
@@ -30,6 +30,7 @@ Capabilities:
 - **Knowledge annotation (Ollama, local):** Ingest first, then run **`cd chat && npm run annotate`** (or rely on the **background worker** timer). Tags, summaries, and facts land on each LanceDB row; **`/api/suggest-reply`** returns them on each `snippets[]` item when annotated, and the reply pipeline uses the same enriched text as **`context-engine`** RAG facts. See **[docs/INGESTION.md](docs/INGESTION.md)** and `REPLY_ANNOTATION_*` in **`chat/.env.example`**.
 - **Context engine & voice:** Recipient-scoped history and hybrid RAG are assembled in **`chat/context-engine.js`** (see **[docs/CONTEXT_ENGINE.md](docs/CONTEXT_ENGINE.md)**). **Mic** in the hub uses the browser **Web Speech API** to fill the composer; pair with **Suggest** for an AI draft.
 - **Alias merge (reversible):** Merging contacts moves channels/notes to the primary and keeps the other SQLite row as an **`primary_contact_id` alias**. The KYC panel lists linked profiles with **Unlink**; APIs: **`GET /api/contacts/aliases?for=`** and **`POST /api/contacts/unlink-alias`** (`aliasContactId`). See **[reply#19](https://github.com/moldovancsaba/reply/issues/19)**.
+- **Auto-triage & zero-inbox hints:** Rule file **`chat/triage-rules.json`** drives `triage-engine.evaluate()` — each hit logs **`suggestedActions`** (`reply`, `archive`, `upload`) and **`priority`**. Dashboard shows a **priority queue** plus log columns; **`GET /api/triage-queue`**. See **[reply#24](https://github.com/moldovancsaba/reply/issues/24)**.
 
 ---
 

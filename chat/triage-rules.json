@@ -1,0 +1,29 @@
+[
+  {
+    "id": "newsletter-archive",
+    "sender": "*",
+    "keywords": ["unsubscribe", "newsletter", "no longer wish to receive"],
+    "action": "Low-signal promo — archive candidate",
+    "tag": "inbox_noise",
+    "priority": 25,
+    "suggestedActions": ["archive"]
+  },
+  {
+    "id": "attachment-upload",
+    "sender": "*",
+    "keywords": ["please find attached", "see attached", "uploaded the file", "photos in"],
+    "action": "Attachment / file mentioned — confirm upload",
+    "tag": "files",
+    "priority": 70,
+    "suggestedActions": ["upload", "reply"]
+  },
+  {
+    "id": "urgent-reply",
+    "sender": "*",
+    "keywords": ["urgent", "asap", "today eod", "need answer"],
+    "action": "Time-sensitive — reply soon",
+    "tag": "urgent",
+    "priority": 95,
+    "suggestedActions": ["reply"]
+  }
+]
