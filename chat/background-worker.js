@@ -511,6 +511,48 @@ setInterval(backfillPendingHatoriDrafts, 5 * 60 * 1000);
 // Run once shortly after startup
 setTimeout(backfillPendingHatoriDrafts, 30 * 1000);
 
+/**
+ * Periodic Ollama annotation of unannotated LanceDB rows (reply#36 / reply#37).
+ * Disabled when REPLY_ANNOTATION_DISABLE=1 or interval is 0.
+ */
+function getAnnotationSweepIntervalMs() {
+    if (String(process.env.REPLY_ANNOTATION_DISABLE || "").trim() === "1") {
+        return 0;
+    }
+    const raw = process.env.REPLY_ANNOTATION_INTERVAL_MS;
+    if (raw != null && String(raw).trim() !== "") {
+        const n = Number(raw);
+        if (Number.isFinite(n) && n > 0) {
+            return Math.min(n, 24 * 60 * 60 * 1000);
+        }
+        if (Number.isFinite(n) && n === 0) {
+            return 0;
+        }
+    }
+    return 30 * 60 * 1000;
+}
+
+async function runOllamaAnnotationSweepOnce() {
+    try {
+        const { annotateBatch } = require("./annotation-agent.js");
+        await annotateBatch();
+    } catch (e) {
+        console.error("[Worker] Ollama annotation sweep failed:", e.message);
+    }
+}
+
+(() => {
+    const everyMs = getAnnotationSweepIntervalMs();
+    if (!everyMs) {
+        console.log("[Worker] LanceDB annotation sweep disabled (REPLY_ANNOTATION_DISABLE=1 or REPLY_ANNOTATION_INTERVAL_MS=0).");
+        return;
+    }
+    const minutes = Math.round(everyMs / 60000);
+    console.log(`[Worker] LanceDB annotation sweep every ~${minutes}m (set REPLY_ANNOTATION_INTERVAL_MS to override).`);
+    setTimeout(() => void runOllamaAnnotationSweepOnce(), 90 * 1000);
+    setInterval(() => void runOllamaAnnotationSweepOnce(), everyMs);
+})();
+
 pollLoop();
 
 // Background deep analysis sweep: N contacts per hour (default 1/hour).
