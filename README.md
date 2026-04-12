@@ -6,7 +6,7 @@
 <p align="center"><strong>A unified aggregation proxy and outbound transport engine for iMessage, WhatsApp, Mail, and LinkedIn.</strong></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.5.12-2563EB?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/version-v0.5.13-2563EB?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-0F172A?style=for-the-badge" alt="Platform">
   <img src="https://img.shields.io/badge/transport-OpenClaw%20%7C%20AppleScript-0EA5E9?style=for-the-badge" alt="Transports">
 </p>
@@ -33,7 +33,7 @@ Capabilities:
 - **Auto-triage & zero-inbox hints:** Rule file **`chat/triage-rules.json`** drives `triage-engine.evaluate()` — each hit logs **`suggestedActions`** (`reply`, `archive`, `upload`) and **`priority`**. Dashboard shows a **priority queue** plus log columns; **`GET /api/triage-queue`**. See **[reply#24](https://github.com/moldovancsaba/reply/issues/24)**.
 - **{hatori} sensitivity contract:** Cross-system options and **`SensitivityMeta`** typedef for phased redaction/indexing — **[docs/HATORI_SENSITIVITY_CONTRACT.md](docs/HATORI_SENSITIVITY_CONTRACT.md)** ([reply#16](https://github.com/moldovancsaba/reply/issues/16)).
 - **Unified brain (scale-out):** Ingest paths + style profile + **`npm run fingerprint`** status JSON — **[docs/UNIFIED_BRAIN.md](docs/UNIFIED_BRAIN.md)** ([reply#12](https://github.com/moldovancsaba/reply/issues/12)).
-- **Multiple mailboxes (staged):** `settings.json` supports **`mailAccounts[]`** + **`defaultMailAccountId`**; exposed on **`GET/POST /api/settings`**. See **[docs/MULTI_MAILBOX.md](docs/MULTI_MAILBOX.md)** ([reply#21](https://github.com/moldovancsaba/reply/issues/21)).
+- **Multiple mailboxes:** `settings.json` **`mailAccounts[]`** + **`defaultMailAccountId`** on **`GET/POST /api/settings`**; **Email** settings tab to add IMAP rows. **`sync-mail.js`** syncs primary IMAP then each extra account (namespaced LanceDB ids + `imap_sync_state.json`). See **[docs/MULTI_MAILBOX.md](docs/MULTI_MAILBOX.md)** ([reply#21](https://github.com/moldovancsaba/reply/issues/21)).
 
 ---
 

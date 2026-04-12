@@ -23,6 +23,166 @@ function maskHint(value) {
   return `${'•'.repeat(Math.min(10, s.length - 2))}${s.slice(-2)}`;
 }
 
+function rebuildMailDefaultSelect(accounts, selectedId) {
+  const sel = el('settings-mail-default-account');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Primary (built-in IMAP / Gmail)</option>';
+  for (const a of accounts) {
+    if (!a?.id) continue;
+    const opt = document.createElement('option');
+    opt.value = a.id;
+    opt.textContent = a.label || a.id;
+    sel.appendChild(opt);
+  }
+  const pick = selectedId && accounts.some((a) => a.id === selectedId) ? selectedId : '';
+  sel.value = pick;
+}
+
+function renderMailAccountsList(accounts, defaultMailAccountId) {
+  const root = el('settings-mail-accounts-list');
+  if (!root) return;
+  root.innerHTML = '';
+  const list = Array.isArray(accounts) ? accounts : [];
+  for (const acc of list) {
+    if ((acc.provider || 'imap') !== 'imap') continue;
+    const im = acc.imap || {};
+    const row = document.createElement('div');
+    row.className = 'settings-list-item-premium mb-md';
+    row.style.flexDirection = 'column';
+    row.style.alignItems = 'stretch';
+    row.dataset.mailAccountRow = '1';
+    row.dataset.accountId = acc.id || `mail-${Date.now().toString(36)}`;
+
+    row.innerHTML = `
+      <div class="u-flex-center-gap" style="justify-content:space-between;margin-bottom:8px;">
+        <span class="u-font-weight-700">IMAP account</span>
+        <label class="u-font-size-085 u-flex-center-gap" style="gap:6px;">
+          <input type="checkbox" class="js-mail-acct-enabled" ${acc.enabled !== false ? 'checked' : ''}/> enabled
+        </label>
+        <button type="button" class="btn btn-ghost btn-sm js-mail-acct-remove">Remove</button>
+      </div>
+      <div class="settings-grid settings-grid-2">
+        <div class="settings-field">
+          <label class="settings-label">Label</label>
+          <input type="text" class="settings-input js-mail-acct-label" placeholder="Work inbox" value="">
+        </div>
+        <div class="settings-field">
+          <label class="settings-label">Account id</label>
+          <input type="text" class="settings-input js-mail-acct-id" readonly value="">
+        </div>
+        <div class="settings-field">
+          <label class="settings-label">Host</label>
+          <input type="text" class="settings-input js-mail-acct-host" placeholder="imap.example.com" value="">
+        </div>
+        <div class="settings-field">
+          <label class="settings-label">Port</label>
+          <input type="number" class="settings-input js-mail-acct-port" value="993"/>
+        </div>
+        <div class="settings-field">
+          <label class="settings-label">User</label>
+          <input type="text" class="settings-input js-mail-acct-user" placeholder="user@example.com" value="">
+        </div>
+        <div class="settings-field">
+          <label class="settings-label">Password</label>
+          <input type="password" class="settings-input js-mail-acct-pass" placeholder="leave blank to keep" value="">
+          <div class="settings-hint js-mail-acct-pass-hint"></div>
+        </div>
+        <div class="settings-field">
+          <label class="settings-label">Inbox mailbox</label>
+          <input type="text" class="settings-input js-mail-acct-mailbox" value="INBOX"/>
+        </div>
+        <div class="settings-field">
+          <label class="settings-label">Sent mailbox (optional)</label>
+          <input type="text" class="settings-input js-mail-acct-sent" value=""/>
+        </div>
+        <div class="settings-field">
+          <label class="settings-label">Since days (first run)</label>
+          <input type="number" class="settings-input js-mail-acct-since" value="30"/>
+        </div>
+        <div class="settings-field">
+          <label class="settings-label">Fetch limit</label>
+          <input type="number" class="settings-input js-mail-acct-limit" value="200"/>
+        </div>
+        <div class="settings-field" style="grid-column:1/-1;">
+          <label class="settings-label">Self emails (comma-separated)</label>
+          <input type="text" class="settings-input js-mail-acct-self" placeholder="alias@corp.com" value=""/>
+        </div>
+      </div>
+    `;
+
+    row.querySelector('.js-mail-acct-label').value = acc.label || acc.id || '';
+    row.querySelector('.js-mail-acct-id').value = row.dataset.accountId;
+    row.querySelector('.js-mail-acct-host').value = im.host || '';
+    row.querySelector('.js-mail-acct-port').value = String(im.port != null ? im.port : 993);
+    row.querySelector('.js-mail-acct-user').value = im.user || '';
+    row.querySelector('.js-mail-acct-mailbox').value = im.mailbox || 'INBOX';
+    row.querySelector('.js-mail-acct-sent').value = im.sentMailbox || '';
+    row.querySelector('.js-mail-acct-since').value = String(im.sinceDays != null ? im.sinceDays : 30);
+    row.querySelector('.js-mail-acct-limit').value = String(im.limit != null ? im.limit : 200);
+    row.querySelector('.js-mail-acct-self').value = im.selfEmails || '';
+
+    const passHint = row.querySelector('.js-mail-acct-pass-hint');
+    const hasPass = im.hasPass === true || !!(im.pass && String(im.pass).trim());
+    if (passHint) {
+      passHint.textContent =
+        hasPass && im.passHint ? `Saved: ${maskHint(im.passHint)}` : hasPass ? 'Saved' : 'Not set';
+    }
+
+    row.querySelector('.js-mail-acct-remove').onclick = () => {
+      row.remove();
+      rebuildMailDefaultSelect(collectMailAccountsFromDom(), el('settings-mail-default-account')?.value || '');
+    };
+
+    root.appendChild(row);
+  }
+
+  rebuildMailDefaultSelect(list, defaultMailAccountId || '');
+}
+
+function collectMailAccountsFromDom() {
+  const root = el('settings-mail-accounts-list');
+  if (!root) return [];
+  const rows = root.querySelectorAll('[data-mail-account-row]');
+  const out = [];
+  for (const row of rows) {
+    const id = row.querySelector('.js-mail-acct-id')?.value?.trim() || row.dataset.accountId;
+    const label = row.querySelector('.js-mail-acct-label')?.value?.trim() || id;
+    const host = row.querySelector('.js-mail-acct-host')?.value?.trim() || '';
+    const port = Number(row.querySelector('.js-mail-acct-port')?.value) || 993;
+    const user = row.querySelector('.js-mail-acct-user')?.value?.trim() || '';
+    const pass = row.querySelector('.js-mail-acct-pass')?.value || '';
+    const mailbox = row.querySelector('.js-mail-acct-mailbox')?.value?.trim() || 'INBOX';
+    const sentMailbox = row.querySelector('.js-mail-acct-sent')?.value?.trim() || '';
+    const sinceDays = Math.max(1, Math.min(Number(row.querySelector('.js-mail-acct-since')?.value) || 30, 3650));
+    const limit = Math.max(1, Math.min(Number(row.querySelector('.js-mail-acct-limit')?.value) || 200, 2000));
+    const selfEmails = row.querySelector('.js-mail-acct-self')?.value?.trim() || '';
+    const enabled = row.querySelector('.js-mail-acct-enabled')?.checked !== false;
+    if (!host || !user) continue;
+
+    const imap = {
+      host,
+      port,
+      secure: true,
+      user,
+      mailbox,
+      sentMailbox,
+      sinceDays,
+      limit,
+      selfEmails,
+    };
+    if (pass) imap.pass = pass;
+
+    out.push({
+      id,
+      label,
+      provider: 'imap',
+      enabled,
+      imap,
+    });
+  }
+  return out;
+}
+
 export function applyReplyUiSettings(settings) {
   window.replySettings = settings || {};
   const ui = settings?.ui || {};
@@ -110,6 +270,8 @@ async function loadIntoForm() {
   el('settings-imap-pass').value = '';
   el('settings-imap-pass-hint').textContent = imap.hasPass ? `Saved: ${maskHint(imap.passHint)}` : 'Not set';
 
+  renderMailAccountsList(data.mailAccounts || [], data.defaultMailAccountId || '');
+
   // Messaging
   setVal('settings-bridge-telegram-mode', bridgeChannels?.telegram?.inboundMode || 'draft_only');
   setVal('settings-bridge-discord-mode', bridgeChannels?.discord?.inboundMode || 'draft_only');
@@ -177,6 +339,8 @@ async function onSave() {
         user: el('settings-imap-user')?.value?.trim() || null,
         pass: el('settings-imap-pass')?.value || null,
       },
+      mailAccounts: collectMailAccountsFromDom(),
+      defaultMailAccountId: el('settings-mail-default-account')?.value?.trim() || null,
       worker: {
         pollIntervalSeconds: Number(el('settings-worker-interval')?.value) || 60,
         quantities: {
@@ -439,6 +603,31 @@ export async function wireDom() {
 
   const disconnectBtn = el('settings-gmail-disconnect');
   if (disconnectBtn) disconnectBtn.onclick = onDisconnectGmail;
+
+  const addMailAcct = el('settings-mail-add-account');
+  if (addMailAcct) {
+    addMailAcct.onclick = () => {
+      const cur = collectMailAccountsFromDom();
+      cur.push({
+        id: `mail-${Date.now().toString(36)}`,
+        label: 'Extra mailbox',
+        provider: 'imap',
+        enabled: true,
+        imap: {
+          host: '',
+          port: 993,
+          secure: true,
+          user: '',
+          mailbox: 'INBOX',
+          sentMailbox: '',
+          limit: 200,
+          sinceDays: 30,
+          selfEmails: '',
+        },
+      });
+      renderMailAccountsList(cur, el('settings-mail-default-account')?.value || '');
+    };
+  }
 
   navItems.forEach(btn => {
     btn.onclick = () => switchTab(btn.getAttribute('data-tab'));

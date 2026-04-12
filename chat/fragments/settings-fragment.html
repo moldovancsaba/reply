@@ -164,6 +164,25 @@
                             <div id="settings-imap-pass-hint" class="settings-hint">Stored in encrypted vault</div>
                         </div>
                     </div>
+
+                    <div class="settings-card">
+                        <div class="settings-section-title">
+                            <span class="material-symbols-outlined">stacked_email</span> Additional IMAP mailboxes
+                        </div>
+                        <p class="settings-hint mb-lg">Each row syncs after the primary IMAP (worker / “Sync Email”).
+                            Vector IDs are namespaced per account. Duplicate host+user as primary is skipped.</p>
+                        <div class="settings-field">
+                            <label class="settings-label" for="settings-mail-default-account">Default send account
+                                (reserved)</label>
+                            <select id="settings-mail-default-account" class="settings-input"
+                                title="Used when the composer supports per-account send">
+                                <option value="">Primary (built-in IMAP / Gmail)</option>
+                            </select>
+                        </div>
+                        <div id="settings-mail-accounts-list" class="settings-stack"></div>
+                        <button type="button" id="settings-mail-add-account" class="btn btn-secondary mt-md">Add IMAP
+                            account</button>
+                    </div>
                 </section>
 
                 <!-- TAB: MESSAGING -->
