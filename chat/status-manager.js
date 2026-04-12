@@ -6,7 +6,7 @@ class StatusManager {
     constructor() {
         this.dataDir = path.join(__dirname, 'data');
         if (!fs.existsSync(this.dataDir)) {
-            fs.mkdirSync(this.dataDir, { recursive: true });
+            fs.mkdirSync(this.dataDir, { recursive: true, mode: 0o700 });
         }
     }
 
