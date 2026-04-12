@@ -605,11 +605,9 @@ async function serveSendWhatsApp(req, res) {
 
         const settings = readSettings();
         const allowOpenClaw = settings?.global?.allowOpenClaw !== false;
-
-        if (!allowOpenClaw) {
-            writeJson(res, 403, { error: "OpenClaw WhatsApp outbound is disabled by policy." });
-            return;
-        }
+        const { sendWhatsAppViaOpenClawCli, sendWhatsAppViaDesktopAutomation, resolveWhatsAppSendTransport } = require("../utils/whatsapp-utils");
+        const transport = resolveWhatsAppSendTransport(payload?.transport);
+        const allowDesktopFallback = payload?.allowDesktopFallback !== false;
 
         // reply#17 — same inbound-verified gate as `serveSendMessage`
         const waGate = checkOutboundAllowed("whatsapp", recipientRaw);
@@ -629,10 +627,33 @@ async function serveSendWhatsApp(req, res) {
             return;
         }
 
-        const { sendWhatsAppViaOpenClawCli } = require("../utils/whatsapp-utils");
-        const result = await sendWhatsAppViaOpenClawCli({ recipient, text, dryRun });
-        await contactStore.clearDraft(recipientRaw);
-        writeJson(res, 200, { status: "ok", result: result.parsed || result.raw || "ok" });
+        const finishOk = async (resultPayload) => {
+            await contactStore.clearDraft(recipientRaw);
+            writeJson(res, 200, { status: "ok", ...resultPayload });
+        };
+
+        if (transport === "openclaw_cli") {
+            if (!allowOpenClaw) {
+                if (!allowDesktopFallback) {
+                    writeJson(res, 403, { error: "OpenClaw WhatsApp outbound is disabled by policy." });
+                    return;
+                }
+                const desk = await sendWhatsAppViaDesktopAutomation({ recipient, text });
+                await finishOk({ transport: "desktop_automation", result: desk });
+                return;
+            }
+            try {
+                const result = await sendWhatsAppViaOpenClawCli({ recipient, text, dryRun });
+                await finishOk({ transport: "openclaw_cli", result: result.parsed || result.raw || "ok" });
+                return;
+            } catch (e) {
+                if (!allowDesktopFallback) throw e;
+                console.warn("[WhatsApp] OpenClaw send failed, trying desktop automation:", e.message);
+            }
+        }
+
+        const desk = await sendWhatsAppViaDesktopAutomation({ recipient, text });
+        await finishOk({ transport: "desktop_automation", result: desk });
         return;
     } catch (e) {
         console.error("[DEBUG] OpenClaw Transport threw:", e.message, "\n---", e.stderr || "", "\n---", e.stdout || "");

@@ -69,6 +69,7 @@ function platformFromHost(host) {
 function platformFromChannelHint(channelHint) {
   const raw = String(channelHint || '').toLowerCase();
   if (!raw) return '';
+  if (raw === 'wa' || raw === 'wa.me') return 'whatsapp';
   if (raw.includes('youtube')) return 'youtube';
   if (raw.includes('linkedin')) return 'linkedin';
   if (raw.includes('whatsapp')) return 'whatsapp';
@@ -177,6 +178,16 @@ export function resolvePlatformTarget(value, options = {}) {
 
   if (!platform || platform === 'url') {
     if (platformHint) platform = platformHint;
+  }
+
+  // Prefer explicit channel metadata over phone-shaped seeds (reply#42).
+  const hinted = platformFromChannelHint(channelHint);
+  if (
+    hinted &&
+    !host &&
+    (platform === 'mobile' || platform === 'landline' || platform === 'context' || platform === 'text')
+  ) {
+    platform = hinted;
   }
 
   const href = normalizeHref(raw, platform);

@@ -12,7 +12,7 @@
 
       .app-container {
         display: grid;
-        grid-template-columns: 280px 1fr 320px;
+        grid-template-columns: 280px 1fr minmax(360px, 420px);
         height: 100vh;
         overflow: hidden;
       }
@@ -350,6 +350,7 @@
       .chat-area {
         display: flex;
         flex-direction: column;
+        /* Header → thread → composer (DOM has composer before messages; reorder for UX — reply#41) */
         background-color: #000000;
         /* Pure black for contrast */
         position: relative;
@@ -357,6 +358,25 @@
         height: 100vh;
         max-height: 100vh;
         overflow: hidden;
+      }
+
+      .chat-area > .chat-header {
+        order: 1;
+        flex-shrink: 0;
+      }
+
+      .chat-area > .messages-container {
+        order: 2;
+      }
+
+      .chat-area > .input-area {
+        order: 3;
+        flex-shrink: 0;
+      }
+
+      .chat-area > #dashboard,
+      .chat-area > #training-page {
+        order: 2;
       }
 
       .chat-header {
@@ -756,7 +776,7 @@
 
       .input-wrapper {
         display: grid;
-        grid-template-columns: 1fr auto auto;
+        grid-template-columns: minmax(0, 1fr) auto auto;
         gap: 10px;
         background-color: var(--bg-input);
         /* Dark input bg */
@@ -769,6 +789,7 @@
       }
 
       textarea#chat-input {
+        grid-column: 1;
         flex: 1;
         min-width: 0;
         background: transparent;
@@ -1014,18 +1035,23 @@
         margin-top: 10px;
         display: flex;
         gap: 8px;
-        align-items: center;
+        align-items: flex-end;
       }
 
       .kyc-note-input {
         flex: 1;
+        min-width: 0;
         padding: 10px 12px;
         border: 1px solid rgba(255, 255, 255, 0.10);
-        border-radius: 999px;
+        border-radius: 12px;
         background: rgba(0, 0, 0, 0.18);
         color: var(--text-primary);
         font-size: 0.9rem;
         outline: none;
+        resize: vertical;
+        min-height: 40px;
+        max-height: 120px;
+        font-family: inherit;
       }
 
       .kyc-note-input::placeholder {
@@ -1212,6 +1238,64 @@
         overflow-wrap: break-word;
         overflow-wrap: anywhere;
         line-height: 1.35;
+        min-width: 0;
+      }
+
+      .kyc-sugg-content .platform-value {
+        min-width: 0;
+        max-width: 100%;
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .kyc-channel-editor {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .kyc-channel-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .kyc-channel-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .kyc-chip--row {
+        flex: 1;
+        min-width: 0;
+        max-width: 100%;
+        white-space: normal;
+      }
+
+      .kyc-channel-add {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .kyc-channel-add-type {
+        height: 36px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(0, 0, 0, 0.2);
+        color: var(--text-primary);
+        padding: 0 8px;
+      }
+
+      .kyc-channel-add-input {
+        flex: 1;
+        min-width: 140px;
       }
 
       .kyc-sugg-meta {

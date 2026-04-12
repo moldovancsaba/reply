@@ -84,6 +84,58 @@ function openClawWhatsAppAccount() {
     return a || "default";
 }
 
+/**
+ * Send via WhatsApp Desktop (macOS UI automation). Uses pbcopy for message body
+ * so multi-line / special characters do not break AppleScript string literals.
+ * Set WHATSAPP_APP_NAME for WhatsApp Business (default "WhatsApp").
+ */
+function sendWhatsAppViaDesktopAutomation({ recipient, text }) {
+    const { spawnSync } = require("child_process");
+    const appName = String(process.env.WHATSAPP_APP_NAME || "WhatsApp").trim() || "WhatsApp";
+    const r = spawnSync("pbcopy", { input: String(text || ""), encoding: "utf8" });
+    if (r.status !== 0) {
+        return Promise.reject(new Error("pbcopy failed (could not place message on clipboard)"));
+    }
+    const recipientEsc = String(recipient || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const appEsc = appName.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const script = `
+on run argv
+  set recipientId to item 1 of argv
+  tell application "${appEsc}"
+    activate
+  end tell
+  delay 0.55
+  tell application "System Events"
+    keystroke "k" using command down
+    delay 0.35
+    keystroke recipientId
+    delay 0.45
+    key code 36
+    delay 0.55
+    keystroke "v" using command down
+    delay 0.25
+    key code 36
+  end tell
+end run
+`;
+    return new Promise((resolve, reject) => {
+        execFile("/usr/bin/osascript", ["-e", script, "--", recipientEsc], { timeout: 45000 }, (error, stdout, stderr) => {
+            if (error) {
+                const err = new Error(
+                    error.message ||
+                        String(stderr || "").trim() ||
+                        "WhatsApp Desktop automation failed (Accessibility permissions?)"
+                );
+                err.hint =
+                    "Grant Accessibility for Terminal/Cursor and WhatsApp; ensure WhatsApp Desktop is logged in. " +
+                    "Optional: WHATSAPP_APP_NAME=\"WhatsApp Business\".";
+                return reject(err);
+            }
+            resolve({ transport: "desktop_automation", stdout: stdout || "" });
+        });
+    });
+}
+
 function sendWhatsAppViaOpenClawCli({ recipient, text, dryRun = false }) {
     const bin = resolveOpenClawBinary();
     const account = openClawWhatsAppAccount();
@@ -131,5 +183,6 @@ module.exports = {
     buildOpenClawWhatsAppHint,
     resolveWhatsAppSendTransport,
     openClawWhatsAppAccount,
-    sendWhatsAppViaOpenClawCli
+    sendWhatsAppViaOpenClawCli,
+    sendWhatsAppViaDesktopAutomation
 };

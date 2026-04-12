@@ -3,6 +3,18 @@ const { execFile } = require("child_process");
 const contactStore = require("../contact-store.js");
 const { mergeProfile } = require("../kyc-merge.js");
 
+/** Allowed channel buckets on a profile (reply#22). */
+function sanitizeClientChannels(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const allowed = ["phone", "email", "whatsapp", "linkedin", "imessage"];
+    const out = {};
+    for (const t of allowed) {
+        if (!Array.isArray(raw[t])) continue;
+        out[t] = [...new Set(raw[t].map((x) => String(x || "").trim()).filter(Boolean))];
+    }
+    return Object.keys(out).length ? out : null;
+}
+
 // Helper functions that will be refactored into a utils.js file later
 function writeJson(res, statusCode, payload) {
   res.writeHead(statusCode, { "Content-Type": "application/json" });
@@ -63,6 +75,7 @@ async function serveKyc(req, res, url, authorizeSensitiveRoute, onUpdate, bodyDa
       linkedinUrl: contact?.linkedinUrl || "",
       notes: Array.isArray(contact?.notes) ? contact.notes : [],
       channels: contact?.channels || { phone: [], email: [] },
+      verifiedChannels: contact?.verifiedChannels || {},
       pendingSuggestions: Array.isArray(contact?.pendingSuggestions) ? contact.pendingSuggestions : [],
       rejectedSuggestions: Array.isArray(contact?.rejectedSuggestions) ? contact.rejectedSuggestions : [],
     });
@@ -94,8 +107,12 @@ async function serveKyc(req, res, url, authorizeSensitiveRoute, onUpdate, bodyDa
         intro: (json.intro ?? "").trim(),
       };
 
-      // Don't overwrite with empty strings
+      const ch = sanitizeClientChannels(json.channels);
+      if (ch) data.channels = ch;
+
+      // Don't overwrite with empty strings (channel objects are always truthy)
       Object.keys(data).forEach((k) => {
+        if (k === "channels") return;
         if (!data[k]) delete data[k];
       });
 
