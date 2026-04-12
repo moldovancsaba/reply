@@ -15,6 +15,14 @@ const fs = require("fs");
 const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, ".env"), override: true });
 
+/** Verbose hub `console.log` lines (reply#33). Errors/warnings stay on. */
+function replyHubDebugLog(...args) {
+    const v = String(process.env.REPLY_DEBUG || "").trim().toLowerCase();
+    if (v === "1" || v === "true" || v === "yes") {
+        console.log(...args);
+    }
+}
+
 // Utilities & Middleware
 const { writeJson } = require("./utils/server-utils.js");
 const securityMiddleware = require("./middleware/security.js");
@@ -50,21 +58,21 @@ try {
   serviceManager.setStatus('hatori', 'loading in queue');
   serviceManager.setStatus('worker', 'loading in queue');
 
-  if (process.env.REPLY_USE_HATORI === '1' && fs.existsSync(HATORI_PROJECT_PATH)) {
-    const hatoriPort = process.env.REPLY_HATORI_PORT || '23572';
+    if (process.env.REPLY_USE_HATORI === '1' && fs.existsSync(HATORI_PROJECT_PATH)) {
+      const hatoriPort = process.env.REPLY_HATORI_PORT || '23572';
 
-    if (process.env.REPLY_HATORI_EXTERNAL === '1') {
-      console.log(`[ServiceManager] Hatori is managed externally. Skipping sidecar spawn.`);
-      serviceManager.setStatus('hatori', 'external');
-    } else {
-      statusManager.update("system", { progress: 30, message: "Starting Hatori sidecar..." });
-      // Check if Hatori is already running (e.g. menubar daemon) before spawning
-      const hatoriHealthUrl = `http://127.0.0.1:${hatoriPort}/v1/health`;
-      fetch(hatoriHealthUrl, { signal: AbortSignal.timeout(3500) })
-        .then(r => {
-          if (r.ok) {
-            console.log(`[ServiceManager] Hatori already running on port ${hatoriPort} (external). Skipping spawn.`);
-            serviceManager.setStatus('hatori', 'external');
+      if (process.env.REPLY_HATORI_EXTERNAL === '1') {
+        replyHubDebugLog(`[ServiceManager] Hatori is managed externally. Skipping sidecar spawn.`);
+        serviceManager.setStatus('hatori', 'external');
+      } else {
+        statusManager.update("system", { progress: 30, message: "Starting Hatori sidecar..." });
+        // Check if Hatori is already running (e.g. menubar daemon) before spawning
+        const hatoriHealthUrl = `http://127.0.0.1:${hatoriPort}/v1/health`;
+        fetch(hatoriHealthUrl, { signal: AbortSignal.timeout(3500) })
+          .then(r => {
+            if (r.ok) {
+              replyHubDebugLog(`[ServiceManager] Hatori already running on port ${hatoriPort} (external). Skipping spawn.`);
+              serviceManager.setStatus('hatori', 'external');
           } else {
             spawnHatoriSidecar();
           }
@@ -225,12 +233,12 @@ function tryListen(port) {
 const SYNC_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 let autoSyncIntervalId = null;
 autoSyncIntervalId = setInterval(() => {
-  console.log("[Auto-Sync] Running background sync for continuous learning...");
+  replyHubDebugLog("[Auto-Sync] Running background sync for continuous learning...");
   Promise.all([
     syncWhatsApp().catch(err => console.error("[Auto-Sync] WhatsApp failed:", err.message)),
     syncIMessage().catch(err => console.error("[Auto-Sync] iMessage failed:", err.message))
   ]).then(() => {
-    console.log("[Auto-Sync] Background sync complete.");
+    replyHubDebugLog("[Auto-Sync] Background sync complete.");
   });
 }, SYNC_INTERVAL_MS);
 
@@ -246,7 +254,7 @@ let shuttingDown = false;
 async function gracefulShutdown(trigger) {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`[Hub] ${trigger} received; closing HTTP server and stopping managed services...`);
+  replyHubDebugLog(`[Hub] ${trigger} received; closing HTTP server and stopping managed services...`);
   if (autoSyncIntervalId) {
     clearInterval(autoSyncIntervalId);
     autoSyncIntervalId = null;

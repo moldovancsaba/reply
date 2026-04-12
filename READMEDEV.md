@@ -140,6 +140,10 @@ When you change:
 - Board rules/fields/process → docs/PROJECT_MANAGEMENT.md
 Always keep docs/HANDOVER.md current.
 
+### Hub logging (`REPLY_DEBUG`)
+
+Set `REPLY_DEBUG=1` (or `true` / `yes`) in `chat/.env` to enable **informational** hub `console.log` output: Hatori sidecar skip lines, hourly auto-sync bookends, graceful shutdown line (`chat/server.js` → `replyHubDebugLog`). **Warnings and errors are not gated.** Dev-only repro scripts live under `chat/scripts/dev/` (see `chat/scripts/dev/README.md`).
+
 ================================================================================
 11) EVIDENCE TEMPLATE (STANDARD OUTPUT) ✅
 ================================================================================

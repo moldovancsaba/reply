@@ -4,6 +4,7 @@
  */
 
 import { fetchConversations } from './api.js';
+import { UI } from './ui.js';
 import { createPlatformIcon, resolvePlatformTarget } from './platform-icons.js';
 import { APP_DISPLAY_NAME } from './branding.js';
 
@@ -91,9 +92,22 @@ export async function loadConversations(append = false) {
         }
 
         // Fetch contacts from server
-        const data = await fetchConversations(contactOffset, CONTACT_LIMIT, conversationsQuery, conversationsSort);
+        const data = await fetchConversations(
+            contactOffset,
+            CONTACT_LIMIT,
+            conversationsQuery,
+            conversationsSort,
+            !append
+        );
         if (data?.meta && data.meta.sortValid === false) {
-            console.warn('Contacts API: unknown sort requested; server fell back to newest.', data.meta);
+            const req = data.meta.sortRequested != null ? String(data.meta.sortRequested) : '';
+            UI.showToast(
+                req
+                    ? `Unknown conversation sort “${req}”. Using newest.`
+                    : 'Unknown conversation sort. Using newest.',
+                'warning',
+                5000
+            );
         }
 
         // Update state
@@ -233,6 +247,7 @@ export async function loadConversations(append = false) {
 
     } catch (error) {
         console.error('Failed to load conversations:', error);
+        UI.showToast(error?.message || 'Failed to load contacts', 'error');
         contactListEl.innerHTML = `
       <div style="padding:20px; text-align:center; color:#d32f2f;">
         <p>Failed to load contacts</p>

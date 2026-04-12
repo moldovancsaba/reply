@@ -3,6 +3,7 @@
  * Loads/saves the contact profile shown in the right pane.
  */
 import { createPlatformValueNode, resolvePlatformTarget } from './platform-icons.js';
+import { UI } from './ui.js';
 
 async function fetchJson(url, options) {
   const res = await fetch(url, options);
@@ -782,7 +783,7 @@ window.saveInlineProfile = async (btn) => {
     console.log('[KYC] saveInlineProfile() success');
   } catch (e) {
     console.error('[KYC] saveInlineProfile() ERROR:', e);
-    alert(`Save failed: ${e.message}`);
+    UI.showToast(e.message || 'Save failed', 'error');
   }
 };
 
@@ -793,7 +794,7 @@ window.saveProfile = async (btn) => {
     console.log('[KYC] saveProfile() success');
   } catch (e) {
     console.error('[KYC] saveProfile() ERROR:', e);
-    alert(`Save failed: ${e.message}`);
+    UI.showToast(e.message || 'Save failed', 'error');
   }
 };
 
@@ -854,7 +855,7 @@ window.executeMerge = async (btn) => {
     }
   } catch (e) {
     console.error('Merge failed:', e);
-    alert(`Merge failed: ${e.message}`);
+    UI.showToast(e.message || 'Merge failed', 'error');
   } finally {
     btn.disabled = false;
     btn.textContent = originalText;
@@ -872,11 +873,14 @@ function wireAnalyzeButton() {
     try {
       btn.disabled = true;
       btn.textContent = '⏳';
+      UI.showLoading();
       await analyzeContact(handle);
+      UI.showToast('KYC analysis complete', 'success', 2500);
     } catch (e) {
       console.error('Analyze failed:', e);
-      alert(`Analyze failed: ${e.message}`);
+      UI.showToast(e.message || 'Analyze failed', 'error');
     } finally {
+      UI.hideLoading();
       btn.disabled = false;
       btn.textContent = original;
     }

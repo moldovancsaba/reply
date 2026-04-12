@@ -29,7 +29,6 @@ final class ReplyMenubarApp: NSObject, NSApplicationDelegate {
     
     /// Hub HTTP port (updated after successful /api/health; may shift if PORT+1 bind).
     private var replyPort = "45311"
-    private let hatoriPort = "23572"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureMenuBarIcon()
@@ -130,8 +129,25 @@ final class ReplyMenubarApp: NSObject, NSApplicationDelegate {
         fetchReplyHealth {
             // OpenClaw route is on the same hub port; run after probe updates `replyPort`.
             self.fetchOpenClawHealth()
+            // Direct Hatori probe (same path as hub startup); complements aggregated hub health.
+            self.fetchHatoriDirectHealth()
         }
-        fetchHatoriHealth()
+    }
+
+    private func readHatoriPortFromEnv() -> String {
+        let envPath = "\(repoRoot)/chat/.env"
+        let fallback = "23572"
+        guard let contents = try? String(contentsOfFile: envPath, encoding: .utf8) else { return fallback }
+        for line in contents.split(separator: "\n", omittingEmptySubsequences: false) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.first != "#" else { continue }
+            if trimmed.hasPrefix("REPLY_HATORI_PORT=") {
+                let rest = String(trimmed.dropFirst("REPLY_HATORI_PORT=".count)).trimmingCharacters(in: .whitespaces)
+                let cleaned = rest.replacingOccurrences(of: "\"", with: "").replacingOccurrences(of: "'", with: "")
+                if let n = Int(cleaned), n > 0, n < 65536 { return String(n) }
+            }
+        }
+        return fallback
     }
 
     /// Default 45311; override with `PORT=` in `chat/.env` at repo root.
@@ -247,8 +263,21 @@ final class ReplyMenubarApp: NSObject, NSApplicationDelegate {
         }
     }
     
-    private func fetchHatoriHealth() {
-        // Now mostly redundant as Hub aggregates, but we keep it for direct check if needed or just skip
+    private func fetchHatoriDirectHealth() {
+        let port = readHatoriPortFromEnv()
+        guard let url = URL(string: "http://127.0.0.1:\(port)/v1/health") else { return }
+        URLSession.shared.dataTask(with: url) { _, response, _ in
+            DispatchQueue.main.async {
+                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                if code == 200 {
+                    self.hatoriItem.title = "Hatori API: up (direct \(port))"
+                } else if code == 0 {
+                    self.hatoriItem.title = "Hatori API: unreachable (direct \(port))"
+                } else {
+                    self.hatoriItem.title = "Hatori API: HTTP \(code) (direct \(port))"
+                }
+            }
+        }.resume()
     }
 
     private func fetchOpenClawHealth() {
