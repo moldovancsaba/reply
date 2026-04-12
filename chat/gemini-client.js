@@ -1,13 +1,23 @@
+/**
+ * Local **Ollama** refine / drafting helper (reply#32 naming truth).
+ *
+ * **Why the filename says `gemini-client`:** Historical name from an earlier cloud-Gemini
+ * experiment. The implementation has been **Ollama-first** for a long time; imports across
+ * the repo still use this path, so renames would churn many files. Treat this module as
+ * “local LLM refine” — see also `docs/ARCHITECTURE.md` and `docs/LOCAL_MACHINE_DEPLOYMENT.md`
+ * (Gemini / GOOGLE_API_KEY notes).
+ *
+ * **Behavior:** `refineReply()` runs a short Ollama chat against `getReplyOllamaModel()`,
+ * optionally blending in vector `search()` hits for “how I write” examples. No outbound
+ * call to Google Gemini in this file.
+ *
+ * **Host:** `OLLAMA_HOST` or `http://127.0.0.1:11434`.
+ */
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { search } = require('./vector-store.js');
 const { getReplyOllamaModel } = require('./ollama-model.js');
-
-/**
- * Client for local drafting via Ollama (Replaces Gemini API for privacy/cost).
- * No external API key required.
- */
 
 const OLLAMA_HOST = "127.0.0.1";
 const OLLAMA_PORT = 11434;

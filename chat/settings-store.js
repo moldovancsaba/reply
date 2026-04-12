@@ -6,15 +6,27 @@ const SETTINGS_PATH = path.join(__dirname, "data", "settings.json");
 const CHANNEL_BRIDGE_MODES = new Set(["disabled", "draft_only"]);
 const CHANNEL_BRIDGE_CHANNELS = ["imessage", "whatsapp", "telegram", "discord", "signal", "viber", "linkedin"];
 
+function debugSettingsLoggingEnabled() {
+  const v = String(process.env.REPLY_DEBUG_SETTINGS || "").toLowerCase().trim();
+  return v === "1" || v === "true" || v === "yes";
+}
+
 // Encryption settings - Lazy initialization to ensure process.env is ready (via dotenv)
 const ALGORITHM = "aes-256-cbc";
 let _cachedKey = null;
 function getEncryptionKey() {
   if (!_cachedKey) {
     const token = process.env.REPLY_OPERATOR_TOKEN || "reply-local-fallback-salt";
-    try {
-      fs.appendFileSync(path.join(__dirname, "data", "debug_token.log"), `[${new Date().toISOString()}] Token: ${token.substring(0, 4)}... (len: ${token.length})\n`);
-    } catch { }
+    if (debugSettingsLoggingEnabled()) {
+      try {
+        fs.appendFileSync(
+          path.join(__dirname, "data", "debug_token.log"),
+          `[${new Date().toISOString()}] settings-store: encryption key derived (operator token length=${token.length}, not logged)\n`
+        );
+      } catch {
+        /* ignore */
+      }
+    }
     _cachedKey = crypto.scryptSync(
       token,
       "salt",
