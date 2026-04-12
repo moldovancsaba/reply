@@ -19,6 +19,7 @@ import './dashboard.js?v=2.1';
 import './kyc.js?v=2.1';
 import { applyReplyUiSettings } from './settings.js?v=2.1';
 import { openTrainingPage, closeTrainingPage } from './training.js?v=2.1';
+import { UI } from './ui.js';
 
 // Global state
 window.currentHandle = null;
@@ -158,6 +159,7 @@ function setupEventListeners() {
           try {
             btnSuggest.disabled = true;
             btnSuggest.textContent = '⏳ ...';
+            UI.showLoading();
 
             // If the operator asks for a fresh suggestion while there is an existing draft,
             // record it as a replacement signal for ongoing learning.
@@ -190,16 +192,27 @@ function setupEventListeners() {
               headers: buildSecurityHeaders(),
               body: JSON.stringify({ handle }),
             });
-            const data = await res.json();
-            suggestion = data?.suggestion || '';
-            explanation = data?.explanation || '';
-            const hatori_id = data?.hatori_id || null;
-            if (suggestion && typeof window.seedHatoriDraft === 'function') {
-              window.seedHatoriDraft(suggestion, hatori_id, true);
-              return; // seedHatoriDraft handles the assignment
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              const msg =
+                (data && (data.error || data.message)) ||
+                `Suggest failed (${res.status})`;
+              UI.showToast(msg, 'error');
+            } else {
+              suggestion = data?.suggestion || '';
+              explanation = data?.explanation || '';
+              const hatori_id = data?.hatori_id || null;
+              if (suggestion && typeof window.seedHatoriDraft === 'function') {
+                window.seedHatoriDraft(suggestion, hatori_id, true);
+                UI.showToast('Suggestion ready', 'success', 2200);
+                return;
+              }
+              if (!suggestion) {
+                UI.showToast('No suggestion text returned', 'warning', 4000);
+              }
             }
           } catch (e) {
-            console.warn('API suggest failed, using fallback', e);
+            UI.showToast(e?.message || 'Suggest request failed', 'error');
           }
         }
 
@@ -211,6 +224,7 @@ function setupEventListeners() {
             'Just saw your message, thanks!',
           ];
           suggestion = greetings[Math.floor(Math.random() * greetings.length)];
+          UI.showToast('Using a quick template — no AI text this time.', 'warning', 3500);
         }
 
         chatInput.value = suggestion;
@@ -227,6 +241,7 @@ function setupEventListeners() {
 
         try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
       } finally {
+        UI.hideLoading();
         btnSuggest.disabled = false;
         btnSuggest.textContent = originalText;
       }

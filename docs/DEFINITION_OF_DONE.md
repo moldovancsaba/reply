@@ -11,7 +11,7 @@ Every task, pull request, or commit must satisfy these criteria before being con
     *   Security audited (0 vulnerabilities).
 *   **Clean Code:**
     *   Clear, unambiguous English comments explaining logic.
-    *   No commented-out code or `console.log` spam (debug logs must be removed or behind a flag).
+    *   No commented-out code or `console.log` spam (debug logs must be removed or behind a flag). Hub: see [`READMEDEV.md`](../READMEDEV.md#hub-logging-reply_debug) (`REPLY_DEBUG`).
     *   Consistent formatting (Prettier/ESLint standards).
 
 ## 2. Documentation = Code

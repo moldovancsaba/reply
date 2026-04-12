@@ -47,6 +47,9 @@ function normalizeConversationSort(raw) {
     return CONVERSATION_SORT_MODES.has(s) ? s : "newest";
 }
 
+/** Stable list for clients (reply#15); lexicographic order so snapshots stay deterministic. */
+const AVAILABLE_CONVERSATION_SORT_MODES = [...CONVERSATION_SORT_MODES].sort();
+
 function applyConversationSort(items, mode, nowMs) {
     const tie = (a, b) =>
         String(a.displayName || a.handle || "").localeCompare(String(b.displayName || b.handle || ""));
@@ -286,7 +289,8 @@ async function serveConversations(req, res, url) {
                 sortRequested: sortRaw,
                 sortValid: CONVERSATION_SORT_MODES.has(
                     String(sortRaw || "").toLowerCase().trim()
-                )
+                ),
+                availableSortModes: AVAILABLE_CONVERSATION_SORT_MODES
             }
         });
     } catch (err) {
@@ -672,6 +676,9 @@ module.exports = {
     serveHatoriOutcome,
     normalizeConversationSort,
     CONVERSATION_SORT_MODES,
+    AVAILABLE_CONVERSATION_SORT_MODES,
+    applyConversationSort,
+    sanitizeConversationItemForApi,
     invalidateConversationsCache: () => {
         conversationsIndexCache.builtAtMs = 0;
         conversationsIndexCache.rawItems = null;

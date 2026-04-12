@@ -4,6 +4,7 @@
  */
 
 import { fetchSystemHealth, fetchTriageLogs, fetchBridgeSummary, fetchOpenClawStatus, triggerSync, buildSecurityHeaders } from './api.js';
+import { UI } from './ui.js';
 
 /**
  * OpenClaw `gateway health --json` may expose `channels` as a number, array, or nested object — never interpolate raw objects.
@@ -202,6 +203,7 @@ export async function renderDashboard() {
 
   // Show loading state
   dashboard.innerHTML = '<div style="padding:40px; text-align:center; color:#666;">Loading dashboard...</div>';
+  UI.showLoading();
 
   try {
     // Fetch dashboard data safely
@@ -478,6 +480,8 @@ export async function renderDashboard() {
         triageContainer.appendChild(empty);
       }
     }
+
+    wireDashboardActions(dashboard);
   } catch (error) {
     console.error('Failed to render dashboard:', error);
     dashboard.innerHTML = '';
@@ -503,10 +507,10 @@ export async function renderDashboard() {
     errorContainer.appendChild(retryBtn);
 
     dashboard.appendChild(errorContainer);
-    return;
+    UI.showToast(error.message || 'Failed to load dashboard', 'error');
+  } finally {
+    UI.hideLoading();
   }
-
-  wireDashboardActions(dashboard);
 }
 
 /**
@@ -572,6 +576,7 @@ export async function handleSync(source, triggerButton = null) {
     }
   } catch (error) {
     console.error(`Sync failed for ${source}: `, error);
+    UI.showToast(error.message || `Sync failed (${source})`, 'error');
     if (button) {
       button.disabled = false;
       button.innerHTML = originalHtml;

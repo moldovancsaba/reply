@@ -97,6 +97,7 @@ curl -sfS http://127.0.0.1:45311/api/health
 - **`GOOGLE_API_KEY` in `.env.example`** — Historically mentioned for “Gemini”; **`chat/gemini-client.js` implements refine via local Ollama**, using the same model resolution as suggestions (`getReplyOllamaModel()` from `ollama-model.js`). A cloud Gemini key is **not** required for refine in the current code path.
 - **`REPLY_CONTEXT_*` (reply#14)** — `REPLY_CONTEXT_HALF_LIFE_DAYS` (default 21), `REPLY_CONTEXT_RELEVANCE_WEIGHT`, `REPLY_CONTEXT_FRESHNESS_WEIGHT` control how mail/Gmail-like RAG snippets blend **recency vs vector relevance**. `/api/suggest` responses include `contextMeta.contextFreshnessSummary` when the local Ollama path runs (dominant `fresh` / `recent` / `archival` bucket + mail-like counts).
 - **`REPLY_DEBUG_SETTINGS`** — Leave **unset** in production. When set to `1` / `true`, `settings-store` may append **non-secret** diagnostics to `chat/data/debug_token.log` (gitignored). Default path does **not** write operator token fragments to disk (reply#32).
+- **`REPLY_DEBUG`** — Optional. When `1` / `true` / `yes`, the hub prints extra informational stdout (sidecar skip, auto-sync bookends, shutdown). Warnings/errors stay on (reply#33).
 
 ---
 
