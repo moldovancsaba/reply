@@ -35,6 +35,18 @@ function applyAiSettingsToProcessEnv(settings) {
     delete process.env.REPLY_OLLAMA_MODEL;
   }
 
+  if (ai.annotationOllamaModel && String(ai.annotationOllamaModel).trim()) {
+    process.env.REPLY_ANNOTATION_MODEL = String(ai.annotationOllamaModel).trim();
+  } else {
+    delete process.env.REPLY_ANNOTATION_MODEL;
+  }
+
+  if (ai.kycOllamaModel && String(ai.kycOllamaModel).trim()) {
+    process.env.REPLY_KYC_OLLAMA_MODEL = String(ai.kycOllamaModel).trim();
+  } else {
+    delete process.env.REPLY_KYC_OLLAMA_MODEL;
+  }
+
   if (ai.openclawBinary && String(ai.openclawBinary).trim()) {
     process.env.OPENCLAW_BIN = String(ai.openclawBinary).trim();
   } else {

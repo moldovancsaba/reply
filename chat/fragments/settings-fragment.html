@@ -340,6 +340,16 @@
                                     placeholder="e.g. gemma4:e2b (REPLY_OLLAMA_MODEL)" title="Model for suggest/KYC-style paths">
                             </div>
                             <div class="settings-field" style="grid-column:1/-1;">
+                                <label class="settings-label" for="settings-ai-annotation-model">Annotation model (optional)</label>
+                                <input id="settings-ai-annotation-model" type="text" class="settings-input"
+                                    placeholder="default: same as main model (REPLY_ANNOTATION_MODEL)" title="LanceDB batch annotation job">
+                            </div>
+                            <div class="settings-field" style="grid-column:1/-1;">
+                                <label class="settings-label" for="settings-ai-kyc-model">KYC / ✨ Analyze model (optional)</label>
+                                <input id="settings-ai-kyc-model" type="text" class="settings-input"
+                                    placeholder="e.g. qwen2.5:7b (REPLY_KYC_OLLAMA_MODEL)" title="Profile analyze Ollama tag">
+                            </div>
+                            <div class="settings-field" style="grid-column:1/-1;">
                                 <label class="settings-label" for="settings-ai-openclaw-bin">OpenClaw CLI path (optional)</label>
                                 <input id="settings-ai-openclaw-bin" type="text" class="settings-input"
                                     placeholder="openclaw or absolute path → OPENCLAW_BIN" title="Binary for gateway health / WhatsApp CLI">
@@ -361,6 +371,18 @@
                                     placeholder="http://127.0.0.1:23572" title="HATORI_API_URL — overrides default port">
                             </div>
                         </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <div class="settings-section-title">
+                            <span class="material-symbols-outlined">restart_alt</span> Background worker
+                        </div>
+                        <p class="settings-hint mb-md">Calls <code>POST /api/system/service/control</code> (operator token
+                            required if enforcement is on). Use after changing models synced to <code>chat/.env</code>, or
+                            if the worker is stuck.</p>
+                        <button type="button" class="btn btn-secondary" id="settings-ai-restart-worker">Restart background
+                            worker</button>
+                        <p id="settings-ai-restart-worker-hint" class="settings-hint mt-sm" style="margin-bottom:0"></p>
                     </div>
 
                     <div class="settings-card">

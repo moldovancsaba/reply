@@ -6,12 +6,17 @@
 const { loadReplyEnv } = require("./load-env.js");
 loadReplyEnv();
 
+const { readSettings } = require("./settings-store.js");
+const { applyAiSettingsToProcessEnv, resolveOllamaHttpBase } = require("./ai-runtime-config.js");
+applyAiSettingsToProcessEnv(readSettings());
+
 const { Ollama } = require("ollama");
-const ollama = new Ollama();
 const { getAnnotationOllamaModel } = require("./ollama-model.js");
 const { getUnannotatedDocuments, annotateDocument } = require("./vector-store.js");
 
-const MODEL = getAnnotationOllamaModel();
+function getAnnotationOllama() {
+  return new Ollama({ host: resolveOllamaHttpBase() });
+}
 const MAX_DOCS_PER_RUN = parseInt(process.env.REPLY_ANNOTATION_LIMIT || "50", 10);
 
 /**
@@ -58,7 +63,7 @@ async function annotateBatch() {
         return;
     }
 
-    console.log(`Found ${docs.length} documents to annotate using model: ${MODEL}`);
+    console.log(`Found ${docs.length} documents to annotate using model: ${getAnnotationOllamaModel()}`);
 
     let successCount = 0;
     let failCount = 0;
@@ -70,8 +75,8 @@ async function annotateBatch() {
         try {
             const prompt = PROMPT_TEMPLATE.replace("{TEXT}", doc.text || "");
 
-            const response = await ollama.chat({
-                model: MODEL,
+            const response = await getAnnotationOllama().chat({
+                model: getAnnotationOllamaModel(),
                 messages: [{ role: 'user', content: prompt }],
                 format: 'json',
                 options: {

@@ -17,7 +17,7 @@ import { handleSendMessage } from './messages.js';
 import { getSettings, buildSecurityHeaders, reportHatoriOutcome, reportDraftReplacement } from './api.js';
 import './dashboard.js?v=2.1';
 import './kyc.js?v=2.1';
-import { applyReplyUiSettings } from './settings.js?v=2.4';
+import { applyReplyUiSettings } from './settings.js?v=2.5';
 import { openTrainingPage, closeTrainingPage } from './training.js?v=2.1';
 import { UI } from './ui.js';
 import { maybeShowOnboarding } from './onboarding.js?v=2.1';
