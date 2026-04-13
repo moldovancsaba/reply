@@ -216,6 +216,12 @@ async function handleUpdateSettings(req, res) {
             if (typeof incomingAi.hatoriApiUrl === "string") {
                 next.ai.hatoriApiUrl = incomingAi.hatoriApiUrl.trim().slice(0, 512);
             }
+            if (typeof incomingAi.annotationOllamaModel === "string") {
+                next.ai.annotationOllamaModel = incomingAi.annotationOllamaModel.trim().slice(0, 160);
+            }
+            if (typeof incomingAi.kycOllamaModel === "string") {
+                next.ai.kycOllamaModel = incomingAi.kycOllamaModel.trim().slice(0, 160);
+            }
         }
 
         writeSettings(next);

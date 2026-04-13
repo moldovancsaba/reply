@@ -7,6 +7,12 @@
 console.log = (...args) => console.error(...args);
 console.warn = (...args) => console.error(...args);
 
+const { loadReplyEnv } = require("./load-env.js");
+loadReplyEnv();
+const { readSettings } = require("./settings-store.js");
+const { applyAiSettingsToProcessEnv } = require("./ai-runtime-config.js");
+applyAiSettingsToProcessEnv(readSettings());
+
 const { analyzeContact } = require("./kyc-agent.js");
 
 async function main() {
