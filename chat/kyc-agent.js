@@ -1,15 +1,24 @@
-const { Ollama } = require('ollama');
-const ollama = new Ollama();
+const { loadReplyEnv } = require("./load-env.js");
+loadReplyEnv();
+const { readSettings } = require("./settings-store.js");
+const { applyAiSettingsToProcessEnv, resolveOllamaHttpBase } = require("./ai-runtime-config.js");
+applyAiSettingsToProcessEnv(readSettings());
+
+const { Ollama } = require("ollama");
+function getKycOllamaClient() {
+  return new Ollama({ host: resolveOllamaHttpBase() });
+}
+function getKycOllamaModel() {
+  return String(process.env.REPLY_KYC_OLLAMA_MODEL || "qwen2.5:7b").trim() || "qwen2.5:7b";
+}
 const contactStore = require('./contact-store.js');
 const { mergeProfile } = require("./kyc-merge.js");
 const { getHistory, dedupeDocsByStableKey } = require('./vector-store.js');
 const { extractSignals } = require('./signal-extractor.js');
-const { withDefaults, readSettings } = require('./settings-store.js');
+const { withDefaults } = require('./settings-store.js');
 const fs = require('fs');
 const path = require('path');
 const syncGuard = require('./utils/sync-guard');
-
-const MODEL = process.env.REPLY_KYC_OLLAMA_MODEL || "qwen2.5:7b";
 const KYC_DEBUG = process.env.REPLY_KYC_DEBUG === "1";
 
 function debugLog(...args) {
@@ -340,8 +349,8 @@ RETURN ONLY JSON:
 
             try {
                 console.log(`[KYC] Processing chunk ${chunks.indexOf(corpus) + 1}/${chunkLimit} for ${handleId}...`);
-                response = await ollama.chat({
-                    model: MODEL,
+                response = await getKycOllamaClient().chat({
+                    model: getKycOllamaModel(),
                     messages: [{ role: 'user', content: prompt }],
                     format: 'json'
                 }, { signal: controller.signal });
@@ -396,7 +405,7 @@ RETURN ONLY JSON:
                 newestMessageAt: messages.filter(m => m.date).slice(-1)[0]?.date || null,
                 oldestMessageAt: messages.find(m => m.date)?.date || null,
                 llm: {
-                    model: MODEL,
+                    model: getKycOllamaModel(),
                     sampledMessages: sampled.length,
                     chunksTotal: chunks.length,
                     chunksProcessed: chunkLimit,

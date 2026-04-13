@@ -266,6 +266,8 @@ function withDefaults(settings) {
         openclawGatewayToken:
           a.openclawGatewayToken === null ? null : String(a.openclawGatewayToken || ""),
         hatoriApiUrl: String(a.hatoriApiUrl || "").trim().slice(0, 512),
+        annotationOllamaModel: String(a.annotationOllamaModel || "").trim().slice(0, 160),
+        kycOllamaModel: String(a.kycOllamaModel || "").trim().slice(0, 160),
       };
     })(),
     mailAccounts: Array.isArray(s?.mailAccounts)
@@ -426,6 +428,8 @@ function maskSettingsForClient(settings) {
       hasOpenclawGatewayToken: ocTok.has,
       openclawGatewayTokenHint: ocTok.hint,
       hatoriApiUrl: cfg.ai?.hatoriApiUrl || "",
+      annotationOllamaModel: cfg.ai?.annotationOllamaModel || "",
+      kycOllamaModel: cfg.ai?.kycOllamaModel || "",
     },
     channelBridge: channelBridge,
     global: {
@@ -497,6 +501,12 @@ function syncToEnv(settings) {
     }
     if (ai.ollamaModel && String(ai.ollamaModel).trim()) {
       mapping.REPLY_OLLAMA_MODEL = String(ai.ollamaModel).trim();
+    }
+    if (ai.annotationOllamaModel && String(ai.annotationOllamaModel).trim()) {
+      mapping.REPLY_ANNOTATION_MODEL = String(ai.annotationOllamaModel).trim();
+    }
+    if (ai.kycOllamaModel && String(ai.kycOllamaModel).trim()) {
+      mapping.REPLY_KYC_OLLAMA_MODEL = String(ai.kycOllamaModel).trim();
     }
     if (ai.openclawBinary && String(ai.openclawBinary).trim()) {
       mapping.OPENCLAW_BIN = String(ai.openclawBinary).trim();

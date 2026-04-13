@@ -1,4 +1,5 @@
 import { getSettings, saveSettings, getGmailAuthUrl, disconnectGmail } from './api.js';
+import { UI } from './ui.js';
 import {
   loadConversations,
   setConversationsQuery,
@@ -339,6 +340,8 @@ async function loadIntoForm() {
   setVal('settings-ai-ollama-host', ai.ollamaHost || '');
   setVal('settings-ai-ollama-port', ai.ollamaPort ? String(ai.ollamaPort) : '0');
   setVal('settings-ai-ollama-model', ai.ollamaModel || '');
+  setVal('settings-ai-annotation-model', ai.annotationOllamaModel || '');
+  setVal('settings-ai-kyc-model', ai.kycOllamaModel || '');
   setVal('settings-ai-openclaw-bin', ai.openclawBinary || '');
   setVal('settings-ai-openclaw-gateway-url', ai.openclawGatewayUrl || '');
   const ocTok = el('settings-ai-openclaw-gateway-token');
@@ -438,6 +441,8 @@ async function onSave() {
         ollamaHost: el('settings-ai-ollama-host')?.value?.trim() || '',
         ollamaPort: Number(el('settings-ai-ollama-port')?.value) || 0,
         ollamaModel: el('settings-ai-ollama-model')?.value?.trim() || '',
+        annotationOllamaModel: el('settings-ai-annotation-model')?.value?.trim() || '',
+        kycOllamaModel: el('settings-ai-kyc-model')?.value?.trim() || '',
         openclawBinary: el('settings-ai-openclaw-bin')?.value?.trim() || '',
         openclawGatewayUrl: el('settings-ai-openclaw-gateway-url')?.value?.trim() || '',
         openclawGatewayToken: el('settings-ai-openclaw-gateway-token')?.value || null,
@@ -681,7 +686,7 @@ export async function wireDom() {
   const hasPage = !!document.getElementById('settings-page');
   if (!hasPage) {
     try {
-      const response = await fetch('fragments/settings-fragment.html?v=2.4');
+      const response = await fetch('fragments/settings-fragment.html?v=2.5');
       if (!response.ok) throw new Error('Failed to load settings fragment');
       const html = await response.text();
       container.innerHTML = html;
@@ -746,6 +751,20 @@ export async function wireDom() {
   });
   el('settings-providers-check-all')?.addEventListener('click', () => {
     refreshAiProviderStatuses().catch((e) => console.warn(e));
+  });
+
+  el('settings-ai-restart-worker')?.addEventListener('click', async () => {
+    const hint = el('settings-ai-restart-worker-hint');
+    try {
+      const { controlService } = await import('./api.js');
+      await controlService('worker', 'restart');
+      if (hint) hint.textContent = '';
+      UI.showToast('Background worker restart sent.', 'success');
+    } catch (e) {
+      const msg = e?.message || String(e);
+      if (hint) hint.textContent = msg;
+      UI.showToast(msg, 'error');
+    }
   });
 }
 
