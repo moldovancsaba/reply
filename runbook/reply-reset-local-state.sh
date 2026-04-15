@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Wipe Reply-derived local state (NOT Apple Messages / WhatsApp source DBs), git pull, restart hub.
+# Removes: LanceDB index, unified chat.db, contacts.db, sync cursors, worker pid, suggestion queue.
+# Preserves: chat/.env*, chat/data/settings.json, chat/data/system_persona.txt, OAuth tokens in settings.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+CHAT="${REPO_ROOT}/chat"
+DATA="${CHAT}/data"
+LANCE="${REPO_ROOT}/knowledge/lancedb"
+
+echo "==> Repo: ${REPO_ROOT}"
+
+echo "==> Stopping Reply hub (launchd + node on hub ports)…"
+chmod +x "${SCRIPT_DIR}/stop.sh" 2>/dev/null || true
+"${SCRIPT_DIR}/stop.sh" || true
+sleep 3
+
+echo "==> git pull --ff-only origin main"
+cd "${REPO_ROOT}"
+git pull --ff-only origin main
+
+echo "==> Removing LanceDB (${LANCE})…"
+rm -rf "${LANCE}"
+
+echo "==> Removing unified messages + contacts SQLite…"
+rm -f "${DATA}/chat.db" "${DATA}/chat.db-shm" "${DATA}/chat.db-wal" || true
+rm -f "${DATA}/contacts.db" "${DATA}/contacts.db-shm" "${DATA}/contacts.db-wal" || true
+
+echo "==> Removing sync cursors, status JSON, worker pid, draft queue…"
+rm -f "${DATA}/sync_state.json" \
+  "${DATA}/whatsapp_sync_state.json" \
+  "${DATA}/imap_sync_state.json" \
+  "${DATA}/gmail_sync_state.json" \
+  "${DATA}/pending-suggestion-draft-queue.json" \
+  "${DATA}/kyc_auto_scan_cursor.json" \
+  "${DATA}/worker.pid" || true
+rm -f "${DATA}"/*_sync_status.json 2>/dev/null || true
+
+mkdir -p "${DATA}"
+
+echo "==> Recreating empty unified_messages schema (chat.db)…"
+cd "${CHAT}"
+node -e "require('./message-store').initialize();"
+
+echo "==> Reloading Reply hub (make run from repo root)…"
+cd "${REPO_ROOT}"
+chmod +x ./tools/scripts/reply_service.sh 2>/dev/null || true
+make run
+
+echo ""
+echo "Done. The worker will re-sync iMessage/WhatsApp/mail on its next poll; open the dashboard and use"
+echo "per-channel Sync if you want to hurry. Contacts and vector rows rebuild from sources."
