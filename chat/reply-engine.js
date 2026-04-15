@@ -99,6 +99,18 @@ function getOllamaModel() {
   return getReplyOllamaModel();
 }
 
+/** Some small models return nested objects for `draft` under JSON mode; normalize for the copywriter. */
+function normalizeAnalyzerDraftField(draft) {
+  if (draft == null) return "";
+  if (typeof draft === "string") return draft;
+  if (typeof draft === "object") {
+    if (typeof draft.response === "string") return draft.response;
+    if (typeof draft.text === "string") return draft.text;
+    if (typeof draft.draft === "string") return draft.draft;
+  }
+  return "";
+}
+
 let cachedPersona = null;
 function getPersona() {
   if (!cachedPersona) {
@@ -113,8 +125,8 @@ function getPersona() {
 }
 
 async function generateReply(message, contextSnippets = [], recipient = null, goldenExamples = []) {
-  if (!message || typeof message !== "string") {
-    return { suggestion: "Please provide a message to reply to.", explanation: "" };
+  if (!message || typeof message !== "string" || !String(message).trim()) {
+    return { suggestion: "", explanation: "", code: "no_message" };
   }
 
   // OPTION: Route to Hatori when enabled and draft runtime is not Ollama-only
@@ -228,6 +240,16 @@ JSON:`;
       analyzerResult = { draft: analyzerResponse.message.content, explanation: "Direct response generated." };
     }
 
+    const draftStr = normalizeAnalyzerDraftField(analyzerResult.draft);
+    if (draftStr) {
+      analyzerResult.draft = draftStr;
+    } else if (typeof analyzerResult.draft !== "string") {
+      analyzerResult.draft =
+        typeof analyzerResponse.message.content === "string"
+          ? analyzerResponse.message.content
+          : "";
+    }
+
     // --- AGENT 2: THE COPYWRITER ---
     const copywriterPrompt = `You are a professional copywriter specialized in a concise, "Csaba Style" communication.
 Your task is to take a draft reply and refine it to be as short, direct, and impactful as possible.
@@ -255,8 +277,9 @@ REPLY (Text only, 1-2 sentences max, no filler):`;
   } catch (error) {
     console.error("Error in two-agent pipeline:", error);
     return {
-      suggestion: `Error: ${error.message}`,
-      explanation: "Ollama communication failed.",
+      suggestion: "",
+      explanation: error.message || "Ollama communication failed.",
+      code: "agent_error",
       contextMeta
     };
   }

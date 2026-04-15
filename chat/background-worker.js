@@ -27,6 +27,11 @@ const { addDocuments } = require('./vector-store.js');
 const contactStore = require('./contact-store.js');
 const { generateReply } = require('./reply-engine.js');
 const { getSnippets } = require('./knowledge.js');
+const {
+    enqueueSuggestionDraft,
+    processOneSuggestionDraft,
+    getSuggestionDraftIntervalMs
+} = require('./suggestion-draft-queue.js');
 const { sync: syncIMessage, getIMessageReadonlyDb } = require('./sync-imessage.js');
 const { syncWhatsApp } = require('./sync-whatsapp.js');
 const { syncMail, isImapConfigured, isGmailConfigured } = require('./sync-mail.js');
@@ -43,7 +48,7 @@ const hatori = require('./hatori-client.js');
  * Responsibilities:
  * 1. Poll Apple Messages (chat.db) for new activity.
  * 2. Vectorize new messages for semantic search.
- * 3. Proactively generate drafts for unanswered messages.
+ * 3. Queue suggestion drafts for inbound messages; background sweep generates one draft per interval (default 5 min, newest first).
  * 4. Extract KYC information from incoming text.
  */
 
@@ -426,17 +431,18 @@ async function runIntelligencePipeline(handle, text) {
         // Fire-and-forget so the worker can keep processing inbound messages.
         void maybeRunDeepAnalysis(handle, 'new-message');
 
-        // B. Proactive Drafting — always generate a fresh draft for each inbound message
-        // so the composer shows an up-to-date {hatori} suggestion.
-        const snippets = await getSnippets(text, 3);
-        const draftResult = await generateReply(text, snippets, handle);
-        const draftText = typeof draftResult === 'string' ? draftResult : (draftResult.suggestion || '');
-        const draftHatoriId = typeof draftResult === 'object' ? (draftResult.hatori_id || null) : null;
-
-        if (draftText && !draftText.startsWith('Error')) {
-            // Persist draft + hatori_id for the annotation loop
-            contactStore.setDraft(handle, draftText, { hatori_id: draftHatoriId });
-            console.log(`[Worker] Proactive draft created${draftHatoriId ? ` (hatori_id: ${draftHatoriId})` : ''}.`);
+        // B. Suggestion drafts — default: queue for background (one draft / interval, newest first).
+        // Set REPLY_INLINE_DRAFT_GENERATE=1 to also run generateReply on every inbound (heavy).
+        enqueueSuggestionDraft(handle);
+        if (String(process.env.REPLY_INLINE_DRAFT_GENERATE || '').trim() === '1') {
+            const snippets = await getSnippets(text, 3);
+            const draftResult = await generateReply(text, snippets, handle);
+            const draftText = typeof draftResult === 'string' ? draftResult : (draftResult.suggestion || '');
+            const draftHatoriId = typeof draftResult === 'object' ? (draftResult.hatori_id || null) : null;
+            if (String(draftText || '').trim()) {
+                await contactStore.setDraft(handle, draftText, { hatori_id: draftHatoriId });
+                console.log(`[Worker] Inline draft created${draftHatoriId ? ` (hatori_id: ${draftHatoriId})` : ''}.`);
+            }
         }
     } catch (e) {
         console.error("Intelligence Pipeline Error:", e);
@@ -462,57 +468,43 @@ async function pollLoop() {
 }
 
 /**
- * Background draft backfill: Once every 5 minutes, find a conversation without a draft
- * and generate one to ensure we have full coverage.
+ * Background suggestion drafts: at most one generateReply per interval (default 5 min),
+ * queue order newest-first. Disable with REPLY_SUGGEST_BACKGROUND_DISABLE=1.
  */
-async function backfillPendingHatoriDrafts() {
+async function runSuggestionDraftSweepOnce() {
+    const everyMs = getSuggestionDraftIntervalMs();
+    if (!everyMs) return;
     try {
-        if (process.env.REPLY_USE_HATORI !== '1') return;
-
-        console.log('[Worker] Checking for conversations needing draft backfill...');
-        const contacts = contactStore.contacts;
-        if (!contacts || contacts.length === 0) return;
-
-        // Find active contacts without a draft, sorted by recently contacted
-        const pending = contacts
-            .filter(c => !c.draft && c.status !== 'closed' && c.handle)
-            .sort((a, b) => (b.lastContacted || '').localeCompare(a.lastContacted || ''));
-
-        if (pending.length === 0) {
-            console.log('[Worker] All active conversations have drafts.');
-            return;
-        }
-
-        const target = pending[0];
-        console.log(`[Worker] Backfilling draft for ${target.displayName} (${target.handle})...`);
-
-        // Fetch the last inbound message from vector store to use as context
-        const { getHistory } = require('./vector-store.js');
-        const history = await getHistory(target.handle).catch(() => []);
-        const lastInbound = history
-            .filter(h => h.text && !h.text.includes('] Me:'))
-            .sort((a, b) => (b.text.match(/\[(\d{4}-\d{2}-\d{2}[^\]]+)\]/)?.[1] || '').localeCompare(a.text.match(/\[(\d{4}-\d{2}-\d{2}[^\]]+)\]/)?.[1] || ''))[0];
-
-        if (lastInbound) {
-            const stripped = lastInbound.text.replace(/^\[[^\]]+\]\s*(Me|\S+):?\s*/i, '').trim();
-            if (stripped) {
-                await runIntelligencePipeline(target.handle, stripped);
-                console.log(`[Worker] Backfill complete for ${target.handle}.`);
-            } else {
-                console.log(`[Worker] No clear message text for backfill for ${target.handle}.`);
-            }
-        } else {
-            console.log(`[Worker] No inbound history found for backfill for ${target.handle}.`);
+        const res = await processOneSuggestionDraft({
+            contactStore,
+            generateReply,
+            getSnippets,
+            isBusy: () => isProcessing
+        });
+        if (res.skipped) {
+            console.log('[Worker] Suggestion draft sweep skipped (iMessage poll in progress).');
+        } else if (res.ok) {
+            console.log(`[Worker] Background suggestion draft ready for ${res.handle}.`);
+        } else if (res.reason && res.reason !== 'queue_empty') {
+            console.log(
+                `[Worker] Suggestion draft sweep: ${res.handle || '(no handle)'} — ${res.reason}`
+            );
         }
     } catch (e) {
-        console.error('[Worker] Backfill Error:', e);
+        console.error('[Worker] Suggestion draft sweep error:', e.message || e);
     }
 }
 
-// Start the backfill interval (every 5 minutes)
-setInterval(backfillPendingHatoriDrafts, 5 * 60 * 1000);
-// Run once shortly after startup
-setTimeout(backfillPendingHatoriDrafts, 30 * 1000);
+(() => {
+    const everyMs = getSuggestionDraftIntervalMs();
+    if (!everyMs) {
+        console.log('[Worker] Background suggestion drafts disabled (REPLY_SUGGEST_BACKGROUND_DISABLE=1).');
+        return;
+    }
+    console.log(`[Worker] Background suggestion drafts every ${Math.round(everyMs / 1000)}s (newest queued first).`);
+    setInterval(runSuggestionDraftSweepOnce, everyMs);
+    setTimeout(runSuggestionDraftSweepOnce, 45 * 1000);
+})();
 
 /**
  * Periodic Ollama annotation of unannotated LanceDB rows (reply#36 / reply#37).

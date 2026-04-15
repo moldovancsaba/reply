@@ -40,7 +40,8 @@ const RESTART_POLICIES = {
     hatori: {
         maxRetries: 3,
         backoffMs: 30000,
-        actionHint: 'Ensure the Hatori Python app is in the `../hatori/` folder. Run `pip install -r requirements.txt` in that directory.'
+        actionHint:
+            'Set REPLY_HATORI_PROJECT_PATH to your Hatori clone, or REPLY_HATORI_EXTERNAL=1 if it runs via LaunchAgent. See ../hatori/README.md.'
     }
 };
 

@@ -36,3 +36,47 @@ test("resolveOllamaHttpBase falls back to 127.0.0.1:OLLAMA_PORT", () => {
     delete require.cache[require.resolve("../ai-runtime-config.js")];
   }
 });
+
+test("getOllamaUrlParts parses OLLAMA_HOST with explicit port", () => {
+  const prevHost = process.env.OLLAMA_HOST;
+  const prevPort = process.env.OLLAMA_PORT;
+  try {
+    process.env.OLLAMA_HOST = "http://10.0.0.2:11440";
+    delete process.env.OLLAMA_PORT;
+    delete require.cache[require.resolve("../ai-runtime-config.js")];
+    const { getOllamaUrlParts } = require("../ai-runtime-config.js");
+    assert.deepEqual(getOllamaUrlParts(), {
+      hostname: "10.0.0.2",
+      port: 11440,
+      isHttps: false
+    });
+  } finally {
+    if (prevHost === undefined) delete process.env.OLLAMA_HOST;
+    else process.env.OLLAMA_HOST = prevHost;
+    if (prevPort === undefined) delete process.env.OLLAMA_PORT;
+    else process.env.OLLAMA_PORT = prevPort;
+    delete require.cache[require.resolve("../ai-runtime-config.js")];
+  }
+});
+
+test("getOllamaUrlParts uses 11434 when HTTP URL omits port", () => {
+  const prevHost = process.env.OLLAMA_HOST;
+  const prevPort = process.env.OLLAMA_PORT;
+  try {
+    process.env.OLLAMA_HOST = "http://127.0.0.1";
+    delete process.env.OLLAMA_PORT;
+    delete require.cache[require.resolve("../ai-runtime-config.js")];
+    const { getOllamaUrlParts } = require("../ai-runtime-config.js");
+    assert.deepEqual(getOllamaUrlParts(), {
+      hostname: "127.0.0.1",
+      port: 11434,
+      isHttps: false
+    });
+  } finally {
+    if (prevHost === undefined) delete process.env.OLLAMA_HOST;
+    else process.env.OLLAMA_HOST = prevHost;
+    if (prevPort === undefined) delete process.env.OLLAMA_PORT;
+    else process.env.OLLAMA_PORT = prevPort;
+    delete require.cache[require.resolve("../ai-runtime-config.js")];
+  }
+});

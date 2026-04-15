@@ -337,7 +337,7 @@
                             <div class="settings-field" style="grid-column:1/-1;">
                                 <label class="settings-label" for="settings-ai-ollama-model">Ollama model tag</label>
                                 <input id="settings-ai-ollama-model" type="text" class="settings-input"
-                                    placeholder="e.g. gemma4:e2b (REPLY_OLLAMA_MODEL)" title="Model for suggest/KYC-style paths">
+                                    placeholder="e.g. gemma3:1b (REPLY_OLLAMA_MODEL)" title="Model for suggest/KYC-style paths">
                             </div>
                             <div class="settings-field" style="grid-column:1/-1;">
                                 <label class="settings-label" for="settings-ai-annotation-model">Annotation model (optional)</label>
@@ -369,6 +369,10 @@
                                 <label class="settings-label" for="settings-ai-hatori-url">Hatori API base (optional)</label>
                                 <input id="settings-ai-hatori-url" type="text" class="settings-input"
                                     placeholder="http://127.0.0.1:23572" title="HATORI_API_URL — overrides default port">
+                                <p class="settings-hint" style="margin-top:6px;margin-bottom:0">Hub also reads
+                                    <code>REPLY_HATORI_PROJECT_PATH</code> in <code>chat/.env.local</code> for the Python
+                                    checkout (spawn path). Watch the three lanes (writer / drafter / judge) on the
+                                    dashboard or open Hatori UI (port 23571).</p>
                             </div>
                         </div>
                     </div>

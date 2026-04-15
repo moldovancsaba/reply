@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 const { addDocuments } = require('./vector-store.js');
+const { enqueueSuggestionDraftsFromDocBatch } = require('./suggestion-draft-queue.js');
 const contactStore = require('./contact-store.js');
 
 const statusManager = require('./status-manager.js');
@@ -197,6 +198,7 @@ async function syncMail() {
         if (docs.length > 0) {
             updateStatus({ state: "running", progress: 70, message: `Vectorizing ${docs.length} emails...` });
             await addDocuments(docs);
+            enqueueSuggestionDraftsFromDocBatch(docs);
             console.log("Mail sync complete.");
 
             // Get current count and add new emails

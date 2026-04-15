@@ -22,3 +22,10 @@ test("system health route wires httpPort from hub-runtime", () => {
   assert.ok(/\bhttpPort\b/.test(src), "health payload should expose httpPort");
   assert.ok(/\bhttpHost\b/.test(src), "health payload should expose httpHost");
 });
+
+test("system health attaches preflight + api contract", () => {
+  const src = fs.readFileSync(path.join(__dirname, "../routes/system.js"), "utf8");
+  assert.ok(src.includes("health.preflight"), "health should include preflight report");
+  assert.ok(src.includes("health.apiContract"), "health should include apiContract for clients");
+  assert.ok(src.includes("servePreflight"), "/api/preflight route handler should exist");
+});

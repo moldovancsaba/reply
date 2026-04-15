@@ -379,6 +379,14 @@
         order: 2;
       }
 
+      /* Let the dashboard scroll inside the flex column instead of painting over siblings */
+      .chat-area > #dashboard.dashboard {
+        flex: 1 1 auto;
+        min-height: 0;
+        min-width: 0;
+        width: 100%;
+      }
+
       .chat-header {
         padding: 0 20px;
         height: 52px;
@@ -1372,6 +1380,10 @@
         overflow-y: auto;
         align-content: start;
         scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+      }
+
+      .dashboard > * {
+        min-width: 0;
       }
 
       .health-card--span-full {

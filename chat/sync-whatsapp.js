@@ -2,11 +2,13 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 const { addDocuments } = require('./vector-store.js');
+const { enqueueSuggestionDraftsFromDocBatch } = require('./suggestion-draft-queue.js');
 
 const statusManager = require('./status-manager.js');
 const { withDefaults, readSettings } = require('./settings-store.js');
+const { resolveWhatsAppChatStoragePath } = require('./utils/whatsapp-db-path.js');
 
-const WA_DB_PATH = process.env.REPLY_WHATSAPP_DB_PATH || path.join(process.env.HOME, 'Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite');
+const WA_DB_PATH = resolveWhatsAppChatStoragePath();
 const STATE_FILE = path.join(__dirname, 'data', 'whatsapp_sync_state.json');
 
 // Ensure data dir exists
@@ -46,8 +48,8 @@ function convertWADate(waTime) {
 }
 
 async function syncWhatsApp() {
-    if (!fs.existsSync(WA_DB_PATH)) {
-        console.error("WhatsApp database not found at:", WA_DB_PATH);
+    if (!WA_DB_PATH || !fs.existsSync(WA_DB_PATH)) {
+        console.error("WhatsApp database not found at:", WA_DB_PATH || "(no path)");
         updateStatus({ state: "error", message: "Database not found" });
         return;
     }
@@ -157,7 +159,9 @@ async function syncWhatsApp() {
                 updateStatus({ state: "running", progress: 50, message: `Vectorizing ${docs.length} messages...` });
 
                 // 1. Vectorize for search
-                await addDocuments(docs.map(({ _meta, ...d }) => d));
+                const vectorDocs = docs.map(({ _meta, ...d }) => d);
+                await addDocuments(vectorDocs);
+                enqueueSuggestionDraftsFromDocBatch(vectorDocs);
 
                 // 2. Save to unified chat.db
                 const { saveMessages } = require('./message-store.js');

@@ -55,22 +55,17 @@ function applyAiSettingsToProcessEnv(settings) {
 
   if (ai.openclawGatewayUrl && String(ai.openclawGatewayUrl).trim()) {
     process.env.REPLY_OPENCLAW_GATEWAY_URL = String(ai.openclawGatewayUrl).trim();
-  } else {
-    delete process.env.REPLY_OPENCLAW_GATEWAY_URL;
   }
+  /* Empty UI field must not wipe `chat/.env.local` (loadReplyEnv already set these). */
 
   if (ai.openclawGatewayToken && String(ai.openclawGatewayToken).trim()) {
     process.env.REPLY_OPENCLAW_GATEWAY_TOKEN = String(ai.openclawGatewayToken).trim();
-  } else {
-    delete process.env.REPLY_OPENCLAW_GATEWAY_TOKEN;
   }
 
   if (ai.hatoriApiUrl && String(ai.hatoriApiUrl).trim()) {
     let u = String(ai.hatoriApiUrl).trim();
     if (!/^https?:\/\//i.test(u)) u = `http://${u}`;
     process.env.HATORI_API_URL = u.replace(/\/$/, "");
-  } else {
-    delete process.env.HATORI_API_URL;
   }
 }
 
@@ -79,6 +74,25 @@ function resolveOllamaHttpBase() {
   if (raw) return raw.replace(/\/$/, "");
   const port = String(process.env.OLLAMA_PORT || "11434").trim() || "11434";
   return `http://127.0.0.1:${port}`;
+}
+
+/**
+ * Parsed origin for Node `http` / `https` requests to Ollama.
+ * When the URL omits a port, uses 11434 for HTTP (Ollama default) and 443 for HTTPS.
+ * @returns {{ hostname: string, port: number, isHttps: boolean }}
+ */
+function getOllamaUrlParts() {
+  const base = resolveOllamaHttpBase();
+  let url;
+  try {
+    url = new URL(/^https?:\/\//i.test(base) ? base : `http://${base}`);
+  } catch {
+    url = new URL("http://127.0.0.1:11434");
+  }
+  const isHttps = url.protocol === "https:";
+  const hasPort = url.port !== "";
+  const port = hasPort ? Number(url.port) : isHttps ? 443 : 11434;
+  return { hostname: url.hostname, port, isHttps };
 }
 
 /** @returns {'auto'|'ollama'|'hatori'} */
@@ -108,6 +122,7 @@ function shouldRunHatoriIngestBeforeSuggest() {
 module.exports = {
   applyAiSettingsToProcessEnv,
   resolveOllamaHttpBase,
+  getOllamaUrlParts,
   getDraftRuntimeMode,
   shouldRouteDraftToHatori,
   shouldRunHatoriIngestBeforeSuggest,

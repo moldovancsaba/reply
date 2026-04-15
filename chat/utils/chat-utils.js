@@ -95,8 +95,71 @@ function extractDateFromText(text) {
     if (!text || typeof text !== "string") return null;
     const m = text.match(/\[(.*?)\]/);
     if (!m) return null;
-    const d = new Date(m[1]);
-    return Number.isNaN(d.getTime()) ? null : d;
+    const raw = String(m[1] || "").trim();
+    if (!raw) return null;
+    let d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) return d;
+    // SQLite `datetime(..., 'localtime')` and other space-separated forms
+    if (/^\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}/.test(raw)) {
+        d = new Date(raw.replace(/\s+/, "T"));
+        if (!Number.isNaN(d.getTime())) return d;
+    }
+    return null;
+}
+
+/**
+ * Classify indexed line `[ts] Sender: body` — "me" only from the sender token, not from quoted `] Me:` in the body.
+ * @param {string} text
+ * @returns {"me"|"contact"|null}
+ */
+function inferRoleFromIndexedLine(text) {
+    const t = String(text || "");
+    const m = t.match(/^\[[^\]]+\]\s*([^:\n]+?):\s*/);
+    if (!m) return null;
+    const who = String(m[1] || "").trim();
+    if (!who) return null;
+    if (who === "Me" || /^me$/i.test(who)) return "me";
+    return "contact";
+}
+
+function parseVectorDocSequenceId(doc) {
+    const id = String(doc?.id || "");
+    const msg = id.match(/(?:^|-)msg-(\d+)$/i) || id.match(/msg-(\d+)/i);
+    if (msg) return Number(msg[1]) || 0;
+    return 0;
+}
+
+/**
+ * Latest inbound message body + channel from vector rows (suggest + background draft queue).
+ * @param {Array<{ id?: string, text?: string, path?: string, source?: string }>} docs
+ * @returns {{ text: string, channel: string } | null}
+ */
+function pickLatestInboundFromVectorDocs(docs) {
+    const rows = (Array.isArray(docs) ? docs : [])
+        .map((d) => {
+            const raw = String(d.text || "");
+            const role = inferRoleFromIndexedLine(raw) ?? (raw.includes("] Me:") ? "me" : "contact");
+            const date = extractDateFromText(raw);
+            const text = stripMessagePrefix(raw).trim();
+            const seq = parseVectorDocSequenceId(d);
+            return { d, role, date, text, seq };
+        })
+        .filter((r) => r.text && r.role === "contact");
+
+    if (rows.length === 0) return null;
+
+    rows.sort((a, b) => {
+        const ta = a.date ? a.date.getTime() : 0;
+        const tb = b.date ? b.date.getTime() : 0;
+        if (tb !== ta) return tb - ta;
+        return b.seq - a.seq;
+    });
+
+    const best = rows[0];
+    return {
+        text: best.text,
+        channel: channelFromDoc(best.d)
+    };
 }
 
 function stripMessagePrefix(text) {
@@ -160,6 +223,8 @@ module.exports = {
     extractDateFromText,
     stripMessagePrefix,
     channelFromDoc,
+    inferRoleFromIndexedLine,
+    pickLatestInboundFromVectorDocs,
     buildSearchHaystack,
     matchesQuery
 };

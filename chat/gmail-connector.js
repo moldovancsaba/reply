@@ -4,6 +4,7 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 const statusManager = require("./status-manager.js");
 const contactStore = require("./contact-store.js");
 const { addDocuments } = require("./vector-store.js");
+const { enqueueSuggestionDraftsFromDocBatch } = require("./suggestion-draft-queue.js");
 const { readSettings, writeSettings } = require("./settings-store.js");
 
 const DATA_DIR = path.join(__dirname, "data");
@@ -465,6 +466,7 @@ async function syncGmail({ maxMessages = 500 } = {}) {
   if (docs.length > 0) {
     updateMailStatus({ state: "running", message: `Vectorizing ${docs.length} Gmail messages…`, connector: "gmail", progress: 80 });
     await addDocuments(docs);
+    enqueueSuggestionDraftsFromDocBatch(docs);
   }
 
   state.lastSync = new Date().toISOString();

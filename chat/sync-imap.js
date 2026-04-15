@@ -3,6 +3,7 @@ const path = require('path');
 const { simpleParser } = require('mailparser');
 const { ImapFlow } = require('imapflow');
 const { addDocuments } = require('./vector-store.js');
+const { enqueueSuggestionDraftsFromDocBatch } = require('./suggestion-draft-queue.js');
 const contactStore = require('./contact-store.js');
 const statusManager = require('./status-manager.js');
 const { cleanMessageText } = require('./message-cleaner.js');
@@ -220,6 +221,7 @@ async function syncMailbox(client, mailboxName, opts) {
 
     if (docs.length > 0) {
       await addDocuments(docs);
+      enqueueSuggestionDraftsFromDocBatch(docs);
     }
 
     return { fetched: docs.length, maxUid: maxUidSeen };
