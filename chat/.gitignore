@@ -11,5 +11,7 @@ data/security_audit.jsonl
 data/debug_token.log
 data/*_sync_status.json
 data/sync_state.json
+data/whatsapp_sync_state.json
 data/kyc_auto_scan_cursor.json
+data/pending-suggestion-draft-queue.json
 logs/

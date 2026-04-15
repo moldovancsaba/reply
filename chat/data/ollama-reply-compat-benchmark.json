@@ -1,0 +1,550 @@
+{
+  "startedAt": "2026-04-15T11:26:52.343Z",
+  "finishedAt": "2026-04-15T11:29:56.214Z",
+  "host": "http://127.0.0.1:11434",
+  "roundsPerModel": 3,
+  "testsPerRound": 5,
+  "compatibilityRanking": [
+    {
+      "rank": 1,
+      "model": "gemma3:1b",
+      "reliability": 1,
+      "hits": 15,
+      "slots": 15,
+      "medianFullRoundMs": 3033,
+      "medianAnyRoundMs": 3033,
+      "fullRoundsPassed": 3
+    },
+    {
+      "rank": 2,
+      "model": "llama3.2:3b",
+      "reliability": 1,
+      "hits": 15,
+      "slots": 15,
+      "medianFullRoundMs": 4708,
+      "medianAnyRoundMs": 4708,
+      "fullRoundsPassed": 3
+    },
+    {
+      "rank": 3,
+      "model": "granite4:3b",
+      "reliability": 1,
+      "hits": 15,
+      "slots": 15,
+      "medianFullRoundMs": 7771,
+      "medianAnyRoundMs": 7771,
+      "fullRoundsPassed": 3
+    },
+    {
+      "rank": 4,
+      "model": "qwen2.5:7b",
+      "reliability": 1,
+      "hits": 15,
+      "slots": 15,
+      "medianFullRoundMs": 13910,
+      "medianAnyRoundMs": 13910,
+      "fullRoundsPassed": 3
+    },
+    {
+      "rank": 5,
+      "model": "MichelRosselli/apertus:latest",
+      "reliability": 1,
+      "hits": 15,
+      "slots": 15,
+      "medianFullRoundMs": 18258,
+      "medianAnyRoundMs": 18258,
+      "fullRoundsPassed": 3
+    }
+  ],
+  "picks": {
+    "reliability": {
+      "model": "gemma3:1b",
+      "reliability": 1,
+      "note": "Highest share of successful Reply-shaped calls (15 slots = 5 tests × 3 rounds)."
+    },
+    "speed": {
+      "model": "gemma3:1b",
+      "medianFullRoundMs": 3033,
+      "medianAnyRoundMs": 3033,
+      "reliability": 1,
+      "note": "Fastest median wall time among models with 100% success across all 15 slots."
+    }
+  },
+  "byModel": {
+    "gemma3:1b": {
+      "rounds": [
+        {
+          "round": 1,
+          "roundOk": true,
+          "totalMs": 4300,
+          "results": {
+            "analyzer_json": {
+              "ok": true,
+              "ms": 1832
+            },
+            "copywriter_plain": {
+              "ok": true,
+              "ms": 252
+            },
+            "kyc_json": {
+              "ok": true,
+              "ms": 592
+            },
+            "annotation_json": {
+              "ok": true,
+              "ms": 1265
+            },
+            "refine_generate": {
+              "ok": true,
+              "ms": 359
+            }
+          }
+        },
+        {
+          "round": 2,
+          "roundOk": true,
+          "totalMs": 3011,
+          "results": {
+            "analyzer_json": {
+              "ok": true,
+              "ms": 664
+            },
+            "copywriter_plain": {
+              "ok": true,
+              "ms": 247
+            },
+            "kyc_json": {
+              "ok": true,
+              "ms": 588
+            },
+            "annotation_json": {
+              "ok": true,
+              "ms": 1157
+            },
+            "refine_generate": {
+              "ok": true,
+              "ms": 355
+            }
+          }
+        },
+        {
+          "round": 3,
+          "roundOk": true,
+          "totalMs": 3033,
+          "results": {
+            "analyzer_json": {
+              "ok": true,
+              "ms": 680
+            },
+            "copywriter_plain": {
+              "ok": true,
+              "ms": 243
+            },
+            "kyc_json": {
+              "ok": true,
+              "ms": 599
+            },
+            "annotation_json": {
+              "ok": true,
+              "ms": 1151
+            },
+            "refine_generate": {
+              "ok": true,
+              "ms": 360
+            }
+          }
+        }
+      ],
+      "summary": {
+        "model": "gemma3:1b",
+        "reliability": 1,
+        "hits": 15,
+        "slots": 15,
+        "medianFullRoundMs": 3033,
+        "medianAnyRoundMs": 3033,
+        "fullRoundsPassed": 3
+      },
+      "qualityStress": null
+    },
+    "granite4:3b": {
+      "rounds": [
+        {
+          "round": 1,
+          "roundOk": true,
+          "totalMs": 9628,
+          "results": {
+            "analyzer_json": {
+              "ok": true,
+              "ms": 5130
+            },
+            "copywriter_plain": {
+              "ok": true,
+              "ms": 407
+            },
+            "kyc_json": {
+              "ok": true,
+              "ms": 1048
+            },
+            "annotation_json": {
+              "ok": true,
+              "ms": 2536
+            },
+            "refine_generate": {
+              "ok": true,
+              "ms": 507
+            }
+          }
+        },
+        {
+          "round": 2,
+          "roundOk": true,
+          "totalMs": 7583,
+          "results": {
+            "analyzer_json": {
+              "ok": true,
+              "ms": 2775
+            },
+            "copywriter_plain": {
+              "ok": true,
+              "ms": 376
+            },
+            "kyc_json": {
+              "ok": true,
+              "ms": 1055
+            },
+            "annotation_json": {
+              "ok": true,
+              "ms": 2880
+            },
+            "refine_generate": {
+              "ok": true,
+              "ms": 497
+            }
+          }
+        },
+        {
+          "round": 3,
+          "roundOk": true,
+          "totalMs": 7771,
+          "results": {
+            "analyzer_json": {
+              "ok": true,
+              "ms": 2991
+            },
+            "copywriter_plain": {
+              "ok": true,
+              "ms": 352
+            },
+            "kyc_json": {
+              "ok": true,
+              "ms": 1064
+            },
+            "annotation_json": {
+              "ok": true,
+              "ms": 2880
+            },
+            "refine_generate": {
+              "ok": true,
+              "ms": 484
+            }
+          }
+        }
+      ],
+      "summary": {
+        "model": "granite4:3b",
+        "reliability": 1,
+        "hits": 15,
+        "slots": 15,
+        "medianFullRoundMs": 7771,
+        "medianAnyRoundMs": 7771,
+        "fullRoundsPassed": 3
+      },
+      "qualityStress": null
+    },
+    "MichelRosselli/apertus:latest": {
+      "rounds": [
+        {
+          "round": 1,
+          "roundOk": true,
+          "totalMs": 38899,
+          "results": {
+            "analyzer_json": {
+              "ok": true,
+              "ms": 26064
+            },
+            "copywriter_plain": {
+              "ok": true,
+              "ms": 1380
+            },
+            "kyc_json": {
+              "ok": true,
+              "ms": 2307
+            },
+            "annotation_json": {
+              "ok": true,
+              "ms": 7209
+            },
+            "refine_generate": {
+              "ok": true,
+              "ms": 1939
+            }
+          }
+        },
+        {
+          "round": 2,
+          "roundOk": true,
+          "totalMs": 16816,
+          "results": {
+            "analyzer_json": {
+              "ok": true,
+              "ms": 4259
+            },
+            "copywriter_plain": {
+              "ok": true,
+              "ms": 1039
+            },
+            "kyc_json": {
+              "ok": true,
+              "ms": 2440
+            },
+            "annotation_json": {
+              "ok": true,
+              "ms": 7023
+            },
+            "refine_generate": {
+              "ok": true,
+              "ms": 2055
+            }
+          }
+        },
+        {
+          "round": 3,
+          "roundOk": true,
+          "totalMs": 18258,
+          "results": {
+            "analyzer_json": {
+              "ok": true,
+              "ms": 5462
+            },
+            "copywriter_plain": {
+              "ok": true,
+              "ms": 1375
+            },
+            "kyc_json": {
+              "ok": true,
+              "ms": 2358
+            },
+            "annotation_json": {
+              "ok": true,
+              "ms": 7392
+            },
+            "refine_generate": {
+              "ok": true,
+              "ms": 1671
+            }
+          }
+        }
+      ],
+      "summary": {
+        "model": "MichelRosselli/apertus:latest",
+        "reliability": 1,
+        "hits": 15,
+        "slots": 15,
+        "medianFullRoundMs": 18258,
+        "medianAnyRoundMs": 18258,
+        "fullRoundsPassed": 3
+      },
+      "qualityStress": null
+    },
+    "qwen2.5:7b": {
+      "rounds": [
+        {
+          "round": 1,
+          "roundOk": true,
+          "totalMs": 29904,
+          "results": {
+            "analyzer_json": {
+              "ok": true,
+              "ms": 20124
+            },
+            "copywriter_plain": {
+              "ok": true,
+              "ms": 946
+            },
+            "kyc_json": {
+              "ok": true,
+              "ms": 1834
+            },
+            "annotation_json": {
+              "ok": true,
+              "ms": 5868
+            },
+            "refine_generate": {
+              "ok": true,
+              "ms": 1132
+            }
+          }
+        },
+        {
+          "round": 2,
+          "roundOk": true,
+          "totalMs": 13910,
+          "results": {
+            "analyzer_json": {
+              "ok": true,
+              "ms": 4115
+            },
+            "copywriter_plain": {
+              "ok": true,
+              "ms": 919
+            },
+            "kyc_json": {
+              "ok": true,
+              "ms": 1804
+            },
+            "annotation_json": {
+              "ok": true,
+              "ms": 5963
+            },
+            "refine_generate": {
+              "ok": true,
+              "ms": 1109
+            }
+          }
+        },
+        {
+          "round": 3,
+          "roundOk": true,
+          "totalMs": 13722,
+          "results": {
+            "analyzer_json": {
+              "ok": true,
+              "ms": 4006
+            },
+            "copywriter_plain": {
+              "ok": true,
+              "ms": 920
+            },
+            "kyc_json": {
+              "ok": true,
+              "ms": 1826
+            },
+            "annotation_json": {
+              "ok": true,
+              "ms": 5885
+            },
+            "refine_generate": {
+              "ok": true,
+              "ms": 1085
+            }
+          }
+        }
+      ],
+      "summary": {
+        "model": "qwen2.5:7b",
+        "reliability": 1,
+        "hits": 15,
+        "slots": 15,
+        "medianFullRoundMs": 13910,
+        "medianAnyRoundMs": 13910,
+        "fullRoundsPassed": 3
+      },
+      "qualityStress": null
+    },
+    "llama3.2:3b": {
+      "rounds": [
+        {
+          "round": 1,
+          "roundOk": true,
+          "totalMs": 7843,
+          "results": {
+            "analyzer_json": {
+              "ok": true,
+              "ms": 4404
+            },
+            "copywriter_plain": {
+              "ok": true,
+              "ms": 402
+            },
+            "kyc_json": {
+              "ok": true,
+              "ms": 798
+            },
+            "annotation_json": {
+              "ok": true,
+              "ms": 1924
+            },
+            "refine_generate": {
+              "ok": true,
+              "ms": 315
+            }
+          }
+        },
+        {
+          "round": 2,
+          "roundOk": true,
+          "totalMs": 4422,
+          "results": {
+            "analyzer_json": {
+              "ok": true,
+              "ms": 762
+            },
+            "copywriter_plain": {
+              "ok": true,
+              "ms": 389
+            },
+            "kyc_json": {
+              "ok": true,
+              "ms": 789
+            },
+            "annotation_json": {
+              "ok": true,
+              "ms": 1934
+            },
+            "refine_generate": {
+              "ok": true,
+              "ms": 548
+            }
+          }
+        },
+        {
+          "round": 3,
+          "roundOk": true,
+          "totalMs": 4708,
+          "results": {
+            "analyzer_json": {
+              "ok": true,
+              "ms": 1451
+            },
+            "copywriter_plain": {
+              "ok": true,
+              "ms": 463
+            },
+            "kyc_json": {
+              "ok": true,
+              "ms": 788
+            },
+            "annotation_json": {
+              "ok": true,
+              "ms": 1508
+            },
+            "refine_generate": {
+              "ok": true,
+              "ms": 498
+            }
+          }
+        }
+      ],
+      "summary": {
+        "model": "llama3.2:3b",
+        "reliability": 1,
+        "hits": 15,
+        "slots": 15,
+        "medianFullRoundMs": 4708,
+        "medianAnyRoundMs": 4708,
+        "fullRoundsPassed": 3
+      },
+      "qualityStress": null
+    }
+  }
+}

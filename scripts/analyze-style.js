@@ -1,12 +1,14 @@
-const fs = require('fs');
-const path = require('path');
-const http = require('http');
+const fs = require("fs");
+const path = require("path");
+const http = require("http");
+const https = require("https");
 
-const DATA_FILE = path.join(__dirname, '../training_data.jsonl');
-const OUT_FILE = path.join(__dirname, '../chat/data/system_persona.txt');
-const OLLAMA_HOST = "127.0.0.1";
-const OLLAMA_PORT = 11434;
+require("../chat/load-env.js").loadReplyEnv();
+
+const DATA_FILE = path.join(__dirname, "../training_data.jsonl");
+const OUT_FILE = path.join(__dirname, "../chat/data/system_persona.txt");
 const { getReplyOllamaModel } = require("../chat/ollama-model.js");
+const { getOllamaUrlParts } = require("../chat/ai-runtime-config.js");
 const OLLAMA_MODEL = getReplyOllamaModel();
 
 async function analyzeStyle() {
@@ -58,21 +60,23 @@ Output ONLY the final system prompt block. Start directly with: "You are Csaba. 
         }
     });
 
+    const { hostname, port, isHttps } = getOllamaUrlParts();
+    const transport = isHttps ? https : http;
     const options = {
-        hostname: OLLAMA_HOST,
-        port: OLLAMA_PORT,
-        path: '/api/generate',
-        method: 'POST',
+        hostname,
+        port,
+        path: "/api/generate",
+        method: "POST",
         headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(payload)
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(payload)
         }
     };
 
     console.log(`Sending prompt to local Ollama model "${OLLAMA_MODEL}"... (This may take a minute)`);
 
     return new Promise((resolve, reject) => {
-        const req = http.request(options, (res) => {
+        const req = transport.request(options, (res) => {
             let data = '';
             res.on('data', (chunk) => data += chunk);
             res.on('end', () => {

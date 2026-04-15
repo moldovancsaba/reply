@@ -89,9 +89,25 @@ async function probeOpenClawGatewayHealthzFromEnv(timeoutMs) {
             throw new Error(`healthz HTTP ${r.status}`);
         }
         return await r.json();
+    } catch {
+        /* Let CLI `gateway health` run as fallback when healthz is down or TLS blocked */
+        return null;
     } finally {
         clearTimeout(id);
     }
+}
+
+/**
+ * Normalize gateway probe payloads: Docker `/healthz` often returns `{ ok, status: "live" }`;
+ * some builds omit `ok` and only set `status`.
+ * @param {unknown} data
+ * @returns {boolean}
+ */
+function openclawGatewayResponseOk(data) {
+    if (!data || typeof data !== "object") return false;
+    if (data.ok === true) return true;
+    const s = String(data.status || "").toLowerCase();
+    return s === "live" || s === "ok";
 }
 
 /**
@@ -104,7 +120,7 @@ async function probeOpenClawGatewayHealth(bin, opts = {}) {
     const timeoutMs = opts.timeoutMs ?? 5000;
     const viaHttp = await probeOpenClawGatewayHealthzFromEnv(timeoutMs);
     if (viaHttp) {
-        return viaHttp;
+        return { ...viaHttp, ok: openclawGatewayResponseOk(viaHttp) };
     }
 
     const childEnv = getOpenClawGatewayExecEnv();
@@ -122,7 +138,8 @@ async function probeOpenClawGatewayHealth(bin, opts = {}) {
     if (jsonStart === -1) {
         throw new Error("No JSON object found in gateway health output");
     }
-    return JSON.parse(stdout.slice(jsonStart));
+    const parsed = JSON.parse(stdout.slice(jsonStart));
+    return { ...parsed, ok: openclawGatewayResponseOk(parsed) };
 }
 
 module.exports = {
@@ -131,5 +148,6 @@ module.exports = {
     readGatewayTokenFromHomeConfig,
     probeOpenClawGatewayHealth,
     probeOpenClawGatewayHealthzFromEnv,
-    wsGatewayUrlToHealthzHttpUrl
+    wsGatewayUrlToHealthzHttpUrl,
+    openclawGatewayResponseOk
 };

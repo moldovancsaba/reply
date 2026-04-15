@@ -5,11 +5,9 @@ const { applyAiSettingsToProcessEnv, resolveOllamaHttpBase } = require("./ai-run
 applyAiSettingsToProcessEnv(readSettings());
 
 const { Ollama } = require("ollama");
+const { getKycOllamaModel } = require("./ollama-model.js");
 function getKycOllamaClient() {
   return new Ollama({ host: resolveOllamaHttpBase() });
-}
-function getKycOllamaModel() {
-  return String(process.env.REPLY_KYC_OLLAMA_MODEL || "qwen2.5:7b").trim() || "qwen2.5:7b";
 }
 const contactStore = require('./contact-store.js');
 const { mergeProfile } = require("./kyc-merge.js");
@@ -18,6 +16,7 @@ const { extractSignals } = require('./signal-extractor.js');
 const { withDefaults } = require('./settings-store.js');
 const fs = require('fs');
 const path = require('path');
+const { resolveWhatsAppChatStoragePath } = require('./utils/whatsapp-db-path.js');
 const syncGuard = require('./utils/sync-guard');
 const KYC_DEBUG = process.env.REPLY_KYC_DEBUG === "1";
 
@@ -171,8 +170,8 @@ function extractPhones(text) {
 async function lidsForPhones(phoneDigitsList) {
     try {
         if (!process.env.HOME) return new Map();
-        const dbPath = path.join(process.env.HOME, "Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite");
-        if (!fs.existsSync(dbPath)) return new Map();
+        const dbPath = resolveWhatsAppChatStoragePath();
+        if (!dbPath || !fs.existsSync(dbPath)) return new Map();
 
         const phones = Array.from(new Set((phoneDigitsList || []).map(normalizePhone).filter(Boolean)));
         if (phones.length === 0) return new Map();

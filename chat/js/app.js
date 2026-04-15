@@ -219,30 +219,21 @@ function setupEventListeners() {
           }
         }
 
-        if (!suggestion) {
-          const greetings = [
-            'Hi there, just checking in!',
-            'Hello! How can I help?',
-            'Hey, do you have a minute?',
-            'Just saw your message, thanks!',
-          ];
-          suggestion = greetings[Math.floor(Math.random() * greetings.length)];
-          UI.showToast('Using a quick template — no AI text this time.', 'warning', 3500);
-        }
-
-        chatInput.value = suggestion;
-
         const explanationEl = document.getElementById('suggestion-explanation');
-        if (explanationEl) {
-          if (explanation) {
-            explanationEl.textContent = explanation;
-            explanationEl.style.display = 'block';
-          } else {
-            explanationEl.style.display = 'none';
+        if (suggestion) {
+          chatInput.value = suggestion;
+          if (explanationEl) {
+            if (explanation) {
+              explanationEl.textContent = explanation;
+              explanationEl.style.display = 'block';
+            } else {
+              explanationEl.style.display = 'none';
+            }
           }
+          try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
+        } else if (explanationEl) {
+          explanationEl.style.display = 'none';
         }
-
-        try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
       } finally {
         UI.hideLoading();
         btnSuggest.disabled = false;

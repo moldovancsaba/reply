@@ -7,7 +7,8 @@
  * their verified addresses to the same gate. LinkedIn requires an exact match after
  * `normalizeLinkedinKey()` (scheme + URL stripping only — no substring unlock).
  *
- * Opt-out for local dev: `REPLY_OUTBOUND_REQUIRE_INBOUND_VERIFIED=false` (see `chat/.env.example`).
+ * Opt-in for production-style lockdown: `REPLY_OUTBOUND_REQUIRE_INBOUND_VERIFIED=true` (see `chat/.env.example`).
+ * When unset or false, this gate is off — sends are not blocked here (other layers may still apply).
  * Denials are logged via `appendOutboundDenial()` to `chat/data/outbound-policy-denials.jsonl`.
  */
 const fs = require("fs");
@@ -15,8 +16,9 @@ const path = require("path");
 const contactStore = require("../contact-store.js");
 
 function policyEnabled() {
-  const v = String(process.env.REPLY_OUTBOUND_REQUIRE_INBOUND_VERIFIED ?? "true").toLowerCase();
-  return v !== "0" && v !== "false" && v !== "no";
+  const v = String(process.env.REPLY_OUTBOUND_REQUIRE_INBOUND_VERIFIED ?? "").trim().toLowerCase();
+  if (!v) return false;
+  return v === "1" || v === "true" || v === "yes";
 }
 
 function normalizeEmail(s) {

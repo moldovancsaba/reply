@@ -19,12 +19,14 @@ const { readSettings } = require("./settings-store.js");
 const { applyAiSettingsToProcessEnv } = require("./ai-runtime-config.js");
 applyAiSettingsToProcessEnv(readSettings());
 
-const HATORI_PROJECT_PATH = path.join(__dirname, "..", "..", "hatori");
-const { resolveHatoriForHubStart } = require("./hatori-lifecycle.js");
+const { resolveHatoriForHubStart, resolveHatoriProjectPath } = require("./hatori-lifecycle.js");
+const HATORI_PROJECT_PATH = resolveHatoriProjectPath(__dirname);
 if (String(process.env.REPLY_USE_HATORI || "").trim() === "1") {
-  if (!fs.existsSync(HATORI_PROJECT_PATH)) {
+  const hatoriExt = String(process.env.REPLY_HATORI_EXTERNAL || "").trim() === "1";
+  if (!fs.existsSync(HATORI_PROJECT_PATH) && !hatoriExt) {
     console.warn(
-      `[Hatori] REPLY_USE_HATORI=1 but no checkout at ${HATORI_PROJECT_PATH} — hub will not spawn the sidecar. Clone https://github.com/moldovancsaba/hatori as a sibling of this repo, or set REPLY_HATORI_EXTERNAL=1 if the API already runs elsewhere.`
+      `[Hatori] REPLY_USE_HATORI=1 but no checkout at ${HATORI_PROJECT_PATH} — hub will not spawn the sidecar. ` +
+        `Set REPLY_HATORI_PROJECT_PATH to your clone (e.g. /Users/Shared/Projects/hatori) or REPLY_HATORI_EXTERNAL=1 if the API runs elsewhere.`
     );
   }
 }
@@ -72,11 +74,15 @@ async function startManagedServices() {
     serviceManager.setStatus("hatori", "loading in queue");
     serviceManager.setStatus("worker", "loading in queue");
 
-    if (process.env.REPLY_USE_HATORI !== "1" || !fs.existsSync(HATORI_PROJECT_PATH)) {
+    const hatoriExt = String(process.env.REPLY_HATORI_EXTERNAL || "").trim() === "1";
+    const hatoriPathOk = fs.existsSync(HATORI_PROJECT_PATH);
+    if (process.env.REPLY_USE_HATORI !== "1") {
+      serviceManager.setStatus("hatori", "skipped");
+    } else if (!hatoriPathOk && !hatoriExt) {
       serviceManager.setStatus("hatori", "skipped");
     }
 
-    if (process.env.REPLY_USE_HATORI === "1" && fs.existsSync(HATORI_PROJECT_PATH)) {
+    if (process.env.REPLY_USE_HATORI === "1" && (hatoriPathOk || hatoriExt)) {
       const hatoriPort = process.env.REPLY_HATORI_PORT || "23572";
       statusManager.update("system", { progress: 30, message: "Resolving Hatori…" });
       function spawnHatoriSidecar() {
@@ -192,6 +198,7 @@ const server = http.createServer(async (req, res) => {
 
   // System Health
   if (pathname === "/api/health" || pathname === "/api/system-health" || pathname === "/api/system/services") return systemRoutes.serveSystemHealth(req, res);
+  if (pathname === "/api/preflight") return systemRoutes.servePreflight(req, res);
   if (pathname === "/api/system/service/control") return auth({ route: pathname, action: "service-control" }) && systemRoutes.serveServiceControl(req, res);
   if (pathname === "/api/openclaw/status") return systemRoutes.serveOpenClawStatus(req, res);
   if (pathname === "/api/triage-log") return systemRoutes.serveTriageLog(req, res, url);
@@ -237,6 +244,20 @@ function tryListen(port) {
     boundPort = server.address().port;
     hubRuntime.setListenInfo(boundPort, "127.0.0.1");
     console.log(`Reply POC server running at http://localhost:${boundPort}`);
+    setImmediate(() => {
+      systemRoutes
+        .buildSystemHealthPayload()
+        .then((h) => {
+          const p = h.preflight;
+          if (!p) return;
+          const blockedIds = p.checks.filter((c) => c.status === "blocked").map((c) => c.id);
+          console.log(
+            `[Preflight] overall=${p.overall} run=${p.runId}` +
+              (blockedIds.length ? ` blocked=[${blockedIds.join(",")}]` : "")
+          );
+        })
+        .catch((e) => console.warn("[Preflight] startup summary failed:", e.message));
+    });
   });
 
   server.listen(port, "127.0.0.1");
