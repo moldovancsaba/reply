@@ -11,16 +11,15 @@
  * optionally blending in vector `search()` hits for “how I write” examples. No outbound
  * call to Google Gemini in this file.
  *
- * **Host:** `OLLAMA_HOST` or `http://127.0.0.1:11434`.
+ * **Host:** `OLLAMA_HOST` / Settings AI host (see `ai-runtime-config.js` `resolveOllamaHttpBase()`).
  */
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
-const { search } = require('./vector-store.js');
-const { getReplyOllamaModel } = require('./ollama-model.js');
-
-const OLLAMA_HOST = "127.0.0.1";
-const OLLAMA_PORT = 11434;
+const http = require("http");
+const https = require("https");
+const fs = require("fs");
+const path = require("path");
+const { search } = require("./vector-store.js");
+const { getReplyOllamaModel } = require("./ollama-model.js");
+const { getOllamaUrlParts } = require("./ai-runtime-config.js");
 
 let cachedPersona = null;
 function getPersona() {
@@ -88,19 +87,21 @@ REFINED VERSION:`;
         }
     });
 
+    const { hostname, port, isHttps } = getOllamaUrlParts();
+    const transport = isHttps ? https : http;
     const options = {
-        hostname: OLLAMA_HOST,
-        port: OLLAMA_PORT,
-        path: '/api/generate',
-        method: 'POST',
+        hostname,
+        port,
+        path: "/api/generate",
+        method: "POST",
         headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(payload)
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(payload)
         }
     };
 
     return new Promise((resolve, reject) => {
-        const req = http.request(options, (res) => {
+        const req = transport.request(options, (res) => {
             let data = '';
             res.on('data', (chunk) => data += chunk);
             res.on('end', () => {

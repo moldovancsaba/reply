@@ -18,6 +18,11 @@ const {
     getDraftRuntimeMode
 } = require("../ai-runtime-config.js");
 const { buildAuthUrl, connectGmailFromCallback, disconnectGmail, checkGmailConnection } = require("../gmail-connector");
+const {
+    getReplyOllamaModel,
+    getKycOllamaModel,
+    getAnnotationOllamaModel
+} = require("../ollama-model.js");
 const crypto = require("crypto");
 
 let gmailOauthState = null;
@@ -27,6 +32,15 @@ function serveSettings(req, res) {
         const settings = readSettings();
         applyAiSettingsToProcessEnv(settings);
         const client = maskSettingsForClient(settings);
+        if (!String(client.ai?.ollamaModel || "").trim()) {
+            client.ai.ollamaModel = getReplyOllamaModel();
+        }
+        if (!String(client.ai?.kycOllamaModel || "").trim()) {
+            client.ai.kycOllamaModel = getKycOllamaModel();
+        }
+        if (!String(client.ai?.annotationOllamaModel || "").trim()) {
+            client.ai.annotationOllamaModel = getAnnotationOllamaModel();
+        }
         client.runtime = {
             useHatori: process.env.REPLY_USE_HATORI === "1",
             hatoriPort: process.env.REPLY_HATORI_PORT || "23572",

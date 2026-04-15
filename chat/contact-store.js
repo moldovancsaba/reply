@@ -456,6 +456,11 @@ class ContactStore {
                 if (Array.isArray(values)) values.forEach(h => handles.add(h));
             }
         }
+        if (contact.verifiedChannels && typeof contact.verifiedChannels === "object") {
+            for (const [addr, ts] of Object.entries(contact.verifiedChannels)) {
+                if (ts && addr) handles.add(addr);
+            }
+        }
         return Array.from(handles);
     }
 

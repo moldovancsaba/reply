@@ -254,9 +254,17 @@ async function refreshAiProviderStatuses() {
       ocLine.textContent = `Status: ${s}${oc.error ? ` — ${oc.error}` : ''}${oc.detail ? ` (${oc.detail})` : ''}`;
     }
     if (hatLine) {
-      const h = health.services?.hatori_api?.status || 'unknown';
-      const d = health.services?.hatori_api?.detail || '';
-      hatLine.textContent = `Status: ${h}${d ? ` (${d})` : ''}`;
+      const api = health.services?.hatori_api || {};
+      const h = api.status || 'unknown';
+      const d = api.detail || '';
+      const agents = api.agents;
+      let extra = '';
+      if (Array.isArray(agents) && agents.length) {
+        const bad = agents.filter((a) => !a.ok).map((a) => a.role).join(', ');
+        extra = bad ? ` · lanes fault: ${bad}` : ' · writer/drafter/judge ok';
+      }
+      const watch = api.ui_url ? ` · watch ${api.ui_url}` : '';
+      hatLine.textContent = `Status: ${h}${d ? ` (${d})` : ''}${extra}${watch}`;
     }
   } catch (e) {
     if (ollamaLine) ollamaLine.textContent = `Check failed: ${e?.message || e}`;
@@ -519,7 +527,12 @@ export async function openSettings() {
   if (page) page.style.display = 'flex';
   document.body.classList.add('mode-settings');
 
-  switchTab('general');
+  const hashTab =
+    typeof window.location !== 'undefined'
+      ? String(window.location.hash || '').replace(/^#/, '').trim()
+      : '';
+  const tabNav = hashTab ? document.querySelector(`[data-tab="${hashTab}"]`) : null;
+  switchTab(tabNav ? hashTab : 'general');
   await loadIntoForm();
 }
 

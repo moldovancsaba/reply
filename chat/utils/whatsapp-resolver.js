@@ -5,11 +5,9 @@
 
 const fs = require("fs");
 const path = require("path");
+const { resolveWhatsAppChatStoragePath } = require("./whatsapp-db-path.js");
 
-const WA_DB_PATH = path.join(
-    process.env.HOME || "",
-    "Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite"
-);
+const WA_DB_PATH = resolveWhatsAppChatStoragePath();
 
 const whatsAppIdResolver = (() => {
     const MAX_CACHE = 5000;

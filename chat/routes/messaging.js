@@ -13,6 +13,7 @@ const {
     channelFromDoc,
     inferChannelFromHandle,
     inferSourceFromChannel,
+    pickLatestInboundFromVectorDocs,
     buildSearchHaystack,
     matchesQuery
 } = require("../utils/chat-utils");
@@ -128,7 +129,10 @@ const { writeJson, readJsonBody, normalizeErrorText, parseJsonSafe } = require("
 const {
     applyOpenClawWhatsAppGuard,
     resolveOpenClawBinary,
-    buildOpenClawWhatsAppHint
+    buildOpenClawWhatsAppHint,
+    resolveWhatsAppSendTransport,
+    sendWhatsAppViaOpenClawCli,
+    sendWhatsAppViaDesktopAutomation
 } = require("../utils/whatsapp-utils");
 const contactStore = require("../contact-store");
 const whatsAppIdResolver = require("../utils/whatsapp-resolver");
@@ -137,10 +141,11 @@ const { generateReply } = require("../reply-engine");
 const { getSnippets } = require("../knowledge");
 const { refineReply } = require("../gemini-client");
 const { execFile, spawn } = require("child_process");
-const { readSettings, resolveWhatsAppSendTransport } = require("../settings-store");
+const { readSettings } = require("../settings-store");
 const messageStore = require("../message-store");
 const hatori = require("../hatori-client.js");
 const { checkOutboundAllowed, appendOutboundDenial } = require("../utils/outbound-policy.js");
+const { maybeBlockOutboundOnPreflight } = require("./system.js");
 
 const CONVERSATION_STATS_TTL_MS = 60 * 1000;
 const CONVERSATION_PREVIEW_SAMPLE_ROWS = 200;
@@ -369,21 +374,19 @@ async function serveSuggest(req, res) {
             const prefixes = handles.flatMap((h) => pathPrefixesForHandle(h));
             const historyBatches = await Promise.all(prefixes.map((p) => getHistory(p)));
             const docs = historyBatches.flat();
-            const lastIncoming = docs
-                .map((d) => ({
-                    role: (d.text || "").includes("] Me:") ? "me" : "contact",
-                    text: stripMessagePrefix(d.text || ""),
-                    date: extractDateFromText(d.text || ""),
-                    channel: channelFromDoc(d) || inferChannelFromHandle(handle),
-                }))
-                .filter((m) => m.date && m.text && m.role === "contact")
-                .sort((a, b) => b.date - a.date)[0];
-            message = lastIncoming?.text?.trim() || "";
-            inferredChannel = (lastIncoming?.channel || inferChannelFromHandle(handle) || "other").toString().toLowerCase();
+            const picked = pickLatestInboundFromVectorDocs(docs);
+            message = picked?.text?.trim() || "";
+            inferredChannel = (picked?.channel || inferChannelFromHandle(handle) || "other")
+                .toString()
+                .toLowerCase();
         }
 
         if (!message) {
-            writeJson(res, 200, { suggestion: "Hi — just checking in." });
+            writeJson(res, 422, {
+                error: "No inbound contact message found in index for this handle — cannot generate a reply.",
+                code: "no_inbound_context",
+                suggestion: ""
+            });
             return;
         }
 
@@ -457,6 +460,12 @@ async function serveSendMessage(req, res, channel) {
 
         if (!handle || !text) {
             writeJson(res, 400, { error: "Missing handle or text" });
+            return;
+        }
+
+        const preBlock = await maybeBlockOutboundOnPreflight();
+        if (preBlock) {
+            writeJson(res, 503, preBlock);
             return;
         }
 
@@ -600,12 +609,17 @@ async function serveSendWhatsApp(req, res) {
             return;
         }
 
+        const preBlock = await maybeBlockOutboundOnPreflight();
+        if (preBlock) {
+            writeJson(res, 503, preBlock);
+            return;
+        }
+
         const recipient = recipientRaw.replace(/\s+/g, "");
         const text = textRaw.replace(/\r\n/g, "\n");
 
         const settings = readSettings();
         const allowOpenClaw = settings?.global?.allowOpenClaw !== false;
-        const { sendWhatsAppViaOpenClawCli, sendWhatsAppViaDesktopAutomation, resolveWhatsAppSendTransport } = require("../utils/whatsapp-utils");
         const transport = resolveWhatsAppSendTransport(payload?.transport);
         const allowDesktopFallback = payload?.allowDesktopFallback !== false;
 

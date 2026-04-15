@@ -138,7 +138,7 @@ npm run dev
 - **WhatsApp failing with "refactor pending" or AppleScript errors**: We recently scrubbed all legacy desktop automation fallbacks from the system. Ensure you are exclusively using `OpenClaw` and running the correct CLI.
 - **iMessage Missing?**: Go to System Settings -> Privacy & Security -> Full Disk Access -> Give Terminal / VSCode permissions.
 - **Hatori Magic is red?**: Hatori operates on `http://127.0.0.1:23572`. Check the Menu Bar App to see if it is down.
-- **Refine / suggestions need Ollama**: Default local model is `gemma4:e2b` (`ollama pull gemma4:e2b`). Details in [docs/LOCAL_MACHINE_DEPLOYMENT.md](docs/LOCAL_MACHINE_DEPLOYMENT.md).
+- **Refine / suggestions need Ollama**: Default local model is `gemma3:1b` (see `chat/.env.example` for supported tags). Details in [docs/LOCAL_MACHINE_DEPLOYMENT.md](docs/LOCAL_MACHINE_DEPLOYMENT.md).
 
 ## Contributing
 1. **Track work** in [`moldovancsaba/reply` issues](https://github.com/moldovancsaba/reply) and the [`{reply}` GitHub Project (#7)](https://github.com/users/moldovancsaba/projects/7). See [docs/PROJECT_MANAGEMENT.md](docs/PROJECT_MANAGEMENT.md).

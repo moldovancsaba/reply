@@ -51,7 +51,9 @@ curl -sfS http://127.0.0.1:45311/api/health
 3. **Ollama** (local LLM for suggestions, worker drafting, refine, and much of KYC-style extraction that goes through the shared Ollama model helper):
 
    ```bash
-   ollama pull gemma4:e2b
+   ollama pull gemma3:1b
+   ollama pull granite4:3b
+   ollama pull qwen2.5:7b
    ```
 
    Ensure the Ollama daemon is running (`http://127.0.0.1:11434`).
@@ -133,8 +135,9 @@ curl -sfS http://127.0.0.1:45311/api/health
 - **Settings UI → “AI & status”** — Persists **`ai.*`** (draft runtime `auto` / `ollama` / `hatori`, Ollama base URL or port + **main** model tag, optional **annotation** and **KYC / Analyze** model tags → `REPLY_ANNOTATION_MODEL` / `REPLY_KYC_OLLAMA_MODEL`, OpenClaw CLI path + gateway URL/token, Hatori API base). The hub applies these to **`process.env`** on **Save**; **`syncToEnv`** mirrors overlapping keys into **`chat/.env`** so the **background worker** picks them up after **restart** or the in-UI **Restart background worker** action.
 - **`PORT`** — Default `45311`. If that port is already bound, `server.js` tries the next port and logs it (`Port 45311 in use, trying 45312...`). Use the printed URL or free the port.
 - **`REPLY_NODE_BIN`** (optional) — Absolute path to the `node` binary for the LaunchAgent. Use when Node is not on the plist `PATH` (for example, only installed under a version manager without a symlink into `/opt/homebrew/bin`).
-- **`REPLY_OLLAMA_MODEL`** — Default in code is `gemma4:e2b` (lightest Gemma 4 edge tag on Ollama). Larger: `gemma4:e4b`, `gemma4:26b`, `gemma4:31b`.
-- **`REPLY_OLLAMA_MODEL_LEGACY_MAP`** — If `REPLY_OLLAMA_MODEL` is still set to the old `llama3.2:3b`, it is remapped to this value (default: same as current default model).
+- **`REPLY_OLLAMA_MODEL`** — Default in code is `gemma3:1b` (`chat/ollama-model.js`). Other supported tags include `granite4:3b`, `MichelRosselli/apertus:latest`, `qwen2.5:7b`, `llama3.2:3b` (see `chat/.env.example`).
+- **`REPLY_KYC_OLLAMA_MODEL`** — Default `qwen2.5:7b` for KYC / ✨ Analyze (`kyc-agent.js`).
+- **`REPLY_ANNOTATION_MODEL`** — Optional; LanceDB annotation (`annotation-agent.js`). Resolution order: `REPLY_ANNOTATION_MODEL` → `REPLY_OLLAMA_MODEL` → default `granite4:3b` in `ollama-model.js`.
 - **`REPLY_ANNOTATION_MODEL`** — Optional override for the vector annotation batch job; falls back to `REPLY_OLLAMA_MODEL`.
 - **`REPLY_IMESSAGE_DB_PATH`** — Optional explicit path to Apple’s `chat.db`.
 - **`GOOGLE_API_KEY` in `.env.example`** — Historically mentioned for “Gemini”; **`chat/gemini-client.js` implements refine via local Ollama**, using the same model resolution as suggestions (`getReplyOllamaModel()` from `ollama-model.js`). A cloud Gemini key is **not** required for refine in the current code path.
@@ -155,7 +158,7 @@ curl -sfS http://127.0.0.1:45311/api/health
 | Health check fails on 45311 | Another process owns the port or server chose 45312+ | Check console log for actual port; `lsof -i :45311`. |
 | Hub exits / restarts with `SQLITE_CANTOPEN` right after `/api/health` | Unified `data/chat.db` missing, unreadable, or SQLite `error` events on a short-lived connection | Fix permissions on `data/`; ensure disk is available. Health counting uses `data/chat.db` and now handles errors without crashing the hub. |
 | `node: command not found` in `hub.log` | launchd `PATH` does not include your Node install | Install Node where Homebrew puts it, or set **`REPLY_NODE_BIN`** to the full path to `node` in `~/Library/LaunchAgents/com.reply.hub.plist` under `EnvironmentVariables`, then `make run`. [`tools/scripts/reply_service.sh`](../tools/scripts/reply_service.sh) also probes `/opt/homebrew/bin/node` and `/usr/local/bin/node`. |
-| Ollama errors in UI / worker | Model not pulled or daemon down | `ollama list`, `ollama pull gemma4:e2b`, start Ollama. |
+| Ollama errors in UI / worker | Model not pulled or daemon down | `ollama list`, `ollama pull` the tag set in `REPLY_OLLAMA_MODEL`, start Ollama. |
 
 ---
 
@@ -195,14 +198,20 @@ The following were implemented so **local deployment does not depend on a perfec
 
 ### 5.4 Ollama model defaults and refine alignment
 
-**Goals:** Avoid broken defaults (`llama3.2:3b` on fresh Ollama), prefer **lightest Gemma 4** for latency on a laptop, and use **one env knob** for suggestion + refine.
+**Goals:** Prefer a **small, fast default** for latency on a laptop, and use **one env knob** for suggestion + refine (with optional overrides for annotation and KYC).
 
 **Changes:**
 
-- **`chat/ollama-model.js`** — `DEFAULT_MODEL = "gemma4:e2b"`; `getReplyOllamaModel()` / `getAnnotationOllamaModel()`; legacy remap from `llama3.2:3b` to `REPLY_OLLAMA_MODEL_LEGACY_MAP` or default.
-- **`chat/gemini-client.js`** — Refine calls **`getReplyOllamaModel()`** instead of a hardcoded `gemma2:2b` tag (still local Ollama on `127.0.0.1:11434`).
+- **`chat/ollama-model.js`** — `DEFAULT_MODEL = "gemma3:1b"`; `getReplyOllamaModel()` / `getAnnotationOllamaModel()`.
+- **`chat/gemini-client.js`** — Refine calls **`getReplyOllamaModel()`**; Ollama base URL follows **`OLLAMA_HOST`** / Settings (see `ai-runtime-config.js`).
 - **`scripts/analyze-style.js`** — Uses `getReplyOllamaModel()` so persona generation matches the same model resolution as the app.
-- **`chat/.env.example`** and template comments — Document `gemma4:e2b` as default and `ollama pull gemma4:e2b`.
+- **`chat/.env.example`** — Documents supported `ollama pull` tags and defaults.
+
+### 5.5 Background suggestion drafts (worker)
+
+**Behavior:** After vectorizing **inbound** rows, sync code and the iMessage live worker **enqueue** the contact handle (`chat/suggestion-draft-queue.js` — `enqueueSuggestionDraft` / `enqueueSuggestionDraftsFromDocBatch`). Channels: **iMessage live poll**, **WhatsApp sync**, **Apple Mail script**, **Gmail connector**, **IMAP** (`sync-imap.js`). A worker timer (default **5 minutes**, `REPLY_SUGGEST_DRAFT_INTERVAL_MS`) runs **at most one** `generateReply` per tick: latest inbound text from LanceDB (same idea as `/api/suggest`), then **`contactStore.setDraft`**. Queue is **newest-first**. If the queue is empty, the worker **seeds** active contacts without a draft.
+
+**Env:** `REPLY_SUGGEST_BACKGROUND_DISABLE=1` turns the timer off; `REPLY_INLINE_DRAFT_GENERATE=1` restores **immediate** drafting on every **iMessage live** inbound (heavy); `REPLY_SUGGEST_REGENERATE_IF_DRAFT=1` allows overwriting an existing draft. Queue state: `chat/data/pending-suggestion-draft-queue.json` (gitignored).
 
 ---
 

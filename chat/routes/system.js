@@ -8,9 +8,10 @@ const { readChannelSyncState } = require("../channel-bridge");
 const contactStore = require("../contact-store");
 const fs = require("fs");
 const path = require("path");
-const http = require("http");
 const hubRuntime = require("../hub-runtime");
 const { ensureWorkerCanStartFromHub } = require("../ensure-hub-worker.js");
+const { resolveHatoriProjectPath } = require("../hatori-lifecycle.js");
+const { resolveOllamaHttpBase } = require("../ai-runtime-config.js");
 
 const DATA_DIR = path.join(__dirname, "..", "data");
 const CHAT_DIR = path.join(__dirname, "..");
@@ -86,8 +87,13 @@ function getNotesCount() {
 }
 
 const serviceManager = require("../service-manager");
+const { buildPreflightReport, collectPathContext, API_CONTRACT_HUB, PREFLIGHT_SCHEMA_VERSION } = require("../preflight.js");
 
-async function serveSystemHealth(req, res) {
+/** Updated on each full health build; used by strict outbound gate. */
+let lastPreflightReport = null;
+let lastPreflightAtMs = 0;
+
+async function buildSystemHealthPayloadCore() {
     const settings = readSettings();
     const healthCfg = settings?.health || {};
     const hatoriProbeMs = Math.max(
@@ -117,16 +123,23 @@ async function serveSystemHealth(req, res) {
     const kycStatus = readStatus("kyc_sync_status.json");
 
     // ── Check Hatori ────────────────────────────────────────────────────
-    // Only ping when this hub is configured to use Hatori (same gate as server.js sidecar).
-    // Match chat/server.js: from `chat/`, two levels up then `hatori/`.
-    const hatoriProjectPath = path.join(__dirname, "..", "..", "..", "hatori");
-    const hatoriFeatureEnabled =
-        process.env.REPLY_USE_HATORI === "1" && fs.existsSync(hatoriProjectPath);
-    const hatoriHealth = hatoriFeatureEnabled
+    // Probe when REPLY_USE_HATORI=1 and either the sibling checkout exists or the API is
+    // managed externally (LaunchAgent / Docker) — do not require ../hatori on disk for external.
+    const hatoriProjectPath = resolveHatoriProjectPath(CHAT_DIR);
+    const hatoriRequired = String(process.env.REPLY_USE_HATORI || "").trim() === "1";
+    const hatoriExternal = String(process.env.REPLY_HATORI_EXTERNAL || "").trim() === "1";
+    const hatoriRepoPresent = fs.existsSync(hatoriProjectPath);
+    const shouldProbeHatori = hatoriRequired && (hatoriExternal || hatoriRepoPresent);
+    const hatoriHealth = shouldProbeHatori
         ? { status: "degraded", detail: "unreachable" }
-        : { status: "skipped", detail: "REPLY_USE_HATORI not enabled or ../hatori missing" };
+        : hatoriRequired
+          ? {
+                status: "skipped",
+                detail: `Hatori checkout missing at ${hatoriProjectPath} — set REPLY_HATORI_EXTERNAL=1 if the API runs elsewhere`
+            }
+          : { status: "skipped", detail: "REPLY_USE_HATORI not enabled" };
 
-    if (hatoriFeatureEnabled) {
+    if (shouldProbeHatori) {
         try {
             const hatoriPort = process.env.REPLY_HATORI_PORT || "23572";
             const hRes = await fetch(`http://127.0.0.1:${hatoriPort}/v1/health`, {
@@ -135,7 +148,31 @@ async function serveSystemHealth(req, res) {
             if (hRes.ok) {
                 hatoriConsecutiveFailures = 0;
                 hatoriHealth.status = "online";
-                hatoriHealth.detail = "ok";
+                let detail = "ok";
+                try {
+                    const hj = await hRes.json();
+                    const tr = hj.task_model_routing || {};
+                    const lanes = ["writer", "drafter", "judge"].map((key) => {
+                        const lane = tr[key] || {};
+                        return {
+                            role: key,
+                            ok: Boolean(lane.ok),
+                            task: lane.task || null,
+                            backend: lane.backend || null,
+                            model: lane.model || null,
+                            fallback_used: Boolean(lane.fallback_used),
+                            error: lane.error ? String(lane.error) : null
+                        };
+                    });
+                    hatoriHealth.agents = lanes;
+                    hatoriHealth.ui_port = hj.ui_port != null ? Number(hj.ui_port) : 23571;
+                    hatoriHealth.ui_url = `http://127.0.0.1:${hatoriHealth.ui_port}/chat`;
+                    const bad = lanes.filter((l) => !l.ok);
+                    detail = bad.length ? `degraded · ${bad.map((b) => b.role).join(", ")}` : "ok · writer / drafter / judge";
+                } catch {
+                    detail = "ok";
+                }
+                hatoriHealth.detail = detail;
             } else {
                 hatoriConsecutiveFailures += 1;
                 hatoriHealth.status = hatoriConsecutiveFailures >= hatoriFailThresh ? "offline" : "degraded";
@@ -150,13 +187,12 @@ async function serveSystemHealth(req, res) {
         hatoriConsecutiveFailures = 0;
     }
 
-    // ── Check Ollama directly on :11434 ────────────────────────────────
+    // ── Check Ollama directly (OLLAMA_HOST / port from env or Settings) ─
     // IMPORTANT: Do NOT derive Ollama status from Hatori — Hatori may time out
     // even when Ollama is running fine. Check Ollama's own API directly.
     let ollamaStatus = "offline";
     try {
-        const ollamaPort = process.env.OLLAMA_PORT || "11434";
-        const oRes = await fetch(`http://127.0.0.1:${ollamaPort}/api/tags`, {
+        const oRes = await fetch(`${resolveOllamaHttpBase()}/api/tags`, {
             signal: AbortSignal.timeout(ollamaProbeMs)
         });
         if (oRes.ok) ollamaStatus = "online";
@@ -166,7 +202,7 @@ async function serveSystemHealth(req, res) {
 
     // ── Hatori watchdog ─────────────────────────────────────────────────
     // After N consecutive Hatori failures: kickstart LaunchAgent if external, else restart managed uvicorn.
-    if (hatoriFeatureEnabled && hatoriConsecutiveFailures === hatoriFailThresh) {
+    if (shouldProbeHatori && hatoriConsecutiveFailures === hatoriFailThresh) {
         const hatoriService = serviceManager.getStatus("hatori");
         const st = hatoriService.status;
         if (st === "external") {
@@ -232,6 +268,12 @@ async function serveSystemHealth(req, res) {
 
     const services = serviceManager.getStatus();
 
+    let hatoriApiDetail = hatoriHealth.detail;
+    const hatoriSvc = services.hatori;
+    if (hatoriHealth.status === "online" && hatoriSvc && String(hatoriSvc.status).includes("external")) {
+        hatoriApiDetail = `${hatoriApiDetail} · external process`;
+    }
+
     // Collect automated repair alerts from service manager
     const repairAlerts = serviceManager.getRepairAlerts();
 
@@ -260,17 +302,21 @@ async function serveSystemHealth(req, res) {
         services.openclaw = { name: "openclaw", status: "unknown" };
     }
 
-    // External gateway (e.g. Docker): no hub-managed PID — probe via CLI so /api/health matches reality.
-    if (!services.openclaw?.pid) {
+    // Gateway liveness: when `REPLY_OPENCLAW_GATEWAY_URL` is ws(s)://, always prefer HTTP `/healthz`
+    // (Docker) — even if the hub once spawned a local `openclaw` child (stale pid). CLI fallback uses
+    // ~/.openclaw token and can falsely report "offline" / token mismatch while Docker is live.
+    const openclawWsConfigured = /^wss?:\/\//i.test(String(process.env.REPLY_OPENCLAW_GATEWAY_URL || "").trim());
+    if (!services.openclaw?.pid || openclawWsConfigured) {
         try {
             const { resolveOpenClawBinary } = require("../utils/whatsapp-utils");
-            const { probeOpenClawGatewayHealth } = require("../openclaw-gateway-env.js");
+            const { probeOpenClawGatewayHealth, openclawGatewayResponseOk } = require("../openclaw-gateway-env.js");
             const data = await probeOpenClawGatewayHealth(resolveOpenClawBinary(), { timeoutMs: 4000 });
+            const ocOk = openclawGatewayResponseOk(data);
             services.openclaw = {
                 ...services.openclaw,
                 name: "openclaw",
-                status: data.ok ? "online" : "offline",
-                detail: data.ok ? "gateway health ok" : "gateway health not ok"
+                status: ocOk ? "online" : "offline",
+                detail: ocOk ? "gateway health ok" : "gateway health not ok"
             };
         } catch (e) {
             services.openclaw = {
@@ -302,7 +348,13 @@ async function serveSystemHealth(req, res) {
         repair: repairAlerts,
         services: {
             ...services,
-            hatori_api: { status: hatoriHealth.status, detail: hatoriHealth.detail },
+            hatori_api: {
+                status: hatoriHealth.status,
+                detail: hatoriApiDetail,
+                ...(Array.isArray(hatoriHealth.agents) ? { agents: hatoriHealth.agents } : {}),
+                ...(hatoriHealth.ui_port != null ? { ui_port: hatoriHealth.ui_port } : {}),
+                ...(hatoriHealth.ui_url ? { ui_url: hatoriHealth.ui_url } : {})
+            },
             ollama: { status: ollamaStatus }
         },
         channels: {
@@ -340,7 +392,54 @@ async function serveSystemHealth(req, res) {
         httpHost
     };
 
-    writeJson(res, 200, health);
+    return health;
+}
+
+function attachPreflightToHealth(health) {
+    const settings = readSettings();
+    const pathCtx = collectPathContext();
+    const preflight = buildPreflightReport(health, pathCtx, { settings });
+    health.apiContract = { hub: API_CONTRACT_HUB, preflightSchema: PREFLIGHT_SCHEMA_VERSION };
+    health.preflight = preflight;
+    lastPreflightReport = preflight;
+    lastPreflightAtMs = Date.now();
+    return health;
+}
+
+async function buildSystemHealthPayload() {
+    const health = await buildSystemHealthPayloadCore();
+    return attachPreflightToHealth(health);
+}
+
+async function serveSystemHealth(req, res) {
+    writeJson(res, 200, await buildSystemHealthPayload());
+}
+
+/**
+ * Standalone preflight JSON for scripts, menubar, or clients that only need foundation checks.
+ */
+async function servePreflight(req, res) {
+    const health = await buildSystemHealthPayload();
+    const p = health.preflight || {};
+    writeJson(res, 200, {
+        ok: p.overall !== "blocked",
+        version: health.version,
+        apiContract: health.apiContract,
+        runId: p.runId,
+        schemaVersion: p.schemaVersion,
+        at: p.at,
+        overall: p.overall,
+        checks: p.checks,
+        summary: p.summary
+    });
+}
+
+/**
+ * Outbound sends are not gated on hub preflight (Foundation matrix stays informational on the dashboard).
+ * Returns null always so all channels can send while operators fix worker/db/etc. separately.
+ */
+async function maybeBlockOutboundOnPreflight() {
+    return null;
 }
 
 async function serveServiceControl(req, res) {
@@ -409,13 +508,15 @@ async function serveServiceControl(req, res) {
 
 async function serveOpenClawStatus(req, res) {
     const { resolveOpenClawBinary } = require("../utils/whatsapp-utils");
-    const { probeOpenClawGatewayHealth } = require("../openclaw-gateway-env.js");
+    const { probeOpenClawGatewayHealth, openclawGatewayResponseOk } = require("../openclaw-gateway-env.js");
 
     try {
         const data = await probeOpenClawGatewayHealth(resolveOpenClawBinary());
+        const ok = openclawGatewayResponseOk(data);
         writeJson(res, 200, {
-            status: data.ok ? "online" : "offline",
-            ...data
+            status: ok ? "online" : "offline",
+            ...data,
+            ok
         });
     } catch (error) {
         console.error("OpenClaw CLI health check failed:", error.message);
@@ -454,6 +555,11 @@ async function serveTriageQueue(req, res, url) {
 
 module.exports = {
     serveSystemHealth,
+    servePreflight,
+    buildSystemHealthPayload,
+    buildSystemHealthPayloadCore,
+    attachPreflightToHealth,
+    maybeBlockOutboundOnPreflight,
     serveServiceControl,
     serveOpenClawStatus,
     serveTriageLog,

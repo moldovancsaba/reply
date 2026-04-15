@@ -9,8 +9,23 @@ const path = require("path");
 
 const HATORI_LABEL = process.env.REPLY_HATORI_LAUNCHD_LABEL || "com.hatori";
 
+/** Sibling checkout: `<parent-of-reply-repo>/hatori` (see README). */
 function hatoriProjectPathFromChatDir(chatDir) {
   return path.join(chatDir, "..", "..", "hatori");
+}
+
+/**
+ * Resolved Hatori Python project root for spawn + health copy.
+ * Override with `REPLY_HATORI_PROJECT_PATH` (absolute path) when the checkout is not the default sibling.
+ * @param {string} chatDir - Absolute path to the `chat/` directory
+ * @returns {string}
+ */
+function resolveHatoriProjectPath(chatDir) {
+  const override = String(process.env.REPLY_HATORI_PROJECT_PATH || "").trim();
+  if (override) {
+    return path.resolve(override);
+  }
+  return hatoriProjectPathFromChatDir(chatDir);
 }
 
 /**
@@ -121,6 +136,7 @@ async function resolveHatoriForHubStart(p) {
 module.exports = {
   HATORI_LABEL,
   hatoriProjectPathFromChatDir,
+  resolveHatoriProjectPath,
   kickstartHatoriJob,
   waitForHatoriHealth,
   probeHatoriHealth,

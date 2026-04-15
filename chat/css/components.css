@@ -120,6 +120,10 @@
     border: 1px solid var(--border);
     min-height: 168px;
     gap: var(--space-xs);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-width: 0;
     transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
@@ -228,8 +232,6 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    margin-bottom: auto;
-    /* Pushes meta to bottom if needed */
     width: fit-content;
     max-width: 100%;
     overflow: hidden;
@@ -889,4 +891,143 @@
 .btn-sm {
     padding: 3px 10px;
     font-size: 0.75rem;
+}
+
+/* Dashboard: foundation / preflight matrix */
+.preflight-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 12px 2px;
+    align-items: center;
+}
+
+.preflight-actions .btn {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.preflight-panel .preflight-meta {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin: 0 0 10px 2px;
+}
+
+.preflight-panel .preflight-meta code {
+    font-size: 0.76rem;
+    opacity: 0.9;
+}
+
+.preflight-panel {
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+}
+
+.preflight-table {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.8rem;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.preflight-row {
+    display: grid;
+    grid-template-columns: minmax(100px, 140px) minmax(120px, 1fr) minmax(0, 2fr) 88px 20px;
+    gap: 8px;
+    align-items: start;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    min-width: 0;
+}
+
+.preflight-row > * {
+    min-width: 0;
+}
+
+.preflight-row--ok {
+    border-left: 3px solid rgba(52, 199, 89, 0.55);
+}
+
+.preflight-row--degraded {
+    border-left: 3px solid rgba(255, 159, 10, 0.65);
+}
+
+.preflight-row--blocked {
+    border-left: 3px solid rgba(255, 69, 58, 0.75);
+    background: rgba(255, 59, 48, 0.06);
+}
+
+.preflight-cell--id {
+    font-family: ui-monospace, monospace;
+    font-size: 0.72rem;
+    opacity: 0.85;
+    word-break: break-all;
+}
+
+.preflight-cell--title {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.preflight-cell--detail {
+    color: var(--text-secondary);
+    word-break: break-word;
+    line-height: 1.35;
+}
+
+.preflight-cell--status {
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    opacity: 0.9;
+}
+
+.preflight-hint {
+    cursor: help;
+    opacity: 0.65;
+    font-size: 0.85rem;
+}
+
+.hatori-watch-strip .hatori-agent-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.hatori-agent-chip {
+    font-size: 0.78rem;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    font-weight: 600;
+}
+
+.hatori-agent-chip--ok {
+    background: rgba(52, 199, 89, 0.12);
+    color: rgba(220, 252, 231, 0.95);
+}
+
+.hatori-agent-chip--bad {
+    background: rgba(255, 69, 58, 0.15);
+    color: #ffb4ab;
+}
+
+@media (max-width: 900px) {
+    .preflight-row {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto auto;
+    }
+
+    .preflight-cell--detail {
+        grid-column: 1 / -1;
+    }
 }

@@ -151,7 +151,19 @@ export async function loadConversations(append = false) {
             name.className = 'contact-name';
             const channel = contact.lastChannel || contact.channel || contact.lastSource || contact.source || '';
             const handleForHint = contact.latestHandle || contact.handle || '';
-            const displayName = formatContactLabel(contact.displayName || contact.name || contact.handle);
+            const rawLabel = formatContactLabel(
+                contact.displayName || contact.name || contact.handle
+            );
+            const lidish =
+                /^[a-zA-Z0-9+/]+={0,2}$/.test(String(handleForHint)) &&
+                String(handleForHint).length >= 16;
+            const looksUnresolved =
+                lidish &&
+                (rawLabel === String(contact.handle || '').trim() ||
+                    rawLabel === String(handleForHint).trim());
+            const displayName = looksUnresolved
+                ? `WhatsApp · ${String(handleForHint).slice(0, 10)}…`
+                : rawLabel;
             name.textContent = displayName;
 
             // Optional: Time would go here if available

@@ -20,6 +20,7 @@ export default [
                 setInterval: "readonly",
                 clearTimeout: "readonly",
                 clearInterval: "readonly",
+                setImmediate: "readonly",
                 URL: "readonly",
                 URLSearchParams: "readonly",
                 fetch: "readonly",

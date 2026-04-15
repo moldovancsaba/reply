@@ -3,6 +3,7 @@ const { getSnippets, getGoldenExamples, getHistory } = require("../vector-store.
 const contactStore = require("../contact-store.js");
 const hatori = require("../hatori-client.js");
 const { shouldRunHatoriIngestBeforeSuggest } = require("../ai-runtime-config.js");
+const { pathPrefixesForHandle, pickLatestInboundFromVectorDocs } = require("../utils/chat-utils.js");
 
 
 // Helper functions from server.js
@@ -28,44 +29,6 @@ async function readJsonBody(req) {
   } catch {
     return {};
   }
-}
-
-function pathPrefixesForHandle(handle) {
-  if (!handle || typeof handle !== 'string') return [];
-  const h = handle.trim();
-  if (!h) return [];
-  if (h.includes('@')) return [`mailto:${h}`];
-  // Phone-like handles may exist across multiple channels, and may be formatted differently (+36... vs 3630...).
-  const variants = new Set();
-  variants.add(h);
-  const normalized = normalizePhone(h);
-  if (normalized) variants.add(normalized);
-
-  const out = [];
-  for (const v of variants) {
-    out.push(`imessage://${v}`);
-    out.push(`whatsapp://${v}`);
-    out.push(`telegram://${v}`);
-    out.push(`discord://${v}`);
-    out.push(`signal://${v}`);
-    out.push(`viber://${v}`);
-    out.push(`linkedin://${v}`);
-  }
-  return out;
-}
-
-function extractDateFromText(text) {
-  if (!text || typeof text !== 'string') return null;
-  const m = text.match(/\[(.*?)\]/);
-  if (!m) return null;
-  const d = new Date(m[1]);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function stripMessagePrefix(text) {
-  if (!text || typeof text !== 'string') return "";
-  const idx = text.indexOf(": ");
-  return idx >= 0 ? text.slice(idx + 2) : text;
 }
 
 /**
@@ -103,19 +66,6 @@ function snippetShapeForSuggestReply(doc) {
   };
 }
 
-function normalizePhone(phone) {
-  if (!phone) return null;
-  const raw = String(phone).trim();
-  if (!raw) return null;
-  // Remove punctuation/spaces, keep only digits and a leading "+"
-  let cleaned = raw.replace(/[^\d+]/g, "");
-  if (cleaned.startsWith("00")) cleaned = `+${cleaned.slice(2)}`;
-  const digits = cleaned.replace(/\D/g, "");
-  if (digits.length < 6) return null;
-  return digits; // Use digits-only key to match across formatting
-}
-
-
 /**
  * API Endpoint: /api/suggest
  * Generates a draft suggestion using the latest incoming message for a handle.
@@ -141,26 +91,19 @@ async function serveSuggest(req, res) {
 
     if (!message) {
       const handles = contactStore.getAllHandles(handle);
-
       const prefixes = handles.flatMap((h) => pathPrefixesForHandle(h));
       const historyBatches = await Promise.all(prefixes.map((p) => getHistory(p)));
       const docs = historyBatches.flat();
-
-      const messages = docs
-        .map((d) => ({
-          role: (d.text || "").includes("] Me:") ? "me" : "contact",
-          text: stripMessagePrefix(d.text || ""),
-          date: extractDateFromText(d.text || ""),
-        }))
-        .filter((m) => m.date && m.text)
-        .sort((a, b) => b.date - a.date);
-
-      const lastIncoming = messages.find((m) => m.role === "contact");
-      message = lastIncoming?.text?.trim() || "";
+      const picked = pickLatestInboundFromVectorDocs(docs);
+      message = picked?.text?.trim() || "";
     }
 
     if (!message) {
-      writeJson(res, 200, { suggestion: "Hi — just checking in." });
+      writeJson(res, 422, {
+        error: "No inbound contact message found in index for this handle — cannot generate a reply.",
+        code: "no_inbound_context",
+        suggestion: ""
+      });
       return;
     }
 

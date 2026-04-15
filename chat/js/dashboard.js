@@ -76,6 +76,12 @@ function wireDashboardActions(root) {
     });
   });
 
+  root.querySelectorAll('[data-preflight-refresh]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      refreshAlertsPanel();
+    });
+  });
+
   const retryBtn = root.querySelector('[data-dashboard-retry]');
   if (retryBtn) {
     retryBtn.addEventListener('click', () => renderDashboard());
@@ -109,15 +115,15 @@ function renderHealthCard(config) {
     <div class="health-card-actions">
       ${actions.map(action => {
     if (action.type === 'settings') {
-      return `<button type="button" class="btn-icon" data-dashboard-open-settings="${action.channel}" title="${action.title || 'Configure'}">⚙️</button>`;
+      return `<button type="button" class="btn-icon" data-dashboard-open-settings="${escapeDashboardAttr(action.channel)}" title="${escapeDashboardAttr(action.title || 'Configure')}">⚙️</button>`;
     }
     if (action.type === 'sync') {
-      return `<button type="button" class="btn-icon" data-dashboard-sync="${action.channel}" title="${action.title || 'Sync'}">
-            ${action.icon ? `<img src="${action.icon}" alt="${action.channel}" class="platform-icon platform-icon--sm">` : action.emoji || '🔄'}
+      return `<button type="button" class="btn-icon" data-dashboard-sync="${escapeDashboardAttr(action.channel)}" title="${escapeDashboardAttr(action.title || 'Sync')}">
+            ${action.icon ? `<img src="${escapeDashboardAttr(action.icon)}" alt="${escapeDashboardText(action.channel)}" class="platform-icon platform-icon--sm">` : action.emoji || '🔄'}
           </button>`;
     }
     if (action.type === 'service') {
-      return `<button type="button" class="btn-icon" data-dashboard-service-control="${action.name}" data-dashboard-action="${action.action}" title="${action.title || 'Control'}">
+      return `<button type="button" class="btn-icon" data-dashboard-service-control="${escapeDashboardAttr(action.name)}" data-dashboard-action="${escapeDashboardAttr(action.action)}" title="${escapeDashboardAttr(action.title || 'Control')}">
             ${action.emoji || '🔄'}
           </button>`;
     }
@@ -129,22 +135,24 @@ function renderHealthCard(config) {
   const metaHtml = meta.map(m => {
     const overflowClass = m.overflow ? 'health-card-meta-overflow' : '';
     const wrapClass = m.wrap ? 'health-card-meta-wrap' : '';
-    const safeTitle = m.title ? String(m.title).replace(/"/g, '&quot;') : '';
-    return `<div class="health-card-meta ${overflowClass} ${wrapClass}" ${safeTitle ? `title="${safeTitle}"` : ''}>${m.text}</div>`;
+    const metaTitle = m.title ? escapeDashboardAttr(m.title) : '';
+    const body = m.html ? m.text : escapeDashboardText(m.text);
+    return `<div class="health-card-meta ${overflowClass} ${wrapClass}" ${metaTitle ? `title="${metaTitle}"` : ''}>${body}</div>`;
   }).join('');
 
+  const safeTitle = escapeDashboardText(title);
   const iconHtml = icon ? (icon.includes('.svg') || icon.includes('.png') || icon.includes('/')
-    ? `<img src="${icon}" alt="${title}" class="platform-icon platform-icon--sm">`
+    ? `<img src="${icon}" alt="${safeTitle}" class="platform-icon platform-icon--sm">`
     : `<span class="health-card-icon">${icon}</span>`) : '';
 
   return `
     <div class="health-card">
       <div class="health-card-header">
-        <h4>${iconHtml}<span>${title}</span></h4>
+        <h4>${iconHtml}<span>${safeTitle}</span></h4>
         ${actionsHtml}
       </div>
-      <div class="health-value">${value}</div>
-      <div class="health-status-tag ${statusClass}">${statusText}</div>
+      <div class="health-value">${escapeDashboardText(value)}</div>
+      <div class="health-status-tag ${statusClass}">${escapeDashboardText(statusText)}</div>
       ${metaHtml}
     </div>
   `;
@@ -154,6 +162,102 @@ function renderHealthCard(config) {
  * Renders the System Alerts panel.
  * Only shown when health.repair array is non-empty.
  */
+function escapeDashboardText(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeDashboardAttr(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;');
+}
+
+/**
+ * Foundation / preflight matrix (hub contract + path probes).
+ * @param {object|null} preflight - health.preflight from /api/system-health
+ * @param {object} [health] - optional parent health for apiContract line
+ */
+function renderPreflightPanel(preflight, health) {
+  if (!preflight || !Array.isArray(preflight.checks)) return '';
+
+  const overall = preflight.overall || 'ready';
+  const tagClass =
+    overall === 'blocked' ? 'tag-offline' : overall === 'degraded' ? 'tag-warning' : 'tag-online';
+  const runShort = preflight.runId ? String(preflight.runId).slice(0, 8) : '?';
+  const ac = health?.apiContract;
+  const contractLine = ac
+    ? ` · contract hub ${escapeDashboardText(String(ac.hub))} / schema ${escapeDashboardText(String(ac.preflightSchema ?? ''))}`
+    : '';
+
+  const rows = preflight.checks
+    .map((c) => {
+      const rowClass =
+        c.status === 'blocked'
+          ? 'preflight-row preflight-row--blocked'
+          : c.status === 'degraded'
+            ? 'preflight-row preflight-row--degraded'
+            : 'preflight-row preflight-row--ok';
+      const hint = c.hint
+        ? `<span class="preflight-hint" title="${escapeDashboardAttr(c.hint)}">ⓘ</span>`
+        : '';
+      return `<div class="${rowClass}">
+        <span class="preflight-cell preflight-cell--id">${escapeDashboardText(c.id)}</span>
+        <span class="preflight-cell preflight-cell--title">${escapeDashboardText(c.title)}</span>
+        <span class="preflight-cell preflight-cell--detail">${escapeDashboardText(c.detail)}</span>
+        <span class="preflight-cell preflight-cell--status">${escapeDashboardText(c.status)}</span>
+        ${hint}
+      </div>`;
+    })
+    .join('');
+
+  return `
+    <div class="health-card health-card--span-full preflight-panel">
+      <div class="health-card-header">
+        <h4><span class="health-card-icon">🧱</span><span>Foundation (preflight)</span></h4>
+        <div class="health-status-tag ${tagClass}">${escapeDashboardText(overall)}</div>
+      </div>
+      <div class="preflight-meta">Run <code>${escapeDashboardText(runShort)}</code>… · preflight v${escapeDashboardText(String(preflight.schemaVersion ?? '?'))}${contractLine}</div>
+      <div class="preflight-actions">
+        <button type="button" class="btn btn-sm btn-secondary" data-preflight-refresh title="Re-fetch health">↻ Refresh checks</button>
+        <a class="btn btn-sm btn-secondary" href="settings.html#ai-status" title="Hatori, Ollama, OpenClaw gateway">⚙️ AI &amp; gateways</a>
+      </div>
+      <div class="preflight-table">${rows}</div>
+    </div>`;
+}
+
+/**
+ * Hatori UI + writer/drafter/judge chips from `/v1/health` (when hub exposes them).
+ * @param {object} health
+ */
+function renderHatoriWatchStrip(health) {
+  const api = health.services?.hatori_api;
+  if (!api || !Array.isArray(api.agents) || api.agents.length === 0) return '';
+  const uiPort = api.ui_port != null ? Number(api.ui_port) : 23571;
+  const url = api.ui_url || `http://127.0.0.1:${uiPort}/chat`;
+  const chips = api.agents
+    .map((a) => {
+      const ok = Boolean(a.ok);
+      const cls = ok ? 'hatori-agent-chip hatori-agent-chip--ok' : 'hatori-agent-chip hatori-agent-chip--bad';
+      const model = a.model ? ` · ${escapeDashboardText(String(a.model))}` : '';
+      return `<span class="${cls}" title="${escapeDashboardAttr(a.task || '')}">${escapeDashboardText(a.role)}${model}</span>`;
+    })
+    .join('');
+
+  return `
+    <div class="health-card health-card--span-full hatori-watch-strip">
+      <div class="health-card-header">
+        <h4><span class="health-card-icon">🤖</span><span>Hatori — watch &amp; three lanes</span></h4>
+        <a class="btn btn-sm btn-secondary" href="${escapeDashboardAttr(url)}" target="_blank" rel="noopener noreferrer">Open UI ↗</a>
+      </div>
+      <p class="settings-hint" style="margin:0 0 10px 2px">Writer, drafter, and judge routing from Hatori <code>/v1/health</code>. Red lane = model or backend issue in Hatori.</p>
+      <div class="hatori-agent-chips">${chips}</div>
+    </div>`;
+}
+
 function renderAlertsPanel(repairs) {
   if (!Array.isArray(repairs) || repairs.length === 0) return '';
 
@@ -250,8 +354,11 @@ export async function renderDashboard() {
     const openClawStatusClass = openClawStatus.status === 'online' ? 'tag-online' : 'tag-offline';
 
     const openClawMeta = [
-      { text: `Linked: ${formatOpenClawChannelsSummary(openClawStatus.channels)}` },
-      { text: `Heartbeat: ${formatLastSync(openClawStatus.heartbeat)}` }
+      {
+        wrap: true,
+        text: `Linked: ${formatOpenClawChannelsSummary(openClawStatus.channels)}`
+      },
+      { wrap: true, text: `Heartbeat: ${formatLastSync(openClawStatus.heartbeat)}` }
     ];
     const openClawActions = [
       { type: 'settings', channel: 'whatsapp', title: 'OpenClaw Settings' }
@@ -265,6 +372,10 @@ export async function renderDashboard() {
     // Render dashboard HTML
     dashboard.innerHTML = `
       ${renderAlertsPanel(health.repair || [])}
+
+      ${renderPreflightPanel(health.preflight || null, health)}
+
+      ${renderHatoriWatchStrip(health)}
 
       ${renderHealthCard({
       title: 'OpenClaw Health',
@@ -284,7 +395,10 @@ export async function renderDashboard() {
         statusText: '● Server Running',
         statusClass: 'tag-online',
         meta: [
-          { text: `<span>Uptime: ${uptimeHrs}h</span>&nbsp;&nbsp;<span>Contacts: ${health.stats?.total || 0}</span>` }
+          {
+            html: true,
+            text: `<span>Uptime: ${uptimeHrs}h</span>&nbsp;&nbsp;<span>Contacts: ${health.stats?.total || 0}</span>`
+          }
         ]
       })
       }
@@ -605,9 +719,41 @@ async function refreshAlertsPanel() {
     } else if (alertsRoot) {
       alertsRoot.remove();
     }
-    // Re-wire buttons in the alerts panel after DOM update
+
+    const preflightRoot = dashboard.querySelector('.preflight-panel');
+    const preflightHtml = renderPreflightPanel(health.preflight || null, health);
+    if (preflightHtml) {
+      if (preflightRoot) preflightRoot.outerHTML = preflightHtml;
+      else {
+        const firstCard = dashboard.querySelector('.health-card');
+        if (firstCard) firstCard.insertAdjacentHTML('beforebegin', preflightHtml);
+        else dashboard.insertAdjacentHTML('afterbegin', preflightHtml);
+      }
+    } else if (preflightRoot) {
+      preflightRoot.remove();
+    }
+
+    const hatoriStrip = dashboard.querySelector('.hatori-watch-strip');
+    const hatoriHtml = renderHatoriWatchStrip(health);
+    if (hatoriHtml) {
+      if (hatoriStrip) hatoriStrip.outerHTML = hatoriHtml;
+      else {
+        const pref = dashboard.querySelector('.preflight-panel');
+        if (pref) pref.insertAdjacentHTML('afterend', hatoriHtml);
+        else {
+          const firstCard = dashboard.querySelector('.health-card');
+          if (firstCard) firstCard.insertAdjacentHTML('beforebegin', hatoriHtml);
+        }
+      }
+    } else if (hatoriStrip) {
+      hatoriStrip.remove();
+    }
+
+    // Re-wire buttons after DOM update (alerts + preflight refresh)
     const newPanel = dashboard.querySelector('.system-alerts-panel');
     if (newPanel) wireDashboardActions(newPanel);
+    const prefPanel = dashboard.querySelector('.preflight-panel');
+    if (prefPanel) wireDashboardActions(prefPanel);
   } catch (e) {
     console.warn('[Dashboard] refreshAlertsPanel failed:', e.message);
   }
