@@ -215,6 +215,21 @@ export async function reportDraftReplacement({ handle, original_text, reason = '
     }
 }
 
+export async function reportTrinityOutcome(outcome) {
+    if (!outcome || !outcome.cycle_id) return { status: 'skipped' };
+    const res = await _request(`${API_BASE}/api/feedback`, {
+        method: 'POST',
+        headers: buildSecurityHeaders(),
+        body: JSON.stringify({
+            type: 'trinity_draft_outcome',
+            outcome,
+        }),
+        _silent: true,
+        _showLoading: false,
+    });
+    return res.json();
+}
+
 /**
  * Send a message to a contact
  * @param {string} handle - Contact handle
@@ -222,7 +237,7 @@ export async function reportDraftReplacement({ handle, original_text, reason = '
  * @param {string} channel - Channel to use (only imessage/email/whatsapp are send-enabled)
  * @returns {Promise<Object>} Send result
  */
-export async function sendMessage(handle, text, channel = 'imessage') {
+export async function sendMessage(handle, text, channel = 'imessage', draftContext = null) {
     const ch = (channel || 'imessage').toString().toLowerCase();
     const endpointByChannel = {
         imessage: '/api/send-imessage',
@@ -240,6 +255,9 @@ export async function sendMessage(handle, text, channel = 'imessage') {
         at: new Date().toISOString(),
     };
     const sendPayload = { recipient: handle, text, trigger: sendTrigger };
+    if (draftContext) {
+        sendPayload.draftContext = draftContext;
+    }
     if (ch === 'whatsapp') {
         // Server picks transport from REPLY_WHATSAPP_SEND_TRANSPORT (default: desktop); OpenClaw may fall back to desktop.
         sendPayload.allowDesktopFallback = true;

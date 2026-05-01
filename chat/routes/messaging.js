@@ -5,7 +5,13 @@
 
 const fs = require("fs");
 const path = require("path");
-const { generateReply, normalizeSuggestionResult } = require("../brain-runtime");
+const {
+    exportDraftTrace,
+    generateReply,
+    normalizeSuggestionResult,
+    recordDraftOutcome,
+    resolveReplyCompanyId,
+} = require("../brain-runtime");
 const {
     safeDateMs,
     pathPrefixesForHandle,
@@ -494,8 +500,37 @@ async function serveSuggest(req, res) {
         const suggestion = suggestionResult.suggestion;
         const explanation = suggestionResult.explanation;
         const contextMeta = suggestionResult.contextMeta;
+        const rankedDraftSet = suggestionResult.rankedDraftSet || null;
 
-        writeJson(res, 200, { suggestion, explanation, contextMeta });
+        if (rankedDraftSet && Array.isArray(rankedDraftSet.drafts)) {
+            const shownAt = new Date().toISOString();
+            await Promise.all(
+                rankedDraftSet.drafts.map((draft) =>
+                    recordDraftOutcome({
+                        company_id: draft.company_id,
+                        cycle_id: rankedDraftSet.cycle_id,
+                        thread_ref: rankedDraftSet.thread_ref,
+                        channel: rankedDraftSet.channel,
+                        candidate_id: draft.candidate_id,
+                        disposition: "SHOWN",
+                        occurred_at: shownAt,
+                        original_draft_text: draft.draft_text,
+                        latency_ms: 0,
+                        notes: "reply_api_suggest",
+                    }).catch((error) => {
+                        console.warn("[reply-runtime] failed to record shown outcome:", error.message);
+                    })
+                )
+            );
+        }
+
+        writeJson(res, 200, {
+            suggestion,
+            explanation,
+            contextMeta,
+            runtimeMode: suggestionResult.runtimeMode || null,
+            rankedDraftSet,
+        });
     } catch (e) {
         writeJson(res, 500, { error: e.message || "Suggest failed" });
     }
@@ -520,6 +555,15 @@ async function serveRefineReply(req, res) {
 async function serveFeedback(req, res) {
     try {
         const entry = await readJsonBody(req);
+        if (entry?.type === "trinity_draft_outcome" && entry?.outcome) {
+            const result = await recordDraftOutcome(entry.outcome);
+            if (entry?.outcome?.cycle_id) {
+                await exportDraftTrace(entry.outcome.cycle_id).catch(() => null);
+            }
+            writeJson(res, 200, result);
+            return;
+        }
+
         entry.timestamp = new Date().toISOString();
         const logPath = path.join(__dirname, "../../feedback.jsonl");
         fs.appendFileSync(logPath, JSON.stringify(entry) + "\n");
@@ -538,6 +582,7 @@ async function serveSendMessage(req, res, channel) {
         const json = await readJsonBody(req);
         const handle = json.recipient || json.handle;
         const text = (json.text || "").toString();
+        const draftContext = json.draftContext || null;
 
         if (!handle || !text) {
             writeJson(res, 400, { error: "Missing handle or text" });
@@ -569,11 +614,11 @@ async function serveSendMessage(req, res, channel) {
         }
 
         if (channel === 'imessage') {
-            return handleSendIMessage(req, res, handle, text);
+            return handleSendIMessage(req, res, handle, text, draftContext);
         } else if (channel === 'email') {
-            return handleSendEmail(req, res, handle, text);
+            return handleSendEmail(req, res, handle, text, draftContext);
         } else if (channel === 'linkedin') {
-            return handleSendLinkedIn(req, res, handle, text);
+            return handleSendLinkedIn(req, res, handle, text, draftContext);
         } else {
             writeJson(res, 400, { error: `Unsupported channel: ${channel}` });
         }
@@ -582,7 +627,7 @@ async function serveSendMessage(req, res, channel) {
     }
 }
 
-async function handleSendIMessage(req, res, recipient, text) {
+async function handleSendIMessage(req, res, recipient, text, draftContext = null) {
     const appleScript = `
 on run argv
   set recipientId to item 1 of argv
@@ -621,11 +666,12 @@ end run
         contactStore.updateLastContacted(recipient, sentAt, { channel: 'imessage' });
         await contactStore.clearDraft(recipient);
         await autoAnnotateSentMessage("imessage", recipient, text);
+        await finalizeDraftSendOutcome(draftContext, text, "ok");
         writeJson(res, 200, { status: "ok", sentAt, id: localId, recipient });
     });
 }
 
-async function handleSendEmail(req, res, recipient, text) {
+async function handleSendEmail(req, res, recipient, text, draftContext = null) {
     try {
         const settings = readSettings();
         const gmail = settings?.gmail || {};
@@ -639,6 +685,7 @@ async function handleSendEmail(req, res, recipient, text) {
             await sendGmail({ to: recipient, subject, text });
             await contactStore.clearDraft(recipient);
             await autoAnnotateSentMessage("email", recipient, text);
+            await finalizeDraftSendOutcome(draftContext, text, "ok");
             writeJson(res, 200, { status: "ok", provider: "gmail" });
             return;
         }
@@ -671,11 +718,12 @@ end run
             return;
         }
         await contactStore.clearDraft(recipient);
+        await finalizeDraftSendOutcome(draftContext, text, "ok");
         writeJson(res, 200, { status: "ok" });
     });
 }
 
-async function handleSendLinkedIn(req, res, recipient, text) {
+async function handleSendLinkedIn(req, res, recipient, text, draftContext = null) {
     const targetUrl = "https://www.linkedin.com/messaging/";
     try {
         const proc = spawn("pbcopy");
@@ -686,6 +734,7 @@ async function handleSendLinkedIn(req, res, recipient, text) {
 
         await autoAnnotateSentMessage("linkedin", recipient, text);
         await contactStore.clearDraft(recipient);
+        await finalizeDraftSendOutcome(draftContext, text, "ok");
         writeJson(res, 200, {
             status: "ok",
             transport: "desktop_clipboard",
@@ -702,6 +751,7 @@ async function serveSendWhatsApp(req, res) {
         const recipientRaw = (payload?.recipient || "").toString().trim();
         const textRaw = (payload?.text || "").toString();
         const dryRun = Boolean(payload?.dryRun);
+        const draftContext = payload?.draftContext || null;
 
         if (!recipientRaw || !textRaw) {
             writeJson(res, 400, { error: "Missing recipient or text" });
@@ -742,6 +792,7 @@ async function serveSendWhatsApp(req, res) {
 
         const finishOk = async (resultPayload) => {
             await contactStore.clearDraft(recipientRaw);
+            await finalizeDraftSendOutcome(draftContext, text, "ok");
             writeJson(res, 200, { status: "ok", ...resultPayload });
         };
 
@@ -776,6 +827,66 @@ async function serveSendWhatsApp(req, res) {
             ...(hint ? { hint } : {})
         });
     }
+}
+
+async function finalizeDraftSendOutcome(draftContext, finalText, sendResult) {
+    if (!draftContext || !draftContext.cycleId) {
+        return;
+    }
+    const selectedCandidateId = String(draftContext.selectedCandidateId || "").trim() || null;
+    const selectedDraftText = String(draftContext.selectedDraftText || draftContext.originalDraftText || "").trim();
+    const cycleId = String(draftContext.cycleId || "").trim();
+    const threadRef = String(draftContext.threadRef || "").trim();
+    const channel = String(draftContext.channel || "").trim().toLowerCase();
+    if (!cycleId || !threadRef || !channel) {
+        return;
+    }
+
+    const normalizedFinal = String(finalText || "").trim();
+    const editDistance = normalizedEditDistance(selectedDraftText, normalizedFinal);
+    let disposition = "MANUAL_REPLACEMENT";
+    if (selectedCandidateId && normalizedFinal === selectedDraftText) {
+        disposition = "SENT_AS_IS";
+    } else if (selectedCandidateId && editDistance <= 0.45) {
+        disposition = "EDITED_THEN_SENT";
+    }
+
+    await recordDraftOutcome({
+        company_id: draftContext.companyId || resolveReplyCompanyId(),
+        cycle_id: cycleId,
+        thread_ref: threadRef,
+        channel,
+        candidate_id: selectedCandidateId,
+        disposition,
+        occurred_at: new Date().toISOString(),
+        original_draft_text: selectedDraftText || null,
+        final_text: normalizedFinal,
+        edit_distance: editDistance,
+        latency_ms: Math.max(0, Date.now() - Number(draftContext.generatedAtMs || Date.now())),
+        send_result: sendResult || "ok",
+        notes: "reply_send",
+    });
+    await exportDraftTrace(cycleId).catch(() => null);
+}
+
+function normalizedEditDistance(left, right) {
+    const a = String(left || "");
+    const b = String(right || "");
+    if (!a && !b) return 0;
+    const matrix = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+    for (let i = 0; i <= a.length; i += 1) matrix[i][0] = i;
+    for (let j = 0; j <= b.length; j += 1) matrix[0][j] = j;
+    for (let i = 1; i <= a.length; i += 1) {
+        for (let j = 1; j <= b.length; j += 1) {
+            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+            matrix[i][j] = Math.min(
+                matrix[i - 1][j] + 1,
+                matrix[i][j - 1] + 1,
+                matrix[i - 1][j - 1] + cost
+            );
+        }
+    }
+    return matrix[a.length][b.length] / Math.max(a.length, b.length);
 }
 
 // `normalizeConversationSort` + `CONVERSATION_SORT_MODES`: exported for `chat/test/conversations-meta.test.js` (reply#31).

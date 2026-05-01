@@ -11,6 +11,9 @@ test("normalizeSuggestionResult unwraps string legacy results", () => {
     suggestion: "Draft reply",
     explanation: "",
     contextMeta: null,
+    runtimeMode: "legacy",
+    rankedDraftSet: null,
+    trinityDraftCandidate: null,
   });
 });
 
@@ -27,6 +30,7 @@ test("normalizeSuggestionResult preserves structured results", () => {
   assert.equal(normalized.explanation, "Why this works");
   assert.deepEqual(normalized.contextMeta, { rag: [] });
   assert.equal(normalized.runtimeMode, "trinity-shadow");
+  assert.equal(normalized.rankedDraftSet, null);
   assert.deepEqual(normalized.trinityDraftCandidate, {
     contractVersion: "trinity.reply.v1alpha1",
   });
