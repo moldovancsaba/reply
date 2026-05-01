@@ -40,7 +40,7 @@
 **Tasks**:
 - [ ] **Task 1.1**: Check if `.github/workflows/ci.yml` exists
   ```bash
-  ls -la /Users/moldovancsaba/Projects/reply/.github/workflows/ci.yml
+  ls -la /Users/Shared/Projects/reply/.github/workflows/ci.yml
   ```
   - If NOT found → proceed to Task 1.2
   - If found → skip to Task 1.3
@@ -96,7 +96,7 @@
 **Tasks**:
 - [ ] **Task 2.1**: Audit for string-interpolated SQL
   ```bash
-  grep -r "WHERE.*\${" /Users/moldovancsaba/Projects/reply/chat/*.js | grep -v "//"
+  grep -r "WHERE.*\${" /Users/Shared/Projects/reply/chat/*.js | grep -v "//"
   ```
   - If results found → Document each finding with line number
   - If no results → Proceed to Task 2.3
@@ -118,7 +118,7 @@
 
 - [ ] **Task 2.3**: Re-audit (confirm fix)
   ```bash
-  grep -r "WHERE.*\${" /Users/moldovancsaba/Projects/reply/chat/*.js | grep -v "//"
+  grep -r "WHERE.*\${" /Users/Shared/Projects/reply/chat/*.js | grep -v "//"
   ```
   - Expected output: Empty (no findings)
   - If findings remain: Repeat Task 2.2

@@ -525,10 +525,6 @@ final class ReplyCoreService: ObservableObject {
             cursor.deleteLastPathComponent()
         }
 
-        let known = URL(fileURLWithPath: "/Users/moldovancsaba/Projects/reply")
-        if FileManager.default.fileExists(atPath: known.appending(path: "chat/server.js").path) {
-            return known
-        }
         return nil
     }
 

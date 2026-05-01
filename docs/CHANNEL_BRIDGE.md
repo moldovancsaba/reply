@@ -111,7 +111,7 @@ For batch requests:
 Use the helper script to forward JSON/NDJSON/array payloads:
 
 ```bash
-cd /Users/moldovancsaba/Projects/reply/chat
+cd /Users/Shared/Projects/reply/chat
 npm run channel-bridge:ingest -- --event '{"channel":"telegram","peer":{"handle":"@alice"},"text":"hello","timestamp":"2026-02-18T11:02:00Z"}'
 ```
 

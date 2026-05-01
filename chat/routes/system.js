@@ -153,13 +153,19 @@ function normalizeChannelStatus(baseStatus, ingestedTotal, extras = {}) {
     const state = String(baseStatus?.state || baseStatus?.status || "idle").toLowerCase();
     const lastSuccessfulSync = baseStatus?.lastSuccessfulSync || baseStatus?.lastSync || null;
     const lastAttemptedSync = baseStatus?.lastAttemptedSync || baseStatus?.timestamp || lastSuccessfulSync || null;
+    const numeric = (value) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+    const processed = Math.max(numeric(baseStatus?.processed), numeric(ingestedTotal));
+    const total = Math.max(numeric(baseStatus?.total), numeric(ingestedTotal));
     return {
         ...baseStatus,
         state,
         status: state === "error" ? "repair_required" : (state || "idle"),
         ingestedTotal,
-        processed: ingestedTotal,
-        total: ingestedTotal,
+        processed,
+        total,
         lastSuccessfulSync,
         lastAttemptedSync,
         ...extras
@@ -174,6 +180,10 @@ let lastPreflightReport = null;
 let lastPreflightAtMs = 0;
 
 async function buildSystemHealthPayloadCore() {
+    const numeric = (value) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
     const settings = readSettings();
     const healthCfg = settings?.health || {};
     const ollamaProbeMs = Math.max(
@@ -328,7 +338,9 @@ async function buildSystemHealthPayloadCore() {
                 lastSuccessfulSync: imessageStatus?.lastSuccessfulSync || imessageStatus?.lastSync || getIMessageCheckpointLastSync()
             }),
             whatsapp: normalizeChannelStatus(whatsappStatus, whatsappCount),
-            notes: normalizeChannelStatus(notesStatus, notesCountIngested, { total: getNotesCount() }),
+            notes: normalizeChannelStatus(notesStatus, notesCountIngested, {
+                total: Math.max(numeric(notesStatus.total), numeric(notesStatus.processed), numeric(notesStatus.updated), numeric(getNotesCount()), numeric(notesCountIngested))
+            }),
             calendar: normalizeChannelStatus(calendarStatus, calendarCount),
             mail: {
                 ...mailStatus,
@@ -336,9 +348,9 @@ async function buildSystemHealthPayloadCore() {
                 provider: mailProvider,
                 account: mailAccount,
                 connected: !!(gmailOk || imapOk),
-                processed: mailCount,
-                total: mailCount,
-                status: (mailStatus.state === 'error' || (!!(gmailOk || imapOk) && mailCount === 0 && mailStatus.state === 'idle')) ? "repair_required" : (mailStatus.state || "ok")
+                processed: Math.max(numeric(mailStatus.processed), numeric(mailStatus.total), numeric(mailCount)),
+                total: Math.max(numeric(mailStatus.total), numeric(mailStatus.processed), numeric(mailCount)),
+                status: (mailStatus.state === 'error') ? "repair_required" : (mailStatus.state || "ok")
             },
             linkedin_messages: {
                 ...readStatus("linkedin_sync_status.json"),

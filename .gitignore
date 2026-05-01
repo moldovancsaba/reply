@@ -30,6 +30,9 @@ chat/data/apple-contacts-export
 chat/models.json
 chat/raw_health.json
 chat/project_*.json
+20260222_reply_board.json
+archive/scripts/*.json
+archive/scripts/*.sh
 chat/test-hybrid-db/
 chat/test-hybrid-db-final/
 chat/tmp-db/

@@ -48,6 +48,14 @@ function formatOpenClawChannelsSummary(channels) {
   return 'None';
 }
 
+function metricValue(...values) {
+  for (const value of values) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return 0;
+}
+
 function wireDashboardActions(root) {
   if (!root) return;
 
@@ -526,7 +534,7 @@ export async function renderDashboard() {
       ${renderHealthCard({
         title: 'Email Sync',
         icon: '/public/mail.svg',
-        value: mailSync.processed || 0,
+        value: metricValue(mailSync.total, mailSync.processed, mailSync.ingestedTotal),
         statusText: mailSync.connected ? `● ${mailSync.provider === 'gmail' ? 'Gmail' : 'IMAP'} Connected` : '● Disconnected',
         statusClass: mailSync.connected ? 'tag-online' : 'tag-offline',
         meta: [
@@ -556,7 +564,7 @@ export async function renderDashboard() {
       ${renderHealthCard({
         title: 'Notes Sync',
         icon: '📝',
-        value: notesSync.processed || 0,
+        value: metricValue(notesSync.total, notesSync.ingestedTotal, notesSync.processed, notesSync.updated),
         statusText: '● Notes Scanned',
         meta: [{ text: `Sync: ${formatLastSync(notesSync.lastSync)}` }],
         actions: [
