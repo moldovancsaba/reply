@@ -422,6 +422,26 @@ function persistShadowComparison(payload) {
   }
 }
 
+function readShadowComparisons(limit = 20) {
+  try {
+    ensureDataHome();
+    const logFile = dataPath("shadow", "trinity-draft-comparisons.jsonl");
+    if (!fs.existsSync(logFile)) return [];
+    const lines = fs
+      .readFileSync(logFile, "utf-8")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    return lines
+      .slice(-Math.max(1, Math.min(Number(limit) || 20, 500)))
+      .reverse()
+      .map((line) => JSON.parse(line));
+  } catch (error) {
+    console.warn("[reply-runtime] Failed to read Trinity shadow comparisons:", error.message);
+    return [];
+  }
+}
+
 function normalizedEditDistance(left, right) {
   const source = String(left || "");
   const target = String(right || "");
@@ -464,6 +484,7 @@ module.exports = {
   normalizeSuggestionResult,
   normalizedEditDistance,
   persistShadowComparison,
+  readShadowComparisons,
   recordDraftOutcome,
   resolveReplyCompanyId,
   tokenOverlapRatio,
