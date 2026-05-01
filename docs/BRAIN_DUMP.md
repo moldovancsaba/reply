@@ -81,7 +81,7 @@ The sections below retain **2026-02-22** planning detail for archaeology. When t
 {reply} Status — Sprint X, Week Y
 
 ✅ Completed:
-- #XXX: [Brief] (commit SHA)
+- [issue-id]: [Brief] (commit SHA)
 
 🟡 In Progress:
 - #YYY: [Brief] — ETA [date]
