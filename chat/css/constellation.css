@@ -1,10 +1,46 @@
 /* Generated from Constellation design-system snapshot. */
 
-:root {
-  --cds-accent-primary: #db7440;
+:root,
+[data-theme="day"] {
+  --cds-accent-primary: #4d96ff;
   --cds-accent-secondary: #2f9c8a;
-  --cds-accent-highlight: #e4b850;
-  --cds-border-focus: #db7440;
+  --cds-accent-highlight: #87b8ff;
+  --cds-border-focus: #2563eb;
+  --cds-border-soft: #c8d5ea;
+  --cds-border-strong: #9eb3d8;
+  --cds-status-success: #2a7a48;
+  --cds-status-warning: #a86a00;
+  --cds-status-danger: #b13b2d;
+  --cds-status-info: #2563eb;
+  --cds-surface-canvas: #eef4ff;
+  --cds-surface-sidebar: #dbe7fb;
+  --cds-surface-panel: #fcfdff;
+  --cds-surface-elevated: #ffffff;
+  --cds-surface-muted: #dde5f4;
+  --cds-text-primary: #16233a;
+  --cds-text-secondary: #455b7e;
+  --cds-text-tertiary: #6a7f9c;
+  --cds-font-family-sans: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --cds-font-family-mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+  --cds-space-xs: 8px;
+  --cds-space-sm: 12px;
+  --cds-space-md: 16px;
+  --cds-space-lg: 24px;
+  --cds-space-xl: 32px;
+  --cds-radius-sm: 8px;
+  --cds-radius-md: 12px;
+  --cds-radius-lg: 18px;
+  --cds-radius-xl: 24px;
+  --cds-radius-full: 999px;
+  --cds-shadow-sm: 0 6px 16px rgba(28, 56, 109, 0.10);
+  --cds-shadow-md: 0 12px 28px rgba(28, 56, 109, 0.14);
+}
+
+[data-theme="night"] {
+  --cds-accent-primary: #4d96ff;
+  --cds-accent-secondary: #2f9c8a;
+  --cds-accent-highlight: #87b8ff;
+  --cds-border-focus: #4d96ff;
   --cds-border-soft: #343b44;
   --cds-border-strong: #4a5360;
   --cds-status-success: #4fc57a;
@@ -19,18 +55,6 @@
   --cds-text-primary: #f5f0e8;
   --cds-text-secondary: #c6bcb0;
   --cds-text-tertiary: #9d9388;
-  --cds-font-family-sans: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --cds-font-family-mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
-  --cds-space-xs: 8px;
-  --cds-space-sm: 12px;
-  --cds-space-md: 16px;
-  --cds-space-lg: 24px;
-  --cds-space-xl: 32px;
-  --cds-radius-sm: 8px;
-  --cds-radius-md: 12px;
-  --cds-radius-lg: 18px;
-  --cds-radius-xl: 24px;
-  --cds-radius-full: 999px;
   --cds-shadow-sm: 0 6px 16px rgba(0, 0, 0, 0.18);
   --cds-shadow-md: 0 12px 28px rgba(0, 0, 0, 0.24);
 }

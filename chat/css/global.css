@@ -78,13 +78,20 @@ body {
   padding: 0;
   font-family: var(--cds-font-family-sans);
   background:
-    radial-gradient(circle at top left, rgba(219, 116, 64, 0.18), transparent 24%),
-    radial-gradient(circle at top right, rgba(47, 156, 138, 0.12), transparent 20%),
-    linear-gradient(180deg, #0f1116 0%, var(--bg-app) 100%);
+    radial-gradient(circle at top left, rgba(77, 150, 255, 0.16), transparent 24%),
+    radial-gradient(circle at top right, rgba(47, 156, 138, 0.10), transparent 20%),
+    linear-gradient(180deg, #f7fbff 0%, var(--bg-app) 100%);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   height: 100vh;
   overflow: hidden;
+}
+
+[data-theme="night"] body {
+  background:
+    radial-gradient(circle at top left, rgba(77, 150, 255, 0.18), transparent 24%),
+    radial-gradient(circle at top right, rgba(47, 156, 138, 0.12), transparent 20%),
+    linear-gradient(180deg, #0f1116 0%, var(--bg-app) 100%);
 }
 
 /* Layout Utilities */
