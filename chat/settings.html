@@ -2,6 +2,19 @@
 <html lang="en">
 
 <head>
+    <script>
+        (function () {
+            try {
+                const stored = localStorage.getItem("reply.theme") || "auto";
+                const mode = stored === "auto"
+                    ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "day")
+                    : stored;
+                document.documentElement.dataset.theme = mode;
+            } catch {
+                document.documentElement.dataset.theme = "night";
+            }
+        })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{reply} — Settings</title>
@@ -20,6 +33,9 @@
                     </span>
                     <span id="btn-settings" class="u-sidebar-icon reply-shell-icon" title="Settings" aria-hidden="true">
                         ⚙
+                    </span>
+                    <span id="btn-theme-settings" class="u-sidebar-icon reply-shell-icon" title="Theme" aria-hidden="true">
+                        ◐
                     </span>
                     <span id="btn-training" class="u-sidebar-icon reply-shell-icon" title="Agent Training" aria-hidden="true">
                         🧠

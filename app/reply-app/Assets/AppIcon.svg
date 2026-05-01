@@ -1,9 +1,9 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="bg" x1="132" y1="92" x2="888" y2="940" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#4D96FF"/>
+      <stop stop-color="#74B4FF"/>
       <stop offset="0.55" stop-color="#2563EB"/>
-      <stop offset="1" stop-color="#1438C9"/>
+      <stop offset="1" stop-color="#153A9B"/>
     </linearGradient>
     <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(290 210) rotate(43.1524) scale(589.072)">
       <stop stop-color="white" stop-opacity="0.28"/>
@@ -29,6 +29,6 @@
   <g filter="url(#shadow)">
     <rect x="240" y="220" width="544" height="544" rx="148" fill="url(#plate)"/>
     <rect x="240" y="220" width="544" height="544" rx="148" stroke="white" stroke-opacity="0.55" stroke-width="8"/>
-    <text x="512" y="598" text-anchor="middle" font-family="SF Pro Display, Helvetica Neue, Arial, sans-serif" font-size="324" font-weight="700" letter-spacing="-26" fill="#165DFF">{r}</text>
+    <text x="512" y="598" text-anchor="middle" font-family="SF Pro Display, Helvetica Neue, Arial, sans-serif" font-size="272" font-weight="700" letter-spacing="-18" fill="#165DFF">{0}</text>
   </g>
 </svg>

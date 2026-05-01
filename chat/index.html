@@ -3,6 +3,19 @@
 
 <head>
   <script>
+    (function () {
+      try {
+        const stored = localStorage.getItem("reply.theme") || "auto";
+        const mode = stored === "auto"
+          ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "day")
+          : stored;
+        document.documentElement.dataset.theme = mode;
+      } catch {
+        document.documentElement.dataset.theme = "night";
+      }
+    })();
+  </script>
+  <script>
     window.onerror = function (msg, url, line, col, error) {
       console.error('[GLOBAL ERROR]', { msg, url, line, col, error });
       // Only alert once to avoid spamming
@@ -35,6 +48,9 @@
           </span>
           <span id="btn-settings" class="u-sidebar-icon reply-shell-icon" title="Settings" aria-hidden="true">
             ⚙
+          </span>
+          <span id="btn-theme" class="u-sidebar-icon reply-shell-icon" title="Theme" aria-hidden="true">
+            ◐
           </span>
         </div>
         <div id="services-health-status" class="services-health-status" title="Services Health">
