@@ -1,4 +1,5 @@
 import { getSettings, saveSettings, getGmailAuthUrl, disconnectGmail } from './api.js';
+import { applyIconFallback } from './icon-fallback.js';
 import { UI } from './ui.js';
 import {
   loadConversations,
@@ -16,6 +17,7 @@ function el(id) {
 
 let gmailHasSavedSecret = false;
 let gmailHasRefreshToken = false;
+let wireDomPromise = null;
 
 function maskHint(value) {
   if (!value) return '';
@@ -230,6 +232,22 @@ function switchTab(tabId) {
 
   if (tabId === 'ai-status') {
     refreshAiProviderStatuses().catch((e) => console.warn('[settings] provider check:', e));
+  }
+}
+
+function ensureSettingsSurface(tabId = 'general') {
+  const page = el('settings-page');
+  const shell = page?.querySelector('.settings-page-shell');
+  const contentArea = page?.querySelector('.settings-content-area');
+  const contentBody = page?.querySelector('.settings-content-body');
+  if (page) page.style.display = 'flex';
+  if (shell) shell.style.display = 'flex';
+  if (contentArea) contentArea.style.display = 'flex';
+  if (contentBody) contentBody.style.display = 'block';
+
+  const visibleSection = page?.querySelector('.settings-tab-content:not(.u-display-none)');
+  if (!visibleSection) {
+    switchTab(tabId);
   }
 }
 
@@ -507,7 +525,10 @@ export async function openSettings() {
       ? String(window.location.hash || '').replace(/^#/, '').trim()
       : '';
   const tabNav = hashTab ? document.querySelector(`[data-tab="${hashTab}"]`) : null;
-  switchTab(tabNav ? hashTab : 'general');
+  const selectedTab = tabNav ? hashTab : 'general';
+  switchTab(selectedTab);
+  ensureSettingsSurface(selectedTab);
+  applyIconFallback(document.getElementById('settings-page') || document);
   await loadIntoForm();
 }
 
@@ -665,6 +686,8 @@ function initStandaloneSettingsShell() {
  * Wire DOM events for settings
  */
 export async function wireDom() {
+  if (wireDomPromise) return wireDomPromise;
+  wireDomPromise = (async () => {
   const container = document.getElementById('settings-container');
   if (!container) return;
 
@@ -684,6 +707,8 @@ export async function wireDom() {
       return;
     }
   }
+
+  applyIconFallback(container);
 
   const page = document.getElementById('settings-page');
   const closeBtn = document.getElementById('settings-close');
@@ -751,6 +776,13 @@ export async function wireDom() {
       UI.showToast(msg, 'error');
     }
   });
+  })();
+
+  try {
+    await wireDomPromise;
+  } finally {
+    wireDomPromise = null;
+  }
 }
 
 window.openSettings = openSettings;
@@ -758,7 +790,13 @@ window.closeSettings = closeSettings;
 
 // Auto-open if in standalone mode
 if (window.location.pathname.includes('settings.html')) {
-  setTimeout(() => openSettings(), 100);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      openSettings().catch((e) => console.error('[settings] open failed:', e));
+    }, { once: true });
+  } else {
+    openSettings().catch((e) => console.error('[settings] open failed:', e));
+  }
 }
 
 if (document.readyState === 'loading') {

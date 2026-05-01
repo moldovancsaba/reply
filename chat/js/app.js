@@ -18,6 +18,7 @@ import { getSettings, buildSecurityHeaders, reportDraftReplacement } from './api
 import './dashboard.js?v=2.2';
 import './kyc.js?v=2.1';
 import { applyReplyUiSettings } from './settings.js?v=2.5';
+import { applyIconFallback } from './icon-fallback.js';
 import { UI } from './ui.js';
 import { maybeShowOnboarding } from './onboarding.js?v=2.1';
 
@@ -99,6 +100,8 @@ window.openChannelSettings = function openChannelSettings(channel) {
   const tab = SETTINGS_TAB_BY_CHANNEL[key] || 'general';
   window.location.href = `settings.html#${encodeURIComponent(tab)}`;
 };
+
+applyIconFallback(document);
 
 function cacheComposerDraft(handle, text) {
   if (!handle) return;

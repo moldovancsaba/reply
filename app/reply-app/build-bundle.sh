@@ -42,6 +42,9 @@ rsync -a --delete \
   --exclude "tmp-db/" \
   --exclude ".DS_Store" \
   "$REPO_ROOT/chat/" "$APP_BUNDLE/Contents/Resources/$CORE_DIR_NAME/chat/"
+rsync -a --delete \
+  --exclude ".DS_Store" \
+  "$REPO_ROOT/public/" "$APP_BUNDLE/Contents/Resources/$CORE_DIR_NAME/public/"
 cp "$PROJECT_DIR/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 cp "$ICON_PATH" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
