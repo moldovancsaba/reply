@@ -94,10 +94,16 @@ final class ReplyCoreService: ObservableObject {
         var env = ProcessInfo.processInfo.environment
         env["REPLY_DATA_HOME"] = replyDataHome.path
         env["REPLY_LOG_HOME"] = replyLogHome.path
+        env["REPLY_RELEASE_MODE"] = "1"
+        env["REPLY_BRAIN_RUNTIME"] = "trinity"
+        env["USE_TRINITY_DRAFTS"] = "1"
+        env["REPLY_ALLOW_LEGACY_BRAIN"] = "0"
+        env["REPLY_ALLOW_EXPERIMENTAL_BRAIN_MODES"] = "0"
+        env["TRINITY_RUNTIME_ROOT"] = runtimeRoot.appending(path: "trinity-runtime").path
         if let mirrored = mirroredIMessageDbURL(), FileManager.default.fileExists(atPath: mirrored.path) {
             env["REPLY_IMESSAGE_DB_PATH"] = mirrored.path
         }
-        env["PATH"] = "\(runtimeBinary.deletingLastPathComponent().path):/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+        env["PATH"] = "\(runtimeBinary.deletingLastPathComponent().path):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         process.environment = env
         process.standardOutput = output
         process.standardError = output
