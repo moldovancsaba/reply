@@ -5,8 +5,8 @@ knowledge/lancedb/
 knowledge/notes-metadata.json
 .DS_Store
 .codex/
-app/ReplyApp/.build/
-app/ReplyApp/dist/
+app/reply-app/.build/
+app/reply-app/dist/
 chat/data/security_audit.jsonl
 chat/data/apple-source-mirrors/
 chat/data/imessage-mirror.pid
