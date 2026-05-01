@@ -1712,6 +1712,7 @@
         flex: 1;
         display: flex;
         flex-direction: column;
+        width: 100%;
         min-width: 0;
         min-height: 0;
         overflow: hidden;
@@ -1757,6 +1758,16 @@
         max-width: 920px;
         width: 100%;
         box-sizing: border-box;
+      }
+
+      .material-symbols-outlined.reply-local-icon {
+        font-family: inherit !important;
+        font-variation-settings: normal !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+        speak: none;
       }
 
       .settings-tab-content {
@@ -2011,6 +2022,7 @@
 
       body.mode-settings.settings-standalone #settings-container {
         flex: 1;
+        width: 100%;
         min-height: 0;
         display: flex;
         flex-direction: column;
@@ -2020,7 +2032,9 @@
       body.mode-settings.settings-standalone #settings-page.settings-page {
         position: relative;
         inset: auto;
+        display: flex;
         flex: 1;
+        width: 100%;
         min-height: 0;
         padding: 0;
         margin: 0;

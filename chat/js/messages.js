@@ -5,6 +5,7 @@
 
 import { fetchMessages, sendMessage } from './api.js';
 import { APP_DISPLAY_NAME } from './branding.js';
+import { applyIconFallback } from './icon-fallback.js';
 import { UI } from './ui.js';
 import { appendLinkedText, createPlatformIcon, resolvePlatformTarget } from './platform-icons.js';
 import { formatPleasant } from './message-formatter.js';
@@ -81,14 +82,17 @@ function createMessageBubble(msg) {
         starBtn.style.transition = 'color 0.2s';
         starBtn.textContent = msg.is_annotated ? 'star' : 'star_border';
         starBtn.title = msg.is_annotated ? 'Remove Golden Example' : 'Mark as Golden Example';
+        applyIconFallback(starBtn.parentElement || starBtn);
 
         starBtn.onclick = async (e) => {
             e.stopPropagation();
-            const nextState = !(starBtn.textContent === 'star');
+            const currentState = starBtn.dataset.iconName === 'star';
+            const nextState = !currentState;
 
             starBtn.textContent = nextState ? 'star' : 'star_border';
             starBtn.style.color = nextState ? '#fbbc04' : '#ccc';
             starBtn.title = nextState ? 'Remove Golden Example' : 'Mark as Golden Example';
+            applyIconFallback(starBtn.parentElement || starBtn);
 
             try {
                 const { buildSecurityHeaders } = await import('./api.js');
@@ -102,6 +106,7 @@ function createMessageBubble(msg) {
                 console.error('Annotation failed:', err);
                 starBtn.textContent = !nextState ? 'star' : 'star_border';
                 starBtn.style.color = !nextState ? '#fbbc04' : '#ccc';
+                applyIconFallback(starBtn.parentElement || starBtn);
             }
         };
         info.appendChild(starBtn);
