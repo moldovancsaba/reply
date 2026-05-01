@@ -1,5 +1,0 @@
-[dotenv@17.3.1] injecting env (16) from .env -- tip: ⚡️ secrets for agents: https://dotenvx.com/as2
-[dotenv@17.3.1] injecting env (0) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
-[dotenv@17.3.1] injecting env (0) from .env -- tip: ⚙️  override existing env vars with { override: true }
-[Triage] Loaded 4 rules.
-{reply} POC server running at http://localhost:45311
