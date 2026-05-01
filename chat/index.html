@@ -27,14 +27,14 @@
     <aside class="sidebar" id="sidebar-pane">
       <div class="sidebar-header">
         <div class="u-flex-center-gap">
-          <span id="btn-toggle-sidebar" class="material-symbols-outlined u-sidebar-icon" title="Collapse contacts">
-            left_panel_close
+          <span id="btn-toggle-sidebar" class="u-sidebar-icon reply-shell-icon" title="Collapse contacts" aria-hidden="true">
+            ◧
           </span>
-          <span id="btn-dash" class="material-symbols-outlined u-sidebar-icon-lg" title="Go to Dashboard">
-            flip_camera_android
+          <span id="btn-dash" class="u-sidebar-icon-lg reply-shell-icon" title="Go to Dashboard" aria-hidden="true">
+            ◫
           </span>
-          <span id="btn-settings" class="material-symbols-outlined u-sidebar-icon" title="Settings">
-            settings
+          <span id="btn-settings" class="u-sidebar-icon reply-shell-icon" title="Settings" aria-hidden="true">
+            ⚙
           </span>
         </div>
         <div id="services-health-status" class="services-health-status" title="Services Health">
@@ -70,7 +70,7 @@
       <header class="chat-header">
         <div class="u-flex-center-gap-12">
           <button id="btn-show-sidebar" class="btn btn-secondary btn-icon btn-icon-sm u-display-none" title="Show contacts" aria-label="Show contacts">
-            <span class="material-symbols-outlined">left_panel_open</span>
+            <span class="reply-shell-icon" aria-hidden="true">◨</span>
           </button>
           <div id="active-contact-name-chat" class="u-chat-active-contact">Select a contact</div>
           <select id="status-select" onchange="updateManualStatus()"
@@ -82,7 +82,7 @@
         </div>
         <div class="u-flex-center-gap">
           <button id="btn-show-profile" class="btn btn-secondary btn-icon btn-icon-sm u-display-none" title="Show profile" aria-label="Show profile">
-            <span class="material-symbols-outlined">right_panel_open</span>
+            <span class="reply-shell-icon" aria-hidden="true">▣</span>
           </button>
           <button class="btn btn-primary" id="btn-mic" title="Voice Input" style="display:none;">🎤 Mic</button>
           <button class="btn btn-primary" id="btn-magic" title="Refine draft" style="display:none;">✨ Refine</button>

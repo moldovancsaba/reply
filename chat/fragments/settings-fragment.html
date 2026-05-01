@@ -8,22 +8,22 @@
             </div>
             <nav class="settings-nav">
                 <button class="settings-nav-item active" data-tab="general">
-                    <span class="material-symbols-outlined">tune</span> General
+                    <span class="reply-settings-icon" aria-hidden="true">☷</span> General
                 </button>
                 <button class="settings-nav-item" data-tab="email">
-                    <span class="material-symbols-outlined">mail</span> Email
+                    <span class="reply-settings-icon" aria-hidden="true">✉</span> Email
                 </button>
                 <button class="settings-nav-item" data-tab="messaging">
-                    <span class="material-symbols-outlined">chat_bubble</span> Messaging
+                    <span class="reply-settings-icon" aria-hidden="true">💬</span> Messaging
                 </button>
                 <button class="settings-nav-item" data-tab="worker">
-                    <span class="material-symbols-outlined">cyclone</span> Worker
+                    <span class="reply-settings-icon" aria-hidden="true">↻</span> Worker
                 </button>
                 <button class="settings-nav-item" data-tab="ai-status">
-                    <span class="material-symbols-outlined">monitor_heart</span> AI &amp; status
+                    <span class="reply-settings-icon" aria-hidden="true">◉</span> AI &amp; status
                 </button>
                 <button class="settings-nav-item" data-tab="security">
-                    <span class="material-symbols-outlined">lock</span> Privacy & Security
+                    <span class="reply-settings-icon" aria-hidden="true">🔒</span> Privacy & Security
                 </button>
             </nav>
             <div class="settings-sidebar-footer">
@@ -44,7 +44,7 @@
                 <section id="tab-content-general" class="settings-tab-content">
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="material-symbols-outlined">auto_awesome</span> Generative Persona
+                            <span class="reply-settings-icon" aria-hidden="true">✨</span> Generative Persona
                         </div>
                         <div class="settings-grid">
                             <div class="settings-field">
@@ -59,7 +59,7 @@
 
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="material-symbols-outlined">palette</span> UI Aesthetics
+                            <span class="reply-settings-icon" aria-hidden="true">🎨</span> UI Aesthetics
                         </div>
                         <p class="settings-hint mb-md">Personalize how message bubbles appear for each secondary
                             channel.</p>
@@ -96,7 +96,7 @@
                 <section id="tab-content-email" class="settings-tab-content u-display-none">
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="material-symbols-outlined">alternate_email</span> Gmail (OAuth)
+                            <span class="reply-settings-icon" aria-hidden="true">✉</span> Gmail (OAuth)
                         </div>
                         <div class="settings-info-card-premium mb-lg">
                             <div class="u-flex-center-gap">
@@ -142,7 +142,7 @@
 
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="material-symbols-outlined">dns</span> Direct IMAP
+                            <span class="reply-settings-icon" aria-hidden="true">☰</span> Direct IMAP
                         </div>
                         <p class="settings-hint mb-lg">Legacy connection for custom providers or non-Gmail accounts.</p>
                         <div class="settings-grid settings-grid-2">
@@ -170,7 +170,7 @@
 
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="material-symbols-outlined">stacked_email</span> Additional IMAP mailboxes
+                            <span class="reply-settings-icon" aria-hidden="true">✉</span> Additional IMAP mailboxes
                         </div>
                         <p class="settings-hint mb-lg">Each row syncs after the primary IMAP (worker / “Sync Email”).
                             Vector IDs are namespaced per account. Duplicate host+user as primary is skipped.</p>
@@ -192,7 +192,7 @@
                 <section id="tab-content-messaging" class="settings-tab-content u-display-none">
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="material-symbols-outlined">bridge</span> Channel Bridge Policies
+                            <span class="reply-settings-icon" aria-hidden="true">⟷</span> Channel Bridge Policies
                         </div>
                         <p class="settings-hint mb-lg">Define how inbound traffic from secondary bridges is handled by
                             the automated tiler.</p>
@@ -239,7 +239,7 @@
                 <section id="tab-content-worker" class="settings-tab-content u-display-none">
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="material-symbols-outlined">speed</span> Background Intelligence
+                            <span class="reply-settings-icon" aria-hidden="true">⏱</span> Background Intelligence
                         </div>
                         <div class="settings-field">
                             <label class="settings-label">Polling Cadence (seconds)</label>
@@ -276,7 +276,7 @@
                 <section id="tab-content-ai-status" class="settings-tab-content u-display-none">
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="material-symbols-outlined">healing</span> Health monitor
+                            <span class="reply-settings-icon" aria-hidden="true">🩺</span> Health monitor
                         </div>
                         <p class="settings-hint mb-md">Hub uses these values for <code>/api/system-health</code> probes.
                             Save, then reopen the dashboard to apply.</p>
@@ -298,7 +298,7 @@
 
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="material-symbols-outlined">tune</span> Draft runtime &amp; endpoints
+                            <span class="reply-settings-icon" aria-hidden="true">☷</span> Draft runtime &amp; endpoints
                         </div>
                         <p class="settings-hint mb-md">Saved to the app-owned <code>settings.json</code> in
                             <code>~/Library/Application Support/reply</code> and synced to
@@ -358,7 +358,7 @@
 
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="material-symbols-outlined">restart_alt</span> Background worker
+                            <span class="reply-settings-icon" aria-hidden="true">↻</span> Background worker
                         </div>
                         <p class="settings-hint mb-md">Calls <code>POST /api/system/service/control</code> (operator token
                             required if enforcement is on). Use after changing models synced to <code>chat/.env</code>, or
@@ -370,7 +370,7 @@
 
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="material-symbols-outlined">smart_toy</span> AI providers
+                            <span class="reply-settings-icon" aria-hidden="true">🤖</span> AI providers
                         </div>
                         <p class="settings-hint mb-md">Read-only checks against the running hub. Values above override env
                             for this hub process after Save.</p>
@@ -400,7 +400,7 @@
                 <section id="tab-content-security" class="settings-tab-content u-display-none">
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="material-symbols-outlined">verified_user</span> Security Hardening
+                            <span class="reply-settings-icon" aria-hidden="true">🛡</span> Security Hardening
                         </div>
                         <div class="u-flex-column gap-md">
                             <div class="settings-checkbox-group">
@@ -418,7 +418,7 @@
 
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="material-symbols-outlined">vpn_key</span> API Sovereignty
+                            <span class="reply-settings-icon" aria-hidden="true">🔑</span> API Sovereignty
                         </div>
                         <div class="settings-field">
                             <label class="settings-label">Master Operator Token</label>
