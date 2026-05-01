@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PLIST="${HOME}/Library/LaunchAgents/com.reply.hub.plist"
 
-echo "=== Reply doctor (repo vs LaunchAgent) ==="
+echo "=== {reply} doctor (repo vs LaunchAgent) ==="
 echo "Current directory (expected repo root): ${REPO_ROOT}"
 
 if [[ ! -f "$PLIST" ]]; then

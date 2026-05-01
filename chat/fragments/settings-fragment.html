@@ -4,7 +4,7 @@
         <!-- Settings Sidebar Navigation -->
         <aside class="settings-sidebar">
             <div class="settings-sidebar-header">
-                <h3>Reply <span>Settings</span></h3>
+                <h3>{reply} <span>Settings</span></h3>
             </div>
             <nav class="settings-nav">
                 <button class="settings-nav-item active" data-tab="general">
@@ -278,26 +278,14 @@
                         <div class="settings-section-title">
                             <span class="material-symbols-outlined">healing</span> Health monitor
                         </div>
-                        <p class="settings-hint mb-md">Hub uses these values for <code>/api/system-health</code> probes
-                            and the Hatori watchdog. Save, then reopen the dashboard to apply.</p>
+                        <p class="settings-hint mb-md">Hub uses these values for <code>/api/system-health</code> probes.
+                            Save, then reopen the dashboard to apply.</p>
                         <div class="settings-grid settings-grid-2">
-                            <div class="settings-field">
-                                <label class="settings-label" for="settings-health-hatori-timeout">Hatori probe timeout
-                                    (ms)</label>
-                                <input id="settings-health-hatori-timeout" type="number" class="settings-input"
-                                    min="3000" max="120000" value="12000" title="Single health request timeout">
-                            </div>
                             <div class="settings-field">
                                 <label class="settings-label" for="settings-health-ollama-timeout">Ollama probe timeout
                                     (ms)</label>
                                 <input id="settings-health-ollama-timeout" type="number" class="settings-input"
                                     min="1000" max="30000" value="3000" title="Ollama /api/tags timeout">
-                            </div>
-                            <div class="settings-field">
-                                <label class="settings-label" for="settings-health-hatori-threshold">Hatori failures
-                                    before watchdog</label>
-                                <input id="settings-health-hatori-threshold" type="number" class="settings-input" min="1"
-                                    max="20" value="3" title="Consecutive failed checks">
                             </div>
                             <div class="settings-field">
                                 <label class="settings-label" for="settings-health-ui-poll">Settings sidebar health dot
@@ -317,10 +305,9 @@
                             it picks up URL/model changes. Hub applies on Save.</p>
                         <div class="settings-field">
                             <label class="settings-label" for="settings-ai-draft-runtime">Suggest / draft runtime</label>
-                            <select id="settings-ai-draft-runtime" class="settings-input" title="Hatori vs local Ollama pipeline">
-                                <option value="auto">Auto — Hatori when REPLY_USE_HATORI=1, else Ollama</option>
-                                <option value="ollama">Ollama only (skip Hatori routing)</option>
-                                <option value="hatori">Hatori when enabled (same as auto if Hatori off)</option>
+                            <select id="settings-ai-draft-runtime" class="settings-input" title="Local Ollama pipeline">
+                                <option value="auto">Auto</option>
+                                <option value="ollama">Ollama only</option>
                             </select>
                         </div>
                         <div class="settings-grid settings-grid-2">
@@ -365,15 +352,6 @@
                                     placeholder="leave blank to keep saved" title="REPLY_OPENCLAW_GATEWAY_TOKEN">
                                 <div id="settings-ai-openclaw-gateway-token-hint" class="settings-hint"></div>
                             </div>
-                            <div class="settings-field" style="grid-column:1/-1;">
-                                <label class="settings-label" for="settings-ai-hatori-url">Hatori API base (optional)</label>
-                                <input id="settings-ai-hatori-url" type="text" class="settings-input"
-                                    placeholder="http://127.0.0.1:23572" title="HATORI_API_URL — overrides default port">
-                                <p class="settings-hint" style="margin-top:6px;margin-bottom:0">Hub also reads
-                                    <code>REPLY_HATORI_PROJECT_PATH</code> in <code>chat/.env.local</code> for the Python
-                                    checkout (spawn path). Watch the three lanes (writer / drafter / judge) on the
-                                    dashboard or open Hatori UI (port 23571).</p>
-                            </div>
                         </div>
                     </div>
 
@@ -410,14 +388,6 @@
                                     <button type="button" class="btn btn-secondary btn-sm" id="settings-providers-check-openclaw">Check</button>
                                 </div>
                                 <p id="settings-providers-openclaw-line" class="settings-hint" style="margin:0">—</p>
-                            </div>
-                            <div id="settings-providers-hatori-wrap" class="settings-list-item-premium u-display-none"
-                                style="flex-direction:column;align-items:stretch;gap:10px;">
-                                <div class="u-flex-center-gap" style="justify-content:space-between;width:100%;">
-                                    <span class="u-font-weight-700">Hatori API</span>
-                                    <button type="button" class="btn btn-secondary btn-sm" id="settings-providers-check-hatori">Check</button>
-                                </div>
-                                <p id="settings-providers-hatori-line" class="settings-hint" style="margin:0">—</p>
                             </div>
                         </div>
                         <button type="button" class="btn btn-primary mt-md" id="settings-providers-check-all">Run all

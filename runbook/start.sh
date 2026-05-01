@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# reply#65 — SSOT for starting the Reply hub on macOS: LaunchAgent (no nohup).
-# Installs/reloads com.reply.hub from the repo root (same as `make run`).
+# Start the {reply} hub in the current user session so Apple-private sources remain readable.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-echo "Reply: installing hub LaunchAgent from ${ROOT} (see Makefile install-service)…"
+echo "{reply}: starting hub in session mode from ${ROOT}…"
 exec make run

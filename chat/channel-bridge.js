@@ -6,7 +6,8 @@ const contactStore = require("./contact-store.js");
 const { saveMessages } = require("./message-store.js");
 const triageEngine = require("./triage-engine.js");
 const { normalizeLinkedInHandle } = require("./linkedin-utils.js");
-const hatori = require("./hatori-client.js");
+const { generateReply } = require("./reply-engine.js");
+const { getSnippets } = require("./vector-store.js");
 
 function withTimeout(promise, timeoutMs, label) {
   return new Promise((resolve, reject) => {
@@ -23,42 +24,23 @@ function withTimeout(promise, timeoutMs, label) {
   });
 }
 
-async function persistHatoriNbaForInbound({ doc, event }) {
-  if (process.env.REPLY_USE_HATORI !== "1") return;
+async function persistLocalNbaForInbound({ doc, event }) {
   if (event.direction !== "inbound") return;
 
   const start = Date.now();
-  const nbaRes = await withTimeout(
-    hatori.getNBA({
-      conversation_id: doc.path,
-      message_id: doc.id,
-      sender_id: event.peer.handle,
-      message: event.text,
-      metadata: {
-        channel: event.channel,
-        displayName: event.peer.displayName,
-      },
-    }),
+  const snippets = await getSnippets(event.text, 3);
+  const draftResult = await withTimeout(
+    generateReply(event.text, snippets, event.peer.handle),
     12000,
-    "hatori_nba",
+    "local_nba",
   );
+  const suggestion =
+    typeof draftResult === "string" ? draftResult : String(draftResult?.suggestion || "").trim();
 
   let added = 0;
-  if (nbaRes?.assistant_message) {
-    await contactStore.addSuggestion(event.peer.handle, "Draft", nbaRes.assistant_message);
+  if (suggestion) {
+    await contactStore.addSuggestion(event.peer.handle, "Draft", suggestion);
     added += 1;
-  }
-
-  if (Array.isArray(nbaRes?.next_actions)) {
-    for (const action of nbaRes.next_actions) {
-      const text = typeof action === "string" ? action : (action?.action || action?.text || "");
-      if (!text) continue;
-      const priorityMatch = text.match(/^[-\s]*(P[012])\s/i);
-      const priority = priorityMatch ? priorityMatch[1].toUpperCase() : "";
-      const type = priority ? `NBA (${priority})` : "NBA";
-      await contactStore.addSuggestion(event.peer.handle, type, text);
-      added += 1;
-    }
   }
 
   appendBridgeEvent({
@@ -639,11 +621,11 @@ async function ingestInboundEvent(rawEvent) {
       console.warn("[Bridge] Triage failed:", e.message);
     }
 
-    // 4. Hatori Next Best Action (NBA) Generation
+    // 4. Local Next Best Action (NBA) generation
     try {
-      await persistHatoriNbaForInbound({ doc, event });
+      await persistLocalNbaForInbound({ doc, event });
     } catch (err) {
-      console.warn("[Bridge] Hatori NBA generation failed:", err.message);
+      console.warn("[Bridge] Local NBA generation failed:", err.message);
       appendBridgeEvent({
         status: "nba_error",
         channel: event.channel,

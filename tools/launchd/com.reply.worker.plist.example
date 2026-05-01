@@ -28,9 +28,9 @@
     <key>KeepAlive</key>
     <true/>
     <key>StandardErrorPath</key>
-    <string>__HOME__/Library/Logs/Reply/worker-standalone.err.log</string>
+    <string>__HOME__/Library/Logs/reply/worker-standalone.err.log</string>
     <key>StandardOutPath</key>
-    <string>__HOME__/Library/Logs/Reply/worker-standalone.out.log</string>
+    <string>__HOME__/Library/Logs/reply/worker-standalone.out.log</string>
     <key>WorkingDirectory</key>
     <string>__REPO_ROOT__/chat</string>
 </dict>

@@ -1,19 +1,57 @@
 /**
  * {reply} - Service Manager
  *
- * Orchestrates background processes (worker, OpenClaw, Hatori) with restart backoff
+ * Orchestrates background processes (worker, OpenClaw) with restart backoff
  * and `repair_required` when limits are hit. Worker duplicate detection: if the worker
  * exits with code 0 almost immediately (see `isWorkerEarlyExitDuplicateCandidate`), we
  * treat it as a stale PID / duplicate worker case and retry a few times (reply#31 tests).
  */
 
 const { spawn } = require('child_process');
+const { execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { ensureLogHome, logPath, dataPath } = require('./app-paths.js');
 
 const WORKER_EARLY_EXIT_MS = 5000;
 const WORKER_DUPLICATE_RETRY_MAX = 2;
 const WORKER_DUPLICATE_RETRY_DELAY_MS = 4000;
+
+function resolveWorkerPidFile() {
+    return dataPath('worker.pid');
+}
+
+function readLiveExternalWorkerPid() {
+    const pidFile = resolveWorkerPidFile();
+    if (!fs.existsSync(pidFile)) return null;
+
+    let pid;
+    try {
+        pid = parseInt(String(fs.readFileSync(pidFile, 'utf8')).trim(), 10);
+    } catch {
+        return null;
+    }
+    if (!Number.isFinite(pid) || pid <= 0) return null;
+
+    try {
+        process.kill(pid, 0);
+    } catch {
+        return null;
+    }
+
+    try {
+        const cmd = execFileSync('ps', ['-ww', '-p', String(pid), '-o', 'command='], {
+            encoding: 'utf8',
+            timeout: 4000
+        }).trim();
+        const workerScript = path.join(__dirname, 'background-worker.js');
+        const looksLikeOurWorker =
+            cmd.includes('background-worker.js') && cmd.includes(workerScript);
+        return looksLikeOurWorker ? pid : null;
+    } catch {
+        return null;
+    }
+}
 
 /** Exported for unit tests — worker exited immediately with success (duplicate / stale lock). */
 function isWorkerEarlyExitDuplicateCandidate(name, code, signal, uptimeMs) {
@@ -30,28 +68,19 @@ const RESTART_POLICIES = {
     worker: {
         maxRetries: 5,
         backoffMs: 30000,
-        actionHint: 'Check logs/worker.log for errors. You can also restart from the Advanced menu in the menubar.'
+        actionHint: 'Check logs/worker.log for errors. You can also restart it from Settings.'
     },
     openclaw: {
         maxRetries: 3,
         backoffMs: 20000,
         actionHint: 'Ensure OpenClaw is installed. Run `openclaw --version` in Terminal to verify.'
-    },
-    hatori: {
-        maxRetries: 3,
-        backoffMs: 30000,
-        actionHint:
-            'Set REPLY_HATORI_PROJECT_PATH to your Hatori clone, or REPLY_HATORI_EXTERNAL=1 if it runs via LaunchAgent. See ../hatori/README.md.'
     }
 };
 
 class ServiceManager {
     constructor() {
         this.services = new Map();
-        this.logsDir = path.join(__dirname, 'logs');
-        if (!fs.existsSync(this.logsDir)) {
-            fs.mkdirSync(this.logsDir, { recursive: true });
-        }
+        this.logsDir = ensureLogHome();
     }
 
     /**
@@ -75,14 +104,14 @@ class ServiceManager {
         let spawnArgs = [...args];
 
         if (command.endsWith('.js')) {
-            spawnCmd = 'node';
+            spawnCmd = process.argv0 || process.execPath;
             spawnArgs = [command, ...args];
         }
 
         console.log(`[ServiceManager] Starting service: ${name} (${spawnCmd} ${spawnArgs.join(' ')})...`);
 
-        const logPath = path.join(this.logsDir, `${name}.log`);
-        const logStream = fs.createWriteStream(logPath, { flags: 'a' });
+        const serviceLogPath = logPath(`${name}.log`);
+        const logStream = fs.createWriteStream(serviceLogPath, { flags: 'a' });
 
         const child = spawn(spawnCmd, spawnArgs, {
             cwd: cwd || path.dirname(command.endsWith('.js') ? command : __dirname),
@@ -104,7 +133,7 @@ class ServiceManager {
             spawnCwd: cwd,
             process: child,
             startTime: Date.now(),
-            logPath,
+            logPath: serviceLogPath,
             restartAttempts: existing.restartAttempts || 0,
             workerDuplicateRetries: existing.workerDuplicateRetries || 0,
             lastError: existing.lastError || null,
@@ -312,7 +341,9 @@ class ServiceManager {
     }
 
     _formatStatus(service) {
-        const isAlive = !!(service.process && !service.process.killed);
+        const isManagedAlive = !!(service.process && !service.process.killed);
+        const externalWorkerPid = service.name === 'worker' ? readLiveExternalWorkerPid() : null;
+        const isAlive = isManagedAlive || !!externalWorkerPid;
         let status = isAlive ? 'online' : (service.exitCode != null ? 'crashed' : 'offline');
 
         if (service.repairRequired) {
@@ -323,16 +354,20 @@ class ServiceManager {
             }
         }
 
+        if (service.name === 'worker' && externalWorkerPid && !isManagedAlive && !service.repairRequired) {
+            status = 'online';
+        }
+
         return {
             name: service.name,
             status,
-            pid: service.process ? service.process.pid : null,
+            pid: service.process ? service.process.pid : (externalWorkerPid || null),
             uptime: isAlive ? Math.floor((Date.now() - service.startTime) / 1000) : 0,
             startedAt: service.startTime ? new Date(service.startTime).toISOString() : null,
             exitCode: service.exitCode,
             restartAttempts: service.restartAttempts || 0,
             repairRequired: !!service.repairRequired,
-            lastError: service.lastError || null,
+            lastError: externalWorkerPid && !isManagedAlive ? null : (service.lastError || null),
             logPath: service.logPath
         };
     }

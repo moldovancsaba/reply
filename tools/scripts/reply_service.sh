@@ -5,11 +5,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-LOG_DIR="${HOME}/Library/Logs/Reply"
+LOG_DIR="${HOME}/Library/Logs/reply"
 HUB_LOG="${LOG_DIR}/hub.log"
 
 mkdir -p "$LOG_DIR"
-# README / menubar expect `tail -f /tmp/reply-hub.log` to work; mirror launchd’s log file.
+# Mirror launchd’s log file to a stable temp path for quick inspection.
 ln -sf "$HUB_LOG" /tmp/reply-hub.log
 
 # launchd sets PATH in com.reply.hub.plist; still resolve Node explicitly for nvm-free reliability.

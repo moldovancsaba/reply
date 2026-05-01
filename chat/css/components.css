@@ -119,6 +119,7 @@
     padding: var(--space-md);
     border: 1px solid var(--border);
     min-height: 168px;
+    height: auto;
     gap: var(--space-xs);
     display: flex;
     flex-direction: column;
@@ -196,9 +197,10 @@
     color: var(--text-secondary);
     margin-top: 6px;
     line-height: 1.4;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    word-break: break-word;
 }
 
 .health-card-meta-overflow {
@@ -707,8 +709,8 @@
     display: flex;
     flex-direction: column;
     padding: var(--space-sm) 0;
-    max-height: 280px;
-    overflow-y: auto;
+    max-height: none;
+    overflow-y: visible;
     scrollbar-color: rgba(255, 255, 255, 0.28) rgba(0, 0, 0, 0.2);
     border-radius: var(--radius-sm);
 }
@@ -910,8 +912,8 @@
 }
 
 .preflight-panel .preflight-meta {
-    font-size: 0.78rem;
-    color: var(--text-secondary);
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.76);
     margin: 0 0 10px 2px;
 }
 
@@ -924,6 +926,103 @@
     max-width: 100%;
     min-width: 0;
     overflow-x: auto;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.025) 100%);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.preflight-panel .health-card-header h4 {
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 0.92rem;
+    letter-spacing: 0.03em;
+}
+
+.preflight-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px 2px;
+}
+
+.preflight-summary-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 26px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.preflight-summary-pill--ok {
+    color: #4cd964;
+    background: rgba(52, 199, 89, 0.12);
+}
+
+.preflight-summary-pill--degraded {
+    color: #ffb340;
+    background: rgba(255, 159, 10, 0.16);
+}
+
+.preflight-summary-pill--blocked {
+    color: #ff7a70;
+    background: rgba(255, 69, 58, 0.16);
+}
+
+.preflight-summary-pill--muted {
+    color: rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.preflight-summary-text {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.preflight-problems {
+    display: grid;
+    gap: 8px;
+    margin: 0 0 12px;
+}
+
+.preflight-problem {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.preflight-problem strong {
+    color: rgba(255, 255, 255, 0.94);
+    font-size: 0.84rem;
+}
+
+.preflight-problem span {
+    color: rgba(255, 255, 255, 0.76);
+    font-size: 0.79rem;
+    line-height: 1.35;
+}
+
+.preflight-problem--degraded {
+    border-left: 3px solid rgba(255, 159, 10, 0.72);
+    background: rgba(255, 159, 10, 0.08);
+}
+
+.preflight-problem--blocked {
+    border-left: 3px solid rgba(255, 69, 58, 0.82);
+    background: rgba(255, 69, 58, 0.08);
+}
+
+.preflight-problem--ok {
+    border-left: 3px solid rgba(52, 199, 89, 0.62);
+    background: rgba(52, 199, 89, 0.07);
 }
 
 .preflight-table {
@@ -967,17 +1066,17 @@
 .preflight-cell--id {
     font-family: ui-monospace, monospace;
     font-size: 0.72rem;
-    opacity: 0.85;
+    color: rgba(255, 255, 255, 0.7);
     word-break: break-all;
 }
 
 .preflight-cell--title {
     font-weight: 600;
-    color: var(--text-primary);
+    color: rgba(255, 255, 255, 0.92);
 }
 
 .preflight-cell--detail {
-    color: var(--text-secondary);
+    color: rgba(255, 255, 255, 0.78);
     word-break: break-word;
     line-height: 1.35;
 }
@@ -987,38 +1086,13 @@
     font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.04em;
-    opacity: 0.9;
+    color: rgba(255, 255, 255, 0.88);
 }
 
 .preflight-hint {
     cursor: help;
-    opacity: 0.65;
+    opacity: 0.82;
     font-size: 0.85rem;
-}
-
-.hatori-watch-strip .hatori-agent-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-}
-
-.hatori-agent-chip {
-    font-size: 0.78rem;
-    padding: 4px 10px;
-    border-radius: var(--radius-sm);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    font-weight: 600;
-}
-
-.hatori-agent-chip--ok {
-    background: rgba(52, 199, 89, 0.12);
-    color: rgba(220, 252, 231, 0.95);
-}
-
-.hatori-agent-chip--bad {
-    background: rgba(255, 69, 58, 0.15);
-    color: #ffb4ab;
 }
 
 @media (max-width: 900px) {

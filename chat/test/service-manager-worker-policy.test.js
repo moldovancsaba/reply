@@ -24,5 +24,5 @@ test("worker duplicate early-exit: long uptime is not duplicate", () => {
 });
 
 test("worker duplicate early-exit: other services ignored", () => {
-  assert.equal(sm.isWorkerEarlyExitDuplicateCandidate("hatori", 0, null, 100), false);
+  assert.equal(sm.isWorkerEarlyExitDuplicateCandidate("openclaw", 0, null, 100), false);
 });

@@ -42,11 +42,8 @@ function serveSettings(req, res) {
             client.ai.annotationOllamaModel = getAnnotationOllamaModel();
         }
         client.runtime = {
-            useHatori: process.env.REPLY_USE_HATORI === "1",
-            hatoriPort: process.env.REPLY_HATORI_PORT || "23572",
             ollamaPort: process.env.OLLAMA_PORT || "11434",
             platform: process.platform,
-            hatoriLaunchdLabel: process.env.REPLY_HATORI_LAUNCHD_LABEL || "com.hatori",
             effectiveOllamaBase: resolveOllamaHttpBase(),
             draftRuntime: getDraftRuntimeMode(),
         };
@@ -140,14 +137,8 @@ async function handleUpdateSettings(req, res) {
                 const n = parseInt(v, 10);
                 return Number.isFinite(n) ? Math.max(min, Math.min(n, max)) : def;
             };
-            if (health.hatoriProbeTimeoutMs !== undefined) {
-                next.health.hatoriProbeTimeoutMs = clamp(health.hatoriProbeTimeoutMs, 3000, 120000, 12000);
-            }
             if (health.ollamaProbeTimeoutMs !== undefined) {
                 next.health.ollamaProbeTimeoutMs = clamp(health.ollamaProbeTimeoutMs, 1000, 30000, 3000);
-            }
-            if (health.hatoriWatchdogFailureThreshold !== undefined) {
-                next.health.hatoriWatchdogFailureThreshold = clamp(health.hatoriWatchdogFailureThreshold, 1, 20, 3);
             }
             if (health.uiHealthPollIntervalMs !== undefined) {
                 next.health.uiHealthPollIntervalMs = clamp(health.uiHealthPollIntervalMs, 5000, 300000, 15000);
@@ -206,7 +197,7 @@ async function handleUpdateSettings(req, res) {
             next.ai = { ...(current.ai || {}) };
             if (typeof incomingAi.draftRuntime === "string") {
                 const dr = incomingAi.draftRuntime.trim().toLowerCase();
-                if (dr === "auto" || dr === "ollama" || dr === "hatori") next.ai.draftRuntime = dr;
+                if (dr === "auto" || dr === "ollama") next.ai.draftRuntime = dr;
             }
             if (typeof incomingAi.ollamaHost === "string") {
                 next.ai.ollamaHost = incomingAi.ollamaHost.trim().slice(0, 512);
@@ -226,9 +217,6 @@ async function handleUpdateSettings(req, res) {
             }
             if (typeof incomingAi.openclawGatewayToken === "string" && incomingAi.openclawGatewayToken.trim()) {
                 next.ai.openclawGatewayToken = incomingAi.openclawGatewayToken.trim();
-            }
-            if (typeof incomingAi.hatoriApiUrl === "string") {
-                next.ai.hatoriApiUrl = incomingAi.hatoriApiUrl.trim().slice(0, 512);
             }
             if (typeof incomingAi.annotationOllamaModel === "string") {
                 next.ai.annotationOllamaModel = incomingAi.annotationOllamaModel.trim().slice(0, 160);

@@ -4,6 +4,7 @@
  */
 
 export const UI = {
+    _recentToastKeys: new Map(),
     /**
      * Show the global loading spinner
      */
@@ -33,6 +34,13 @@ export const UI = {
     showToast: (message, type = 'success', duration = 4000) => {
         const container = document.getElementById('toast-container');
         if (!container) return;
+
+        const normalized = String(message || '').trim().replace(/\s+/g, ' ');
+        const key = `${type}:${normalized}`;
+        const now = Date.now();
+        const last = UI._recentToastKeys.get(key) || 0;
+        if (now - last < 3500) return;
+        UI._recentToastKeys.set(key, now);
 
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
@@ -68,6 +76,13 @@ export const UI = {
         toast.onclick = dismiss;
 
         container.appendChild(toast);
+
+        if (type === 'error') {
+            const activeErrors = Array.from(container.querySelectorAll('.toast-error'));
+            if (activeErrors.length > 3) {
+                activeErrors.slice(0, activeErrors.length - 3).forEach((node) => node.remove());
+            }
+        }
 
         // Auto-dismiss for non-error toasts
         if (type !== 'error' && duration > 0) {
