@@ -133,6 +133,9 @@ struct NativeAISettings: Codable {
     var ollamaModel: String?
     var annotationOllamaModel: String?
     var kycOllamaModel: String?
+    var trinityGeneratorModel: String?
+    var trinityRefinerModel: String?
+    var trinityEvaluatorModel: String?
 }
 
 struct NativeWorkerSettings: Codable {
@@ -164,7 +167,10 @@ struct NativeSettingsDraft: Codable {
             ollamaPort: 11434,
             ollamaModel: "",
             annotationOllamaModel: "",
-            kycOllamaModel: ""
+            kycOllamaModel: "",
+            trinityGeneratorModel: "granite4:350m",
+            trinityRefinerModel: "mistral:latest",
+            trinityEvaluatorModel: "qwen2.5:7b"
         ),
         worker: NativeWorkerSettings(
             pollIntervalSeconds: 60,
@@ -195,7 +201,10 @@ struct NativeSettingsDraft: Codable {
             ollamaPort: payload.ai?.ollamaPort ?? fallback.ai.ollamaPort,
             ollamaModel: payload.ai?.ollamaModel ?? fallback.ai.ollamaModel,
             annotationOllamaModel: payload.ai?.annotationOllamaModel ?? fallback.ai.annotationOllamaModel,
-            kycOllamaModel: payload.ai?.kycOllamaModel ?? fallback.ai.kycOllamaModel
+            kycOllamaModel: payload.ai?.kycOllamaModel ?? fallback.ai.kycOllamaModel,
+            trinityGeneratorModel: payload.ai?.trinityGeneratorModel ?? fallback.ai.trinityGeneratorModel,
+            trinityRefinerModel: payload.ai?.trinityRefinerModel ?? fallback.ai.trinityRefinerModel,
+            trinityEvaluatorModel: payload.ai?.trinityEvaluatorModel ?? fallback.ai.trinityEvaluatorModel
         )
         worker = NativeWorkerSettings(
             pollIntervalSeconds: payload.worker?.pollIntervalSeconds ?? fallback.worker.pollIntervalSeconds,
