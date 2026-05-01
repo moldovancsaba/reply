@@ -1995,6 +1995,26 @@
         max-width: 800px !important;
       }
 
+      .reply-shell-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+        font-family: inherit;
+        font-weight: 700;
+      }
+
+      .reply-settings-icon {
+        display: inline-flex;
+        width: 18px;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+        font-family: inherit;
+        font-size: 0.95rem;
+        flex-shrink: 0;
+      }
+
       /* settings.html — same horizontal layout as index (contacts sidebar | settings) */
       body.mode-settings.settings-standalone {
         height: 100%;
