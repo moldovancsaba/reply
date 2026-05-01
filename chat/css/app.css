@@ -7,11 +7,11 @@
         margin: 0;
         padding: 0;
         height: 100%;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-family: var(--cds-font-family-sans);
         background:
-          radial-gradient(circle at top left, rgba(39, 95, 169, 0.18), transparent 28%),
-          radial-gradient(circle at top right, rgba(18, 145, 123, 0.12), transparent 24%),
-          linear-gradient(180deg, #0b0b0d 0%, #111113 100%);
+          radial-gradient(circle at top left, rgba(219, 116, 64, 0.16), transparent 26%),
+          radial-gradient(circle at top right, rgba(47, 156, 138, 0.12), transparent 22%),
+          linear-gradient(180deg, #0f1116 0%, #14171d 100%);
       }
 
       .app-container {
@@ -61,8 +61,8 @@
       /* --- Sidebar (iMessage Style) --- */
       .sidebar {
         background:
-          linear-gradient(180deg, rgba(32, 32, 36, 0.82) 0%, rgba(23, 23, 27, 0.78) 100%);
-        border-right: 1px solid rgba(255, 255, 255, 0.08);
+          linear-gradient(180deg, rgba(24, 27, 33, 0.9) 0%, rgba(19, 21, 26, 0.86) 100%);
+        border-right: 1px solid var(--border);
         display: flex;
         flex-direction: column;
         height: 100%;
@@ -91,7 +91,7 @@
         gap: 8px;
         min-height: 52px;
         flex-shrink: 0;
-        background: rgba(255, 255, 255, 0.02);
+        background: rgba(255, 255, 255, 0.015);
       }
 
       .sidebar-header .u-flex-center-gap {
@@ -120,8 +120,8 @@
       }
 
       .sidebar-search-input:focus {
-        border-color: rgba(255, 255, 255, 0.18);
-        box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.25);
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(219, 116, 64, 0.22);
       }
 
       .u-sr-only {
@@ -190,8 +190,8 @@
 
       .sidebar-item.active {
         background-color: var(--primary);
-        color: white;
-        box-shadow: 0 10px 24px rgba(10, 132, 255, 0.18);
+        color: #1a1611;
+        box-shadow: 0 10px 24px rgba(219, 116, 64, 0.22);
       }
 
       /* Fix text colors inside active state */
