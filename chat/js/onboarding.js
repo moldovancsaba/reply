@@ -71,7 +71,7 @@ async function checkOllamaInto(container) {
   } catch (e) {
     status.className = 'onboarding-status onboarding-status--warn';
     status.textContent =
-      'Could not reach the Reply hub for a health check. Ensure the app is running, then retry from the dashboard.';
+      'Could not reach the {reply} hub for a health check. Ensure the app is running, then retry from the dashboard.';
   }
   const btn = el('button', 'btn btn-secondary', 'Run check again');
   btn.type = 'button';
@@ -89,7 +89,7 @@ function syncStepBody() {
     el(
       'p',
       'onboarding-lead',
-      'Pull recent messages and mail into Reply so contacts and search work. This can take a minute the first time.'
+      'Pull recent messages and mail into {reply} so contacts and search work. This can take a minute the first time.'
     )
   );
   const row = el('div', 'onboarding-sync-buttons');
@@ -148,8 +148,8 @@ function buildShell() {
 
   const steps = [
     {
-      title: 'Welcome to Reply',
-      body: 'Reply runs locally on your Mac: your messages, contacts, and drafts stay on this machine. This short guide checks Ollama and helps you run a first sync.',
+      title: 'Welcome to {reply}',
+      body: '{reply} runs locally on your Mac: your messages, contacts, and drafts stay on this machine. This short guide checks Ollama and helps you run a first sync.',
       onEnter: null
     },
     {

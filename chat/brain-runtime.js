@@ -268,10 +268,10 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
           ),
         };
       }
-      throw new Error("Trinity returned no usable draft candidates.");
+      throw new Error("{trinity} returned no usable draft candidates.");
     } catch (error) {
       if (!allowLegacyBrain()) {
-        throw new Error(`Trinity suggest failed: ${error.message}`);
+        throw new Error(`{trinity} suggest failed: ${error.message}`);
       }
       console.warn("[reply-runtime] Trinity suggest failed, falling back to legacy:", error.message);
       const legacyResult = await loadLegacyReplyEngine().generateReply(

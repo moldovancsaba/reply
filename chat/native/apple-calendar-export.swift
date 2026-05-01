@@ -16,7 +16,7 @@ enum CalendarExportError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .accessDenied:
-            return "Calendar access denied. Grant Calendar permission to the Reply host process and try again."
+            return "Calendar access denied. Grant Calendar permission to the {reply} host process and try again."
         }
     }
 }
