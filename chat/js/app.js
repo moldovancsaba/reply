@@ -27,6 +27,9 @@ window.conversations = [];
 const SUGGESTION_CACHE_VERSION = 'v1';
 const suggestionJobs = new Map();
 const composerDraftCache = new Map();
+const autoAppliedSuggestionDrafts = new Map();
+let activeContactDraftPollInFlight = false;
+const ACTIVE_CONTACT_DRAFT_POLL_MS = 12000;
 
 // Speech recognition state
 let speechRecognizer = null;
@@ -124,6 +127,62 @@ function setSuggestionExplanation(text = '') {
   }
 }
 
+function normalizeDraftText(raw) {
+  return String(raw || '').trim();
+}
+
+function getActiveComposerText() {
+  const chatInput = document.getElementById('chat-input');
+  return normalizeDraftText(chatInput?.value || '');
+}
+
+function canAutoApplySuggestionDraft(handle, nextDraft, options = {}) {
+  if (options.force === true) return true;
+  const currentText = getActiveComposerText();
+  if (!currentText) return true;
+  const previousAutoDraft = normalizeDraftText(autoAppliedSuggestionDrafts.get(handle) || '');
+  return previousAutoDraft && currentText === previousAutoDraft && currentText !== normalizeDraftText(nextDraft);
+}
+
+function reconcileContactDraft(handle, draftText, options = {}) {
+  const normalizedHandle = String(handle || '').trim();
+  const normalizedDraft = normalizeDraftText(draftText);
+  if (!normalizedHandle || !normalizedDraft) {
+    if (String(window.currentHandle || '') === normalizedHandle) {
+      refreshSuggestButtonState();
+    }
+    return false;
+  }
+
+  const cached = readCachedSuggestion(normalizedHandle);
+  if (normalizeDraftText(cached?.suggestion || '') !== normalizedDraft) {
+    writeCachedSuggestion(normalizedHandle, {
+      suggestion: normalizedDraft,
+      explanation: options.explanation || 'Suggestion ready for this conversation.'
+    });
+  }
+
+  let applied = false;
+  if (String(window.currentHandle || '') === normalizedHandle && canAutoApplySuggestionDraft(normalizedHandle, normalizedDraft, options)) {
+    if (typeof window.seedDraft === 'function') {
+      window.seedDraft(normalizedDraft, true);
+      autoAppliedSuggestionDrafts.set(normalizedHandle, normalizedDraft);
+      applied = true;
+    }
+  }
+
+  if (String(window.currentHandle || '') === normalizedHandle) {
+    const explanation = options.explanation
+      || (applied
+        ? 'Suggestion ready for this conversation.'
+        : 'Suggestion ready for this conversation. Clear the composer or press Suggest again to replace the current draft.');
+    setSuggestionExplanation(explanation);
+  }
+
+  refreshSuggestButtonState();
+  return applied;
+}
+
 function applyLayoutChromeState() {
   const body = document.body;
   if (!body) return;
@@ -210,6 +269,7 @@ function applyCachedSuggestionForHandle(handle, options = {}) {
 
   if (canSeed && typeof window.seedDraft === 'function') {
     window.seedDraft(payload.suggestion, true);
+    autoAppliedSuggestionDrafts.set(String(handle || ''), normalizeDraftText(payload.suggestion));
   }
 
   const explanation = payload.explanation
@@ -277,6 +337,31 @@ async function requestBackgroundSuggestion(handle, existingDraft = '') {
     UI.showToast(e?.message || 'Suggest request failed', 'error');
   } finally {
     refreshSuggestButtonState();
+  }
+}
+
+async function pollActiveConversationDraft() {
+  const handle = String(window.currentHandle || '').trim();
+  if (!handle || activeContactDraftPollInFlight) return;
+
+  activeContactDraftPollInFlight = true;
+  try {
+    const res = await fetch(`/api/kyc?handle=${encodeURIComponent(handle)}`, {
+      headers: buildSecurityHeaders({ includeJsonContentType: false }),
+    });
+    if (!res.ok) {
+      throw new Error(`Active contact poll failed (${res.status})`);
+    }
+    const data = await res.json().catch(() => ({}));
+    if (data && typeof data.draft === 'string' && data.draft.trim()) {
+      reconcileContactDraft(handle, data.draft, {
+        explanation: 'Suggestion ready for this conversation.'
+      });
+    }
+  } catch (e) {
+    console.warn('[{reply}] Active contact draft poll failed:', e?.message || e);
+  } finally {
+    activeContactDraftPollInFlight = false;
   }
 }
 
@@ -710,6 +795,9 @@ async function handleOneClickFix() {
 // Start polling
 setInterval(pollServiceHealth, 15000);
 pollServiceHealth();
+setInterval(() => {
+  void pollActiveConversationDraft();
+}, ACTIVE_CONTACT_DRAFT_POLL_MS);
 
 // Wire one-click fix
 const healthContainer = document.getElementById('services-health-status');
@@ -725,3 +813,5 @@ window.refreshSuggestButtonState = refreshSuggestButtonState;
 window.applyCachedSuggestionForHandle = applyCachedSuggestionForHandle;
 window.cacheComposerDraft = cacheComposerDraft;
 window.getCachedComposerDraft = getCachedComposerDraft;
+window.reconcileContactDraft = reconcileContactDraft;
+window.pollActiveConversationDraft = pollActiveConversationDraft;

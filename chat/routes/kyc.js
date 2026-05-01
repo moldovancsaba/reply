@@ -73,6 +73,7 @@ async function serveKyc(req, res, url, authorizeSensitiveRoute, onUpdate, bodyDa
       intro: contact?.intro || "",
       company: contact?.company || "",
       linkedinUrl: contact?.linkedinUrl || "",
+      draft: contact?.draft || "",
       notes: Array.isArray(contact?.notes) ? contact.notes : [],
       channels: contact?.channels || { phone: [], email: [] },
       verifiedChannels: contact?.verifiedChannels || {},
