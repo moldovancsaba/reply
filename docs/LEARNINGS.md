@@ -8,7 +8,7 @@
 * **Naming:** The system name is **`{reply}`**. Do not rename it (no “Hub”, no prefixes).
 
 ## Settings & Privacy
-* Settings are stored locally in `chat/data/settings.json` (not encrypted).
+* Settings are stored locally in `~/Library/Application Support/reply/settings.json` (or `REPLY_DATA_HOME/settings.json`) and are not encrypted.
 * Gmail OAuth stores a refresh token locally for best UX (local-first).
 * General Settings must not include per-service UI controls; those belong only to the relevant service configuration.
 

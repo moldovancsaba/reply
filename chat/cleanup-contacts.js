@@ -1,7 +1,7 @@
 const fs = require('fs');
-const path = require('path');
+const { dataPath } = require('./app-paths.js');
 
-const DATA_FILE = path.join(__dirname, 'data', 'contacts.json');
+const DATA_FILE = dataPath('contacts.json');
 
 function cleanup() {
     if (!fs.existsSync(DATA_FILE)) return;

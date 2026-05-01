@@ -12,12 +12,12 @@ function defaultLogHome() {
 
 function getDataHome() {
   const raw = String(process.env.REPLY_DATA_HOME || "").trim();
-  return raw || path.join(__dirname, "data");
+  return raw || defaultAppSupportHome();
 }
 
 function getLogHome() {
   const raw = String(process.env.REPLY_LOG_HOME || "").trim();
-  return raw || path.join(__dirname, "logs");
+  return raw || defaultLogHome();
 }
 
 function ensureDir(dir) {

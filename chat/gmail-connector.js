@@ -6,9 +6,9 @@ const contactStore = require("./contact-store.js");
 const { addDocuments } = require("./vector-store.js");
 const { enqueueSuggestionDraftsFromDocBatch } = require("./suggestion-draft-queue.js");
 const { readSettings, writeSettings } = require("./settings-store.js");
+const { dataPath, ensureDataHome } = require("./app-paths.js");
 
-const DATA_DIR = path.join(__dirname, "data");
-const STATE_FILE = path.join(DATA_DIR, "gmail_sync_state.json");
+const STATE_FILE = dataPath("gmail_sync_state.json");
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -20,7 +20,7 @@ const SCOPES = [
 ];
 
 function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  ensureDataHome();
 }
 
 function updateMailStatus(newStatus) {

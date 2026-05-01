@@ -1,8 +1,8 @@
 const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
 const fs = require('fs');
+const { resolveIMessageDbPath } = require('./imessage-db-path.js');
 
-const DB_PATH = path.join(__dirname, 'data', 'chat.db');
+const DB_PATH = resolveIMessageDbPath();
 
 // Check if DB exists
 if (!fs.existsSync(DB_PATH)) {

@@ -4,8 +4,8 @@ const { resolveOllamaHttpBase } = require('./ai-runtime-config.js');
 const { assembleReplyContext, enrichAnnotatedDocText } = require('./context-engine.js');
 const { search, getGoldenExamples, getHistory } = require('./vector-store.js');
 const fs = require('fs');
-const path = require('path');
 const contactStore = require('./contact-store.js');
+const { dataPath } = require('./app-paths.js');
 
 /**
  * Extract the last N messages for a conversation handle from LanceDB.
@@ -114,7 +114,7 @@ let cachedPersona = null;
 function getPersona() {
   if (!cachedPersona) {
     try {
-      const file = path.join(__dirname, 'data', 'system_persona.txt');
+      const file = dataPath('system_persona.txt');
       if (fs.existsSync(file)) {
         cachedPersona = fs.readFileSync(file, 'utf8');
       }

@@ -12,7 +12,7 @@ Typical `{reply}` secrets (names may vary by install):
 |------------------|----------------|--------|
 | `REPLY_OPERATOR_TOKEN` | `chat/.env` | Generate a new random token; update `.env` on every machine that calls sensitive routes. |
 | `GOOGLE_API_KEY` / Gmail OAuth | `chat/.env`, Google Cloud Console | Revoke old key or rotate OAuth client; reconnect Gmail in Settings if needed. |
-| Gmail refresh token | `chat/data/settings.json` (or Settings UI) | Use Settings disconnect/reconnect after client secret rotation. |
+| Gmail refresh token | `~/Library/Application Support/reply/settings.json` (or Settings UI) | Use Settings disconnect/reconnect after client secret rotation. |
 | Any third-party API keys | `.env` / settings | Rotate at the provider; update local `.env` only (never commit). |
 
 Search hints (local clone):
@@ -49,7 +49,7 @@ Track **code and policy** controls that reduce future leakage and support audits
 | Control | Done (Y/N) | Date (UTC) | Notes |
 |---------|------------|------------|--------|
 | Default path: no operator token fragments written to `debug_token.log` | Y | 2026-04-12 | Gated by `REPLY_DEBUG_SETTINGS` (reply#32); file gitignored |
-| `chat/data` created with strict mode where applicable | Y | 2026-04-12 | `status-manager`, `settings-store`, `security-policy`, etc. |
+| app-owned reply data home created with strict mode where applicable | Y | 2026-04-12 | `status-manager`, `settings-store`, `security-policy`, etc. |
 | `npm test` + `npm run lint` on `main` | Y | 2026-04-12 | CI: `.github/workflows/ci.yml` |
 | `node chat/security-audit.js` clean on maintained installs | Y | 2026-04-12 | Run after `security-audit.js --fix` if data dir was loose |
 

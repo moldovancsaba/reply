@@ -9,7 +9,7 @@
  *
  * Opt-in for production-style lockdown: `REPLY_OUTBOUND_REQUIRE_INBOUND_VERIFIED=true` (see `chat/.env.example`).
  * When unset or false, this gate is off — sends are not blocked here (other layers may still apply).
- * Denials are logged via `appendOutboundDenial()` to `chat/data/outbound-policy-denials.jsonl`.
+ * Denials are logged via `appendOutboundDenial()` to the app-owned outbound-policy-denials log.
  */
 const fs = require("fs");
 const path = require("path");

@@ -1,5 +1,4 @@
 const fs = require('fs');
-const path = require('path');
 const { simpleParser } = require('mailparser');
 const { ImapFlow } = require('imapflow');
 const { addDocuments } = require('./vector-store.js');
@@ -7,13 +6,13 @@ const { enqueueSuggestionDraftsFromDocBatch } = require('./suggestion-draft-queu
 const contactStore = require('./contact-store.js');
 const statusManager = require('./status-manager.js');
 const { cleanMessageText } = require('./message-cleaner.js');
+const { dataPath, ensureDataHome } = require('./app-paths.js');
 
-const DATA_DIR = path.join(__dirname, 'data');
-const STATE_FILE = path.join(DATA_DIR, 'imap_sync_state.json');
-const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+const STATE_FILE = dataPath('imap_sync_state.json');
+const SETTINGS_FILE = dataPath('settings.json');
 
 function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  ensureDataHome();
 }
 
 function normalizeEmail(val) {

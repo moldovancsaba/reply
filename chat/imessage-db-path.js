@@ -3,12 +3,13 @@
  */
 const path = require("path");
 const os = require("os");
+const { dataPath } = require("./app-paths.js");
 
 /**
  * @returns {string} Absolute path to the iMessage database.
  * - Honors REPLY_IMESSAGE_DB_PATH when set (non-empty).
  * - On macOS: defaults to ~/Library/Messages/chat.db.
- * - Elsewhere: defaults to chat/data/chat.db (stub / CI).
+ * - Elsewhere: defaults to the app-owned data home stub path.
  */
 function resolveIMessageDbPath() {
     const override = process.env.REPLY_IMESSAGE_DB_PATH;
@@ -18,7 +19,7 @@ function resolveIMessageDbPath() {
     if (process.platform === "darwin") {
         return path.join(os.homedir(), "Library", "Messages", "chat.db");
     }
-    return path.join(__dirname, "data", "chat.db");
+    return dataPath("stubs", "chat.db");
 }
 
 module.exports = { resolveIMessageDbPath };

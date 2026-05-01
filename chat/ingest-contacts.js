@@ -3,6 +3,7 @@ const path = require('path');
 const contactStore = require('./contact-store');
 const chatUtils = require('./utils/chat-utils');
 const statusManager = require('./status-manager');
+const { dataPath, ensureDataHome } = require('./app-paths.js');
 
 const SWIFT_CONTACTS_EXPORTER = path.join(__dirname, 'native', 'apple-contacts-export.swift');
 const XCRUN_BIN = '/usr/bin/xcrun';
@@ -25,7 +26,8 @@ function execFilePromise(command, args, options = {}) {
 }
 
 async function exportContactsNative() {
-    const binPath = path.join(__dirname, 'data', 'apple-contacts-export');
+    ensureDataHome();
+    const binPath = dataPath('bin', 'apple-contacts-export');
     await execFilePromise(XCRUN_BIN, ['--sdk', 'macosx', 'swiftc', '-parse-as-library', SWIFT_CONTACTS_EXPORTER, '-o', binPath], {
         maxBuffer: 20 * 1024 * 1024,
         timeout: 120000

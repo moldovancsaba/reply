@@ -4,13 +4,14 @@ const fs = require("fs");
 const path = require("path");
 const { loadReplyEnv } = require("./load-env.js");
 loadReplyEnv();
+const { getDataHome } = require("./app-paths.js");
 const {
   getSecurityPolicy,
   AUDIT_LOG_PATH,
 } = require("./security-policy.js");
 
 const ROOT = path.join(__dirname, "..");
-const DATA_DIR = path.join(__dirname, "data");
+const DATA_DIR = getDataHome();
 const SERVER_FILE = path.join(__dirname, "server.js");
 
 function modeOctal(stats) {
@@ -38,7 +39,7 @@ function checkPermissions(findings) {
       "fs.data_dir.missing",
       "Data directory missing",
       `${DATA_DIR} does not exist yet.`,
-      "Start the app once or create chat/data with mode 700.",
+      "Start the app once or create the reply application-support directory with mode 700.",
     );
     return;
   }
@@ -50,11 +51,11 @@ function checkPermissions(findings) {
       "critical",
       "fs.data_dir.permissions",
       "Data directory is too permissive",
-      `chat/data mode is ${dirMode.toString(8)}.`,
+      `${DATA_DIR} mode is ${dirMode.toString(8)}.`,
       "Run `node chat/security-audit.js --fix` to set mode 700.",
     );
   } else {
-    pushFinding(findings, "info", "fs.data_dir.permissions.ok", "Data directory permissions look strict", `chat/data mode is ${dirMode.toString(8)}.`);
+    pushFinding(findings, "info", "fs.data_dir.permissions.ok", "Data directory permissions look strict", `${DATA_DIR} mode is ${dirMode.toString(8)}.`);
   }
 
   const sensitiveFiles = [

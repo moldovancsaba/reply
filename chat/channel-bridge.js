@@ -1,6 +1,5 @@
 const crypto = require("crypto");
 const fs = require("fs");
-const path = require("path");
 const { addDocuments, connect } = require("./vector-store.js");
 const contactStore = require("./contact-store.js");
 const { saveMessages } = require("./message-store.js");
@@ -8,6 +7,7 @@ const triageEngine = require("./triage-engine.js");
 const { normalizeLinkedInHandle } = require("./linkedin-utils.js");
 const { generateReply } = require("./reply-engine.js");
 const { getSnippets } = require("./vector-store.js");
+const { dataPath, ensureDataHome } = require("./app-paths.js");
 
 function withTimeout(promise, timeoutMs, label) {
   return new Promise((resolve, reject) => {
@@ -81,10 +81,9 @@ const CHANNEL_ALIASES = {
 const DOC_ID_EXISTS_CACHE = new Set();
 const DOC_ID_EXISTS_CACHE_MAX = 5000;
 const inflightByDocId = new Map();
-const DATA_DIR = path.join(__dirname, "data");
-const SEEN_DOC_IDS_PATH = path.join(DATA_DIR, "channel_bridge_seen.json");
-const BRIDGE_SYNC_STATE_PATH = path.join(DATA_DIR, "channel_bridge_sync.json");
-const BRIDGE_EVENTS_LOG_PATH = path.join(DATA_DIR, "channel_bridge_events.jsonl");
+const SEEN_DOC_IDS_PATH = dataPath("channel_bridge_seen.json");
+const BRIDGE_SYNC_STATE_PATH = dataPath("channel_bridge_sync.json");
+const BRIDGE_EVENTS_LOG_PATH = dataPath("channel_bridge_events.jsonl");
 const SEEN_DOC_IDS_MAX = 100000;
 const SEEN_DOC_IDS_TRIM_TARGET = 80000;
 
@@ -128,7 +127,7 @@ function trimSeenDocIdsIfNeeded() {
 
 function persistSeenDocIds() {
   try {
-    fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+    ensureDataHome();
     trimSeenDocIdsIfNeeded();
     const tmp = `${SEEN_DOC_IDS_PATH}.${Date.now()}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(Array.from(seenDocIds), null, 2), { mode: 0o600 });

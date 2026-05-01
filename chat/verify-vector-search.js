@@ -1,10 +1,10 @@
 const fs = require("fs");
-const path = require("path");
 const { addDocuments, search } = require("./vector-store.js");
+const { dataPath } = require("./app-paths.js");
 
 async function run() {
     console.log("0. Cleaning up previous test DB...");
-    const dbPath = path.join(__dirname, "../knowledge/lancedb");
+    const dbPath = dataPath("lancedb");
     if (fs.existsSync(dbPath)) {
         fs.rmSync(dbPath, { recursive: true, force: true });
     }
