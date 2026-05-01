@@ -6,6 +6,7 @@
 const fs = require("fs");
 const path = require("path");
 const {
+    allowExperimentalBrainModes,
     exportDraftTrace,
     generateReply,
     normalizeSuggestionResult,
@@ -576,6 +577,10 @@ async function serveFeedback(req, res) {
 
 async function serveTrinityShadowComparisons(req, res, url) {
     try {
+        if (!allowExperimentalBrainModes()) {
+            writeJson(res, 404, { error: "Not found" });
+            return;
+        }
         const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit")) || 20, 500));
         const rows = readShadowComparisons(limit);
         writeJson(res, 200, {
