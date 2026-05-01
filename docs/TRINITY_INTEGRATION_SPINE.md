@@ -2,12 +2,12 @@
 
 ## Objective
 
-Route one real Reply suggestion path through Trinity without removing the existing local draft engine.
+Route one real Reply suggestion path through Trinity and make Trinity the only shipped drafting runtime.
 
 ## Deliverable Issues
 
 1. Add `ThreadSnapshot` construction from one real conversation path.
-2. Add `TrinityClient` with feature-flag fallback to the legacy draft engine.
+2. Add `TrinityClient` and a release policy that ships Trinity-only app behavior.
 3. Route `/api/suggest` through Trinity when enabled.
 4. Render top 3 ranked candidates in the composer surface.
 5. Preserve `cycle_id` and `candidate_id` through operator selection and send.
@@ -20,7 +20,7 @@ Route one real Reply suggestion path through Trinity without removing the existi
    - `IGNORED`
    - `MANUAL_REPLACEMENT`
    - `REWORK_REQUESTED`
-7. Keep the legacy path available as a fallback until the Trinity path is production-proven.
+7. Keep any legacy path behind explicit developer-only flags and out of shipped app behavior.
 
 ## Compatibility Rules
 

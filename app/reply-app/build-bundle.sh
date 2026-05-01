@@ -11,6 +11,8 @@ APP_BUNDLE="$BUNDLE_DIR/$APP_NAME.app"
 NODE_BIN="${REPLY_NODE_BIN:-$(command -v node)}"
 RUNTIME_NAME="reply runtime"
 CORE_DIR_NAME="reply-core"
+TRINITY_REPO_ROOT="$(cd "$REPO_ROOT/../trinity" && pwd)"
+TRINITY_RUNTIME_DIR_NAME="trinity-runtime"
 NODE_PREFIX="$(cd "$(dirname "$NODE_BIN")/.." && pwd)"
 LIBNODE_PATH="$(find "$NODE_PREFIX/lib" -maxdepth 1 -name 'libnode*.dylib' | head -n 1 || true)"
 ICON_PATH="$PROJECT_DIR/Assets/AppIcon.icns"
@@ -45,10 +47,15 @@ rsync -a --delete \
 rsync -a --delete \
   --exclude ".DS_Store" \
   "$REPO_ROOT/public/" "$APP_BUNDLE/Contents/Resources/$CORE_DIR_NAME/public/"
+mkdir -p "$APP_BUNDLE/Contents/Resources/$CORE_DIR_NAME/$TRINITY_RUNTIME_DIR_NAME"
+rsync -a --delete \
+  --exclude "__pycache__/" \
+  --exclude ".pytest_cache/" \
+  --exclude ".ruff_cache/" \
+  "$TRINITY_REPO_ROOT/core/" "$APP_BUNDLE/Contents/Resources/$CORE_DIR_NAME/$TRINITY_RUNTIME_DIR_NAME/core/"
 cp "$PROJECT_DIR/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 cp "$ICON_PATH" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
-printf '%s\n' "$REPO_ROOT" > "$APP_BUNDLE/Contents/Resources/reply-repo-root.txt"
 
 codesign --force --deep --sign - "$APP_BUNDLE" >/dev/null 2>&1 || true
 

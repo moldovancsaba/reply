@@ -1,9 +1,8 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const { spawn } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 
-const legacyReplyEngine = require("./reply-engine.js");
 const { assembleReplyContext } = require("./context-engine.js");
 const contactStore = require("./contact-store.js");
 const messageStore = require("./message-store.js");
@@ -11,15 +10,42 @@ const { ensureDataHome, dataPath } = require("./app-paths.js");
 const { pathPrefixesForHandle, inferChannelFromHandle, extractDateFromText, stripMessagePrefix } = require("./utils/chat-utils.js");
 
 const REPLY_TRINITY_CONTRACT_VERSION = "trinity.reply.v1alpha1";
+const TRUE_VALUES = new Set(["1", "true", "yes"]);
+
+function envFlagEnabled(name) {
+  const value = String(process.env[name] || "").trim().toLowerCase();
+  return TRUE_VALUES.has(value);
+}
+
+function releaseRuntimeEnforced() {
+  return envFlagEnabled("REPLY_RELEASE_MODE") || envFlagEnabled("REPLY_BUNDLED_APP");
+}
+
+function allowLegacyBrain() {
+  return !releaseRuntimeEnforced() && envFlagEnabled("REPLY_ALLOW_LEGACY_BRAIN");
+}
+
+function allowExperimentalBrainModes() {
+  return !releaseRuntimeEnforced() && envFlagEnabled("REPLY_ALLOW_EXPERIMENTAL_BRAIN_MODES");
+}
+
+function loadLegacyReplyEngine() {
+  return require("./reply-engine.js");
+}
 
 function getBrainRuntimeMode() {
-  const raw = String(process.env.REPLY_BRAIN_RUNTIME || "legacy").trim().toLowerCase();
-  return raw || "legacy";
+  const raw = String(process.env.REPLY_BRAIN_RUNTIME || "trinity").trim().toLowerCase() || "trinity";
+  if (raw === "legacy") {
+    return allowLegacyBrain() ? "legacy" : "trinity";
+  }
+  if (raw === "trinity-shadow") {
+    return allowExperimentalBrainModes() ? "trinity-shadow" : "trinity";
+  }
+  return "trinity";
 }
 
 function trinityDraftsEnabled() {
-  const flag = String(process.env.USE_TRINITY_DRAFTS || "").trim().toLowerCase();
-  if (flag === "1" || flag === "true" || flag === "yes") return true;
+  if (envFlagEnabled("USE_TRINITY_DRAFTS")) return true;
   return getBrainRuntimeMode() === "trinity";
 }
 
@@ -102,6 +128,17 @@ async function buildThreadSnapshot(
       source: String(row.source || inferRowChannel(row, channel)),
       handle: String(row.handle || handle || "unknown"),
     }));
+  if (!messages.length && String(message || "").trim()) {
+    messages.push({
+      message_id: `${handle || "thread"}-latest-inbound`,
+      role: "CONTACT",
+      text: String(message || "").trim(),
+      occurred_at: new Date().toISOString(),
+      channel,
+      source: channel,
+      handle: handle || "unknown",
+    });
+  }
 
   return {
     company_id: resolveReplyCompanyId(),
@@ -137,7 +174,7 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
   const shadowMode = trinityShadowEnabled();
 
   if (shadowMode) {
-    const legacyResult = await legacyReplyEngine.generateReply(
+    const legacyResult = await loadLegacyReplyEngine().generateReply(
       message,
       contextSnippets,
       recipient,
@@ -233,8 +270,11 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
       }
       throw new Error("Trinity returned no usable draft candidates.");
     } catch (error) {
+      if (!allowLegacyBrain()) {
+        throw new Error(`Trinity suggest failed: ${error.message}`);
+      }
       console.warn("[reply-runtime] Trinity suggest failed, falling back to legacy:", error.message);
-      const legacyResult = await legacyReplyEngine.generateReply(
+      const legacyResult = await loadLegacyReplyEngine().generateReply(
         message,
         contextSnippets,
         recipient,
@@ -248,7 +288,7 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
     }
   }
 
-  const legacyResult = await legacyReplyEngine.generateReply(
+  const legacyResult = await loadLegacyReplyEngine().generateReply(
     message,
     contextSnippets,
     recipient,
@@ -287,8 +327,8 @@ async function exportDraftTrace(cycleId) {
 }
 
 async function callTrinityRuntime(command, payload = null, options = {}) {
-  const pythonBin = process.env.TRINITY_PYTHON_BIN || "python3";
-  const trinityRepoRoot = resolveTrinityRepoRoot();
+  const pythonBin = resolveTrinityPythonBin();
+  const trinityRepoRoot = resolveTrinityRuntimeRoot();
   const env = {
     ...process.env,
     PYTHONPATH: buildPythonPath(trinityRepoRoot),
@@ -334,9 +374,57 @@ async function callTrinityRuntime(command, payload = null, options = {}) {
   });
 }
 
-function resolveTrinityRepoRoot() {
+function resolveTrinityPythonBin() {
+  const configured = String(process.env.TRINITY_PYTHON_BIN || "").trim();
+  const candidates = [
+    configured || null,
+    "python3",
+    "/opt/homebrew/bin/python3",
+    "/opt/homebrew/bin/python3.13",
+    "/opt/homebrew/bin/python3.12",
+    "/usr/local/bin/python3",
+    "/usr/local/bin/python3.13",
+    "/usr/local/bin/python3.12",
+    "/usr/bin/python3",
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (!pythonVersionSatisfies(candidate)) continue;
+    return candidate;
+  }
+
+  throw new Error(
+    "No compatible Python interpreter found for Trinity runtime. Install Python 3.12+ or set TRINITY_PYTHON_BIN.",
+  );
+}
+
+function pythonVersionSatisfies(pythonBin) {
+  try {
+    const probe = spawnSync(
+      pythonBin,
+      ["-c", "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"],
+      { encoding: "utf-8" },
+    );
+    if (probe.status !== 0) return false;
+    const [majorRaw, minorRaw] = String(probe.stdout || "").trim().split(".");
+    const major = Number(majorRaw);
+    const minor = Number(minorRaw);
+    if (!Number.isInteger(major) || !Number.isInteger(minor)) return false;
+    return major > 3 || (major === 3 && minor >= 12);
+  } catch (_) {
+    return false;
+  }
+}
+
+function resolveTrinityRuntimeRoot() {
+  const configuredRuntime = String(process.env.TRINITY_RUNTIME_ROOT || "").trim();
+  if (configuredRuntime) return configuredRuntime;
   const configured = String(process.env.TRINITY_REPO_ROOT || "").trim();
   if (configured) return configured;
+  const bundled = path.resolve(__dirname, "..", "trinity-runtime");
+  if (fs.existsSync(path.join(bundled, "core", "trinity_core", "cli.py"))) {
+    return bundled;
+  }
   return path.resolve(__dirname, "..", "..", "trinity");
 }
 
@@ -475,6 +563,8 @@ function tokenOverlapRatio(left, right) {
 }
 
 module.exports = {
+  allowExperimentalBrainModes,
+  allowLegacyBrain,
   buildShadowComparisonSummary,
   buildThreadSnapshot,
   buildTrinityDraftCandidate,
@@ -484,9 +574,13 @@ module.exports = {
   normalizeSuggestionResult,
   normalizedEditDistance,
   persistShadowComparison,
+  pythonVersionSatisfies,
   readShadowComparisons,
   recordDraftOutcome,
+  releaseRuntimeEnforced,
   resolveReplyCompanyId,
+  resolveTrinityPythonBin,
+  resolveTrinityRuntimeRoot,
   tokenOverlapRatio,
   trinityDraftsEnabled,
   trinityShadowEnabled,
