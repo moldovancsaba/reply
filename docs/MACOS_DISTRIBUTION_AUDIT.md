@@ -35,7 +35,7 @@ Mutable data and logs are app-owned:
 - Logs:
   - `~/Library/Logs/reply`
 
-Legacy `Reply` paths are still migrated forward for compatibility.
+Legacy `{reply}` paths are still migrated forward for compatibility.
 
 ### Protected-data access
 

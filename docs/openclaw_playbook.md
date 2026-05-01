@@ -1,6 +1,6 @@
 # OpenClaw Playbook
 
-This playbook documents the architecture, state locations, and common troubleshooting steps for the local `OpenClaw` integration with `Reply`. Future developers (or AI agents) should consult this document before attempting to debug OpenClaw connectivity issues.
+This playbook documents the architecture, state locations, and common troubleshooting steps for the local `OpenClaw` integration with `{reply}`. Future developers (or AI agents) should consult this document before attempting to debug OpenClaw connectivity issues.
 
 ## 1. Architecture Overview
 

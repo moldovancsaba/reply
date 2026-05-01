@@ -588,7 +588,7 @@ async function serveTrinityShadowComparisons(req, res, url) {
             total: rows.length,
         });
     } catch (e) {
-        writeJson(res, 500, { error: e.message || "Failed to read Trinity shadow comparisons" });
+        writeJson(res, 500, { error: e.message || "Failed to read {trinity} shadow comparisons" });
     }
 }
 

@@ -1,6 +1,6 @@
 # Definition of Done (DoD) & Developer Conduct
 
-**This document outlines the mandatory standards for all contributions to the 'Reply' project.**
+**This document outlines the mandatory standards for all contributions to the `{reply}` project.**
 Every task, pull request, or commit must satisfy these criteria before being considered "Done."
 
 ## 1. Code Quality & Integrity

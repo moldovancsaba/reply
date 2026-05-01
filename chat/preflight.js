@@ -34,7 +34,7 @@ function buildPreflightReport(health, pathCtx, options = {}) {
     checks.push({
         id: "hub",
         category: "core",
-        title: "Reply hub",
+        title: "{reply} hub",
         severity: "info",
         status: "ok",
         detail: `version ${health.version || "unknown"}`,

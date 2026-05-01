@@ -1,14 +1,14 @@
-# Reply Trinity Integration Spine
+# {reply} {trinity} Integration Spine
 
 ## Objective
 
-Route one real Reply suggestion path through Trinity and make Trinity the only shipped drafting runtime.
+Route one real `{reply}` suggestion path through `{trinity}` and make `{trinity}` the only shipped drafting runtime.
 
 ## Deliverable Issues
 
 1. Add `ThreadSnapshot` construction from one real conversation path.
-2. Add `TrinityClient` and a release policy that ships Trinity-only app behavior.
-3. Route `/api/suggest` through Trinity when enabled.
+2. Add `TrinityClient` and a release policy that ships `{trinity}`-only app behavior.
+3. Route `/api/suggest` through `{trinity}` when enabled.
 4. Render top 3 ranked candidates in the composer surface.
 5. Preserve `cycle_id` and `candidate_id` through operator selection and send.
 6. Emit deterministic `DraftOutcomeEvent` records:
@@ -24,6 +24,6 @@ Route one real Reply suggestion path through Trinity and make Trinity the only s
 
 ## Compatibility Rules
 
-1. Reply sends versioned UTC payloads only.
-2. Reply never reads Trinity runtime storage directly.
-3. Reply does not let Train bypass Trinity.
+1. `{reply}` sends versioned UTC payloads only.
+2. `{reply}` never reads `{trinity}` runtime storage directly.
+3. `{reply}` does not let `{train}` bypass `{trinity}`.

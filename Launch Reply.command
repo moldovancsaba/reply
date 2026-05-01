@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Reply System Launcher
+# {reply} system launcher
 # Double-click this file to start the system.
 
 # Get the directory where this script is located

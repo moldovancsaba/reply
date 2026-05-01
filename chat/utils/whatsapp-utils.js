@@ -64,7 +64,7 @@ function buildOpenClawWhatsAppHint(rawErrorText, execErrorText, shortErrorText) 
         return (
             "1) Start the gateway: openclaw gateway (leave it running)\n" +
             `2) Link WhatsApp: openclaw channels login --channel whatsapp --account ${acct}\n` +
-            "3) Retry send from Reply."
+            "3) Retry send from {reply}."
         );
     }
     if (s.includes("gateway is running") || s.includes("start the gateway")) {

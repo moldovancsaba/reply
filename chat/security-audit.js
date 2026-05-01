@@ -203,7 +203,7 @@ function summarize(findings) {
 }
 
 function printReport(findings, summary, fixActions) {
-  console.log("Reply Security Audit");
+  console.log("{reply} security audit");
   console.log(`Summary: critical=${summary.critical} warn=${summary.warn} info=${summary.info}`);
   for (const f of findings) {
     const rem = f.remediation ? ` | remediation: ${f.remediation}` : "";

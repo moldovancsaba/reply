@@ -99,7 +99,7 @@ function checkOutboundAllowedForContact(channel, recipientRaw, contact, options 
       allowed: false,
       code: "no_inbound_proof",
       reason: "This contact has no inbound-verified channel addresses yet.",
-      hint: "Receive an inbound message on this channel so Reply can record proof, then try again.",
+      hint: "Receive an inbound message on this channel so {reply} can record proof, then try again.",
     };
   }
 
@@ -112,7 +112,7 @@ function checkOutboundAllowedForContact(channel, recipientRaw, contact, options 
       allowed: false,
       code: "email_not_verified",
       reason: `No inbound proof for email ${raw}.`,
-      hint: "Reply only to addresses that have already emailed you on this contact.",
+      hint: "{reply} only sends to addresses that have already emailed you on this contact.",
     };
   }
 

@@ -1,4 +1,4 @@
-// Reply Brain - LinkedIn Bridge Content Script (reply#30)
+// {reply} brain - LinkedIn Bridge Content Script (reply#30)
 // Port list MUST stay in sync with `chat/linkedin-hub-port-scan.js` and `js/linkedin-bridge.user.js`.
 
 function buildLinkedInHubPortScanList() {
@@ -70,7 +70,7 @@ async function sendToLocal(payload) {
                 activePort = port; // Confirmed working
                 if (!isConnected) {
                     isConnected = true;
-                    showToast(`Reply Brain: Connected (Port ${port})`);
+                    showToast(`{reply} brain: Connected (Port ${port})`);
                 }
                 console.log(`✅ Synced to :${port}`, payload.events.length, "messages");
                 success = true;
@@ -91,8 +91,8 @@ async function sendToLocal(payload) {
             PORTS.length <= 10
                 ? PORTS.join(", ")
                 : `${PORTS.slice(0, 4).join(", ")} … ${PORTS.slice(-4).join(", ")} (${PORTS.length} ports)`;
-        console.error("❌ Reply hub unreachable on any scanned port:", label);
-        showToast(`Reply: hub not found (tried ${label}). Start {reply} or check PORT.`, true);
+        console.error("❌ {reply} hub unreachable on any scanned port:", label);
+        showToast(`{reply}: hub not found (tried ${label}). Start {reply} or check PORT.`, true);
     }
 }
 
@@ -168,8 +168,8 @@ function scrapeVisibleMessages() {
 }
 
 // Start Polling
-console.log("🚀 Reply Brain Extension Active (Multi-port)");
-showToast("Reply Brain: Extension Active", false);
+console.log("🚀 {reply} brain extension active (multi-port)");
+showToast("{reply} brain: extension active", false);
 
 setInterval(() => {
     const events = scrapeVisibleMessages();

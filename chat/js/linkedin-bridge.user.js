@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         Reply Brain - LinkedIn Bridge
+// @name         {reply} brain - LinkedIn Bridge
 // @namespace    http://tampermonkey.net/
 // @version      1.2
 // @description  Syncs LinkedIn messages to local {reply} hub (scans 45311-45326 then legacy 3000-3003)
-// @author       Reply Brain
+// @author       {reply} brain
 // @match        https://www.linkedin.com/messaging/*
 // @grant        GM_xmlhttpRequest
 // @connect      localhost
@@ -58,8 +58,8 @@
         }, 3000);
     }
 
-    console.log("🚀 Reply Brain: LinkedIn Bridge Active (Multi-port)");
-    showToast("Reply Brain: Linked", false);
+    console.log("🚀 {reply} brain: LinkedIn Bridge Active (Multi-port)");
+    showToast("{reply} brain: Linked", false);
 
     async function sendToLocal(payload) {
         let portsToTry = activePort ? [activePort] : PORTS;
@@ -84,7 +84,7 @@
                     activePort = port;
                     if (!isConnected) {
                         isConnected = true;
-                        showToast(`Reply Brain: Connected (Port ${port})`);
+                        showToast(`{reply} brain: Connected (Port ${port})`);
                     }
                     console.log(`✅ Synced to :${port}`, payload.events.length, "messages");
                     success = true;
@@ -104,8 +104,8 @@
                 PORTS.length <= 10
                     ? PORTS.join(", ")
                     : `${PORTS.slice(0, 4).join(", ")} … ${PORTS.slice(-4).join(", ")} (${PORTS.length} ports)`;
-            console.error("Reply hub unreachable (tried):", label);
-            showToast(`Reply: hub not found (${label}). Start {reply} or check PORT.`, true);
+            console.error("{reply} hub unreachable (tried):", label);
+            showToast(`{reply}: hub not found (${label}). Start {reply} or check PORT.`, true);
         }
     }
 
