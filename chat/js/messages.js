@@ -445,7 +445,11 @@ export async function handleSendMessage() {
 
         console.log(`[SendMessage] channel=${channel}, targetHandle=${targetHandle}, textLen=${text.length}`);
         setSendPending(channel, true);
-        const result = await sendMessage(targetHandle, text, channel);
+        const draftContext =
+            typeof window.getCurrentDraftContext === 'function'
+                ? window.getCurrentDraftContext(currentHandle)
+                : null;
+        const result = await sendMessage(targetHandle, text, channel, draftContext);
         console.log(`[SendMessage] Result status: ${result?.status}`);
 
         if (result?.status !== 'ok') {
@@ -458,6 +462,12 @@ export async function handleSendMessage() {
 
         // Clear input
         chatInput.value = '';
+        try {
+            window.localStorage?.removeItem(`reply.suggestion.v1.${encodeURIComponent(String(currentHandle || ''))}`);
+        } catch {}
+        if (typeof window.clearCachedSuggestion === 'function') {
+            window.clearCachedSuggestion(currentHandle);
+        }
         // Refresh contact list to move current contact to top
         if (typeof window.loadConversations === 'function') {
             await window.loadConversations();
