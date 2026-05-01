@@ -12,6 +12,7 @@
     "annotate": "node annotation-agent.js",
     "fingerprint": "node unified-brain-report.js",
     "channel-bridge:ingest": "node channel-bridge-sidecar.js",
+    "verify:openclaw": "node verify_openclaw.js",
     "linkedin:sync": "node linkedin-sidecar.js",
     "linkedin:install-browsers": "playwright install chromium",
     "lint": "eslint .",
