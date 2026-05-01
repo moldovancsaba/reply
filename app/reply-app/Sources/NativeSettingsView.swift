@@ -14,7 +14,7 @@ struct NativeSettingsView: View {
             }
             .padding(20)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Color.clear)
         .task {
             await service.loadSettings(force: true)
         }
@@ -29,6 +29,7 @@ struct NativeSettingsView: View {
                 if service.isSavingSettings {
                     ProgressView()
                         .controlSize(.small)
+                        .tint(ReplyConstellationPalette.accent)
                 }
                 Button("Reload") {
                     Task { await service.loadSettings(force: true) }
@@ -40,16 +41,16 @@ struct NativeSettingsView: View {
                 .disabled(service.isSavingSettings || service.runtimeState != .online)
             }
             Text("Configure the shipped {reply} runtime directly from the native app. These controls replace the old browser-only operational settings surface.")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(ReplyConstellationPalette.textSecondary)
             if !service.settingsLoadError.isEmpty {
                 Text(service.settingsLoadError)
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(ReplyConstellationPalette.danger)
             }
             if !service.settingsSaveError.isEmpty {
                 Text(service.settingsSaveError)
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(ReplyConstellationPalette.danger)
             }
         }
         .modifier(NativeCardStyle())
@@ -147,7 +148,7 @@ struct NativeSettingsView: View {
             ))
             HStack {
                 Text("MDM state")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(ReplyConstellationPalette.textSecondary)
                 Spacer()
                 Text(service.managementState.label)
                     .fontWeight(.semibold)
@@ -161,7 +162,7 @@ struct NativeSettingsView: View {
             Label("Sync Center", systemImage: "tray.and.arrow.down.fill")
                 .font(.headline)
             Text("Run source syncs without leaving the native app.")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(ReplyConstellationPalette.textSecondary)
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 12)], spacing: 12) {
                 ForEach(SyncChannel.allCases) { channel in
@@ -190,7 +191,7 @@ struct NativeSettingsView: View {
     private func numericField(_ title: String, value: Binding<Int>) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(ReplyConstellationPalette.textSecondary)
             TextField(title, value: value, format: .number)
                 .textFieldStyle(.roundedBorder)
         }
@@ -200,15 +201,6 @@ struct NativeSettingsView: View {
 private struct NativeCardStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
-            )
+            .replyConstellationCard()
     }
 }

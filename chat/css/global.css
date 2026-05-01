@@ -1,71 +1,53 @@
+@import "./constellation.css";
+
 /* 
  * {reply} - Global Design System
  * Dark Theme by Default
  */
 
 :root {
-  /* Color Palette - Industry Standard Dark Mode */
-  --bg-app: #0f0f10;
-  /* Deepest background (app container) */
-  --bg-sidebar: #161618;
-  /* Sidebar background */
-  --bg-card: #2c2c2e;
-  /* Card/Element background */
-  --bg-input: #1c1c1e;
-  /* Input fields */
-  --bg-hover: #3a3a3c;
-  /* Hover states */
+  --bg-app: var(--cds-surface-canvas);
+  --bg-sidebar: var(--cds-surface-sidebar);
+  --bg-card: var(--cds-surface-panel);
+  --bg-input: var(--cds-surface-elevated);
+  --bg-hover: var(--cds-surface-muted);
 
-  /* Text Colors */
-  --text-primary: #ffffff;
-  /* High emphasis */
-  --text-secondary: #ebebf599;
-  /* Medium emphasis (60%) */
-  --text-tertiary: #ebebf54d;
-  /* Low emphasis (30%) */
-  --text-placeholder: #ebebf54d;
+  --text-primary: var(--cds-text-primary);
+  --text-secondary: var(--cds-text-secondary);
+  --text-tertiary: var(--cds-text-tertiary);
+  --text-placeholder: var(--cds-text-tertiary);
 
-  /* Accents */
-  --primary: #0a84ff;
-  /* iOS Blue Dark Mode */
-  --primary-hover: #0077ed;
-  --danger: #ff453a;
-  /* iOS Red Dark Mode */
-  --success: #30d158;
-  /* iOS Green Dark Mode */
-  --warning: #ffd60a;
-  /* iOS Yellow Dark Mode */
+  --primary: var(--cds-accent-primary);
+  --primary-hover: #c46231;
+  --danger: var(--cds-status-danger);
+  --success: var(--cds-status-success);
+  --warning: var(--cds-status-warning);
 
   /* Channel bubble colors (overridden by Settings) */
   --bubble-me-imessage: var(--primary);
-  --bubble-contact-imessage: #262628;
+  --bubble-contact-imessage: var(--cds-surface-elevated);
   --bubble-me-whatsapp: #25D366;
-  --bubble-contact-whatsapp: #262628;
+  --bubble-contact-whatsapp: var(--cds-surface-elevated);
   --bubble-me-email: #5e5ce6;
-  --bubble-contact-email: #262628;
+  --bubble-contact-email: var(--cds-surface-elevated);
 
-  /* Borders & Dividers */
-  --border: #38383a;
-  --border-light: #48484a;
+  --border: var(--cds-border-soft);
+  --border-light: var(--cds-border-strong);
 
-  /* Spacing */
-  --space-xs: 4px;
-  --space-sm: 8px;
-  --space-md: 16px;
-  --space-lg: 24px;
-  --space-xl: 32px;
+  --space-xs: var(--cds-space-xs);
+  --space-sm: var(--cds-space-sm);
+  --space-md: var(--cds-space-md);
+  --space-lg: var(--cds-space-lg);
+  --space-xl: var(--cds-space-xl);
 
-  /* Radius */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-full: 9999px;
+  --radius-sm: var(--cds-radius-sm);
+  --radius-md: var(--cds-radius-md);
+  --radius-lg: var(--cds-radius-lg);
+  --radius-full: var(--cds-radius-full);
 
   /* Extended Text Colors */
-  --text-muted: #888;
-  /* For less prominent text */
-  --text-hint: #999;
-  /* For hints and placeholders */
+  --text-muted: var(--cds-text-secondary);
+  --text-hint: var(--cds-text-tertiary);
 
   /* Input/Form Specific */
   --input-border: var(--border);
@@ -73,15 +55,13 @@
   --input-border-focus: var(--primary);
 
   /* Additional Spacing */
-  --space-2xs: 2px;
+  --space-2xs: 4px;
 
   /* Additional Radii */
-  --radius-input: 8px;
-  /* Standard input radius */
+  --radius-input: var(--cds-radius-md);
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-sm: var(--cds-shadow-sm);
+  --shadow-md: var(--cds-shadow-md);
 
   /* Layout */
   --sidebar-width: 280px;
@@ -96,8 +76,11 @@
 body {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background-color: var(--bg-app);
+  font-family: var(--cds-font-family-sans);
+  background:
+    radial-gradient(circle at top left, rgba(219, 116, 64, 0.18), transparent 24%),
+    radial-gradient(circle at top right, rgba(47, 156, 138, 0.12), transparent 20%),
+    linear-gradient(180deg, #0f1116 0%, var(--bg-app) 100%);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   height: 100vh;
@@ -136,11 +119,12 @@ body {
 /* Buttons */
 .btn {
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 0.6rem 1.2rem;
   font-weight: 700;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  transition: opacity 0.2s, background 0.15s, border-color 0.15s;
+  transition: opacity 0.2s, background 0.15s, border-color 0.15s, transform 0.15s;
 }
 
 .btn:disabled {
@@ -150,17 +134,19 @@ body {
 
 .btn-primary {
   background: var(--primary);
-  color: white;
+  color: #1a1611;
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-primary:hover {
   background: var(--primary-hover);
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text-primary);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  border: 1px solid var(--border);
 }
 
 .btn-secondary:hover {
@@ -193,7 +179,7 @@ body {
 }
 
 .btn-icon:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .btn-icon-sm {

@@ -20,7 +20,7 @@ struct SystemStatusView: View {
             }
             .padding(20)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Color.clear)
     }
 
     private var headerCard: some View {
@@ -37,17 +37,17 @@ struct SystemStatusView: View {
                     Spacer()
                     Text("Last refresh \(date.formatted(date: .omitted, time: .standard))")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(ReplyConstellationPalette.textSecondary)
                 }
             }
             if !service.launchErrorMessage.isEmpty {
                 Text(service.launchErrorMessage)
                     .font(.callout)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(ReplyConstellationPalette.danger)
             }
             Text("If iMessage is blocked, enable Full Disk Access for the runtime binary {reply} uses: \(service.nodeBinaryHint)")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(ReplyConstellationPalette.textSecondary)
         }
         .modifier(CardStyle())
     }
@@ -389,28 +389,28 @@ struct SystemStatusView: View {
     private func runtimeColor(_ state: ReplyRuntimeState) -> Color {
         switch state {
         case .unknown:
-            return .gray
+            return ReplyConstellationPalette.textSecondary
         case .starting:
-            return .orange
+            return ReplyConstellationPalette.warning
         case .online:
-            return .green
+            return ReplyConstellationPalette.success
         case .offline:
-            return .secondary
+            return ReplyConstellationPalette.textSecondary
         case .error:
-            return .red
+            return ReplyConstellationPalette.danger
         }
     }
 
     private func preflightColor(_ status: String) -> Color {
         switch status.lowercased() {
         case "ok", "online", "ready", "idle", "running", "live":
-            return .green
+            return ReplyConstellationPalette.success
         case "degraded", "warning", "starting", "loading":
-            return .orange
+            return ReplyConstellationPalette.warning
         case "blocked", "error", "repair_required", "crashed", "offline":
-            return .red
+            return ReplyConstellationPalette.danger
         default:
-            return .secondary
+            return ReplyConstellationPalette.textSecondary
         }
     }
 }
@@ -418,8 +418,6 @@ struct SystemStatusView: View {
 private struct CardStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .padding(16)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .replyConstellationCard()
     }
 }

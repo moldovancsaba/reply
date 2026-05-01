@@ -101,12 +101,12 @@
 
 /* Premium Card Container */
 .settings-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: color-mix(in srgb, var(--bg-card) 88%, transparent);
+    border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 24px;
     margin-bottom: 24px;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-md);
 }
 
 /* ============================================
@@ -114,8 +114,8 @@
    ============================================ */
 
 .health-card {
-    background: var(--bg-card);
-    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+    border-radius: var(--radius-lg);
     padding: var(--space-md);
     border: 1px solid var(--border);
     min-height: 168px;
@@ -138,6 +138,8 @@
 
 .health-card:hover {
     border-color: var(--border-light);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
 }
 
 .health-card h4 {
@@ -243,17 +245,17 @@
 
 .health-status-tag.tag-online {
     color: var(--success);
-    background: rgba(48, 209, 88, 0.1);
+    background: color-mix(in srgb, var(--success) 14%, transparent);
 }
 
 .health-status-tag.tag-offline {
     color: var(--danger);
-    background: rgba(255, 69, 58, 0.1);
+    background: color-mix(in srgb, var(--danger) 14%, transparent);
 }
 
 .health-status-tag.tag-warning {
     color: var(--warning);
-    background: rgba(255, 214, 10, 0.1);
+    background: color-mix(in srgb, var(--warning) 14%, transparent);
 }
 
 /* ============================================
