@@ -227,6 +227,21 @@ async function refreshConversationsFromServer(append = false) {
     window.conversations = conversations;
 
     renderConversationsPage(data.contacts, append);
+    try {
+        if (typeof window.reconcileContactDraft === 'function' && window.currentHandle) {
+            const activeContact =
+                conversations.find((c) => String(c.handle) === String(window.currentHandle)) ||
+                conversations.find((c) => String(c.latestHandle || '') === String(window.currentHandle)) ||
+                null;
+            if (activeContact && activeContact.draft) {
+                window.reconcileContactDraft(window.currentHandle, activeContact.draft, {
+                    explanation: 'Suggestion ready for this conversation.'
+                });
+            }
+        }
+    } catch (e) {
+        console.warn('[contacts] Failed to reconcile active contact draft:', e);
+    }
 
     if (!append && !conversationsQuery) {
         writeCachedConversationPage({
@@ -471,6 +486,9 @@ export async function selectContact(handle) {
         }
         if (typeof window.refreshSuggestButtonState === 'function') {
             window.refreshSuggestButtonState();
+        }
+        if (typeof window.pollActiveConversationDraft === 'function') {
+            void window.pollActiveConversationDraft();
         }
     } catch (e) {
         console.warn('[selectContact] Failed to apply cached suggestion:', e);
