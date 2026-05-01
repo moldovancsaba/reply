@@ -27,7 +27,7 @@ if (fs.existsSync(LOG_FILE)) {
 // process.stdout.write = process.stderr.write = access.write.bind(access);
 const { addDocuments } = require('./vector-store.js');
 const contactStore = require('./contact-store.js');
-const { generateReply } = require('./reply-engine.js');
+const { generateReply } = require('./brain-runtime.js');
 const { getSnippets } = require('./knowledge.js');
 const {
     enqueueSuggestionDraft,
