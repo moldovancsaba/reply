@@ -14,7 +14,7 @@ import {
   CONVERSATION_SORT_STORAGE_KEY,
 } from './contacts.js';
 import { handleSendMessage } from './messages.js';
-import { getSettings, buildSecurityHeaders, reportDraftReplacement } from './api.js';
+import { getSettings, buildSecurityHeaders, reportDraftReplacement, reportTrinityOutcome } from './api.js';
 import './dashboard.js?v=2.2';
 import './kyc.js?v=2.1';
 import { applyReplyUiSettings } from './settings.js?v=2.5';
@@ -93,6 +93,11 @@ function clearCachedSuggestion(handle) {
   } catch {
     // ignore
   }
+  if (String(window.currentHandle || '') === String(handle || '')) {
+    renderSuggestionCandidates(null);
+    setSuggestionExplanation('');
+    refreshSuggestButtonState();
+  }
 }
 
 window.openChannelSettings = function openChannelSettings(channel) {
@@ -100,6 +105,8 @@ window.openChannelSettings = function openChannelSettings(channel) {
   const tab = SETTINGS_TAB_BY_CHANNEL[key] || 'general';
   window.location.href = `settings.html#${encodeURIComponent(tab)}`;
 };
+window.clearCachedSuggestion = clearCachedSuggestion;
+window.getCurrentDraftContext = currentDraftContext;
 
 applyIconFallback(document);
 
@@ -134,6 +141,193 @@ function normalizeDraftText(raw) {
   return String(raw || '').trim();
 }
 
+function escapeHtml(raw) {
+  return String(raw || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function resolveReplyCompanyIdFallback() {
+  const seed = 'reply.local.runtime';
+  let hash = 2166136261;
+  for (const char of seed) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  const chars = (hash >>> 0).toString(16).padStart(8, '0').repeat(4).slice(0, 32).split('');
+  chars[12] = '5';
+  chars[16] = '8';
+  const hex = chars.join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+function renderSuggestionCandidates(payload) {
+  const root = document.getElementById('suggestion-candidates');
+  if (!root) return;
+  root.innerHTML = '';
+
+  const drafts = Array.isArray(payload?.rankedDraftSet?.drafts) ? payload.rankedDraftSet.drafts : [];
+  if (!drafts.length) {
+    root.classList.add('u-display-none');
+    return;
+  }
+
+  root.classList.remove('u-display-none');
+  const selectedCandidateId = String(payload?.selectedCandidateId || drafts[0]?.candidate_id || '');
+
+  drafts.forEach((draft) => {
+    const card = document.createElement('div');
+    card.className = `suggestion-candidate-card${String(draft.candidate_id || '') === selectedCandidateId ? ' is-selected' : ''}`;
+
+    const header = document.createElement('div');
+    header.className = 'suggestion-candidate-header';
+    header.innerHTML = `<span class="suggestion-rank">#${draft.rank}</span><span class="suggestion-rationale">${escapeHtml(draft.rationale || '')}</span>`;
+    card.appendChild(header);
+
+    const text = document.createElement('div');
+    text.className = 'suggestion-draft-text';
+    text.textContent = draft.draft_text || '';
+    card.appendChild(text);
+
+    if (Array.isArray(draft.risk_flags) && draft.risk_flags.length) {
+      const flags = document.createElement('div');
+      flags.className = 'suggestion-risk-flags';
+      flags.textContent = `Flags: ${draft.risk_flags.join(', ')}`;
+      card.appendChild(flags);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'suggestion-candidate-actions';
+
+    const useBtn = document.createElement('button');
+    useBtn.type = 'button';
+    useBtn.className = 'btn btn-secondary btn-sm';
+    useBtn.textContent = 'Use draft';
+    useBtn.onclick = () => {
+      applySuggestionCandidate(window.currentHandle, draft.candidate_id, { force: true, reportSelection: true });
+    };
+    actions.appendChild(useBtn);
+
+    const rejectBtn = document.createElement('button');
+    rejectBtn.type = 'button';
+    rejectBtn.className = 'btn btn-secondary btn-sm';
+    rejectBtn.textContent = 'Reject';
+    rejectBtn.onclick = async () => {
+      await reportSuggestionOutcome(window.currentHandle, draft.candidate_id, 'REJECTED', {
+        original_draft_text: draft.draft_text || '',
+        notes: 'ui_reject_candidate',
+      });
+      card.classList.add('is-muted');
+    };
+    actions.appendChild(rejectBtn);
+
+    const reworkBtn = document.createElement('button');
+    reworkBtn.type = 'button';
+    reworkBtn.className = 'btn btn-secondary btn-sm';
+    reworkBtn.textContent = 'Rework';
+    reworkBtn.onclick = async () => {
+      await reportSuggestionOutcome(window.currentHandle, draft.candidate_id, 'REWORK_REQUESTED', {
+        original_draft_text: draft.draft_text || '',
+        notes: 'ui_rework_requested',
+      });
+      setSuggestionExplanation('Rework request recorded. Use another candidate or continue with a manual draft.');
+    };
+    actions.appendChild(reworkBtn);
+
+    card.appendChild(actions);
+    root.appendChild(card);
+  });
+
+  const footer = document.createElement('div');
+  footer.className = 'suggestion-candidate-footer';
+  const dismissBtn = document.createElement('button');
+  dismissBtn.type = 'button';
+  dismissBtn.className = 'btn btn-secondary btn-sm';
+  dismissBtn.textContent = 'Dismiss all';
+  dismissBtn.onclick = async () => {
+    const cached = readCachedSuggestion(window.currentHandle);
+    const visibleDrafts = Array.isArray(cached?.rankedDraftSet?.drafts) ? cached.rankedDraftSet.drafts : [];
+    await Promise.all(
+      visibleDrafts.map((draft) =>
+        reportSuggestionOutcome(window.currentHandle, draft.candidate_id, 'IGNORED', {
+          original_draft_text: draft.draft_text || '',
+          notes: 'ui_dismiss_all',
+        })
+      )
+    );
+    clearCachedSuggestion(window.currentHandle);
+  };
+  footer.appendChild(dismissBtn);
+  root.appendChild(footer);
+}
+
+function currentDraftContext(handle) {
+  const cached = readCachedSuggestion(handle);
+  if (!cached?.rankedDraftSet?.cycle_id) return null;
+  const drafts = Array.isArray(cached.rankedDraftSet.drafts) ? cached.rankedDraftSet.drafts : [];
+  const selected = drafts.find((draft) => String(draft.candidate_id || '') === String(cached.selectedCandidateId || '')) || drafts[0] || null;
+  return {
+    companyId: selected?.company_id || resolveReplyCompanyIdFallback(),
+    cycleId: cached.rankedDraftSet.cycle_id,
+    threadRef: cached.rankedDraftSet.thread_ref,
+    channel: cached.rankedDraftSet.channel,
+    selectedCandidateId: selected?.candidate_id || '',
+    selectedDraftText: selected?.draft_text || cached.suggestion || '',
+    originalDraftText: selected?.draft_text || cached.suggestion || '',
+    generatedAtMs: Number(cached.generatedAtMs || Date.now()),
+  };
+}
+
+async function reportSuggestionOutcome(handle, candidateId, disposition, extras = {}) {
+  const cached = readCachedSuggestion(handle);
+  const rankedDraftSet = cached?.rankedDraftSet;
+  if (!rankedDraftSet?.cycle_id) return { status: 'skipped' };
+  const drafts = Array.isArray(rankedDraftSet.drafts) ? rankedDraftSet.drafts : [];
+  const draft = drafts.find((item) => String(item.candidate_id || '') === String(candidateId || '')) || drafts[0] || null;
+  return reportTrinityOutcome({
+    company_id: draft?.company_id || resolveReplyCompanyIdFallback(),
+    cycle_id: rankedDraftSet.cycle_id,
+    thread_ref: rankedDraftSet.thread_ref,
+    channel: rankedDraftSet.channel,
+    candidate_id: draft?.candidate_id || candidateId || null,
+    disposition,
+    occurred_at: new Date().toISOString(),
+    original_draft_text: extras.original_draft_text || draft?.draft_text || cached?.suggestion || '',
+    final_text: extras.final_text || null,
+    edit_distance: extras.edit_distance ?? null,
+    latency_ms: extras.latency_ms ?? Math.max(0, Date.now() - Number(cached?.generatedAtMs || Date.now())),
+    send_result: extras.send_result || null,
+    notes: extras.notes || null,
+  });
+}
+
+function applySuggestionCandidate(handle, candidateId, options = {}) {
+  const cached = readCachedSuggestion(handle);
+  const drafts = Array.isArray(cached?.rankedDraftSet?.drafts) ? cached.rankedDraftSet.drafts : [];
+  const selected = drafts.find((draft) => String(draft.candidate_id || '') === String(candidateId || ''));
+  if (!selected) return false;
+
+  writeCachedSuggestion(handle, {
+    ...(cached || {}),
+    suggestion: selected.draft_text || '',
+    explanation: selected.rationale || cached?.explanation || '',
+    selectedCandidateId: selected.candidate_id,
+  });
+  applyCachedSuggestionForHandle(handle, { force: options.force === true });
+  renderSuggestionCandidates(readCachedSuggestion(handle));
+
+  if (options.reportSelection) {
+    reportSuggestionOutcome(handle, selected.candidate_id, 'SELECTED', {
+      original_draft_text: selected.draft_text || '',
+      notes: 'ui_select_candidate',
+    }).catch((error) => console.warn('[reply] selection report failed:', error?.message || error));
+  }
+  return true;
+}
+
 function getActiveComposerText() {
   const chatInput = document.getElementById('chat-input');
   return normalizeDraftText(chatInput?.value || '');
@@ -160,6 +354,7 @@ function reconcileContactDraft(handle, draftText, options = {}) {
   const cached = readCachedSuggestion(normalizedHandle);
   if (normalizeDraftText(cached?.suggestion || '') !== normalizedDraft) {
     writeCachedSuggestion(normalizedHandle, {
+      ...(cached || {}),
       suggestion: normalizedDraft,
       explanation: options.explanation || 'Suggestion ready for this conversation.'
     });
@@ -180,6 +375,7 @@ function reconcileContactDraft(handle, draftText, options = {}) {
         ? 'Suggestion ready for this conversation.'
         : 'Suggestion ready for this conversation. Clear the composer or press Suggest again to replace the current draft.');
     setSuggestionExplanation(explanation);
+    renderSuggestionCandidates(readCachedSuggestion(normalizedHandle));
   }
 
   refreshSuggestButtonState();
@@ -256,6 +452,7 @@ function applyCachedSuggestionForHandle(handle, options = {}) {
   const payload = readCachedSuggestion(handle);
   if (!payload || !payload.suggestion) {
     setSuggestionExplanation('');
+    renderSuggestionCandidates(null);
     refreshSuggestButtonState();
     return false;
   }
@@ -278,6 +475,7 @@ function applyCachedSuggestionForHandle(handle, options = {}) {
   const explanation = payload.explanation
     || (!canSeed ? 'Background suggestion ready for this conversation. Clear the composer or press Suggest again to replace the current draft.' : '');
   setSuggestionExplanation(explanation);
+  renderSuggestionCandidates(payload);
   refreshSuggestButtonState();
   return canSeed;
 }
@@ -285,6 +483,14 @@ function applyCachedSuggestionForHandle(handle, options = {}) {
 async function requestBackgroundSuggestion(handle, existingDraft = '') {
   if (!handle) return;
   if (suggestionJobs.get(handle)?.status === 'pending') return;
+
+  const prior = readCachedSuggestion(handle);
+  if (prior?.rankedDraftSet?.cycle_id && prior?.selectedCandidateId) {
+    await reportSuggestionOutcome(handle, prior.selectedCandidateId, 'IGNORED', {
+      original_draft_text: prior.suggestion || '',
+      notes: 'request_new_suggestion',
+    }).catch(() => null);
+  }
 
   suggestionJobs.set(handle, { status: 'pending', startedAt: Date.now() });
   refreshSuggestButtonState();
@@ -313,14 +519,28 @@ async function requestBackgroundSuggestion(handle, existingDraft = '') {
 
     const suggestion = data?.suggestion || '';
     const explanation = data?.explanation || '';
+    const rankedDraftSet = data?.rankedDraftSet || null;
     if (!suggestion) throw new Error('No suggestion text returned');
 
-    writeCachedSuggestion(handle, { suggestion, explanation });
+    writeCachedSuggestion(handle, {
+      suggestion,
+      explanation,
+      runtimeMode: data?.runtimeMode || null,
+      rankedDraftSet,
+      selectedCandidateId: rankedDraftSet?.drafts?.[0]?.candidate_id || '',
+      generatedAtMs: Date.now(),
+    });
     suggestionJobs.delete(handle);
 
     const applied = applyCachedSuggestionForHandle(handle, {
       force: String(window.currentHandle || '') === String(handle)
     });
+    if (rankedDraftSet?.drafts?.[0]?.candidate_id) {
+      await reportSuggestionOutcome(handle, rankedDraftSet.drafts[0].candidate_id, 'SELECTED', {
+        original_draft_text: rankedDraftSet.drafts[0].draft_text || '',
+        notes: 'auto_apply_top_candidate',
+      }).catch(() => null);
+    }
     UI.showToast(
       String(window.currentHandle || '') === String(handle)
         ? (applied ? 'Suggestion ready' : 'Suggestion ready in background for this conversation')
@@ -336,6 +556,7 @@ async function requestBackgroundSuggestion(handle, existingDraft = '') {
     });
     if (String(window.currentHandle || '') === String(handle)) {
       setSuggestionExplanation('');
+      renderSuggestionCandidates(null);
     }
     UI.showToast(e?.message || 'Suggest request failed', 'error');
   } finally {
@@ -500,7 +721,6 @@ function setupEventListeners() {
       if (!handle) return;
 
       const existingDraft = (chatInput.value || '').trim();
-      clearCachedSuggestion(handle);
       await requestBackgroundSuggestion(handle, existingDraft);
     };
   }
