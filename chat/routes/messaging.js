@@ -9,6 +9,7 @@ const {
     exportDraftTrace,
     generateReply,
     normalizeSuggestionResult,
+    readShadowComparisons,
     recordDraftOutcome,
     resolveReplyCompanyId,
 } = require("../brain-runtime");
@@ -573,6 +574,19 @@ async function serveFeedback(req, res) {
     }
 }
 
+async function serveTrinityShadowComparisons(req, res, url) {
+    try {
+        const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit")) || 20, 500));
+        const rows = readShadowComparisons(limit);
+        writeJson(res, 200, {
+            comparisons: rows,
+            total: rows.length,
+        });
+    } catch (e) {
+        writeJson(res, 500, { error: e.message || "Failed to read Trinity shadow comparisons" });
+    }
+}
+
 /**
  * Shared send handler for iMessage, email, LinkedIn (WhatsApp uses `serveSendWhatsApp`).
  * Inbound-verified gate (reply#17) runs before any channel-specific send logic.
@@ -898,6 +912,7 @@ module.exports = {
     serveFeedback,
     serveSendMessage,
     serveSendWhatsApp,
+    serveTrinityShadowComparisons,
     normalizeConversationSort,
     CONVERSATION_SORT_MODES,
     AVAILABLE_CONVERSATION_SORT_MODES,
