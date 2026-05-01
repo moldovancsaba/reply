@@ -55,7 +55,7 @@ struct ReplyWebView: NSViewRepresentable {
     }
 
     private func normalizedURLString(_ url: URL?) -> String {
-        guard let url, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+        guard let url, let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
             return ""
         }
         return components.string ?? url.absoluteString

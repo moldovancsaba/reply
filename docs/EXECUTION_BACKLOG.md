@@ -47,6 +47,9 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
 - `REPLY-005` Trinity shadow-mode execution
   The adapter boundary exists, but `{reply}` still uses the legacy engine as the active implementation. Shadow-mode comparison is the next safe step.
 
+- `REPLY-006` Dev-toolchain major-version upgrade lane
+  `chat` is clean on tests, lint, audit, and the native package rebuild after safe dependency updates, but major upgrades remain for the ESLint toolchain. Those should be handled in a dedicated compatibility pass rather than mixed into runtime-boundary work.
+
 ## Dependencies
 
 - Depends on `{trinity}` for canonical runtime vocabulary and future candidate/frontier execution.
