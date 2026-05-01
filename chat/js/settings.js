@@ -601,6 +601,7 @@ function startStandaloneServiceHealthPoll() {
 function initStandaloneSettingsShell() {
   if (!isSettingsStandalonePage() || document.body.dataset.replySettingsShell === '1') return;
   document.body.dataset.replySettingsShell = '1';
+  UI.initThemeControls();
 
   window.selectContact = (handle) => {
     if (handle == null || handle === '') {

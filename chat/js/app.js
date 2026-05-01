@@ -404,6 +404,8 @@ async function init() {
 }
 
 function setupEventListeners() {
+  UI.initThemeControls();
+
   const btnDash = document.getElementById('btn-dash');
   if (btnDash) btnDash.onclick = () => { if (typeof window.selectContact === 'function') window.selectContact(null); };
 

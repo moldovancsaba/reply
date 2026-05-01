@@ -9,7 +9,15 @@
         height: 100%;
         font-family: var(--cds-font-family-sans);
         background:
-          radial-gradient(circle at top left, rgba(219, 116, 64, 0.16), transparent 26%),
+          radial-gradient(circle at top left, rgba(77, 150, 255, 0.16), transparent 26%),
+          radial-gradient(circle at top right, rgba(47, 156, 138, 0.10), transparent 22%),
+          linear-gradient(180deg, #f7fbff 0%, #eef4ff 100%);
+      }
+
+      [data-theme="night"] body,
+      [data-theme="night"] html {
+        background:
+          radial-gradient(circle at top left, rgba(77, 150, 255, 0.16), transparent 26%),
           radial-gradient(circle at top right, rgba(47, 156, 138, 0.12), transparent 22%),
           linear-gradient(180deg, #0f1116 0%, #14171d 100%);
       }
@@ -61,7 +69,7 @@
       /* --- Sidebar (iMessage Style) --- */
       .sidebar {
         background:
-          linear-gradient(180deg, rgba(24, 27, 33, 0.9) 0%, rgba(19, 21, 26, 0.86) 100%);
+          linear-gradient(180deg, rgba(228, 238, 255, 0.94) 0%, rgba(218, 231, 251, 0.90) 100%);
         border-right: 1px solid var(--border);
         display: flex;
         flex-direction: column;
@@ -72,6 +80,11 @@
         overflow: hidden;
         box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.03);
         transition: opacity 160ms ease, width 180ms ease;
+      }
+
+      [data-theme="night"] .sidebar {
+        background:
+          linear-gradient(180deg, rgba(24, 27, 33, 0.9) 0%, rgba(19, 21, 26, 0.86) 100%);
       }
 
       body.sidebar-collapsed .sidebar {
@@ -110,12 +123,21 @@
         padding: 8px 10px;
         border-radius: 10px;
         border: 1px solid rgba(255, 255, 255, 0.08);
-        background: rgba(255, 255, 255, 0.06);
-        color: rgba(255, 255, 255, 0.92);
+        background: rgba(255, 255, 255, 0.52);
+        color: var(--text-primary);
         outline: none;
       }
 
       .sidebar-search-input::placeholder {
+        color: var(--text-secondary);
+      }
+
+      [data-theme="night"] .sidebar-search-input {
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.92);
+      }
+
+      [data-theme="night"] .sidebar-search-input::placeholder {
         color: rgba(255, 255, 255, 0.55);
       }
 

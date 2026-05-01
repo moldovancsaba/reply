@@ -7,6 +7,8 @@ import { applyIconFallback } from './icon-fallback.js';
 
 export const UI = {
     _recentToastKeys: new Map(),
+    _themeMediaQuery: null,
+    _themeListener: null,
     /**
      * Show the global loading spinner
      */
@@ -91,6 +93,76 @@ export const UI = {
         if (type !== 'error' && duration > 0) {
             setTimeout(dismiss, duration);
         }
+    },
+
+    getThemePreference: () => {
+        try {
+            return window.localStorage?.getItem('reply.theme') || 'auto';
+        } catch {
+            return 'auto';
+        }
+    },
+
+    effectiveTheme: (preference) => {
+        if (preference === 'day' || preference === 'night') return preference;
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'night' : 'day';
+    },
+
+    applyThemePreference: (preference = UI.getThemePreference()) => {
+        const next = UI.effectiveTheme(preference);
+        document.documentElement.dataset.theme = next;
+        document.documentElement.style.colorScheme = next === 'night' ? 'dark' : 'light';
+        return next;
+    },
+
+    updateThemeButtonState: () => {
+        const preference = UI.getThemePreference();
+        const symbol = preference === 'auto' ? '◐' : preference === 'day' ? '☼' : '☾';
+        const title = preference === 'auto' ? 'Theme: Auto' : preference === 'day' ? 'Theme: Light' : 'Theme: Dark';
+        ['btn-theme', 'btn-theme-settings'].forEach((id) => {
+            const node = document.getElementById(id);
+            if (!node) return;
+            node.textContent = symbol;
+            node.title = title;
+            node.setAttribute('aria-label', title);
+        });
+    },
+
+    cycleTheme: () => {
+        const current = UI.getThemePreference();
+        const next = current === 'auto' ? 'day' : current === 'day' ? 'night' : 'auto';
+        try {
+            window.localStorage?.setItem('reply.theme', next);
+        } catch {
+            /* ignore */
+        }
+        UI.applyThemePreference(next);
+        UI.updateThemeButtonState();
+    },
+
+    initThemeControls: () => {
+        if (UI._themeMediaQuery == null) {
+            UI._themeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        }
+        if (UI._themeListener == null) {
+            UI._themeListener = () => {
+                if (UI.getThemePreference() === 'auto') {
+                    UI.applyThemePreference('auto');
+                    UI.updateThemeButtonState();
+                }
+            };
+            UI._themeMediaQuery.addEventListener('change', UI._themeListener);
+        }
+
+        UI.applyThemePreference();
+        UI.updateThemeButtonState();
+
+        ['btn-theme', 'btn-theme-settings'].forEach((id) => {
+            const node = document.getElementById(id);
+            if (!node || node.dataset.themeBound === '1') return;
+            node.dataset.themeBound = '1';
+            node.addEventListener('click', UI.cycleTheme);
+        });
     }
 };
 
