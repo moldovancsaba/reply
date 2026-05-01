@@ -7,13 +7,13 @@ run:
 
 .PHONY: run-app
 run-app:
-	chmod +x ./script/build_and_run.sh ./app/ReplyApp/build-bundle.sh
+	chmod +x ./script/build_and_run.sh ./app/reply-app/build-bundle.sh
 	./script/build_and_run.sh --verify
 
 .PHONY: build-app
 build-app:
-	chmod +x ./app/ReplyApp/build-bundle.sh
-	cd ./app/ReplyApp && ./build-bundle.sh
+	chmod +x ./app/reply-app/build-bundle.sh
+	cd ./app/reply-app && ./build-bundle.sh
 
 .PHONY: stop
 stop:

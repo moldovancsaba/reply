@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyhelper.build/primary.swiftdeps"
+  },
+  "/Users/moldovancsaba/Projects/reply/app/reply-app/Sources/ReplyHelper/main.swift": {
+    "dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyhelper.build/main.d",
+    "object": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyhelper.build/main.swift.o",
+    "swiftmodule": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyhelper.build/main~partial.swiftmodule",
+    "swift-dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyhelper.build/main.swiftdeps",
+    "diagnostics": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyhelper.build/main.dia"
+  }
+}

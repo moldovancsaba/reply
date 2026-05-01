@@ -138,7 +138,7 @@ Every external dependency gets:
 
 ### {reply} resource inventory
 
-`ReplyApp` must manage these resources:
+`reply.app` must manage these resources:
 
 1. `ReplyCoreService`
 - Owns the embedded {reply} core process during migration.
@@ -250,7 +250,7 @@ Add a native app workspace under the main repo:
 ```text
 reply/
   app/
-    ReplyApp/
+    reply-app/
       Package.swift or Xcode project
       Sources/
         App/
@@ -266,7 +266,7 @@ reply/
 
 Recommended app modules:
 
-- `App/ReplyApp.swift`
+- `App/reply.swift`
 - `App/AppDelegate.swift`
 - `Core/ReplyCoreService.swift`
 - `Core/ReplyCoreProcess.swift`
@@ -710,7 +710,7 @@ Do not make this phase a mandatory blocker for app delivery.
 
 The first implementation sequence for `{reply}` should be:
 
-1. create `app/ReplyApp` SwiftUI target
+1. create `app/reply-app` SwiftUI target
 2. implement `ReplyCoreService`
 3. move current browser UI into `WKWebView`
 4. add native `SystemStatusView`

@@ -1,0 +1,149 @@
+/**
+ * Local **Ollama** refine / drafting helper (reply#32 naming truth).
+ *
+ * **Why the filename says `gemini-client`:** Historical name from an earlier cloud-Gemini
+ * experiment. The implementation has been **Ollama-first** for a long time; imports across
+ * the repo still use this path, so renames would churn many files. Treat this module as
+ * “local LLM refine” — see also `docs/ARCHITECTURE.md` and `docs/LOCAL_MACHINE_DEPLOYMENT.md`
+ * (Gemini / GOOGLE_API_KEY notes).
+ *
+ * **Behavior:** `refineReply()` runs a short Ollama chat against `getReplyOllamaModel()`,
+ * optionally blending in vector `search()` hits for “how I write” examples. No outbound
+ * call to Google Gemini in this file.
+ *
+ * **Host:** `OLLAMA_HOST` / Settings AI host (see `ai-runtime-config.js` `resolveOllamaHttpBase()`).
+ */
+const http = require("http");
+const https = require("https");
+const fs = require("fs");
+const path = require("path");
+const { search } = require("./vector-store.js");
+const { getReplyOllamaModel } = require("./ollama-model.js");
+const { getOllamaUrlParts } = require("./ai-runtime-config.js");
+
+let cachedPersona = null;
+function getPersona() {
+    if (!cachedPersona) {
+        try {
+            const file = path.join(__dirname, 'data', 'system_persona.txt');
+            if (fs.existsSync(file)) {
+                cachedPersona = fs.readFileSync(file, 'utf8');
+            }
+        } catch (e) { }
+    }
+    return cachedPersona || "You are an expert executive communications coach.";
+}
+
+/**
+ * Refines a drafted reply using local Ollama (same model as REPLY_OLLAMA_MODEL / suggestions).
+ * @param {string} draft - The initial draft.
+ * @param {string} context - The context used to generate the draft (optional).
+ * @returns {Promise<string>} - The refined text.
+ */
+async function refineReply(draft, context = "") {
+    const basePersona = getPersona();
+
+    // Dynamic RAG: Fetch examples of how Csaba writes about this topic
+    let ragExamples = "";
+    try {
+        const query = (draft || "") + " " + (context || "");
+        if (query.trim().length > 3) {
+            const results = await search(query, 20);
+
+            // Filter only messages successfully sent by Me
+            const myMessages = results
+                .filter(r => r.text && r.text.includes('] Me: '))
+                .slice(0, 4); // Take top 4 examples
+
+            if (myMessages.length > 0) {
+                ragExamples = "\n\n### RAG Examples (Use these past messages to mimic my exact tone & vocabulary):\n" +
+                    myMessages.map(m => `- "${m.text.split('] Me: ')[1] || m.text}"`).join('\n');
+            }
+        }
+    } catch (e) {
+        console.error("RAG fetch failed:", e.message);
+    }
+
+    const systemPrompt = basePersona + ragExamples + `\n\nFinal Instructions:
+- Rewrite the DRAFT below using the EXACT style described in your persona.
+- If RAG Examples are provided, heavily rely on their tone, length, and vocabulary.
+- Output ONLY the rewritten text. No preambles, no explanations, no quotes.`;
+
+    const userPrompt = `DRAFT:
+"${draft}"
+
+CONTEXT:
+${context.substring(0, 1000)}...
+
+REFINED VERSION:`;
+
+    const payload = JSON.stringify({
+        model: getReplyOllamaModel(),
+        system: systemPrompt,
+        prompt: userPrompt,
+        stream: false,
+        options: {
+            temperature: 0.3 // Keep it focused and deterministic
+        }
+    });
+
+    const { hostname, port, isHttps } = getOllamaUrlParts();
+    const transport = isHttps ? https : http;
+    const options = {
+        hostname,
+        port,
+        path: "/api/generate",
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(payload)
+        }
+    };
+
+    return new Promise((resolve, reject) => {
+        const req = transport.request(options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => data += chunk);
+            res.on('end', () => {
+                if (res.statusCode !== 200) {
+                    reject(new Error(`Ollama Local API Error: ${res.statusCode} ${data}`));
+                    return;
+                }
+                try {
+                    const response = JSON.parse(data);
+                    if (response.response) {
+                        resolve(response.response.trim());
+                    } else {
+                        reject(new Error("Empty response from local drafting model."));
+                    }
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        });
+
+        req.on('error', (e) => {
+            if (e.code === 'ECONNREFUSED') {
+                reject(new Error("Ollama is not running locally. Please start Ollama to use the Refine feature."));
+            } else {
+                reject(e);
+            }
+        });
+        req.write(payload);
+        req.end();
+    });
+}
+
+/**
+ * Simple connection test to verify local Ollama model is available.
+ */
+async function testConnection() {
+    try {
+        const result = await refineReply("Hello world", "Test context");
+        return { success: true, message: `Connected to local Ollama (${getReplyOllamaModel()})!`, sample: result };
+    } catch (e) {
+        return { success: false, message: e.message };
+    }
+}
+
+module.exports = { refineReply, testConnection };

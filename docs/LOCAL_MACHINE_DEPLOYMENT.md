@@ -2,7 +2,7 @@
 
 `{reply}` runs locally as a session-owned Node hub plus a managed background worker.
 
-The repository now also includes a native shell MVP at `app/ReplyApp`. That shell launches as `reply.app`, embeds the existing {reply} web UI, and provides a native system/runtime screen. The current shell is development-distributed from this repo; packaged installation/notarization is a separate track.
+The repository now also includes a native shell MVP at `app/reply-app`. That shell launches as `reply.app`, embeds the existing {reply} web UI, and provides a native system/runtime screen. The current shell is development-distributed from this repo; packaged installation/notarization is a separate track.
 
 ## Requirements
 
@@ -27,7 +27,7 @@ Native shell MVP:
 make run-app
 ```
 
-This builds `app/ReplyApp/dist/reply.app` and launches it. The app can connect to an already-running `{reply}` runtime or start/stop/restart it from the native shell.
+This builds `app/reply-app/dist/reply.app` and launches it. The app can connect to an already-running `{reply}` runtime or start/stop/restart it from the native shell.
 
 When the runtime is launched from `reply.app`, it now uses app-owned paths:
 
@@ -57,7 +57,7 @@ Reads `~/Library/Messages/chat.db` by default. If the hub reports `SQLITE_CANTOP
 
 The current packaged app uses the protected-data helper:
 
-- `app/ReplyApp/dist/reply.app/Contents/Helpers/reply-helper`
+- `app/reply-app/dist/reply.app/Contents/Helpers/reply-helper`
 
 ### Apple Mail
 

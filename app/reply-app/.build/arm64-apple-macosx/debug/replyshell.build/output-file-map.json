@@ -1,0 +1,61 @@
+{
+  "": {
+    "swift-dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/primary.swiftdeps"
+  },
+  "/Users/moldovancsaba/Projects/reply/app/reply-app/Sources/AppDelegate.swift": {
+    "dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/AppDelegate.d",
+    "object": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/AppDelegate.swift.o",
+    "swiftmodule": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/AppDelegate~partial.swiftmodule",
+    "swift-dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/AppDelegate.swiftdeps",
+    "diagnostics": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/AppDelegate.dia"
+  },
+  "/Users/moldovancsaba/Projects/reply/app/reply-app/Sources/ContentView.swift": {
+    "dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ContentView.d",
+    "object": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ContentView.swift.o",
+    "swiftmodule": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ContentView~partial.swiftmodule",
+    "swift-dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ContentView.swiftdeps",
+    "diagnostics": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ContentView.dia"
+  },
+  "/Users/moldovancsaba/Projects/reply/app/reply-app/Sources/Models.swift": {
+    "dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/Models.d",
+    "object": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/Models.swift.o",
+    "swiftmodule": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/Models~partial.swiftmodule",
+    "swift-dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/Models.swiftdeps",
+    "diagnostics": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/Models.dia"
+  },
+  "/Users/moldovancsaba/Projects/reply/app/reply-app/Sources/NativeSettingsView.swift": {
+    "dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/NativeSettingsView.d",
+    "object": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/NativeSettingsView.swift.o",
+    "swiftmodule": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/NativeSettingsView~partial.swiftmodule",
+    "swift-dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/NativeSettingsView.swiftdeps",
+    "diagnostics": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/NativeSettingsView.dia"
+  },
+  "/Users/moldovancsaba/Projects/reply/app/reply-app/Sources/ReplyApp.swift": {
+    "dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ReplyApp.d",
+    "object": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ReplyApp.swift.o",
+    "swiftmodule": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ReplyApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ReplyApp.swiftdeps",
+    "diagnostics": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ReplyApp.dia"
+  },
+  "/Users/moldovancsaba/Projects/reply/app/reply-app/Sources/ReplyCoreService.swift": {
+    "dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ReplyCoreService.d",
+    "object": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ReplyCoreService.swift.o",
+    "swiftmodule": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ReplyCoreService~partial.swiftmodule",
+    "swift-dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ReplyCoreService.swiftdeps",
+    "diagnostics": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ReplyCoreService.dia"
+  },
+  "/Users/moldovancsaba/Projects/reply/app/reply-app/Sources/ReplyWebView.swift": {
+    "dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ReplyWebView.d",
+    "object": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ReplyWebView.swift.o",
+    "swiftmodule": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ReplyWebView~partial.swiftmodule",
+    "swift-dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ReplyWebView.swiftdeps",
+    "diagnostics": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/ReplyWebView.dia"
+  },
+  "/Users/moldovancsaba/Projects/reply/app/reply-app/Sources/SystemStatusView.swift": {
+    "dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/SystemStatusView.d",
+    "object": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/SystemStatusView.swift.o",
+    "swiftmodule": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/SystemStatusView~partial.swiftmodule",
+    "swift-dependencies": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/SystemStatusView.swiftdeps",
+    "diagnostics": "/Users/moldovancsaba/Projects/reply/app/reply-app/.build/arm64-apple-macosx/debug/replyshell.build/SystemStatusView.dia"
+  }
+}

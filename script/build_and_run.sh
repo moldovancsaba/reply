@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_DIR="$ROOT_DIR/app/ReplyApp"
+APP_DIR="$ROOT_DIR/app/reply-app"
 APP_BUNDLE="$APP_DIR/dist/reply.app"
 MIRROR_DAEMON="$ROOT_DIR/tools/scripts/imessage_mirror_daemon.sh"
 
