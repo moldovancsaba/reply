@@ -4,6 +4,7 @@ const { execFile } = require("child_process");
 const { addDocuments, connect } = require("./vector-store.js");
 const { saveMessages } = require("./message-store.js");
 const statusManager = require("./status-manager.js");
+const { dataPath, ensureDataHome } = require("./app-paths.js");
 const SWIFT_CALENDAR_EXPORTER = path.join(__dirname, "native", "apple-calendar-export.swift");
 const XCRUN_BIN = "/usr/bin/xcrun";
 
@@ -54,7 +55,8 @@ async function getExistingCalendarIds() {
 
 async function readCalendarEvents() {
   const raw = await new Promise((resolve, reject) => {
-    const binPath = path.join(__dirname, "data", "apple-calendar-export");
+    ensureDataHome();
+    const binPath = dataPath("bin", "apple-calendar-export");
     execFile(
       XCRUN_BIN,
       ["--sdk", "macosx", "swiftc", "-parse-as-library", SWIFT_CALENDAR_EXPORTER, "-o", binPath],

@@ -2,14 +2,14 @@
 
 Local-first support for **more than one mail source** (several Gmail OAuth connections and/or several IMAP accounts) is staged in **`settings.json`** without breaking the existing flat **`imap`** / **`gmail`** blocks used by the worker today.
 
-## Schema (`chat/data/settings.json`)
+## Schema (`~/Library/Application Support/reply/settings.json`)
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
 | `mailAccounts` | array | Optional list of additional accounts. Each entry: `id`, `label`, `provider` (`imap` \| `gmail_oauth`), `enabled`, `imap` (host, user, …), optional `gmailAccountRef` for future multi-Gmail splits. |
 | `defaultMailAccountId` | string \| null | Which `mailAccounts[].id` is preferred for **send** once the composer supports picker (initial delivery: storage + API only). |
 
-The **primary** IMAP and Gmail OAuth settings remain at the top level (`imap`, `gmail`). **`sync-mail.js`** runs primary IMAP first, then each enabled **`mailAccounts[]`** row with `provider: "imap"` (skipping a duplicate host+user vs primary). Per-account UID state lives under `chat/data/imap_sync_state.json` → `accounts.<id>.mailboxes`.
+The **primary** IMAP and Gmail OAuth settings remain at the top level (`imap`, `gmail`). **`sync-mail.js`** runs primary IMAP first, then each enabled **`mailAccounts[]`** row with `provider: "imap"` (skipping a duplicate host+user vs primary). Per-account UID state lives under `~/Library/Application Support/reply/imap_sync_state.json` → `accounts.<id>.mailboxes`.
 
 ## API
 

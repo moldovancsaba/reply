@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # Wipe {reply}-derived local state (NOT Apple Messages / WhatsApp source DBs), git pull, restart hub.
-# Removes: LanceDB index, unified chat.db, contacts.db, sync cursors, worker pid, suggestion queue.
-# Preserves: chat/.env*, chat/data/settings.json, chat/data/system_persona.txt, OAuth tokens in settings.
+# Removes: app-owned LanceDB index, unified chat.db, contacts.db, sync cursors, worker pid, suggestion queue.
+# Preserves: chat/.env* and app-owned settings/persona artifacts.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CHAT="${REPO_ROOT}/chat"
-DATA="${CHAT}/data"
-LANCE="${REPO_ROOT}/knowledge/lancedb"
+DATA="$(
+  node -e "const p=require('${CHAT}/app-paths.js'); process.stdout.write(p.getDataHome())"
+)"
+LANCE="$(
+  node -e "const p=require('${CHAT}/vector-store.js'); process.stdout.write(String(process.env.REPLY_KNOWLEDGE_DB_PATH || process.env.REPLY_LANCEDB_URI || require('${CHAT}/app-paths.js').dataPath('lancedb')))"
+)"
 
 echo "==> Repo: ${REPO_ROOT}"
 

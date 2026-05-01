@@ -16,16 +16,16 @@
 const http = require("http");
 const https = require("https");
 const fs = require("fs");
-const path = require("path");
 const { search } = require("./vector-store.js");
 const { getReplyOllamaModel } = require("./ollama-model.js");
 const { getOllamaUrlParts } = require("./ai-runtime-config.js");
+const { dataPath } = require("./app-paths.js");
 
 let cachedPersona = null;
 function getPersona() {
     if (!cachedPersona) {
         try {
-            const file = path.join(__dirname, 'data', 'system_persona.txt');
+            const file = dataPath('system_persona.txt');
             if (fs.existsSync(file)) {
                 cachedPersona = fs.readFileSync(file, 'utf8');
             }

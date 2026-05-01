@@ -76,7 +76,7 @@ Notes:
 - `messageId` and `timestamp` are normalized server-side if omitted or malformed.
 - `dryRun: true` can be included to validate normalization without writes.
 - Retries are safe: ingest is idempotent by stable bridge document id; duplicate events are skipped.
-- Seen bridge ids are persisted locally in `chat/data/channel_bridge_seen.json` for restart-safe dedupe.
+- Seen bridge ids are persisted locally in `~/Library/Application Support/reply/channel_bridge_seen.json` for restart-safe dedupe.
 
 ## Behavior
 
@@ -95,7 +95,7 @@ For batch requests:
 ## Lineage log
 
 - Recent bridge ingest decisions are appended to:
-  - `chat/data/channel_bridge_events.jsonl`
+  - `~/Library/Application Support/reply/channel_bridge_events.jsonl`
 - Each row includes status (`ingested`, `duplicate`, `error`), channel, message id, peer, and doc metadata.
 
 ## Summary response

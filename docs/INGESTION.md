@@ -6,7 +6,7 @@
 
 ## Knowledge Model
 
-*   **Storage:** Local LanceDB instance at `knowledge/lancedb` (or configured via `REPLY_LANCEDB_URI`).
+*   **Storage:** Local LanceDB instance at `~/Library/Application Support/reply/lancedb` (or configured via `REPLY_LANCEDB_URI` / `REPLY_KNOWLEDGE_DB_PATH`).
 *   **Schema:** `{ id, source, path, text, vector }`.
 *   **Search:** **Hybrid Search** (Vector Similarity + Full-Text Keyword Search) for maximum accuracy.
 *   **Annotation (Ollama, local):** After text lands in LanceDB, `chat/annotation-agent.js` can attach **`tags`**, a one-line **`summary`**, and **`facts`** (JSON) to each row (`is_annotated`, `annotation_*` columns). **`assembleReplyContext`** (`context-engine.js`) injects that metadata into the LLM “facts” block; **`/api/suggest-reply`** also returns each snippet with optional `annotation_summary`, `annotation_tags`, and `annotation_facts` when the row is annotated (reply#37).
@@ -59,9 +59,9 @@
 *   **Alternative:** IMAP connector (supports Gmail via IMAP with an App Password) when `REPLY_IMAP_*` env vars are set (or configured in Settings).
 *   **Background Worker:** Email sync runs automatically only when Gmail OAuth or IMAP is configured (to avoid triggering Apple Mail AppleScript unintentionally).
 *   **Source Label:** `source: "IMAP"` (stored as email snippets with `path: mailto:<address>`).
-*   **Delta Sync (IMAP):** Tracks last-seen UIDs per mailbox in `chat/data/imap_sync_state.json`.
-*   **Delta Sync (Gmail):** Tracks Gmail `historyId` in `chat/data/gmail_sync_state.json`.
-*   **Settings storage:** UI Settings are stored locally in `chat/data/settings.json` (not encrypted).
+*   **Delta Sync (IMAP):** Tracks last-seen UIDs per mailbox in `~/Library/Application Support/reply/imap_sync_state.json`.
+*   **Delta Sync (Gmail):** Tracks Gmail `historyId` in `~/Library/Application Support/reply/gmail_sync_state.json`.
+*   **Settings storage:** UI settings are stored locally in `~/Library/Application Support/reply/settings.json` (not encrypted).
 
 ### 5. iMessage (macOS)
 *   **Mechanism:** `chat/sync-imessage.js` (batch) and `chat/background-worker.js` (live poll) read Apple Messages SQLite **`chat.db`** and vectorize text into LanceDB; unified history also flows through `message-store.js` where applicable.
@@ -82,7 +82,7 @@
 
 | Env Variable | Description | Default |
 | :--- | :--- | :--- |
-| `REPLY_LANCEDB_URI` | Path to the Vector DB | `knowledge/lancedb` |
+| `REPLY_LANCEDB_URI` | Path to the Vector DB | `~/Library/Application Support/reply/lancedb` |
 | `REPLY_KNOWLEDGE_PATH` | Path for local text docs | `knowledge/documents` |
 | `PORT` | Chat server port | `45311` |
 | `REPLY_IMESSAGE_DB_PATH` | Absolute path to Apple Messages `chat.db` (optional) | macOS: `~/Library/Messages/chat.db` |
