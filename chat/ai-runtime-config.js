@@ -47,6 +47,23 @@ function applyAiSettingsToProcessEnv(settings) {
     delete process.env.REPLY_KYC_OLLAMA_MODEL;
   }
 
+  process.env.TRINITY_MODEL_PROVIDER = "ollama";
+  if (ai.trinityGeneratorModel && String(ai.trinityGeneratorModel).trim()) {
+    process.env.TRINITY_GENERATOR_MODEL = String(ai.trinityGeneratorModel).trim();
+  } else {
+    delete process.env.TRINITY_GENERATOR_MODEL;
+  }
+  if (ai.trinityRefinerModel && String(ai.trinityRefinerModel).trim()) {
+    process.env.TRINITY_REFINER_MODEL = String(ai.trinityRefinerModel).trim();
+  } else {
+    delete process.env.TRINITY_REFINER_MODEL;
+  }
+  if (ai.trinityEvaluatorModel && String(ai.trinityEvaluatorModel).trim()) {
+    process.env.TRINITY_EVALUATOR_MODEL = String(ai.trinityEvaluatorModel).trim();
+  } else {
+    delete process.env.TRINITY_EVALUATOR_MODEL;
+  }
+
   if (ai.openclawBinary && String(ai.openclawBinary).trim()) {
     process.env.OPENCLAW_BIN = String(ai.openclawBinary).trim();
   } else {

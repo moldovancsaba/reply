@@ -94,6 +94,27 @@ struct NativeSettingsView: View {
                 get: { service.settingsDraft.ai.kycOllamaModel ?? "" },
                 set: { service.settingsDraft.ai.kycOllamaModel = $0 }
             ))
+
+            Divider()
+
+            Text("Trinity drafting roles")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(ReplyConstellationPalette.textSecondary)
+
+            TextField("Trinity generator model", text: Binding(
+                get: { service.settingsDraft.ai.trinityGeneratorModel ?? "granite4:350m" },
+                set: { service.settingsDraft.ai.trinityGeneratorModel = $0 }
+            ))
+
+            TextField("Trinity refiner model", text: Binding(
+                get: { service.settingsDraft.ai.trinityRefinerModel ?? "mistral:latest" },
+                set: { service.settingsDraft.ai.trinityRefinerModel = $0 }
+            ))
+
+            TextField("Trinity evaluator model", text: Binding(
+                get: { service.settingsDraft.ai.trinityEvaluatorModel ?? "qwen2.5:7b" },
+                set: { service.settingsDraft.ai.trinityEvaluatorModel = $0 }
+            ))
         }
         .modifier(NativeCardStyle())
     }

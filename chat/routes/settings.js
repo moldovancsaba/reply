@@ -41,6 +41,15 @@ function serveSettings(req, res) {
         if (!String(client.ai?.annotationOllamaModel || "").trim()) {
             client.ai.annotationOllamaModel = getAnnotationOllamaModel();
         }
+        if (!String(client.ai?.trinityGeneratorModel || "").trim()) {
+            client.ai.trinityGeneratorModel = "granite4:350m";
+        }
+        if (!String(client.ai?.trinityRefinerModel || "").trim()) {
+            client.ai.trinityRefinerModel = "mistral:latest";
+        }
+        if (!String(client.ai?.trinityEvaluatorModel || "").trim()) {
+            client.ai.trinityEvaluatorModel = "qwen2.5:7b";
+        }
         client.runtime = {
             ollamaPort: process.env.OLLAMA_PORT || "11434",
             platform: process.platform,
@@ -223,6 +232,15 @@ async function handleUpdateSettings(req, res) {
             }
             if (typeof incomingAi.kycOllamaModel === "string") {
                 next.ai.kycOllamaModel = incomingAi.kycOllamaModel.trim().slice(0, 160);
+            }
+            if (typeof incomingAi.trinityGeneratorModel === "string") {
+                next.ai.trinityGeneratorModel = incomingAi.trinityGeneratorModel.trim().slice(0, 160);
+            }
+            if (typeof incomingAi.trinityRefinerModel === "string") {
+                next.ai.trinityRefinerModel = incomingAi.trinityRefinerModel.trim().slice(0, 160);
+            }
+            if (typeof incomingAi.trinityEvaluatorModel === "string") {
+                next.ai.trinityEvaluatorModel = incomingAi.trinityEvaluatorModel.trim().slice(0, 160);
             }
         }
 
