@@ -261,6 +261,9 @@ function withDefaults(settings) {
           a.openclawGatewayToken === null ? null : String(a.openclawGatewayToken || ""),
         annotationOllamaModel: String(a.annotationOllamaModel || "").trim().slice(0, 160),
         kycOllamaModel: String(a.kycOllamaModel || "").trim().slice(0, 160),
+        trinityGeneratorModel: String(a.trinityGeneratorModel || "granite4:350m").trim().slice(0, 160),
+        trinityRefinerModel: String(a.trinityRefinerModel || "mistral:latest").trim().slice(0, 160),
+        trinityEvaluatorModel: String(a.trinityEvaluatorModel || "qwen2.5:7b").trim().slice(0, 160),
       };
     })(),
     mailAccounts: Array.isArray(s?.mailAccounts)
@@ -420,6 +423,9 @@ function maskSettingsForClient(settings) {
       openclawGatewayTokenHint: ocTok.hint,
       annotationOllamaModel: cfg.ai?.annotationOllamaModel || "",
       kycOllamaModel: cfg.ai?.kycOllamaModel || "",
+      trinityGeneratorModel: cfg.ai?.trinityGeneratorModel || "granite4:350m",
+      trinityRefinerModel: cfg.ai?.trinityRefinerModel || "mistral:latest",
+      trinityEvaluatorModel: cfg.ai?.trinityEvaluatorModel || "qwen2.5:7b",
     },
     channelBridge: channelBridge,
     global: {
@@ -497,6 +503,16 @@ function syncToEnv(settings) {
     }
     if (ai.kycOllamaModel && String(ai.kycOllamaModel).trim()) {
       mapping.REPLY_KYC_OLLAMA_MODEL = String(ai.kycOllamaModel).trim();
+    }
+    mapping.TRINITY_MODEL_PROVIDER = "ollama";
+    if (ai.trinityGeneratorModel && String(ai.trinityGeneratorModel).trim()) {
+      mapping.TRINITY_GENERATOR_MODEL = String(ai.trinityGeneratorModel).trim();
+    }
+    if (ai.trinityRefinerModel && String(ai.trinityRefinerModel).trim()) {
+      mapping.TRINITY_REFINER_MODEL = String(ai.trinityRefinerModel).trim();
+    }
+    if (ai.trinityEvaluatorModel && String(ai.trinityEvaluatorModel).trim()) {
+      mapping.TRINITY_EVALUATOR_MODEL = String(ai.trinityEvaluatorModel).trim();
     }
     if (ai.openclawBinary && String(ai.openclawBinary).trim()) {
       mapping.OPENCLAW_BIN = String(ai.openclawBinary).trim();
