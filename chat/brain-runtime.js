@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
 
@@ -6,6 +7,7 @@ const legacyReplyEngine = require("./reply-engine.js");
 const { assembleReplyContext } = require("./context-engine.js");
 const contactStore = require("./contact-store.js");
 const messageStore = require("./message-store.js");
+const { ensureDataHome, dataPath } = require("./app-paths.js");
 const { pathPrefixesForHandle, inferChannelFromHandle, extractDateFromText, stripMessagePrefix } = require("./utils/chat-utils.js");
 
 const REPLY_TRINITY_CONTRACT_VERSION = "trinity.reply.v1alpha1";
@@ -19,6 +21,10 @@ function trinityDraftsEnabled() {
   const flag = String(process.env.USE_TRINITY_DRAFTS || "").trim().toLowerCase();
   if (flag === "1" || flag === "true" || flag === "yes") return true;
   return getBrainRuntimeMode() === "trinity";
+}
+
+function trinityShadowEnabled() {
+  return getBrainRuntimeMode() === "trinity-shadow";
 }
 
 function normalizeSuggestionResult(result) {
@@ -128,6 +134,73 @@ async function buildThreadSnapshot(
 
 async function generateReply(message, contextSnippets = [], recipient = null, goldenExamples = []) {
   const runtimeMode = getBrainRuntimeMode();
+  const shadowMode = trinityShadowEnabled();
+
+  if (shadowMode) {
+    const legacyResult = await legacyReplyEngine.generateReply(
+      message,
+      contextSnippets,
+      recipient,
+      goldenExamples,
+    );
+    const normalizedLegacy = normalizeSuggestionResult(legacyResult);
+    try {
+      const threadSnapshot = await buildThreadSnapshot(
+        message,
+        contextSnippets,
+        recipient,
+        goldenExamples,
+      );
+      const rankedDraftSet = await callTrinityRuntime("reply-suggest", threadSnapshot);
+      const top = Array.isArray(rankedDraftSet?.drafts) ? rankedDraftSet.drafts[0] : null;
+      const shadowComparison = buildShadowComparisonSummary({
+        legacySuggestion: normalizedLegacy.suggestion,
+        trinitySuggestion: String(top?.draft_text || "").trim(),
+      });
+      persistShadowComparison({
+        comparedAt: new Date().toISOString(),
+        runtimeMode: "trinity-shadow",
+        handle: String(recipient || "").trim(),
+        message: String(message || "").trim(),
+        legacySuggestion: normalizedLegacy.suggestion,
+        legacyExplanation: normalizedLegacy.explanation,
+        trinitySuggestion: String(top?.draft_text || "").trim(),
+        trinityRationale: String(top?.rationale || "").trim(),
+        cycleId: rankedDraftSet?.cycle_id || null,
+        traceRef: rankedDraftSet?.trace_ref || null,
+        comparison: shadowComparison,
+      });
+      return {
+        ...normalizedLegacy,
+        contextMeta: {
+          ...(normalizedLegacy.contextMeta || {}),
+          runtime: "trinity-shadow",
+          shadowComparison,
+          trinityCycleId: rankedDraftSet?.cycle_id || null,
+          trinityTraceRef: rankedDraftSet?.trace_ref || null,
+        },
+        runtimeMode: "trinity-shadow",
+        rankedDraftSet: null,
+        trinityDraftCandidate: await buildTrinityDraftCandidate(
+          message,
+          contextSnippets,
+          recipient,
+          goldenExamples,
+        ),
+      };
+    } catch (error) {
+      console.warn("[reply-runtime] Trinity shadow suggest failed, keeping legacy active:", error.message);
+      return {
+        ...normalizedLegacy,
+        contextMeta: {
+          ...(normalizedLegacy.contextMeta || {}),
+          runtime: "trinity-shadow",
+          shadowError: error.message,
+        },
+        runtimeMode: "trinity-shadow_fallback_legacy",
+      };
+    }
+  }
 
   if (trinityDraftsEnabled()) {
     try {
@@ -326,14 +399,74 @@ function inferRowChannel(row, fallbackChannel) {
   return String(fallbackChannel || inferChannelFromHandle(row?.handle) || "other").toLowerCase();
 }
 
+function buildShadowComparisonSummary({ legacySuggestion, trinitySuggestion }) {
+  const legacy = String(legacySuggestion || "").trim();
+  const trinity = String(trinitySuggestion || "").trim();
+  return {
+    sameText: legacy === trinity,
+    overlapRatio: tokenOverlapRatio(legacy, trinity),
+    editDistance: normalizedEditDistance(legacy, trinity),
+    legacyLength: legacy.length,
+    trinityLength: trinity.length,
+  };
+}
+
+function persistShadowComparison(payload) {
+  try {
+    ensureDataHome();
+    const logFile = dataPath("shadow", "trinity-draft-comparisons.jsonl");
+    fs.mkdirSync(path.dirname(logFile), { recursive: true, mode: 0o700 });
+    fs.appendFileSync(logFile, `${JSON.stringify(payload)}\n`, { encoding: "utf-8", mode: 0o600 });
+  } catch (error) {
+    console.warn("[reply-runtime] Failed to persist Trinity shadow comparison:", error.message);
+  }
+}
+
+function normalizedEditDistance(left, right) {
+  const source = String(left || "");
+  const target = String(right || "");
+  if (!source && !target) return 0;
+  const rows = Array.from({ length: source.length + 1 }, () => new Array(target.length + 1).fill(0));
+  for (let i = 0; i <= source.length; i += 1) rows[i][0] = i;
+  for (let j = 0; j <= target.length; j += 1) rows[0][j] = j;
+  for (let i = 1; i <= source.length; i += 1) {
+    for (let j = 1; j <= target.length; j += 1) {
+      const cost = source[i - 1] === target[j - 1] ? 0 : 1;
+      rows[i][j] = Math.min(
+        rows[i - 1][j] + 1,
+        rows[i][j - 1] + 1,
+        rows[i - 1][j - 1] + cost,
+      );
+    }
+  }
+  return rows[source.length][target.length] / Math.max(source.length, target.length);
+}
+
+function tokenOverlapRatio(left, right) {
+  const leftTokens = new Set(String(left || "").toLowerCase().split(/\s+/).filter(Boolean));
+  const rightTokens = new Set(String(right || "").toLowerCase().split(/\s+/).filter(Boolean));
+  if (!leftTokens.size && !rightTokens.size) return 1;
+  const union = new Set([...leftTokens, ...rightTokens]);
+  let overlap = 0;
+  for (const token of union) {
+    if (leftTokens.has(token) && rightTokens.has(token)) overlap += 1;
+  }
+  return Number((overlap / Math.max(union.size, 1)).toFixed(4));
+}
+
 module.exports = {
+  buildShadowComparisonSummary,
   buildThreadSnapshot,
   buildTrinityDraftCandidate,
   exportDraftTrace,
   generateReply,
   getBrainRuntimeMode,
   normalizeSuggestionResult,
+  normalizedEditDistance,
+  persistShadowComparison,
   recordDraftOutcome,
   resolveReplyCompanyId,
+  tokenOverlapRatio,
   trinityDraftsEnabled,
+  trinityShadowEnabled,
 };
