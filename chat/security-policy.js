@@ -1,9 +1,8 @@
 const fs = require("fs");
-const path = require("path");
 const crypto = require("crypto");
+const { dataPath, ensureDataHome } = require("./app-paths.js");
 
-const DATA_DIR = path.join(__dirname, "data");
-const AUDIT_LOG_PATH = path.join(DATA_DIR, "security_audit.jsonl");
+const AUDIT_LOG_PATH = dataPath("security_audit.jsonl");
 
 function parseBool(value, defaultValue) {
   if (value === undefined || value === null || value === "") return defaultValue;
@@ -113,7 +112,7 @@ function isHumanApproved(req, payload) {
 
 function appendSecurityAudit(event) {
   try {
-    fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+    ensureDataHome();
     const line = JSON.stringify({ ts: new Date().toISOString(), ...event }) + "\n";
     fs.appendFileSync(AUDIT_LOG_PATH, line, { encoding: "utf8", mode: 0o600 });
   } catch (err) {

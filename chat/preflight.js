@@ -63,7 +63,7 @@ function buildPreflightReport(health, pathCtx, options = {}) {
         severity: "critical",
         status: dbOk ? "ok" : "blocked",
         detail: dbOk ? "present and readable" : "missing or unreadable",
-        hint: dbOk ? null : "Ensure chat/data/chat.db exists and the hub can read it (run sync once)."
+        hint: dbOk ? null : "Ensure the app-owned unified chat.db exists under ~/Library/Application Support/reply and the hub can read it (run sync once)."
     });
 
     if (process.platform === "darwin") {

@@ -1,9 +1,10 @@
 const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
 const fs = require('fs');
+const { dataPath, ensureDataHome } = require('./app-paths.js');
 
-const JSON_PATH = path.join(__dirname, '../chat/data/contacts.json');
-const DB_PATH = path.join(__dirname, '../chat/data/contacts.db');
+ensureDataHome();
+const JSON_PATH = dataPath('contacts.json');
+const DB_PATH = dataPath('contacts.db');
 
 if (!fs.existsSync(JSON_PATH)) {
     console.error("contacts.json not found.");

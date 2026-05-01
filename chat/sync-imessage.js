@@ -50,7 +50,7 @@ function getIMessageAccessError() {
     if (!fs.existsSync(DB_PATH)) {
         return process.platform === "darwin"
             ? `iMessage database missing at ${DB_PATH}. Grant Full Disk Access to the protected-data helper used by {reply}, or set REPLY_IMESSAGE_DB_PATH in chat/.env to a readable chat.db.`
-            : `Database missing at ${DB_PATH}. Place chat.db under chat/data/ or set REPLY_IMESSAGE_DB_PATH.`;
+            : `Database missing at ${DB_PATH}. Place a stub chat.db under the app-owned reply data home or set REPLY_IMESSAGE_DB_PATH.`;
     }
     try {
         fs.accessSync(DB_PATH, fs.constants.R_OK);

@@ -32,7 +32,7 @@ graph TD
 ### 1. The "Brain" (Vector Store)
 *   **Technology:** LanceDB (Node.js)
 *   **Model:** `Xenova/all-MiniLM-L6-v2` (Local Embedding Model)
-*   **Storage:** `knowledge/lancedb`
+*   **Storage:** `~/Library/Application Support/reply/lancedb`
 *   **Search Strategy:** **Hybrid Search** (Reciprocal Rank Fusion of Vector Similarity + BM25 Keyword Search).
 
 ### 2. The Interaction Layer (Server)
@@ -65,7 +65,7 @@ graph TD
 
 ## Runtime & deployment (macOS)
 
-*   **Hub process:** `chat/server.js` serves the UI and API; it starts the **background worker** (`background-worker.js`) as a managed child. Recommended local run: foreground session mode via `make run` from the repo root so Apple-private sources remain readable (see [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md) for logs under `~/Library/Logs/Reply/` and the `/tmp/reply-hub.log` symlink). On **SIGTERM/SIGINT**, the hub closes the HTTP server and **`shutdownAllAsync`** stops managed children (worker, sidecars) before exit.
+*   **Hub process:** `chat/server.js` serves the UI and API; it starts the **background worker** (`background-worker.js`) as a managed child. Recommended local run: foreground session mode via `make run` from the repo root so Apple-private sources remain readable (see [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md) for logs under `~/Library/Logs/reply/` and the `/tmp/reply-hub.log` symlink). On **SIGTERM/SIGINT**, the hub closes the HTTP server and **`shutdownAllAsync`** stops managed children (worker, sidecars) before exit.
 *   **Default HTTP port:** `45311` (`PORT` in `chat/.env`); if busy, the server tries the next port and logs it. **`/api/health`** includes **`httpPort`** and **`httpHost`** for the actual bind address. **`make status`** probes `PORT` from `chat/.env` through `PORT+15`; **`make doctor`** compares the installed plist script path to the current repo root.
 *   **iMessage ingestion:** Batch sync (`sync-imessage.js`) and worker polling read Apple’s SQLite **`chat.db`** (default `~/Library/Messages/chat.db`, override `REPLY_IMESSAGE_DB_PATH`). The DB is opened **lazily** with error handling so the hub stays up when the file is missing or blocked by TCC; iMessage features degrade until Full Disk Access (or a valid path) is fixed — details in [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md).
 *   **Local LLM:** Ollama (base URL from `OLLAMA_HOST` / Settings; default `http://127.0.0.1:11434`); default model tag **`gemma3:1b`** via `chat/ollama-model.js` and `REPLY_OLLAMA_MODEL`. Refine (`gemini-client.js`) uses the same resolver (local Ollama, not a cloud Gemini call in the current code path).
@@ -78,7 +78,7 @@ graph TD
 * **Settings UX:** A full settings page in the main pane (same space as the Dashboard).
   * General Settings: connectors (IMAP/Gmail) + global worker interval.
   * Service Settings: per-service worker limits + per-channel UI appearance (emoji + bubble colors).
-* **Settings storage:** `chat/data/settings.json` (local, not encrypted).
+* **Settings storage:** `~/Library/Application Support/reply/settings.json` (local, not encrypted).
 * **Email send path:** Composer → `/api/send-email` → Gmail API when connected; otherwise opens a Mail.app compose window (fallback does not auto-send).
 
 ## Design Principles

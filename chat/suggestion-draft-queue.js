@@ -4,11 +4,11 @@
  */
 
 const fs = require("fs");
-const path = require("path");
 const { getHistory } = require("./vector-store.js");
 const { pathPrefixesForHandle, pickLatestInboundFromVectorDocs } = require("./utils/chat-utils.js");
+const { dataPath, ensureDataHome } = require("./app-paths.js");
 
-const QUEUE_PATH = path.join(__dirname, "data", "pending-suggestion-draft-queue.json");
+const QUEUE_PATH = dataPath("pending-suggestion-draft-queue.json");
 const MAX_ITEMS = 500;
 
 function readQueue() {
@@ -22,8 +22,7 @@ function readQueue() {
 }
 
 function writeQueue(items) {
-  const dir = path.dirname(QUEUE_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  ensureDataHome();
   fs.writeFileSync(QUEUE_PATH, JSON.stringify({ items: items.slice(0, MAX_ITEMS) }, null, 2), "utf8");
 }
 

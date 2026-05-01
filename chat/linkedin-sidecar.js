@@ -4,9 +4,8 @@
  */
 
 const { chromium } = require('playwright');
-const path = require('path');
-const fs = require('fs');
 const { normalizeLinkedInHandle } = require('./linkedin-utils.js');
+const { dataPath, ensureDataHome } = require('./app-paths.js');
 
 const ENDPOINT = process.env.REPLY_BRIDGE_ENDPOINT || "http://localhost:3000/api/channel-bridge/inbound";
 const POLL_INTERVAL = 30000; // 30 seconds
@@ -16,10 +15,8 @@ async function runSidecar() {
     console.log("🚀 Starting LinkedIn Sidecar Scraper...");
 
     // Setup state directory for persistent session
-    const userDataDir = path.join(__dirname, 'data', 'linkedin-session');
-    if (!fs.existsSync(userDataDir)) {
-        fs.mkdirSync(userDataDir, { recursive: true });
-    }
+    ensureDataHome();
+    const userDataDir = dataPath('linkedin-session');
 
     const browser = await chromium.launchPersistentContext(userDataDir, {
         headless: false, // Set to true for background operation
