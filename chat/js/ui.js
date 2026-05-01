@@ -3,6 +3,8 @@
  * Standardized feedback for async operations and errors.
  */
 
+import { applyIconFallback } from './icon-fallback.js';
+
 export const UI = {
     _recentToastKeys: new Map(),
     /**
@@ -59,6 +61,7 @@ export const UI = {
     `;
         const msgEl = toast.querySelector('.toast-message');
         if (msgEl) msgEl.textContent = message;
+        applyIconFallback(toast);
 
         // Click to dismiss
         const dismiss = () => {
