@@ -5,7 +5,7 @@ const contactStore = require("./contact-store.js");
 const { saveMessages } = require("./message-store.js");
 const triageEngine = require("./triage-engine.js");
 const { normalizeLinkedInHandle } = require("./linkedin-utils.js");
-const { generateReply } = require("./reply-engine.js");
+const { generateReply } = require("./brain-runtime.js");
 const { getSnippets } = require("./vector-store.js");
 const { dataPath, ensureDataHome } = require("./app-paths.js");
 
@@ -158,7 +158,7 @@ function trimBridgeEventLogIfNeeded() {
 
 function appendBridgeEvent(record) {
   try {
-    fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+    ensureDataHome();
     trimBridgeEventLogIfNeeded();
     const line = `${JSON.stringify({ at: new Date().toISOString(), ...(record || {}) })}\n`;
     fs.appendFileSync(BRIDGE_EVENTS_LOG_PATH, line, { encoding: "utf8", mode: 0o600 });
@@ -170,7 +170,7 @@ function appendBridgeEvent(record) {
 
 function recordChannelSync(channel) {
   try {
-    fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+    ensureDataHome();
     let state = {};
     if (fs.existsSync(BRIDGE_SYNC_STATE_PATH)) {
       state = JSON.parse(fs.readFileSync(BRIDGE_SYNC_STATE_PATH, "utf8"));

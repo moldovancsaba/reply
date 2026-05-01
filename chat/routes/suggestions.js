@@ -1,4 +1,4 @@
-const { generateReply } = require('../reply-engine.js');
+const { generateReply, normalizeSuggestionResult } = require('../brain-runtime.js');
 const { getSnippets, getGoldenExamples, getHistory } = require("../vector-store.js");
 const contactStore = require("../contact-store.js");
 const messageStore = require("../message-store.js");
@@ -115,9 +115,11 @@ async function serveSuggest(req, res) {
     const snippets = await getSnippets(message, 3);
     const goldenExamples = await getGoldenExamples(5);
 
-    const suggestionResult = await generateReply(message, snippets, handle, goldenExamples);
-    const suggestion = typeof suggestionResult === 'string' ? suggestionResult : (suggestionResult.suggestion || "");
-    const explanation = suggestionResult.explanation || "";
+    const suggestionResult = normalizeSuggestionResult(
+      await generateReply(message, snippets, handle, goldenExamples)
+    );
+    const suggestion = suggestionResult.suggestion;
+    const explanation = suggestionResult.explanation;
 
     // Save as pending suggestion
     const { addDocuments } = require("../vector-store.js");
@@ -158,7 +160,10 @@ async function serveSuggestReply(req, res) {
   const goldenExamples = await getGoldenExamples(5);
 
   // Generate a suggested reply using the local LLM.
-  const suggestion = await generateReply(message, snippets, recipient, goldenExamples);
+  const suggestionResult = normalizeSuggestionResult(
+    await generateReply(message, snippets, recipient, goldenExamples)
+  );
+  const suggestion = suggestionResult.suggestion;
 
   // Save as pending suggestion
   const { addDocuments } = require("../vector-store.js");
@@ -175,6 +180,7 @@ async function serveSuggestReply(req, res) {
 
   writeJson(res, 200, {
     suggestion,
+    explanation: suggestionResult.explanation,
     contact: contact ? { displayName: contact.displayName, profession: contact.profession } : null,
     snippets: snippets.map(snippetShapeForSuggestReply)
   });

@@ -5,6 +5,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { generateReply, normalizeSuggestionResult } = require("../brain-runtime");
 const {
     safeDateMs,
     pathPrefixesForHandle,
@@ -141,7 +142,6 @@ const {
 const contactStore = require("../contact-store");
 const whatsAppIdResolver = require("../utils/whatsapp-resolver");
 const { autoAnnotateSentMessage } = require("../utils/annotation-utils");
-const { generateReply } = require("../reply-engine");
 const { getSnippets } = require("../knowledge");
 const { refineReply } = require("../gemini-client");
 const { addDocuments } = require("../vector-store");
@@ -488,10 +488,12 @@ async function serveSuggest(req, res) {
 
         const snippets = await getSnippets(message, 3);
 
-        const suggestionResult = await generateReply(message, snippets, handle);
-        const suggestion = typeof suggestionResult === 'string' ? suggestionResult : (suggestionResult.suggestion || "");
-        const explanation = suggestionResult.explanation || "";
-        const contextMeta = suggestionResult.contextMeta || null;
+        const suggestionResult = normalizeSuggestionResult(
+            await generateReply(message, snippets, handle)
+        );
+        const suggestion = suggestionResult.suggestion;
+        const explanation = suggestionResult.explanation;
+        const contextMeta = suggestionResult.contextMeta;
 
         writeJson(res, 200, { suggestion, explanation, contextMeta });
     } catch (e) {

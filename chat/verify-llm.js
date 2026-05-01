@@ -1,4 +1,4 @@
-const { generateReply } = require("./reply-engine.js");
+const { generateReply, normalizeSuggestionResult } = require("./brain-runtime.js");
 
 async function run() {
     console.log("Testing LLM generation...");
@@ -14,12 +14,12 @@ async function run() {
     console.log(`Input: "${message}"`);
     console.log("Context provided: README.md snippet.");
 
-    const reply = await generateReply(message, context);
+    const reply = normalizeSuggestionResult(await generateReply(message, context));
 
     console.log("\nGenerated Reply:\n");
-    console.log(reply);
+    console.log(reply.suggestion);
 
-    if (reply.toLowerCase().includes("npm install")) {
+    if (reply.suggestion.toLowerCase().includes("npm install")) {
         console.log("\nSUCCESS: Reply used the provided context!");
     } else {
         console.log("\nWARNING: Reply might not have used context (check output).");
