@@ -4,9 +4,9 @@
 1.  Navigate to the `{reply}` folder in Finder.
 2.  Double-click **`Launch Reply.command`** (foreground dev-style run from `chat/`), **or** install the background hub with `make run` from the repo root (see [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md)).
 3.  A terminal window will open when using the `.command` launcher.
-4.  The UI is usually `http://localhost:45311/` (or the next port if `45311` is busy — use the URL printed in the terminal or check `~/Library/Logs/Reply/hub.log` when using LaunchAgent).
+4.  The UI is usually `http://localhost:45311/` (or the next port if `45311` is busy — use the URL printed in the terminal or check `~/Library/Logs/Reply/hub.log`).
 
-To stop: close the terminal window for the `.command` flow, or `make stop` / `launchctl unload` for the LaunchAgent flow (details in [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md)).
+To stop: keep the `make run` terminal open while using the app, and run `make stop` when you want the hub down (details in [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md)).
 
 ---
 

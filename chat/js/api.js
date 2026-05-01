@@ -9,7 +9,9 @@ const API_BASE = '';
 
 async function _request(url, options = {}) {
     const isMutation = options.method && options.method !== 'GET';
-    const showLoading = Boolean(options._showLoading) || isMutation;
+    // Global blocking overlays are opt-in only. Mutations should generally
+    // keep the workspace interactive and surface progress inline/per-action.
+    const showLoading = Boolean(options._showLoading);
     if (showLoading) UI.showLoading();
 
     try {
@@ -35,10 +37,13 @@ async function _request(url, options = {}) {
         return res;
     } catch (err) {
         const msg = err.message || 'Network error';
+        const reconnecting =
+            /load failed|networkerror|failed to fetch|network request failed/i.test(msg);
         const skipToast =
             options._silent ||
             options.delegateErrorUI ||
-            err._replyErrorUiShown;
+            err._replyErrorUiShown ||
+            reconnecting;
         if (!skipToast) UI.showToast(msg, 'error');
         throw err;
     } finally {
@@ -97,7 +102,7 @@ export async function fetchConversations(offset = 0, limit = 20, query = '', sor
     const res = await _request(`${API_BASE}/api/conversations?${params.toString()}`, {
         headers: buildSecurityHeaders(),
         _silent: true,
-        _showLoading: !!showLoadingUi,
+        _showLoading: false,
     });
     return await res.json();
 }
@@ -114,7 +119,7 @@ export async function fetchMessages(handle, offset = 0, limit = 30, showLoadingU
     const res = await _request(`${API_BASE}/api/thread?handle=${encodeURIComponent(handle)}&offset=${offset}&limit=${limit}`, {
         headers: buildSecurityHeaders(),
         _silent: true,
-        _showLoading: !!showLoadingUi,
+        _showLoading: false,
     });
     const data = await res.json();
     return data.messages || [];
@@ -143,7 +148,12 @@ export async function fetchOpenClawStatus() {
     });
     // We don't throw on error here because many errors are expected (gateway offline)
     // and handled gracefully by the UI via JSON content.
-    return await res.json();
+    const data = await res.json();
+    const normalizedStatus = String(data?.status || '').toLowerCase();
+    if (normalizedStatus === 'live' || (data?.ok === true && normalizedStatus !== 'offline')) {
+        return { ...data, status: 'online' };
+    }
+    return data;
 }
 
 /**
@@ -186,49 +196,6 @@ export async function fetchBridgeSummary(limit = 200) {
     return await res.json();
 }
 
-/**
- * Report the outcome of a {hatori} suggestion back to the intelligence engine.
- * status: 'sent_as_is' | 'edited_then_sent'
- * Fires as background (no await needed by callers).
- */
-export async function reportHatoriOutcome({
-    hatori_id,
-    original_text,
-    final_sent_text,
-    statusOverride = null,
-    platform = 'other',
-    recipient_id = '',
-    conversation_id = '',
-    edit_reason = ''
-}) {
-    if (!hatori_id) return; // Nothing to report if this message didn't originate from {hatori}
-
-    const isSentAsIs = original_text === final_sent_text ||
-        Math.abs(original_text.length - final_sent_text.length) <= 2;
-    const status = statusOverride || (isSentAsIs ? 'sent_as_is' : 'edited_then_sent');
-
-    try {
-        await fetch(`${API_BASE}/api/hatori/outcome`, {
-            method: 'POST',
-            headers: buildSecurityHeaders(),
-            body: JSON.stringify({
-                external_outcome_id: `reply:outcome-${Date.now()}`,
-                assistant_interaction_id: hatori_id,
-                status,
-                platform,
-                recipient_id,
-                conversation_id,
-                original_text,
-                final_sent_text,
-                edit_reason: edit_reason || (status === 'not_sent' ? 'replaced_via_suggest' : ''),
-                diff: status === 'edited_then_sent' ? `${original_text} -> ${final_sent_text}` : null
-            })
-        });
-    } catch (e) {
-        console.warn('[{reply}] Hatori annotation failed (non-blocking):', e.message);
-    }
-}
-
 export async function reportDraftReplacement({ handle, original_text, reason = 'suggest_replace' }) {
     if (!original_text || !String(original_text).trim()) return;
     try {
@@ -253,10 +220,9 @@ export async function reportDraftReplacement({ handle, original_text, reason = '
  * @param {string} handle - Contact handle
  * @param {string} text - Message text
  * @param {string} channel - Channel to use (only imessage/email/whatsapp are send-enabled)
- * @param {object} hatoriContext - Optional {hatori} draft context for annotation { hatori_id, original_draft }
  * @returns {Promise<Object>} Send result
  */
-export async function sendMessage(handle, text, channel = 'imessage', hatoriContext = null) {
+export async function sendMessage(handle, text, channel = 'imessage') {
     const ch = (channel || 'imessage').toString().toLowerCase();
     const endpointByChannel = {
         imessage: '/api/send-imessage',
@@ -289,18 +255,6 @@ export async function sendMessage(handle, text, channel = 'imessage', hatoriCont
 
     const data = await res.json();
     UI.showToast('Message sent!', 'success');
-
-    // Fire-and-forget annotation to {hatori} (does not block the send UI)
-    if (hatoriContext && hatoriContext.hatori_id) {
-        reportHatoriOutcome({
-            hatori_id: hatoriContext.hatori_id,
-            original_text: hatoriContext.original_draft || '',
-            final_sent_text: text,
-            platform: ch,
-            recipient_id: handle,
-            conversation_id: `reply:${handle}`
-        });
-    }
 
     return data;
 }

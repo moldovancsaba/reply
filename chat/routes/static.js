@@ -26,7 +26,10 @@ function serveIndex(req, res, securityPolicy) {
             const inject = `<script>window.REPLY_OPERATOR_TOKEN = "${securityPolicy.operatorToken}";</script>\n</head>`;
             content = content.replace("</head>", inject);
         }
-        res.writeHead(200, { "Content-Type": "text/html" });
+        res.writeHead(200, {
+            "Content-Type": "text/html",
+            "Cache-Control": "no-store, no-cache, must-revalidate"
+        });
         res.end(content);
     });
 }
@@ -47,7 +50,10 @@ function serveSettingsPage(req, res, securityPolicy) {
             const inject = `<script>window.REPLY_OPERATOR_TOKEN = "${securityPolicy.operatorToken}";</script>\n</head>`;
             content = content.replace("</head>", inject);
         }
-        res.writeHead(200, { "Content-Type": "text/html" });
+        res.writeHead(200, {
+            "Content-Type": "text/html",
+            "Cache-Control": "no-store, no-cache, must-revalidate"
+        });
         res.end(content);
     });
 }
@@ -72,7 +78,10 @@ async function serveAsset(req, res, pathname) {
             '.webp': 'image/webp',
         }[ext] || 'text/plain';
 
-        res.writeHead(200, { 'Content-Type': contentType });
+        res.writeHead(200, {
+            'Content-Type': contentType,
+            'Cache-Control': 'no-store, no-cache, must-revalidate'
+        });
         res.end(content);
     } catch (err) {
         res.writeHead(404);
@@ -87,7 +96,10 @@ async function serveRootSvg(req, res, pathname) {
     const filePath = path.join(PUBLIC_DIR, pathname.slice(1));
     try {
         const content = await fs.promises.readFile(filePath);
-        res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
+        res.writeHead(200, {
+            'Content-Type': 'image/svg+xml',
+            'Cache-Control': 'no-store, no-cache, must-revalidate'
+        });
         res.end(content);
     } catch (err) {
         res.writeHead(404);

@@ -1,45 +1,96 @@
-const { exec } = require('child_process');
-const fs = require('fs');
+const { execFile } = require('child_process');
 const path = require('path');
 const contactStore = require('./contact-store');
 const chatUtils = require('./utils/chat-utils');
+const statusManager = require('./status-manager');
 
-const SCRIPT_PATH = path.join(__dirname, 'export-contacts.applescript');
+const SWIFT_CONTACTS_EXPORTER = path.join(__dirname, 'native', 'apple-contacts-export.swift');
+const XCRUN_BIN = '/usr/bin/xcrun';
+
+function updateStatus(status) {
+    statusManager.update('contacts', status);
+}
+
+function execFilePromise(command, args, options = {}) {
+    return new Promise((resolve, reject) => {
+        execFile(command, args, options, (error, stdout, stderr) => {
+            if (error) {
+                error.stdout = stdout;
+                error.stderr = stderr;
+                return reject(error);
+            }
+            resolve({ stdout, stderr });
+        });
+    });
+}
+
+async function exportContactsNative() {
+    const binPath = path.join(__dirname, 'data', 'apple-contacts-export');
+    await execFilePromise(XCRUN_BIN, ['--sdk', 'macosx', 'swiftc', '-parse-as-library', SWIFT_CONTACTS_EXPORTER, '-o', binPath], {
+        maxBuffer: 20 * 1024 * 1024,
+        timeout: 120000
+    });
+    const { stdout } = await execFilePromise(binPath, [], {
+        maxBuffer: 100 * 1024 * 1024,
+        timeout: 300000
+    });
+    const parsed = JSON.parse(stdout || '[]');
+    if (!Array.isArray(parsed)) {
+        throw new Error('Native Contacts exporter returned invalid JSON.');
+    }
+    return parsed.map((row) => ({
+        displayName: row.displayName || '',
+        profession: row.profession || '',
+        company: row.company || '',
+        linkedinUrl: row.linkedinUrl || '',
+        notes: row.notes || '',
+        channels: {
+            email: Array.isArray(row.emails) ? row.emails.filter(Boolean) : [],
+            phone: Array.isArray(row.phones) ? row.phones.filter(Boolean) : []
+        }
+    }));
+}
 
 /**
  * Execute AppleScript and parse results.
  */
 function ingestContacts() {
     return new Promise((resolve, reject) => {
-        // Increase maxBuffer to 10MB to handle large contact lists
-        exec(`osascript ${SCRIPT_PATH}`, { maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
-            if (error) {
-                return reject(`AppleScript Error: ${error.message}`);
-            }
+        (async () => {
+            updateStatus({
+                state: 'running',
+                progress: 0,
+                processed: 0,
+                total: 0,
+                message: 'Reading Apple Contacts...'
+            });
+            const newContactsData = await exportContactsNative();
 
-            const lines = stdout.trim().split('\n');
-            const newContactsData = [];
-
-            lines.forEach(line => {
-                if (!line) return;
-                const [name, emails, phones, job, notes, company, linkedinUrl] = line.split('|SEP|');
-
-                newContactsData.push({
-                    displayName: name,
-                    profession: job,
-                    company: company || '',
-                    linkedinUrl: linkedinUrl || '',
-                    notes: notes ? notes.split('[NL]').join('\n') : "",
-                    channels: {
-                        email: emails ? emails.split(',').map(e => e.trim()).filter(e => e) : [],
-                        phone: phones ? phones.split(',').map(p => p.trim()).filter(p => p) : []
-                    }
-                });
+            updateStatus({
+                state: 'running',
+                progress: 40,
+                message: `Merging ${newContactsData.length} contacts into Reply...`,
+                total: newContactsData.length
             });
 
             mergeWithExisting(newContactsData).then(() => {
+                updateStatus({
+                    state: 'idle',
+                    progress: 100,
+                    message: `Contacts sync complete. ${newContactsData.length} contacts processed.`,
+                    lastSync: new Date().toISOString(),
+                    total: newContactsData.length,
+                    processed: newContactsData.length
+                });
                 resolve(newContactsData.length);
-            }).catch(reject);
+            }).catch((err) => {
+                updateStatus({ state: 'error', progress: 0, message: String(err) });
+                reject(err);
+            });
+        })().catch((error) => {
+            const detail = error.stderr?.trim() || error.message;
+            updateStatus({ state: 'error', progress: 0, message: `Apple Contacts export failed: ${detail}` });
+            reject(`Apple Contacts export failed: ${detail}`);
         });
     });
 }

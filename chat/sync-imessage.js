@@ -4,9 +4,11 @@ const path = require('path');
 const fs = require('fs');
 const { withDefaults, readSettings } = require('./settings-store.js');
 const { resolveIMessageDbPath } = require('./imessage-db-path.js');
+const { ensureDataHome, dataPath } = require('./app-paths.js');
+ensureDataHome();
 
 const DB_PATH = resolveIMessageDbPath();
-const STATE_FILE = path.join(__dirname, 'data', 'sync_state.json');
+const STATE_FILE = dataPath('sync_state.json');
 const statusManager = require('./status-manager.js');
 
 /** @type {import('sqlite3').Database|null|false} false = open failed permanently this process */
@@ -14,6 +16,24 @@ let _imessageDb = null;
 
 function updateStatus(status) {
     statusManager.update('imessage', status);
+}
+
+function nowIso() {
+    return new Date().toISOString();
+}
+
+function markAttempt(status) {
+    let current = {};
+    try {
+        current = statusManager.get('imessage') || {};
+    } catch {
+        current = {};
+    }
+    return {
+        lastSuccessfulSync: current.lastSuccessfulSync || current.lastSync || null,
+        ...status,
+        lastAttemptedSync: nowIso()
+    };
 }
 
 function readCurrentProcessed() {
@@ -26,6 +46,22 @@ function readCurrentProcessed() {
     }
 }
 
+function getIMessageAccessError() {
+    if (!fs.existsSync(DB_PATH)) {
+        return process.platform === "darwin"
+            ? `iMessage database missing at ${DB_PATH}. Grant Full Disk Access to the protected-data helper used by {reply}, or set REPLY_IMESSAGE_DB_PATH in chat/.env to a readable chat.db.`
+            : `Database missing at ${DB_PATH}. Place chat.db under chat/data/ or set REPLY_IMESSAGE_DB_PATH.`;
+    }
+    try {
+        fs.accessSync(DB_PATH, fs.constants.R_OK);
+        return null;
+    } catch (err) {
+        return process.platform === "darwin"
+            ? `Cannot read iMessage database at ${DB_PATH}. Grant Full Disk Access to the protected-data helper used by {reply}, or set REPLY_IMESSAGE_DB_PATH in chat/.env to a readable chat.db.`
+            : `Cannot read database at ${DB_PATH}: ${err.message}`;
+    }
+}
+
 /**
  * Lazily open Apple's chat.db (readonly). Never runs at require() time — avoids crashing
  * the hub when Messages DB is missing or blocked by TCC (hub must stay up for the UI).
@@ -34,13 +70,11 @@ function getIMessageReadonlyDb() {
     if (_imessageDb === false) return null;
     if (_imessageDb) return _imessageDb;
 
-    if (!fs.existsSync(DB_PATH)) {
-        const hint =
-            process.platform === "darwin"
-                ? `iMessage database missing at ${DB_PATH}. Grant Full Disk Access to Terminal/your Node host, or set REPLY_IMESSAGE_DB_PATH in chat/.env to a readable chat.db.`
-                : `Database missing at ${DB_PATH}. Place chat.db under chat/data/ or set REPLY_IMESSAGE_DB_PATH.`;
+    const accessError = getIMessageAccessError();
+    if (accessError) {
+        const hint = accessError;
         console.warn("[sync-imessage]", hint);
-        updateStatus({ state: "error", message: "Database not found" });
+        updateStatus(markAttempt({ state: "error", message: hint, lastSync: null }));
         _imessageDb = false;
         return null;
     }
@@ -48,7 +82,7 @@ function getIMessageReadonlyDb() {
     const database = new sqlite3.Database(DB_PATH, sqlite3.OPEN_READONLY, (err) => {
         if (err) {
             console.error("[sync-imessage] Cannot open iMessage database:", err.message);
-            updateStatus({ state: "error", message: err.message });
+            updateStatus(markAttempt({ state: "error", message: err.message, lastSync: null }));
             if (_imessageDb === database) _imessageDb = false;
         }
     });
@@ -89,13 +123,13 @@ async function sync() {
     const db = getIMessageReadonlyDb();
     if (!db) {
         const msg = fs.existsSync(DB_PATH)
-            ? `Cannot open iMessage database (permissions?): ${DB_PATH}`
+            ? `Cannot open iMessage database. Grant Full Disk Access to the protected-data helper used by {reply} or set REPLY_IMESSAGE_DB_PATH: ${DB_PATH}`
             : `iMessage database not found: ${DB_PATH}`;
-        updateStatus({ state: "error", message: msg });
+        updateStatus(markAttempt({ state: "error", message: msg, lastSync: null }));
         throw new Error(msg);
     }
 
-    updateStatus({ state: "running", message: "Opening message database..." });
+    updateStatus(markAttempt({ state: "running", message: "Opening message database..." }));
     const state = loadState();
     console.log(`Starting iMessage sync from ROWID > ${state.lastProcessedId}...`);
 
@@ -129,7 +163,10 @@ async function sync() {
 
                 updateStatus({
                     state: "idle",
-                    lastSync: new Date().toISOString(),
+                    message: "iMessage is already in sync.",
+                    lastSync: nowIso(),
+                    lastSuccessfulSync: nowIso(),
+                    lastAttemptedSync: nowIso(),
                     processed: readCurrentProcessed()
                 });
                 return resolve();
@@ -137,7 +174,7 @@ async function sync() {
 
             console.log(`Processing ${rows.length} new messages...`);
             // Don't update 'processed' during intermediate steps - only at the end
-            updateStatus({ state: "running", progress: 20, message: `Processing ${rows.length} new messages...` });
+            updateStatus(markAttempt({ state: "running", progress: 20, message: `Processing ${rows.length} new messages...` }));
 
             const docs = rows.map(row => ({
                 id: `msg-${row.ROWID}`,
@@ -147,7 +184,7 @@ async function sync() {
             }));
 
             try {
-                updateStatus({ state: "running", progress: 50, message: `Vectorizing ${docs.length} messages...` });
+                updateStatus(markAttempt({ state: "running", progress: 50, message: `Vectorizing ${docs.length} messages...` }));
 
                 // 1. Vectorize for search
                 await addDocuments(docs);
@@ -160,7 +197,8 @@ async function sync() {
                     source: 'iMessage',
                     handle: row.handle_id || 'unknown',
                     timestamp: convertDate(row.date),
-                    path: `imessage://${row.handle_id || 'unknown'}`
+                    path: `imessage://${row.handle_id || 'unknown'}`,
+                    is_from_me: row.is_from_me === 1
                 }));
                 await saveMessages(unifiedDocs);
 
@@ -181,12 +219,15 @@ async function sync() {
                 const nextProcessed = readCurrentProcessed() + docs.length;
                 updateStatus({
                     state: "idle",
-                    lastSync: new Date().toISOString(),
+                    message: `Synced ${docs.length} iMessage records.`,
+                    lastSync: nowIso(),
+                    lastSuccessfulSync: nowIso(),
+                    lastAttemptedSync: nowIso(),
                     processed: nextProcessed
                 });
                 resolve();
             } catch (syncErr) {
-                updateStatus({ state: "error", message: syncErr.message });
+                updateStatus(markAttempt({ state: "error", message: syncErr.message, lastSync: null }));
                 reject(syncErr);
             }
         });
@@ -201,10 +242,10 @@ if (require.main === module) {
         })
         .catch((err) => {
             console.error("Sync failed:", err);
-            updateStatus({ state: "error", message: err.message });
+            updateStatus(markAttempt({ state: "error", message: err.message, lastSync: null }));
             const d = getIMessageReadonlyDb();
             if (d && typeof d.close === "function") d.close();
         });
 }
 
-module.exports = { sync, getIMessageReadonlyDb };
+module.exports = { sync, getIMessageReadonlyDb, getIMessageAccessError };

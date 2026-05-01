@@ -14,23 +14,271 @@ import {
   CONVERSATION_SORT_STORAGE_KEY,
 } from './contacts.js';
 import { handleSendMessage } from './messages.js';
-import { getSettings, buildSecurityHeaders, reportHatoriOutcome, reportDraftReplacement } from './api.js';
-import './dashboard.js?v=2.1';
+import { getSettings, buildSecurityHeaders, reportDraftReplacement } from './api.js';
+import './dashboard.js?v=2.2';
 import './kyc.js?v=2.1';
 import { applyReplyUiSettings } from './settings.js?v=2.5';
-import { openTrainingPage, closeTrainingPage } from './training.js?v=2.1';
 import { UI } from './ui.js';
 import { maybeShowOnboarding } from './onboarding.js?v=2.1';
 
 // Global state
 window.currentHandle = null;
 window.conversations = [];
+const SUGGESTION_CACHE_VERSION = 'v1';
+const suggestionJobs = new Map();
+const composerDraftCache = new Map();
 
 // Speech recognition state
 let speechRecognizer = null;
 let speechIsRecording = false;
 let speechBaseText = '';
 let speechFinalText = '';
+const LAYOUT_SIDEBAR_COLLAPSED_KEY = 'reply.layout.sidebarCollapsed';
+const LAYOUT_PROFILE_COLLAPSED_KEY = 'reply.layout.profileCollapsed';
+const SETTINGS_TAB_BY_CHANNEL = {
+  openclaw: 'ai-status',
+  ollama: 'ai-status',
+  worker: 'worker',
+  imessage: 'messaging',
+  whatsapp: 'messaging',
+  linkedin: 'messaging',
+  'linkedin-posts': 'messaging',
+  notes: 'messaging',
+  contacts: 'messaging',
+  kyc: 'worker',
+  mail: 'email',
+  email: 'email',
+};
+
+function suggestionStorageKey(handle) {
+  return `reply.suggestion.${SUGGESTION_CACHE_VERSION}.${encodeURIComponent(String(handle || ''))}`;
+}
+
+function readCachedSuggestion(handle) {
+  try {
+    if (!handle || !window.localStorage) return null;
+    const raw = window.localStorage.getItem(suggestionStorageKey(handle));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.suggestion) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedSuggestion(handle, payload) {
+  try {
+    if (!handle || !window.localStorage) return;
+    window.localStorage.setItem(
+      suggestionStorageKey(handle),
+      JSON.stringify({
+        ...payload,
+        cachedAt: new Date().toISOString(),
+      })
+    );
+  } catch {
+    // Non-blocking cache only.
+  }
+}
+
+function clearCachedSuggestion(handle) {
+  try {
+    if (!handle || !window.localStorage) return;
+    window.localStorage.removeItem(suggestionStorageKey(handle));
+  } catch {
+    // ignore
+  }
+}
+
+window.openChannelSettings = function openChannelSettings(channel) {
+  const key = String(channel || '').trim().toLowerCase();
+  const tab = SETTINGS_TAB_BY_CHANNEL[key] || 'general';
+  window.location.href = `settings.html#${encodeURIComponent(tab)}`;
+};
+
+function cacheComposerDraft(handle, text) {
+  if (!handle) return;
+  const value = String(text || '');
+  if (!value.trim()) {
+    composerDraftCache.delete(handle);
+    return;
+  }
+  composerDraftCache.set(handle, value);
+}
+
+function getCachedComposerDraft(handle) {
+  if (!handle) return '';
+  return composerDraftCache.get(handle) || '';
+}
+
+function setSuggestionExplanation(text = '') {
+  const explanationEl = document.getElementById('suggestion-explanation');
+  if (!explanationEl) return;
+  if (text) {
+    explanationEl.textContent = text;
+    explanationEl.style.display = 'block';
+  } else {
+    explanationEl.textContent = '';
+    explanationEl.style.display = 'none';
+  }
+}
+
+function applyLayoutChromeState() {
+  const body = document.body;
+  if (!body) return;
+  const sidebarCollapsed = body.classList.contains('sidebar-collapsed');
+  const profileCollapsed = body.classList.contains('profile-collapsed');
+  document.getElementById('btn-show-sidebar')?.classList.toggle('u-display-none', !sidebarCollapsed);
+  document.getElementById('btn-show-profile')?.classList.toggle('u-display-none', !profileCollapsed);
+  const sidebarToggle = document.getElementById('btn-toggle-sidebar');
+  if (sidebarToggle) sidebarToggle.textContent = sidebarCollapsed ? 'left_panel_open' : 'left_panel_close';
+  const profileToggle = document.getElementById('btn-toggle-profile');
+  if (profileToggle) profileToggle.textContent = profileCollapsed ? 'right_panel_open' : 'Collapse';
+  const profileToggleEmpty = document.getElementById('btn-toggle-profile-empty');
+  if (profileToggleEmpty) profileToggleEmpty.textContent = profileCollapsed ? 'Expand' : 'Collapse';
+}
+
+function setSidebarCollapsed(collapsed) {
+  const body = document.body;
+  if (!body) return;
+  body.classList.toggle('sidebar-collapsed', !!collapsed);
+  try {
+    window.localStorage?.setItem(LAYOUT_SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
+  } catch {}
+  applyLayoutChromeState();
+}
+
+function setProfileCollapsed(collapsed) {
+  const body = document.body;
+  if (!body) return;
+  body.classList.toggle('profile-collapsed', !!collapsed);
+  try {
+    window.localStorage?.setItem(LAYOUT_PROFILE_COLLAPSED_KEY, collapsed ? '1' : '0');
+  } catch {}
+  applyLayoutChromeState();
+}
+
+function restoreLayoutChromeState() {
+  try {
+    setSidebarCollapsed(window.localStorage?.getItem(LAYOUT_SIDEBAR_COLLAPSED_KEY) === '1');
+    setProfileCollapsed(window.localStorage?.getItem(LAYOUT_PROFILE_COLLAPSED_KEY) === '1');
+  } catch {
+    applyLayoutChromeState();
+  }
+}
+
+function refreshSuggestButtonState() {
+  const btnSuggest = document.getElementById('btn-suggest');
+  if (!btnSuggest) return;
+  const handle = window.currentHandle;
+  if (!handle) {
+    btnSuggest.disabled = true;
+    btnSuggest.textContent = '💡 Suggest';
+    return;
+  }
+
+  const job = suggestionJobs.get(handle);
+  const cached = readCachedSuggestion(handle);
+  if (job?.status === 'pending') {
+    btnSuggest.disabled = true;
+    btnSuggest.textContent = '⏳ Suggesting…';
+    return;
+  }
+
+  btnSuggest.disabled = false;
+  btnSuggest.textContent = cached?.suggestion ? '💡 Suggest Ready' : '💡 Suggest';
+}
+
+function applyCachedSuggestionForHandle(handle, options = {}) {
+  const payload = readCachedSuggestion(handle);
+  if (!payload || !payload.suggestion) {
+    setSuggestionExplanation('');
+    refreshSuggestButtonState();
+    return false;
+  }
+
+  if (String(window.currentHandle || '') !== String(handle || '')) {
+    refreshSuggestButtonState();
+    return false;
+  }
+
+  const chatInput = document.getElementById('chat-input');
+  const existingDraft = String(chatInput?.value || '').trim();
+  const shouldForce = options.force === true;
+  const canSeed = shouldForce || !existingDraft;
+
+  if (canSeed && typeof window.seedDraft === 'function') {
+    window.seedDraft(payload.suggestion, true);
+  }
+
+  const explanation = payload.explanation
+    || (!canSeed ? 'Background suggestion ready for this conversation. Clear the composer or press Suggest again to replace the current draft.' : '');
+  setSuggestionExplanation(explanation);
+  refreshSuggestButtonState();
+  return canSeed;
+}
+
+async function requestBackgroundSuggestion(handle, existingDraft = '') {
+  if (!handle) return;
+  if (suggestionJobs.get(handle)?.status === 'pending') return;
+
+  suggestionJobs.set(handle, { status: 'pending', startedAt: Date.now() });
+  refreshSuggestButtonState();
+  if (String(window.currentHandle || '') === String(handle)) {
+    setSuggestionExplanation('Generating a suggestion in the background. You can switch conversations and come back later.');
+  }
+
+  try {
+    if (existingDraft) {
+      await reportDraftReplacement({
+        handle,
+        original_text: existingDraft,
+        reason: 'suggest_replace'
+      });
+    }
+
+    const res = await fetch('/api/suggest', {
+      method: 'POST',
+      headers: buildSecurityHeaders(),
+      body: JSON.stringify({ handle }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error((data && (data.error || data.message)) || `Suggest failed (${res.status})`);
+    }
+
+    const suggestion = data?.suggestion || '';
+    const explanation = data?.explanation || '';
+    if (!suggestion) throw new Error('No suggestion text returned');
+
+    writeCachedSuggestion(handle, { suggestion, explanation });
+    suggestionJobs.delete(handle);
+
+    const applied = applyCachedSuggestionForHandle(handle, {
+      force: String(window.currentHandle || '') === String(handle)
+    });
+    UI.showToast(
+      String(window.currentHandle || '') === String(handle)
+        ? (applied ? 'Suggestion ready' : 'Suggestion ready in background for this conversation')
+        : `Suggestion ready for ${handle}`,
+      'success',
+      2400
+    );
+  } catch (e) {
+    suggestionJobs.set(handle, {
+      status: 'error',
+      finishedAt: Date.now(),
+      message: e?.message || 'Suggest request failed'
+    });
+    if (String(window.currentHandle || '') === String(handle)) {
+      setSuggestionExplanation('');
+    }
+    UI.showToast(e?.message || 'Suggest request failed', 'error');
+  } finally {
+    refreshSuggestButtonState();
+  }
+}
 
 async function init() {
   console.log('🚀 Reply initializing...');
@@ -60,16 +308,9 @@ async function init() {
     await selectContact(null);
   }
 
-  try {
-    if (sessionStorage.getItem('reply_open_training') === '1') {
-      sessionStorage.removeItem('reply_open_training');
-      openTrainingPage();
-    }
-  } catch {
-    /* ignore */
-  }
-
   maybeShowOnboarding();
+  refreshSuggestButtonState();
+  restoreLayoutChromeState();
 
   console.log('✅ Reply ready!');
 }
@@ -81,11 +322,20 @@ function setupEventListeners() {
   const btnSettings = document.getElementById('btn-settings');
   if (btnSettings) btnSettings.onclick = () => { window.location.href = 'settings.html'; };
 
-  const btnTraining = document.getElementById('btn-training');
-  if (btnTraining) btnTraining.onclick = openTrainingPage;
+  const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
+  if (btnToggleSidebar) btnToggleSidebar.onclick = () => setSidebarCollapsed(true);
 
-  const btnTrainingClose = document.getElementById('training-close');
-  if (btnTrainingClose) btnTrainingClose.onclick = closeTrainingPage;
+  const btnShowSidebar = document.getElementById('btn-show-sidebar');
+  if (btnShowSidebar) btnShowSidebar.onclick = () => setSidebarCollapsed(false);
+
+  const btnToggleProfile = document.getElementById('btn-toggle-profile');
+  if (btnToggleProfile) btnToggleProfile.onclick = () => setProfileCollapsed(true);
+
+  const btnToggleProfileEmpty = document.getElementById('btn-toggle-profile-empty');
+  if (btnToggleProfileEmpty) btnToggleProfileEmpty.onclick = () => setProfileCollapsed(true);
+
+  const btnShowProfile = document.getElementById('btn-show-profile');
+  if (btnShowProfile) btnShowProfile.onclick = () => setProfileCollapsed(false);
 
   document.querySelectorAll('.sidebar-nav-btn[data-nav-action]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -119,7 +369,10 @@ function setupEventListeners() {
       }
     });
 
-    chatInput.addEventListener('input', autoResize);
+    chatInput.addEventListener('input', () => {
+      autoResize();
+      cacheComposerDraft(window.currentHandle, chatInput.value);
+    });
     // Initial sizing
     autoResize();
   }
@@ -151,94 +404,14 @@ function setupEventListeners() {
 
   const btnSuggest = document.getElementById('btn-suggest');
   if (btnSuggest) {
-        btnSuggest.onclick = async () => {
-          if (!chatInput) return;
+    btnSuggest.onclick = async () => {
+      if (!chatInput) return;
+      const handle = window.currentHandle;
+      if (!handle) return;
 
-          const handle = window.currentHandle;
-          const originalText = btnSuggest.textContent;
-          const existingDraft = (chatInput.value || '').trim();
-          const previousHatoriContext = window.__replyActiveHatoriContext || null;
-
-          try {
-            btnSuggest.disabled = true;
-            btnSuggest.textContent = '⏳ ...';
-            UI.showLoading();
-
-            // If the operator asks for a fresh suggestion while there is an existing draft,
-            // record it as a replacement signal for ongoing learning.
-            if (existingDraft) {
-              await reportDraftReplacement({
-                handle,
-                original_text: existingDraft,
-                reason: 'suggest_replace'
-              });
-              if (previousHatoriContext && previousHatoriContext.hatori_id) {
-                await reportHatoriOutcome({
-                  hatori_id: previousHatoriContext.hatori_id,
-                  original_text: previousHatoriContext.original_draft || '',
-                  final_sent_text: '',
-                  statusOverride: 'not_sent',
-                  platform: (window.currentChannel || 'other'),
-                  recipient_id: handle || '',
-                  conversation_id: handle ? `reply:${handle}` : '',
-                  edit_reason: 'replaced_via_suggest'
-                });
-              }
-            }
-
-        let suggestion = '';
-        let explanation = '';
-        if (handle) {
-          try {
-            const res = await fetch('/api/suggest', {
-              method: 'POST',
-              headers: buildSecurityHeaders(),
-              body: JSON.stringify({ handle }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-              const msg =
-                (data && (data.error || data.message)) ||
-                `Suggest failed (${res.status})`;
-              UI.showToast(msg, 'error');
-            } else {
-              suggestion = data?.suggestion || '';
-              explanation = data?.explanation || '';
-              const hatori_id = data?.hatori_id || null;
-              if (suggestion && typeof window.seedHatoriDraft === 'function') {
-                window.seedHatoriDraft(suggestion, hatori_id, true);
-                UI.showToast('Suggestion ready', 'success', 2200);
-                return;
-              }
-              if (!suggestion) {
-                UI.showToast('No suggestion text returned', 'warning', 4000);
-              }
-            }
-          } catch (e) {
-            UI.showToast(e?.message || 'Suggest request failed', 'error');
-          }
-        }
-
-        const explanationEl = document.getElementById('suggestion-explanation');
-        if (suggestion) {
-          chatInput.value = suggestion;
-          if (explanationEl) {
-            if (explanation) {
-              explanationEl.textContent = explanation;
-              explanationEl.style.display = 'block';
-            } else {
-              explanationEl.style.display = 'none';
-            }
-          }
-          try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
-        } else if (explanationEl) {
-          explanationEl.style.display = 'none';
-        }
-      } finally {
-        UI.hideLoading();
-        btnSuggest.disabled = false;
-        btnSuggest.textContent = originalText;
-      }
+      const existingDraft = (chatInput.value || '').trim();
+      clearCachedSuggestion(handle);
+      await requestBackgroundSuggestion(handle, existingDraft);
     };
   }
 
@@ -299,6 +472,29 @@ function setupEventListeners() {
       );
     });
   }
+
+  document.addEventListener('keydown', (e) => {
+    const isMacShortcut = e.metaKey && !e.ctrlKey && !e.altKey;
+    if (isMacShortcut && e.key === ',') {
+      e.preventDefault();
+      window.location.href = 'settings.html';
+      return;
+    }
+    if (e.metaKey && e.altKey && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      setSidebarCollapsed(!document.body.classList.contains('sidebar-collapsed'));
+      return;
+    }
+    if (e.metaKey && e.altKey && e.key.toLowerCase() === 'p') {
+      e.preventDefault();
+      setProfileCollapsed(!document.body.classList.contains('profile-collapsed'));
+      return;
+    }
+    if (isMacShortcut && e.key === '1') {
+      e.preventDefault();
+      if (typeof window.selectContact === 'function') window.selectContact(null);
+    }
+  });
 
   function setMicUiRecording(btn, recording) {
     if (!btn) return;
@@ -423,17 +619,8 @@ function setupEventListeners() {
         const data = await res.json();
 
         if (data.refined) {
-          if (typeof window.seedHatoriDraft === 'function') {
-            // We pass null for ID to indicate this is a refinement (or keep existing)
-            // But to avoid breaking the annotation loop if it was a Hatori draft,
-            // we'll just manully update the value if we want to keep the old ID.
-            // Actually, for "Magic", let's just update the input value.
-            chatInput.value = data.refined;
-            try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
-          } else {
-            chatInput.value = data.refined;
-            try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
-          }
+          chatInput.value = data.refined;
+          try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
           btnMagic.textContent = '✨ Refined';
         } else {
           let polished = val.trim();
@@ -534,3 +721,7 @@ if (healthContainer) {
 }
 
 window.init = init;
+window.refreshSuggestButtonState = refreshSuggestButtonState;
+window.applyCachedSuggestionForHandle = applyCachedSuggestionForHandle;
+window.cacheComposerDraft = cacheComposerDraft;
+window.getCachedComposerDraft = getCachedComposerDraft;

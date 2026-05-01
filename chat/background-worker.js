@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const { loadReplyEnv } = require('./load-env.js');
 loadReplyEnv();
+const { ensureDataHome, dataPath } = require('./app-paths.js');
+ensureDataHome();
 
 const { withDefaults, readSettings } = require('./settings-store.js');
 const { applyAiSettingsToProcessEnv } = require('./ai-runtime-config.js');
@@ -40,7 +42,6 @@ const { extractSignals } = require('./signal-extractor.js');
 const { mergeProfile } = require('./kyc-merge.js');
 const { execFile } = require('child_process');
 const statusManager = require('./status-manager.js');
-const hatori = require('./hatori-client.js');
 
 /**
  * Optimized Background Worker (SQLite version)
@@ -52,7 +53,7 @@ const hatori = require('./hatori-client.js');
  * 4. Extract KYC information from incoming text.
  */
 
-const PID_FILE = path.join(__dirname, 'data', 'worker.pid');
+const PID_FILE = dataPath('worker.pid');
 
 // Singleton Lock
 if (fs.existsSync(PID_FILE)) {
@@ -101,7 +102,7 @@ const seenIds = new Set();
 let isProcessing = false;
 const deepAnalysisInFlightByHandle = new Map();
 let pollFastRequested = false;
-const AUTO_SCAN_CURSOR_PATH = path.join(__dirname, 'data', 'kyc_auto_scan_cursor.json');
+const AUTO_SCAN_CURSOR_PATH = dataPath('kyc_auto_scan_cursor.json');
 
 function getAutoAnalyzeIntervalMs() {
     const hours = Number(process.env.REPLY_KYC_AUTO_INTERVAL_HOURS || 24);
@@ -362,18 +363,6 @@ async function poll() {
                         statusManager.update('imessage', { processed: next, lastSync: new Date().toISOString() });
                     } catch { }
 
-                    // 1.5. Ingest into Hatori if enabled
-                    if (process.env.REPLY_USE_HATORI === '1') {
-                        hatori.ingestEvent({
-                            external_event_id: `reply:live-${id}`,
-                            kind: 'imessage',
-                            conversation_id: `reply:${handle}`,
-                            sender_id: fromMe ? 'reply:me' : `reply:${handle}`,
-                            content: text,
-                            metadata: { source: 'iMessage-live', date }
-                        }).catch(e => console.warn(`[Hatori] Background ingest failed for ${id}:`, e.message));
-                    }
-
                     // 2. Track activity
                     if (handle) {
                         contactStore.updateLastContacted(handle, date, { channel: 'imessage' });
@@ -438,10 +427,9 @@ async function runIntelligencePipeline(handle, text) {
             const snippets = await getSnippets(text, 3);
             const draftResult = await generateReply(text, snippets, handle);
             const draftText = typeof draftResult === 'string' ? draftResult : (draftResult.suggestion || '');
-            const draftHatoriId = typeof draftResult === 'object' ? (draftResult.hatori_id || null) : null;
             if (String(draftText || '').trim()) {
-                await contactStore.setDraft(handle, draftText, { hatori_id: draftHatoriId });
-                console.log(`[Worker] Inline draft created${draftHatoriId ? ` (hatori_id: ${draftHatoriId})` : ''}.`);
+                await contactStore.setDraft(handle, draftText);
+                console.log('[Worker] Inline draft created.');
             }
         }
     } catch (e) {

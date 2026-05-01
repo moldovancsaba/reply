@@ -70,8 +70,7 @@ async function syncMail() {
             return (typeof result === 'object') ? result : { added: Number(result) || 0, hasMore: false };
         } catch (e) {
             console.error("[Mail Sync] Gmail sync failed:", e.message);
-            updateStatus({ state: "error", message: e.message, connector: "gmail" });
-            throw e;
+            updateStatus({ state: "error", message: `Gmail failed, falling back to local mail: ${e.message}`, connector: "gmail" });
         }
     }
 
@@ -224,7 +223,10 @@ async function syncMail() {
 }
 
 if (require.main === module) {
-    syncMail().then(count => console.log(`Finished. Synced ${count} emails.`));
+    syncMail().then((result) => {
+        const added = typeof result === "object" ? Number(result.added) || 0 : Number(result) || 0;
+        console.log(`Finished. Synced ${added} emails.`);
+    });
 }
 
 module.exports = { syncMail };

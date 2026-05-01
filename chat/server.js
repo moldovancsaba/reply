@@ -2,7 +2,7 @@
  * {reply} hub — HTTP API + static UI for the local chat / sync surface.
  *
  * Routing lives under `routes/*` (messaging, sync, system, …). Managed children (worker,
- * optional Hatori) go through `service-manager.js`. Before starting the worker, the hub calls
+ * optional helpers) go through `service-manager.js`. Before starting the worker, the hub calls
  * `ensure-hub-worker.js` so a stale `data/worker.pid` or duplicate worker does not exit 0
  * immediately. `hub-runtime.js` records the bound port for `/api/health` (`httpPort`/`httpHost`).
  *
@@ -18,18 +18,6 @@ loadReplyEnv();
 const { readSettings } = require("./settings-store.js");
 const { applyAiSettingsToProcessEnv } = require("./ai-runtime-config.js");
 applyAiSettingsToProcessEnv(readSettings());
-
-const { resolveHatoriForHubStart, resolveHatoriProjectPath } = require("./hatori-lifecycle.js");
-const HATORI_PROJECT_PATH = resolveHatoriProjectPath(__dirname);
-if (String(process.env.REPLY_USE_HATORI || "").trim() === "1") {
-  const hatoriExt = String(process.env.REPLY_HATORI_EXTERNAL || "").trim() === "1";
-  if (!fs.existsSync(HATORI_PROJECT_PATH) && !hatoriExt) {
-    console.warn(
-      `[Hatori] REPLY_USE_HATORI=1 but no checkout at ${HATORI_PROJECT_PATH} — hub will not spawn the sidecar. ` +
-        `Set REPLY_HATORI_PROJECT_PATH to your clone (e.g. /Users/Shared/Projects/hatori) or REPLY_HATORI_EXTERNAL=1 if the API runs elsewhere.`
-    );
-  }
-}
 
 /** Verbose hub `console.log` lines (reply#33). Errors/warnings stay on. */
 function replyHubDebugLog(...args) {
@@ -68,42 +56,11 @@ const serviceManager = require("./service-manager.js");
 const hubRuntime = require("./hub-runtime.js");
 const { ensureWorkerCanStartFromHub } = require("./ensure-hub-worker.js");
 
-// Start managed services (Hatori: probe → launchctl kickstart on macOS → optional uvicorn; reply#66)
+// Start managed services for the local product runtime.
 async function startManagedServices() {
   try {
-    serviceManager.setStatus("hatori", "loading in queue");
     serviceManager.setStatus("worker", "loading in queue");
-
-    const hatoriExt = String(process.env.REPLY_HATORI_EXTERNAL || "").trim() === "1";
-    const hatoriPathOk = fs.existsSync(HATORI_PROJECT_PATH);
-    if (process.env.REPLY_USE_HATORI !== "1") {
-      serviceManager.setStatus("hatori", "skipped");
-    } else if (!hatoriPathOk && !hatoriExt) {
-      serviceManager.setStatus("hatori", "skipped");
-    }
-
-    if (process.env.REPLY_USE_HATORI === "1" && (hatoriPathOk || hatoriExt)) {
-      const hatoriPort = process.env.REPLY_HATORI_PORT || "23572";
-      statusManager.update("system", { progress: 30, message: "Resolving Hatori…" });
-      function spawnHatoriSidecar() {
-        const venvPython = path.join(HATORI_PROJECT_PATH, ".venv/bin/python");
-        const pythonCmd = fs.existsSync(venvPython) ? venvPython : "python3";
-        serviceManager.start("hatori", pythonCmd, [
-          "-m", "uvicorn", "api.app:app",
-          "--host", "127.0.0.1",
-          "--port", String(hatoriPort),
-        ], HATORI_PROJECT_PATH);
-      }
-      await resolveHatoriForHubStart({
-        serviceManager,
-        hatoriPort,
-        hatoriProjectPath: HATORI_PROJECT_PATH,
-        spawnUvicorn: spawnHatoriSidecar,
-        debugLog: replyHubDebugLog,
-      });
-    }
-
-    statusManager.update("system", { progress: 50, message: "Launching background worker..." });
+    statusManager.update("system", { progress: 40, message: "Launching background worker..." });
     ensureWorkerCanStartFromHub(__dirname);
     serviceManager.start("worker", path.join(__dirname, "background-worker.js"));
     statusManager.update("system", { status: "online", progress: 100, message: "All systems ready" });
@@ -147,8 +104,6 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/api/suggest") return messagingRoutes.serveSuggest(req, res);
   if (pathname === "/api/refine-reply" || pathname === "/api/refine") return messagingRoutes.serveRefineReply(req, res);
   if (pathname === "/api/feedback") return messagingRoutes.serveFeedback(req, res);
-  if (pathname === "/api/hatori/outcome" || pathname === "/api/hatori-outcome") return messagingRoutes.serveHatoriOutcome(req, res);
-
   // Sending (Sensitive)
   if (pathname === "/api/send-whatsapp") return auth({ route: pathname, action: "send-whatsapp", requireHumanApproval: true }) && messagingRoutes.serveSendWhatsApp(req, res);
   if (pathname === "/api/send-imessage") return auth({ route: pathname, action: "send-imessage", requireHumanApproval: true }) && messagingRoutes.serveSendMessage(req, res, 'imessage');
@@ -159,6 +114,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/api/sync-notes") return auth({ route: pathname, action: "sync-notes" }) && syncRoutes.serveSyncNotes(req, res);
   if (pathname === "/api/sync-imessage") return auth({ route: pathname, action: "sync-imessage" }) && syncRoutes.serveSyncIMessage(req, res);
   if (pathname === "/api/sync-mail") return auth({ route: pathname, action: "sync-mail" }) && syncRoutes.serveSyncMail(req, res);
+  if (pathname === "/api/sync-calendar") return auth({ route: pathname, action: "sync-calendar" }) && syncRoutes.serveSyncCalendar(req, res);
   if (pathname === "/api/sync-whatsapp") return auth({ route: pathname, action: "sync-whatsapp" }) && syncRoutes.serveSyncWhatsApp(req, res);
   if (pathname === "/api/sync-linkedin") return auth({ route: pathname, action: "sync-linkedin" }) && syncRoutes.serveSyncLinkedIn(req, res);
   if (pathname === "/api/sync-linkedin-posts") return auth({ route: pathname, action: "sync-linkedin-posts" }) && syncRoutes.serveSyncLinkedInPosts(req, res);
@@ -243,7 +199,7 @@ function tryListen(port) {
   server.once("listening", () => {
     boundPort = server.address().port;
     hubRuntime.setListenInfo(boundPort, "127.0.0.1");
-    console.log(`Reply POC server running at http://localhost:${boundPort}`);
+    console.log(`{reply} hub running at http://localhost:${boundPort}`);
     setImmediate(() => {
       systemRoutes
         .buildSystemHealthPayload()

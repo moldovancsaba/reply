@@ -1,8 +1,10 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { ensureDataHome, dataPath } = require("./app-paths.js");
 
-const SETTINGS_PATH = path.join(__dirname, "data", "settings.json");
+ensureDataHome();
+const SETTINGS_PATH = dataPath("settings.json");
 const CHANNEL_BRIDGE_MODES = new Set(["disabled", "draft_only"]);
 const CHANNEL_BRIDGE_CHANNELS = ["imessage", "whatsapp", "telegram", "discord", "signal", "viber", "linkedin"];
 
@@ -20,7 +22,7 @@ function getEncryptionKey() {
     if (debugSettingsLoggingEnabled()) {
       try {
         fs.appendFileSync(
-          path.join(__dirname, "data", "debug_token.log"),
+          dataPath("debug_token.log"),
           `[${new Date().toISOString()}] settings-store: encryption key derived (operator token length=${token.length}, not logged)\n`
         );
       } catch {
@@ -209,17 +211,9 @@ function withDefaults(settings) {
       },
     },
     health: {
-      hatoriProbeTimeoutMs: Math.max(
-        3000,
-        Math.min(Number(s?.health?.hatoriProbeTimeoutMs) || 12000, 120000)
-      ),
       ollamaProbeTimeoutMs: Math.max(
         1000,
         Math.min(Number(s?.health?.ollamaProbeTimeoutMs) || 3000, 30000)
-      ),
-      hatoriWatchdogFailureThreshold: Math.max(
-        1,
-        Math.min(Number(s?.health?.hatoriWatchdogFailureThreshold) || 3, 20)
       ),
       uiHealthPollIntervalMs: Math.max(
         5000,
@@ -254,7 +248,7 @@ function withDefaults(settings) {
     ai: (() => {
       const a = s?.ai || {};
       const dr = String(a.draftRuntime || "auto").toLowerCase();
-      const draftRuntime = dr === "ollama" || dr === "hatori" ? dr : "auto";
+      const draftRuntime = dr === "ollama" ? dr : "auto";
       const port = Number(a.ollamaPort);
       return {
         draftRuntime,
@@ -265,7 +259,6 @@ function withDefaults(settings) {
         openclawGatewayUrl: String(a.openclawGatewayUrl || "").trim().slice(0, 512),
         openclawGatewayToken:
           a.openclawGatewayToken === null ? null : String(a.openclawGatewayToken || ""),
-        hatoriApiUrl: String(a.hatoriApiUrl || "").trim().slice(0, 512),
         annotationOllamaModel: String(a.annotationOllamaModel || "").trim().slice(0, 160),
         kycOllamaModel: String(a.kycOllamaModel || "").trim().slice(0, 160),
       };
@@ -413,9 +406,7 @@ function maskSettingsForClient(settings) {
       quantities: worker.quantities,
     },
     health: {
-      hatoriProbeTimeoutMs: cfg.health?.hatoriProbeTimeoutMs ?? 12000,
       ollamaProbeTimeoutMs: cfg.health?.ollamaProbeTimeoutMs ?? 3000,
-      hatoriWatchdogFailureThreshold: cfg.health?.hatoriWatchdogFailureThreshold ?? 3,
       uiHealthPollIntervalMs: cfg.health?.uiHealthPollIntervalMs ?? 15000,
     },
     ai: {
@@ -427,7 +418,6 @@ function maskSettingsForClient(settings) {
       openclawGatewayUrl: cfg.ai?.openclawGatewayUrl || "",
       hasOpenclawGatewayToken: ocTok.has,
       openclawGatewayTokenHint: ocTok.hint,
-      hatoriApiUrl: cfg.ai?.hatoriApiUrl || "",
       annotationOllamaModel: cfg.ai?.annotationOllamaModel || "",
       kycOllamaModel: cfg.ai?.kycOllamaModel || "",
     },
@@ -518,12 +508,6 @@ function syncToEnv(settings) {
     if (ocPlain && String(ocPlain).trim()) {
       mapping.REPLY_OPENCLAW_GATEWAY_TOKEN = String(ocPlain).trim();
     }
-    if (ai.hatoriApiUrl && String(ai.hatoriApiUrl).trim()) {
-      let u = String(ai.hatoriApiUrl).trim();
-      if (!/^https?:\/\//i.test(u)) u = `http://${u}`;
-      mapping.HATORI_API_URL = u.replace(/\/$/, "");
-    }
-
     // Drop nulls and values that still look AES-encrypted (iv:hex), not URLs like http://...
     for (const key of Object.keys(mapping)) {
       const val = mapping[key];

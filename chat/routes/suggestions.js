@@ -1,9 +1,8 @@
 const { generateReply } = require('../reply-engine.js');
 const { getSnippets, getGoldenExamples, getHistory } = require("../vector-store.js");
 const contactStore = require("../contact-store.js");
-const hatori = require("../hatori-client.js");
-const { shouldRunHatoriIngestBeforeSuggest } = require("../ai-runtime-config.js");
-const { pathPrefixesForHandle, pickLatestInboundFromVectorDocs } = require("../utils/chat-utils.js");
+const messageStore = require("../message-store.js");
+const { pathPrefixesForHandle, pickLatestInboundFromVectorDocs, inferChannelFromHandle } = require("../utils/chat-utils.js");
 
 
 // Helper functions from server.js
@@ -96,6 +95,12 @@ async function serveSuggest(req, res) {
       const docs = historyBatches.flat();
       const picked = pickLatestInboundFromVectorDocs(docs);
       message = picked?.text?.trim() || "";
+
+      if (!message) {
+        const dbRow = await messageStore.getLatestContextForHandles(handles, { limit: 120 });
+        message = String(dbRow?.text || '').trim();
+        inferChannelFromHandle(dbRow?.handle || handle);
+      }
     }
 
     if (!message) {
@@ -110,26 +115,9 @@ async function serveSuggest(req, res) {
     const snippets = await getSnippets(message, 3);
     const goldenExamples = await getGoldenExamples(5);
 
-    // Ingest into Hatori before suggestion when Hatori is enabled and not ollama-only runtime
-    if (shouldRunHatoriIngestBeforeSuggest()) {
-      try {
-        await hatori.ingestEvent({
-          external_event_id: `reply:msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          kind: handle.includes('@') ? 'email' : 'imessage',
-          conversation_id: `reply:${handle}`,
-          sender_id: `reply:${handle}`,
-          content: message,
-          metadata: { source: 'api-suggest' }
-        });
-      } catch (e) {
-        console.warn("[Hatori] Ingest failed, continuing to suggestion:", e.message);
-      }
-    }
-
     const suggestionResult = await generateReply(message, snippets, handle, goldenExamples);
     const suggestion = typeof suggestionResult === 'string' ? suggestionResult : (suggestionResult.suggestion || "");
     const explanation = suggestionResult.explanation || "";
-    const hatori_id = suggestionResult.hatori_id || null;
 
     // Save as pending suggestion
     const { addDocuments } = require("../vector-store.js");
@@ -141,7 +129,7 @@ async function serveSuggest(req, res) {
       is_annotated: false
     }]).catch(e => console.error("Failed to save suggestion:", e.message));
 
-    writeJson(res, 200, { suggestion, explanation, hatori_id });
+    writeJson(res, 200, { suggestion, explanation });
   } catch (e) {
     console.error("Suggest error:", e);
     writeJson(res, 500, { error: e.message || "Suggest failed" });

@@ -18,9 +18,9 @@
     <string>__REPO_ROOT__/tools/scripts/reply_service.sh</string>
   </array>
   <key>StandardOutPath</key>
-  <string>__HOME__/Library/Logs/Reply/hub.log</string>
+  <string>__HOME__/Library/Logs/reply/hub.log</string>
   <key>StandardErrorPath</key>
-  <string>__HOME__/Library/Logs/Reply/hub.log</string>
+  <string>__HOME__/Library/Logs/reply/hub.log</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
