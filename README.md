@@ -20,13 +20,28 @@
 
 ## Product Overview
 
-`{reply}` is your unified communication bridge. It continuously scrapes, polls, and listens to webhook events from your messaging platforms, vectors them into an embedded [LanceDB](https://lancedb.github.io/lancedb/) engine, and drafts locally through Ollama.
+`{reply}` is a macOS-first local communication operating system for a single human operator.
+
+It brings inbound communication, contact context, local knowledge, draft generation, and outbound execution into one local product.
+
+At a high level, `{reply}`:
+
+1. ingests communication and context from local and connected sources
+2. organizes that around contacts and conversations
+3. generates and refines drafts locally
+4. helps the operator decide what to do next
+5. executes the final action through the correct channel
+6. captures feedback and outcomes for future improvement
+
+Canonical product definition:
+- [REPLY_OVERVIEW.md](REPLY_OVERVIEW.md)
 
 Capabilities:
-- **WhatsApp Webhook Ingress**: Works exclusively via `OpenClaw` hardware routing.
-- **iMessage Scraping**: Scans `~/Library/Messages/chat.db` every few minutes.
-- **Unified RAG Search**: Semantically search your multi-channel history.
-- **AI Suggest & Magic**: Uses local Ollama-backed drafting and refinement.
+- **Unified local workspace**: one operator view across conversations, contact profiles, notes, channels, and local intelligence.
+- **Channel aggregation**: iMessage, WhatsApp, email, Notes, Calendar, Contacts, LinkedIn messages, and LinkedIn posts.
+- **Unified RAG and contact-aware context**: semantically search and retrieve relevant multi-channel history and local facts.
+- **AI Suggest & Magic**: local Ollama-backed drafting and refinement with recipient-aware context.
+- **Outbound execution**: send or hand off through iMessage, WhatsApp, email, and LinkedIn.
 - **Knowledge annotation (Ollama, local):** Ingest first, then run **`cd chat && npm run annotate`** (or rely on the **background worker** timer). Tags, summaries, and facts land on each LanceDB row; **`/api/suggest-reply`** returns them on each `snippets[]` item when annotated, and the reply pipeline uses the same enriched text as **`context-engine`** RAG facts. See **[docs/INGESTION.md](docs/INGESTION.md)** and `REPLY_ANNOTATION_*` in **`chat/.env.example`**.
 - **Context engine & voice:** Recipient-scoped history and hybrid RAG are assembled in **`chat/context-engine.js`** (see **[docs/CONTEXT_ENGINE.md](docs/CONTEXT_ENGINE.md)**). **Mic** in the hub uses the browser **Web Speech API** to fill the composer; pair with **Suggest** for an AI draft.
 - **Alias merge (reversible):** Merging contacts moves channels/notes to the primary and keeps the other SQLite row as an **`primary_contact_id` alias**. The KYC panel lists linked profiles with **Unlink**; APIs: **`GET /api/contacts/aliases?for=`** and **`POST /api/contacts/unlink-alias`** (`aliasContactId`). See **[reply#19](https://github.com/moldovancsaba/reply/issues/19)**.
@@ -119,6 +134,12 @@ npm start
 - `{reply}` generates drafts locally for inbound activity via `background-worker.js`.
 - **Manual Drafting**: Use "💡 Suggest" for forced regeneration or "✨ Magic" for context-aware refinement.
 - **Background Backfill**: A periodic task runs every 5 minutes to generate missing drafts for older active conversations.
+
+### Product Shape
+- **Product shell**: native macOS app at `app/reply-app`
+- **Runtime**: local Node hub + managed background worker
+- **Storage**: SQLite-backed local stores + LanceDB + app-owned data/log paths
+- **Current UI reality**: native product shell with a still-transitional embedded workspace UI while native surfaces continue replacing browser-era ones
 
 ## Troubleshooting
 
