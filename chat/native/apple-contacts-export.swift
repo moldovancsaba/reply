@@ -17,7 +17,7 @@ enum ExportError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .accessDenied:
-            return "Contacts access denied. Grant Contacts permission to the Reply host process and try again."
+            return "Contacts access denied. Grant Contacts permission to the {reply} host process and try again."
         }
     }
 }

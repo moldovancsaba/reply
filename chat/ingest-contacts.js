@@ -71,7 +71,7 @@ function ingestContacts() {
             updateStatus({
                 state: 'running',
                 progress: 40,
-                message: `Merging ${newContactsData.length} contacts into Reply...`,
+                message: `Merging ${newContactsData.length} contacts into {reply}...`,
                 total: newContactsData.length
             });
 

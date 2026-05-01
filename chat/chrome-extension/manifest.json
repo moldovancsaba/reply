@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "Reply Brain - LinkedIn Bridge",
+    "name": "{reply} brain - LinkedIn Bridge",
     "version": "1.0",
-    "description": "Background sync for LinkedIn messages to Reply Brain.",
+    "description": "Background sync for LinkedIn messages to the {reply} brain.",
     "permissions": [
         "storage"
     ],

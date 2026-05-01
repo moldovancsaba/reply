@@ -1,4 +1,4 @@
-# Reply Execution Backlog
+# {reply} Execution Backlog
 
 ## Objective
 
@@ -18,13 +18,13 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
 ### M2. Trinity Alignment
 
 - [x] Map channel and conversation evidence into the Trinity reply contract.
-- [x] Add shadow-mode comparison between legacy drafting and Trinity candidate outputs.
-- [x] Route one bounded operator workflow through the Trinity adapter boundary.
+- [x] Add shadow-mode comparison between legacy drafting and `{trinity}` candidate outputs.
+- [x] Route one bounded operator workflow through the `{trinity}` adapter boundary.
 
 ### M3. Legacy Retirement
 
-- [ ] Remove direct brain ownership from legacy runtime paths after Trinity cutover succeeds.
-- [ ] Move feedback semantics onto the Trinity-owned contract once feedback memory is available upstream.
+- [ ] Remove direct brain ownership from legacy runtime paths after `{trinity}` cutover succeeds.
+- [ ] Move feedback semantics onto the `{trinity}`-owned contract once feedback memory is available upstream.
 
 ## Active Issue Queue
 
@@ -44,8 +44,8 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
 
 ### Open
 
-- `REPLY-005` Trinity shadow-mode execution
-  The adapter boundary exists, but `{reply}` still uses the legacy engine as the active implementation. Fixed by dual-running Trinity in `trinity-shadow` mode, recording deterministic comparison artifacts while keeping legacy as the active suggestion.
+- `REPLY-005` `{trinity}` shadow-mode execution
+  The adapter boundary exists, but `{reply}` still uses the legacy engine as the active implementation. Fixed by dual-running `{trinity}` in `trinity-shadow` mode, recording deterministic comparison artifacts while keeping legacy as the active suggestion.
 
 - `REPLY-006` Dev-toolchain major-version upgrade lane
   `chat` is clean on tests, lint, audit, and the native package rebuild after safe dependency updates, but major upgrades remain for the ESLint toolchain. Those should be handled in a dedicated compatibility pass rather than mixed into runtime-boundary work.

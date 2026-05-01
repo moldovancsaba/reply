@@ -97,21 +97,21 @@ struct NativeSettingsView: View {
 
             Divider()
 
-            Text("Trinity drafting roles")
+            Text("{trinity} drafting roles")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(ReplyConstellationPalette.textSecondary)
 
-            TextField("Trinity generator model", text: Binding(
+            TextField("{trinity} generator model", text: Binding(
                 get: { service.settingsDraft.ai.trinityGeneratorModel ?? "granite4:350m" },
                 set: { service.settingsDraft.ai.trinityGeneratorModel = $0 }
             ))
 
-            TextField("Trinity refiner model", text: Binding(
+            TextField("{trinity} refiner model", text: Binding(
                 get: { service.settingsDraft.ai.trinityRefinerModel ?? "mistral:latest" },
                 set: { service.settingsDraft.ai.trinityRefinerModel = $0 }
             ))
 
-            TextField("Trinity evaluator model", text: Binding(
+            TextField("{trinity} evaluator model", text: Binding(
                 get: { service.settingsDraft.ai.trinityEvaluatorModel ?? "qwen2.5:7b" },
                 set: { service.settingsDraft.ai.trinityEvaluatorModel = $0 }
             ))
