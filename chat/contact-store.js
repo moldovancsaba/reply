@@ -1,13 +1,37 @@
 const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
+const { ensureDataHome, dataPath } = require('./app-paths.js');
 
-const DB_PATH = process.env.REPLY_CONTACTS_DB_PATH || path.join(__dirname, 'data', 'contacts.db');
+ensureDataHome();
+const DB_PATH = process.env.REPLY_CONTACTS_DB_PATH || dataPath('contacts.db');
+const CONTACT_STORE_REFRESH_TTL_MS = Math.max(
+    0,
+    parseInt(process.env.REPLY_CONTACTS_REFRESH_TTL_MS || '5000', 10) || 5000
+);
+
+function readStoreChangeStamp() {
+    const candidates = [DB_PATH, `${DB_PATH}-wal`, `${DB_PATH}-shm`];
+    let latest = 0;
+    for (const file of candidates) {
+        try {
+            const stat = fs.statSync(file);
+            latest = Math.max(latest, stat.mtimeMs || 0, stat.size || 0);
+        } catch {
+            // Ignore absent files.
+        }
+    }
+    return latest;
+}
 
 class ContactStore {
     constructor() {
         this._contacts = [];
         this._lastMtimeMs = null;
+        this._lastRefreshAtMs = 0;
+        this._contactsById = new Map();
+        this._contactsByHandle = new Map();
+        this._contactsByLookup = new Map();
         try {
             const dir = path.dirname(DB_PATH);
             if (!fs.existsSync(dir)) {
@@ -86,6 +110,7 @@ class ContactStore {
     }
 
     async refresh() {
+        this._lastRefreshAtMs = Date.now();
         return new Promise((resolve, reject) => {
             this._db.all("SELECT * FROM contacts", (err, rows) => {
                 if (err) return reject(err);
@@ -97,21 +122,43 @@ class ContactStore {
                         this._db.all("SELECT * FROM contact_suggestions", (err, sugs) => {
                             if (err) return reject(err);
 
+                            const channelsByContact = new Map();
+                            for (const ch of channels || []) {
+                                if (!ch?.contact_id) continue;
+                                const list = channelsByContact.get(ch.contact_id) || [];
+                                list.push(ch);
+                                channelsByContact.set(ch.contact_id, list);
+                            }
+
+                            const notesByContact = new Map();
+                            for (const note of notes || []) {
+                                if (!note?.contact_id) continue;
+                                const list = notesByContact.get(note.contact_id) || [];
+                                list.push(note);
+                                notesByContact.set(note.contact_id, list);
+                            }
+
+                            const suggestionsByContact = new Map();
+                            for (const sug of sugs || []) {
+                                if (!sug?.contact_id) continue;
+                                const list = suggestionsByContact.get(sug.contact_id) || [];
+                                list.push(sug);
+                                suggestionsByContact.set(sug.contact_id, list);
+                            }
+
                             const hydrated = (rows || []).map(c => {
                                 const contact = { ...c };
                                 contact.channels = { phone: [], email: [] };
                                 contact.verifiedChannels = {};
-                                if (channels) {
-                                    channels.filter(ch => ch.contact_id === c.id).forEach(ch => {
-                                        if (!contact.channels[ch.type]) contact.channels[ch.type] = [];
-                                        contact.channels[ch.type].push(ch.value);
-                                        if (ch.inbound_verified_at) {
-                                            contact.verifiedChannels[ch.value] = ch.inbound_verified_at;
-                                        }
-                                    });
+                                const contactChannels = channelsByContact.get(c.id) || [];
+                                for (const ch of contactChannels) {
+                                    if (!contact.channels[ch.type]) contact.channels[ch.type] = [];
+                                    contact.channels[ch.type].push(ch.value);
+                                    if (ch.inbound_verified_at) {
+                                        contact.verifiedChannels[ch.value] = ch.inbound_verified_at;
+                                    }
                                 }
-                                contact.notes = (notes || [])
-                                    .filter(n => n.contact_id === c.id)
+                                contact.notes = (notesByContact.get(c.id) || [])
                                     .map((n) => {
                                         const raw = String(n.text || "");
                                         try {
@@ -129,18 +176,73 @@ class ContactStore {
                                         }
                                         return { ...n, kind: "note", text: raw, value: raw };
                                     });
-                                contact.pendingSuggestions = (sugs || []).filter(s => s.contact_id === c.id && s.status === 'pending');
-                                contact.rejectedSuggestions = (sugs || []).filter(s => s.contact_id === c.id && s.status === 'rejected').map(s => s.content);
+                                const contactSuggestions = suggestionsByContact.get(c.id) || [];
+                                contact.pendingSuggestions = contactSuggestions.filter(s => s.status === 'pending');
+                                contact.rejectedSuggestions = contactSuggestions
+                                    .filter(s => s.status === 'rejected')
+                                    .map(s => s.content);
                                 return contact;
                             });
 
+                            const contactsById = new Map();
+                            for (const contact of hydrated) {
+                                if (contact?.id) contactsById.set(contact.id, contact);
+                            }
+
+                            const contactsByHandle = new Map();
+                            const contactsByLookup = new Map();
+                            const addLookup = (raw, canonical) => {
+                                const key = String(raw || '').trim().toLowerCase();
+                                if (!key || contactsByLookup.has(key)) return;
+                                contactsByLookup.set(key, canonical);
+                            };
+
+                            for (const contact of hydrated) {
+                                const canonical =
+                                    (contact.primary_contact_id && contactsById.get(contact.primary_contact_id)) ||
+                                    contact;
+                                const handleKey = String(contact.handle || '').trim().toLowerCase();
+                                if (handleKey && !contactsByHandle.has(handleKey)) {
+                                    contactsByHandle.set(handleKey, contact);
+                                }
+                                addLookup(contact.handle, canonical);
+                                addLookup(contact.displayName, canonical);
+                                if (contact.channels) {
+                                    for (const type in contact.channels) {
+                                        const values = contact.channels[type];
+                                        if (!Array.isArray(values)) continue;
+                                        for (const value of values) addLookup(value, canonical);
+                                    }
+                                }
+                            }
+
                             this._contacts = hydrated;
+                            this._contactsById = contactsById;
+                            this._contactsByHandle = contactsByHandle;
+                            this._contactsByLookup = contactsByLookup;
+                            this._lastMtimeMs = readStoreChangeStamp();
                             resolve(hydrated);
                         });
                     });
                 });
             });
         });
+    }
+
+    async refreshIfChanged(maxAgeMs = CONTACT_STORE_REFRESH_TTL_MS) {
+        const now = Date.now();
+        const stamp = readStoreChangeStamp();
+        const cacheFresh =
+            this._contacts.length > 0 &&
+            this._lastMtimeMs != null &&
+            stamp === this._lastMtimeMs &&
+            (now - this._lastRefreshAtMs) < maxAgeMs;
+
+        if (cacheFresh) {
+            return this._contacts;
+        }
+
+        return this.refresh();
     }
 
     async saveContact(contact) {
@@ -232,14 +334,14 @@ class ContactStore {
      */
     findById(id) {
         if (!id) return null;
-        return this._contacts.find((c) => c.id === id) || null;
+        return this._contactsById.get(id) || null;
     }
 
     /** Match on `handle` column only (no alias resolution). Used by merge API (reply#19). */
     getContactRowByHandle(handle) {
         const search = String(handle || "").trim().toLowerCase();
         if (!search) return null;
-        return this._contacts.find((c) => (c.handle || "").toLowerCase().trim() === search) || null;
+        return this._contactsByHandle.get(search) || null;
     }
 
     /**
@@ -274,33 +376,14 @@ class ContactStore {
 
     findContact(identifier) {
         if (!identifier) return null;
-        const search = identifier.toLowerCase().trim();
-
-        const found = this._contacts.find(c => {
-            if (c.handle && c.handle.toLowerCase() === search) return true;
-            if (c.displayName && c.displayName.toLowerCase() === search) return true;
-            if (c.channels) {
-                for (const type in c.channels) {
-                    const values = c.channels[type];
-                    if (Array.isArray(values) && values.some(v => v.toLowerCase() === search)) return true;
-                }
-            }
-            return false;
-        });
-
-        // Resolve Alias
-        if (found && found.primary_contact_id) {
-            const primary = this._contacts.find(c => c.id === found.primary_contact_id);
-            if (primary) return primary;
-        }
-
-        return found;
+        const search = String(identifier).toLowerCase().trim();
+        return this._contactsByLookup.get(search) || null;
     }
 
     getByHandle(handle) {
         if (!handle) return null;
         const search = String(handle).toLowerCase().trim();
-        return this._contacts.find(c => c.handle && c.handle.toLowerCase().trim() === search) || null;
+        return this._contactsByHandle.get(search) || null;
     }
 
     async updateContact(handle, data) {
@@ -394,12 +477,11 @@ class ContactStore {
         }
     }
 
-    async setDraft(handle, text, meta = {}) {
+    async setDraft(handle, text) {
         await this.waitUntilReady();
         const contact = this.findContact(handle);
         if (contact) {
             contact.draft = text;
-            contact.draft_hatori_id = meta.hatori_id || null;
             contact.status = text ? 'draft' : 'open';
             await this.saveContact(contact);
         }

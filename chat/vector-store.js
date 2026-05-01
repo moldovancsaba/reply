@@ -2,6 +2,7 @@ const lancedb = require("@lancedb/lancedb");
 const path = require("path");
 const fs = require("fs");
 const { channelFromDoc } = require("./utils/chat-utils");
+const { dataPath } = require("./app-paths.js");
 
 function escapeSqlString(value) {
     return String(value ?? "").replace(/'/g, "''");
@@ -21,7 +22,7 @@ function extractDetailedDateFromText(text) {
 // Singleton for the embedding pipeline to avoid reloading the model.
 let pipelineInstance = null;
 
-const DB_PATH = process.env.REPLY_KNOWLEDGE_DB_PATH || process.env.REPLY_LANCEDB_URI || path.join(__dirname, "../knowledge/lancedb");
+const DB_PATH = process.env.REPLY_KNOWLEDGE_DB_PATH || process.env.REPLY_LANCEDB_URI || dataPath("lancedb");
 const TABLE_NAME = "documents";
 
 /**

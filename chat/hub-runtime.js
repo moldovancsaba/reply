@@ -1,6 +1,6 @@
 /**
  * In-process hub listen address (set from `server.js` when the HTTP server binds).
- * Exposed on `/api/health` as `httpPort` / `httpHost` for menubar and runbook probes (reply#31).
+ * Exposed on `/api/health` as `httpPort` / `httpHost` for runbook probes (reply#31).
  */
 
 let httpPort = null;

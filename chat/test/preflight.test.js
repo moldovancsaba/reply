@@ -12,8 +12,7 @@ function baseHealth(overrides = {}) {
         services: {
             worker: { status: "online" },
             openclaw: { status: "online" },
-            ollama: { status: "online" },
-            hatori_api: { status: "skipped" }
+            ollama: { status: "online" }
         },
         ...overrides
     };
@@ -27,12 +26,6 @@ const pathsOk = {
 };
 
 test("buildPreflightReport: ready when worker, db, and required services ok", (t) => {
-    const prev = process.env.REPLY_USE_HATORI;
-    t.after(() => {
-        if (prev === undefined) delete process.env.REPLY_USE_HATORI;
-        else process.env.REPLY_USE_HATORI = prev;
-    });
-    process.env.REPLY_USE_HATORI = "0";
     const r = buildPreflightReport(baseHealth(), pathsOk, {
         settings: { global: { allowOpenClaw: true } }
     });
@@ -43,12 +36,6 @@ test("buildPreflightReport: ready when worker, db, and required services ok", (t
 });
 
 test("buildPreflightReport: blocked when worker offline", (t) => {
-    const prev = process.env.REPLY_USE_HATORI;
-    t.after(() => {
-        if (prev === undefined) delete process.env.REPLY_USE_HATORI;
-        else process.env.REPLY_USE_HATORI = prev;
-    });
-    process.env.REPLY_USE_HATORI = "0";
     const h = baseHealth({
         services: {
             ...baseHealth().services,
@@ -61,12 +48,6 @@ test("buildPreflightReport: blocked when worker offline", (t) => {
 });
 
 test("buildPreflightReport: openclaw critical when send transport needs it and gateway offline", (t) => {
-    const prevH = process.env.REPLY_USE_HATORI;
-    t.after(() => {
-        if (prevH === undefined) delete process.env.REPLY_USE_HATORI;
-        else process.env.REPLY_USE_HATORI = prevH;
-    });
-    process.env.REPLY_USE_HATORI = "0";
     process.env.REPLY_WHATSAPP_SEND_TRANSPORT = "openclaw_cli";
     try {
         const h = baseHealth({
@@ -89,32 +70,4 @@ test("buildPreflightReport: openclaw critical when send transport needs it and g
 
 test("API_CONTRACT_HUB is a non-empty semver-like label", () => {
     assert.match(API_CONTRACT_HUB, /^\d+\.\d+$/);
-});
-
-test("buildPreflightReport: Hatori lanes degraded when an agent is not ok", (t) => {
-    const prev = process.env.REPLY_USE_HATORI;
-    t.after(() => {
-        if (prev === undefined) delete process.env.REPLY_USE_HATORI;
-        else process.env.REPLY_USE_HATORI = prev;
-    });
-    process.env.REPLY_USE_HATORI = "1";
-    const h = baseHealth({
-        services: {
-            ...baseHealth().services,
-            hatori_api: {
-                status: "online",
-                detail: "ok · writer / drafter / judge",
-                agents: [
-                    { role: "writer", ok: true },
-                    { role: "drafter", ok: false },
-                    { role: "judge", ok: true }
-                ],
-                ui_url: "http://127.0.0.1:23571/chat"
-            }
-        }
-    });
-    const r = buildPreflightReport(h, pathsOk, { settings: {} });
-    const row = r.checks.find((c) => c.id === "hatori_api");
-    assert.strictEqual(row.status, "degraded");
-    assert.strictEqual(row.severity, "warning");
 });

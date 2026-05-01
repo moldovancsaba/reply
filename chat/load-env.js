@@ -1,6 +1,6 @@
 /**
  * Load `chat/.env` then optional `chat/.env.local` (gitignored) for machine-only overrides
- * such as `REPLY_USE_HATORI=1` without editing the main `.env` file.
+ * such as `REPLY_DEBUG=1` without editing the main `.env` file.
  */
 const fs = require("fs");
 const path = require("path");

@@ -26,7 +26,7 @@ git log -p --all -S 'GOOGLE_API_KEY' -- chat . | head
 
 1. Generate new operator token (long random string); set `REPLY_OPERATOR_TOKEN` in `chat/.env` on the Mac(s) that run the hub.
 2. If Gmail keys were exposed: create new key or OAuth client in Google Cloud; update `.env`; use Settings to disconnect and reconnect Gmail.
-3. Restart the hub (`make stop` / `make run` or LaunchAgent reload) so the process picks up new env.
+3. Restart the hub (`make stop` / `make run`) so the process picks up new env.
 4. Confirm sensitive routes still work: `POST /api/settings` with new token + approval headers (see `docs/HUMAN_FINAL_DECISION_POLICY.md`).
 5. Optional but recommended: enable **GitHub secret scanning** and **push protection** on `moldovancsaba/reply` (repository **Settings → Code security**).
 

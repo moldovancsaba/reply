@@ -6,6 +6,8 @@
 const { writeJson } = require("../utils/server-utils");
 const { readSettings, withDefaults } = require("../settings-store");
 const { syncNotes } = require("../sync-notes");
+const { syncCalendar } = require("../sync-calendar");
+const { getIMessageAccessError } = require("../sync-imessage");
 const { execFile } = require("child_process");
 const path = require("path");
 const syncGuard = require("../utils/sync-guard");
@@ -44,11 +46,18 @@ function serveSyncIMessage(req, res) {
     if (syncGuard.isLocked("imessage")) {
         return writeJson(res, 409, { status: "error", message: "iMessage sync already in progress" });
     }
+    const accessError = getIMessageAccessError();
+    if (accessError) {
+        return writeJson(res, 503, {
+            status: "error",
+            message: accessError
+        });
+    }
     syncGuard.acquireLock("imessage");
 
     console.log("Starting iMessage sync in background...");
     const scriptPath = path.join(__dirname, "../sync-imessage.js");
-    execFile(process.execPath, [scriptPath], { cwd: path.join(__dirname, "..") }, (error, stdout, stderr) => {
+    execFile(process.argv0 || process.execPath, [scriptPath], { cwd: path.join(__dirname, "..") }, (error, stdout, stderr) => {
         syncGuard.releaseLock("imessage");
         if (error) {
             console.error(`iMessage sync error: ${error.message}`);
@@ -80,6 +89,27 @@ function serveSyncMail(req, res) {
     });
 
     writeJson(res, 200, { status: "started", message: "Mail sync started in background" });
+}
+
+/**
+ * API Endpoint: /api/sync-calendar
+ */
+function serveSyncCalendar(req, res) {
+    if (syncGuard.isLocked("calendar")) {
+        return writeJson(res, 409, { status: "error", message: "Calendar sync already in progress" });
+    }
+    syncGuard.acquireLock("calendar");
+
+    console.log("Starting Calendar sync in background...");
+    syncCalendar().then(stats => {
+        console.log("Calendar sync completed:", stats);
+    }).catch(err => {
+        console.error("Calendar sync error:", err.message);
+    }).finally(() => {
+        syncGuard.releaseLock("calendar");
+    });
+
+    writeJson(res, 200, { status: "started", message: "Calendar sync started in background" });
 }
 
 /**
@@ -230,6 +260,7 @@ module.exports = {
     serveSyncNotes,
     serveSyncIMessage,
     serveSyncMail,
+    serveSyncCalendar,
     serveSyncWhatsApp,
     serveSyncLinkedIn,
     serveSyncContacts,

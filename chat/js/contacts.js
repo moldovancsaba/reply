@@ -26,6 +26,216 @@ let conversationsQuery = '';
 let conversationsSort = 'newest';
 let contactObserver = null;
 let isLoadingContacts = false;
+const CONVERSATIONS_CACHE_VERSION = 'v2';
+
+function conversationsCacheKey(query = conversationsQuery, sort = conversationsSort) {
+    return `reply.conversations.${CONVERSATIONS_CACHE_VERSION}.${String(query || '').trim().toLowerCase()}::${normalizeConversationSort(sort)}`;
+}
+
+function readCachedConversationPage(query = conversationsQuery, sort = conversationsSort) {
+    try {
+        const raw = window.localStorage?.getItem(conversationsCacheKey(query, sort));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || !Array.isArray(parsed.contacts)) return null;
+        return parsed;
+    } catch {
+        return null;
+    }
+}
+
+function writeCachedConversationPage(payload, query = conversationsQuery, sort = conversationsSort) {
+    try {
+        if (!window.localStorage || !payload || !Array.isArray(payload.contacts)) return;
+        const serializable = {
+            contacts: payload.contacts,
+            hasMore: !!payload.hasMore,
+            total: Number(payload.total) || payload.contacts.length,
+            cachedAt: new Date().toISOString(),
+        };
+        window.localStorage.setItem(conversationsCacheKey(query, sort), JSON.stringify(serializable));
+    } catch {
+        // Non-blocking cache only.
+    }
+}
+
+function renderConversationsPage(contacts, append = false) {
+    const contactListEl = document.getElementById('contact-list');
+    if (!contactListEl) return;
+
+    if (!append) {
+        contactListEl.innerHTML = '';
+    }
+
+    contacts.forEach(contact => {
+        const item = document.createElement('div');
+        item.className = 'sidebar-item';
+        item.dataset.handle = contact.handle;
+        if (window.currentHandle && (String(window.currentHandle) === String(contact.handle) || String(window.currentHandle) === String(contact.latestHandle || ''))) {
+            item.classList.add('active');
+        }
+
+        const statusDot = document.createElement('div');
+        statusDot.className = 'status-dot';
+        if (contact.status && contact.status !== 'open') {
+            statusDot.classList.add(contact.status);
+        } else {
+            statusDot.style.display = 'none';
+        }
+
+        const info = document.createElement('div');
+        info.className = 'contact-info';
+
+        const topRow = document.createElement('div');
+        topRow.className = 'contact-top-row';
+
+        const name = document.createElement('div');
+        name.className = 'contact-name';
+        const channel = contact.lastChannel || contact.channel || contact.lastSource || contact.source || '';
+        const handleForHint = contact.latestHandle || contact.handle || '';
+        const rawLabel = formatContactLabel(
+            contact.displayName || contact.name || contact.handle
+        );
+        const lidish =
+            /^[a-zA-Z0-9+/]+={0,2}$/.test(String(handleForHint)) &&
+            String(handleForHint).length >= 16;
+        const looksUnresolved =
+            lidish &&
+            (rawLabel === String(contact.handle || '').trim() ||
+                rawLabel === String(handleForHint).trim());
+        const displayName = looksUnresolved
+            ? `WhatsApp · ${String(handleForHint).slice(0, 10)}…`
+            : rawLabel;
+        name.textContent = displayName;
+
+        topRow.appendChild(name);
+
+        const count = Number.isFinite(Number(contact.count)) ? parseInt(contact.count, 10) : 0;
+        const badge = document.createElement('div');
+        badge.className = 'message-badge';
+        badge.textContent = count > 99 ? '99+' : count;
+        if (count === 0) {
+            badge.classList.add('badge-zero');
+            badge.title = 'No messages yet';
+        } else {
+            badge.title = `${count} messages`;
+        }
+        topRow.appendChild(badge);
+
+        const bridgeBadgeLabel = formatBridgePolicyBadge(contact.bridgePolicy);
+        if (bridgeBadgeLabel) {
+            const bridgeBadge = document.createElement('div');
+            bridgeBadge.className = 'bridge-policy-badge';
+            bridgeBadge.textContent = bridgeBadgeLabel;
+            bridgeBadge.title = `Bridge inbound mode: ${bridgeBadgeLabel}`;
+            topRow.appendChild(bridgeBadge);
+        }
+        info.appendChild(topRow);
+
+        const preview = document.createElement('div');
+        preview.className = 'contact-preview';
+        if (contact.lastMessage && contact.lastMessage !== 'Click to see history') {
+            preview.textContent = contact.lastMessage;
+            preview.classList.remove('contact-preview--empty');
+        } else {
+            preview.textContent = 'No recent messages';
+            preview.classList.add('contact-preview--empty');
+        }
+
+        info.appendChild(preview);
+
+        item.appendChild(statusDot);
+        item.appendChild(info);
+
+        const iconHint = [handleForHint, contact.lastMessage].filter(Boolean).join(' ');
+        const waLidHint = /^[a-zA-Z0-9+/]+={0,2}$/.test(String(handleForHint)) && String(handleForHint).length >= 20;
+        const syntheticChannel =
+            channel ||
+            (waLidHint ? 'whatsapp' : '') ||
+            (String(handleForHint).includes('@') ? 'email' : '');
+        const iconSeed = syntheticChannel ? '' : iconHint;
+        const iconPlatform = resolvePlatformTarget(iconSeed, { channelHint: syntheticChannel || channel }).platform;
+        const icon = createPlatformIcon(iconPlatform, channel || 'channel');
+        icon.classList.add('channel-icon');
+        const channelLabel = (contact.lastChannel || contact.channel || '').toString();
+        const sourceLabel = (contact.lastSource || contact.source || '').toString();
+        icon.title = [
+            channelLabel ? `Latest channel: ${channelLabel}` : null,
+            sourceLabel ? `Source: ${sourceLabel}` : null,
+            bridgeBadgeLabel ? `Bridge: ${bridgeBadgeLabel}` : null,
+        ].filter(Boolean).join('\n') || 'Latest channel';
+        item.appendChild(icon);
+
+        item.onclick = () => window.selectContact(contact.handle);
+
+        contactListEl.appendChild(item);
+    });
+
+    if (hasMoreContacts) {
+        const sentinel = document.createElement('div');
+        sentinel.className = 'contact-list-sentinel';
+        sentinel.style.cssText = 'padding: 1rem; text-align: center; color: #888; font-size: 0.9rem;';
+        sentinel.innerHTML = '<span>Loading more...</span>';
+        contactListEl.appendChild(sentinel);
+
+        if (!contactObserver) {
+            contactObserver = new IntersectionObserver((entries) => {
+                const first = entries[0];
+                if (first.isIntersecting && hasMoreContacts && !isLoadingContacts) {
+                    contactOffset += CONTACT_LIMIT;
+                    loadConversations(true);
+                }
+            }, { root: contactListEl, rootMargin: '100px' });
+        }
+
+        contactObserver.disconnect();
+        contactObserver.observe(sentinel);
+    } else if (contactObserver) {
+        contactObserver.disconnect();
+    }
+}
+
+async function refreshConversationsFromServer(append = false) {
+    const contactListEl = document.getElementById('contact-list');
+    if (!contactListEl) return;
+
+    const data = await fetchConversations(
+        contactOffset,
+        CONTACT_LIMIT,
+        conversationsQuery,
+        conversationsSort,
+        false
+    );
+    if (data?.meta && data.meta.sortValid === false) {
+        const req = data.meta.sortRequested != null ? String(data.meta.sortRequested) : '';
+        UI.showToast(
+            req
+                ? `Unknown conversation sort “${req}”. Using newest.`
+                : 'Unknown conversation sort. Using newest.',
+            'warning',
+            5000
+        );
+    }
+
+    hasMoreContacts = data.hasMore;
+
+    if (append) {
+        conversations = [...conversations, ...data.contacts];
+    } else {
+        conversations = data.contacts;
+    }
+    window.conversations = conversations;
+
+    renderConversationsPage(data.contacts, append);
+
+    if (!append && !conversationsQuery) {
+        writeCachedConversationPage({
+            contacts: data.contacts,
+            hasMore: data.hasMore,
+            total: data.total,
+        });
+    }
+}
 
 function formatBridgePolicyBadge(policy) {
     if (!policy || !policy.managed) return '';
@@ -85,186 +295,34 @@ export async function loadConversations(append = false) {
         if (isLoadingContacts) return;
         isLoadingContacts = true;
 
-        // Show loading state
+        const canUseStartupCache = !append && !conversationsQuery;
+        const cached = canUseStartupCache ? readCachedConversationPage() : null;
+
         if (!append) {
             contactOffset = 0;
-            contactListEl.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">Loading contacts...</div>';
+            if (cached && !conversations.length) {
+                hasMoreContacts = !!cached.hasMore;
+                conversations = cached.contacts;
+                window.conversations = conversations;
+                renderConversationsPage(cached.contacts, false);
+                refreshConversationsFromServer(false)
+                    .catch((error) => {
+                        console.error('Background contact refresh failed:', error);
+                    });
+                return;
+            }
+
+            if (!conversations.length) {
+                contactListEl.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">Loading contacts...</div>';
+            }
         }
 
-        // Fetch contacts from server
-        const data = await fetchConversations(
-            contactOffset,
-            CONTACT_LIMIT,
-            conversationsQuery,
-            conversationsSort,
-            !append
-        );
-        if (data?.meta && data.meta.sortValid === false) {
-            const req = data.meta.sortRequested != null ? String(data.meta.sortRequested) : '';
-            UI.showToast(
-                req
-                    ? `Unknown conversation sort “${req}”. Using newest.`
-                    : 'Unknown conversation sort. Using newest.',
-                'warning',
-                5000
-            );
-        }
-
-        // Update state
-        hasMoreContacts = data.hasMore;
-
-        if (append) {
-            conversations = [...conversations, ...data.contacts];
-        } else {
-            conversations = data.contacts;
-            contactListEl.innerHTML = '';
-        }
-        // Keep a single global pointer for modules that update contact labels (e.g. KYC save).
-        window.conversations = conversations;
-
-        // Render contacts
-        data.contacts.forEach(contact => {
-            const item = document.createElement('div');
-            item.className = 'sidebar-item';
-            item.dataset.handle = contact.handle;
-            if (window.currentHandle && (String(window.currentHandle) === String(contact.handle) || String(window.currentHandle) === String(contact.latestHandle || ''))) {
-                item.classList.add('active');
-            }
-
-            // Status indicator (only if not 'open' which is default)
-            const statusDot = document.createElement('div');
-            statusDot.className = 'status-dot';
-            if (contact.status && contact.status !== 'open') {
-                statusDot.classList.add(contact.status);
-            } else {
-                statusDot.style.display = 'none'; // Clean look for normal contacts
-            }
-
-            // Contact info
-            const info = document.createElement('div');
-            info.className = 'contact-info';
-
-            const topRow = document.createElement('div');
-            topRow.className = 'contact-top-row';
-
-            const name = document.createElement('div');
-            name.className = 'contact-name';
-            const channel = contact.lastChannel || contact.channel || contact.lastSource || contact.source || '';
-            const handleForHint = contact.latestHandle || contact.handle || '';
-            const rawLabel = formatContactLabel(
-                contact.displayName || contact.name || contact.handle
-            );
-            const lidish =
-                /^[a-zA-Z0-9+/]+={0,2}$/.test(String(handleForHint)) &&
-                String(handleForHint).length >= 16;
-            const looksUnresolved =
-                lidish &&
-                (rawLabel === String(contact.handle || '').trim() ||
-                    rawLabel === String(handleForHint).trim());
-            const displayName = looksUnresolved
-                ? `WhatsApp · ${String(handleForHint).slice(0, 10)}…`
-                : rawLabel;
-            name.textContent = displayName;
-
-            // Optional: Time would go here if available
-            // const time = document.createElement('div');
-            // time.className = 'contact-time'; 
-
-            topRow.appendChild(name);
-
-            // Message count badge - Moved next to name for zero-gap
-            const count = Number.isFinite(Number(contact.count)) ? parseInt(contact.count, 10) : 0;
-            const badge = document.createElement('div');
-            badge.className = 'message-badge';
-            badge.textContent = count > 99 ? '99+' : count;
-            if (count === 0) {
-                badge.classList.add('badge-zero');
-                badge.title = 'No messages yet';
-            } else {
-                badge.title = `${count} messages`;
-            }
-            topRow.appendChild(badge);
-
-            const bridgeBadgeLabel = formatBridgePolicyBadge(contact.bridgePolicy);
-            if (bridgeBadgeLabel) {
-                const bridgeBadge = document.createElement('div');
-                bridgeBadge.className = 'bridge-policy-badge';
-                bridgeBadge.textContent = bridgeBadgeLabel;
-                bridgeBadge.title = `Bridge inbound mode: ${bridgeBadgeLabel}`;
-                topRow.appendChild(bridgeBadge);
-            }
-            info.appendChild(topRow);
-
-            const preview = document.createElement('div');
-            preview.className = 'contact-preview';
-            // Only show preview if it exists and isn't the default placeholder
-            if (contact.lastMessage && contact.lastMessage !== 'Click to see history') {
-                preview.textContent = contact.lastMessage;
-                preview.classList.remove('contact-preview--empty');
-            } else {
-                preview.textContent = 'No recent messages';
-                preview.classList.add('contact-preview--empty');
-            }
-
-            info.appendChild(preview);
-
-            item.appendChild(statusDot);
-            item.appendChild(info);
-
-            // Channel indicator: prefer API channel/source over message text (reply#42).
-            const iconHint = [handleForHint, contact.lastMessage].filter(Boolean).join(' ');
-            const waLidHint = /^[a-zA-Z0-9+/]+={0,2}$/.test(String(handleForHint)) && String(handleForHint).length >= 20;
-            const syntheticChannel =
-                channel ||
-                (waLidHint ? 'whatsapp' : '') ||
-                (String(handleForHint).includes('@') ? 'email' : '');
-            const iconSeed = syntheticChannel ? '' : iconHint;
-            const iconPlatform = resolvePlatformTarget(iconSeed, { channelHint: syntheticChannel || channel }).platform;
-            const icon = createPlatformIcon(iconPlatform, channel || 'channel');
-            icon.classList.add('channel-icon');
-            const channelLabel = (contact.lastChannel || contact.channel || '').toString();
-            const sourceLabel = (contact.lastSource || contact.source || '').toString();
-            icon.title = [
-                channelLabel ? `Latest channel: ${channelLabel}` : null,
-                sourceLabel ? `Source: ${sourceLabel}` : null,
-                bridgeBadgeLabel ? `Bridge: ${bridgeBadgeLabel}` : null,
-            ].filter(Boolean).join('\n') || 'Latest channel';
-            item.appendChild(icon);
-
-            // Click handler
-            item.onclick = () => window.selectContact(contact.handle);
-
-            contactListEl.appendChild(item);
-        });
-
-        // Add sentinel element for infinite scrolling if there are more contacts
-        if (hasMoreContacts) {
-            const sentinel = document.createElement('div');
-            sentinel.className = 'contact-list-sentinel';
-            sentinel.style.cssText = 'padding: 1rem; text-align: center; color: #888; font-size: 0.9rem;';
-            sentinel.innerHTML = '<span>Loading more...</span>';
-            contactListEl.appendChild(sentinel);
-
-            if (!contactObserver) {
-                contactObserver = new IntersectionObserver((entries) => {
-                    const first = entries[0];
-                    if (first.isIntersecting && hasMoreContacts && !isLoadingContacts) {
-                        contactOffset += CONTACT_LIMIT;
-                        loadConversations(true);
-                    }
-                }, { root: contactListEl, rootMargin: '100px' });
-            }
-
-            contactObserver.disconnect();
-            contactObserver.observe(sentinel);
-        } else if (contactObserver) {
-            contactObserver.disconnect();
-        }
+        await refreshConversationsFromServer(append);
 
     } catch (error) {
         console.error('Failed to load conversations:', error);
         UI.showToast(error?.message || 'Failed to load contacts', 'error');
-        contactListEl.innerHTML = `
+        if (!conversations.length) contactListEl.innerHTML = `
       <div style="padding:20px; text-align:center; color:#d32f2f;">
         <p>Failed to load contacts</p>
         <button onclick="window.loadConversations()" style="margin-top:1rem; padding:0.5rem 1rem; cursor:pointer;">
@@ -294,6 +352,7 @@ export async function selectContact(handle) {
     const settingsPageEl = document.getElementById('settings-page');
     const activeNameEl = document.getElementById('active-contact-name-chat');
     const inputArea = document.querySelector('.input-area');
+    const chatInput = document.getElementById('chat-input');
     const body = document.body;
     const chatHeader = document.querySelector('.chat-header');
     if (!messagesEl || !dashboardEl || !activeNameEl || !inputArea) {
@@ -318,8 +377,16 @@ export async function selectContact(handle) {
         }
     });
 
+    const previousHandle = window.currentHandle;
+    if (previousHandle && typeof window.cacheComposerDraft === 'function' && chatInput) {
+        window.cacheComposerDraft(previousHandle, chatInput.value);
+    }
+
     if (handle === null) {
         if (body) body.classList.add('mode-dashboard');
+        if (typeof window.refreshSuggestButtonState === 'function') {
+            window.refreshSuggestButtonState();
+        }
 
         // Show dashboard
         activeNameEl.textContent = APP_DISPLAY_NAME;
@@ -379,16 +446,34 @@ export async function selectContact(handle) {
         }
     }
 
-    // Load messages
-    await window.loadMessages(handle);
+    if (chatInput) {
+        const cachedDraft = typeof window.getCachedComposerDraft === 'function'
+            ? window.getCachedComposerDraft(handle)
+            : '';
+        chatInput.value = cachedDraft || '';
+        try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
+    }
 
-    // Seed {hatori} draft into composer if one exists for this contact
+    const messageTask = window.loadMessages(handle);
+
+    // Seed persisted local draft into the composer if one exists for this contact.
     try {
-        if (contact && contact.draft && typeof window.seedHatoriDraft === 'function') {
-            window.seedHatoriDraft(contact.draft, contact.draft_hatori_id || null);
+        if (contact && contact.draft && chatInput && !String(chatInput.value || '').trim() && typeof window.seedDraft === 'function') {
+            window.seedDraft(contact.draft);
         }
     } catch (e) {
-        console.warn('[selectContact] Failed to seed hatori draft:', e);
+        console.warn('[selectContact] Failed to seed draft:', e);
+    }
+
+    try {
+        if (typeof window.applyCachedSuggestionForHandle === 'function') {
+            window.applyCachedSuggestionForHandle(handle, { force: false });
+        }
+        if (typeof window.refreshSuggestButtonState === 'function') {
+            window.refreshSuggestButtonState();
+        }
+    } catch (e) {
+        console.warn('[selectContact] Failed to apply cached suggestion:', e);
     }
 
     // Load KYC
@@ -399,6 +484,8 @@ export async function selectContact(handle) {
     } catch (e) {
         console.warn('Failed to load KYC data:', e);
     }
+
+    await messageTask;
 }
 
 // Export to window for onclick handlers

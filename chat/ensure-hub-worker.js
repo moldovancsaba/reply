@@ -9,6 +9,7 @@
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
+const { dataPath, ensureDataHome } = require("./app-paths.js");
 
 const WAIT_MS = 8000;
 const POLL_SEC = 0.25;
@@ -17,7 +18,8 @@ const POLL_SEC = 0.25;
  * @param {string} chatDir - Absolute path to the `chat/` directory (same as __dirname from server.js).
  */
 function ensureWorkerCanStartFromHub(chatDir) {
-    const PID_FILE = path.join(chatDir, "data", "worker.pid");
+    ensureDataHome();
+    const PID_FILE = process.env.REPLY_DATA_HOME ? dataPath("worker.pid") : path.join(chatDir, "data", "worker.pid");
     const workerScript = path.join(chatDir, "background-worker.js");
 
     try {

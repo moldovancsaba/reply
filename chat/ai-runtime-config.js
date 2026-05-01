@@ -62,11 +62,6 @@ function applyAiSettingsToProcessEnv(settings) {
     process.env.REPLY_OPENCLAW_GATEWAY_TOKEN = String(ai.openclawGatewayToken).trim();
   }
 
-  if (ai.hatoriApiUrl && String(ai.hatoriApiUrl).trim()) {
-    let u = String(ai.hatoriApiUrl).trim();
-    if (!/^https?:\/\//i.test(u)) u = `http://${u}`;
-    process.env.HATORI_API_URL = u.replace(/\/$/, "");
-  }
 }
 
 function resolveOllamaHttpBase() {
@@ -95,28 +90,15 @@ function getOllamaUrlParts() {
   return { hostname: url.hostname, port, isHttps };
 }
 
-/** @returns {'auto'|'ollama'|'hatori'} */
+/** @returns {'auto'|'ollama'} */
 function getDraftRuntimeMode() {
   try {
     const v = String(withDefaults(readSettings())?.ai?.draftRuntime || "auto").toLowerCase();
-    if (v === "ollama" || v === "hatori") return v;
+    if (v === "ollama") return v;
   } catch {
     /* ignore */
   }
   return "auto";
-}
-
-/** Use Hatori for generateReply when enabled and policy is not ollama-only. */
-function shouldRouteDraftToHatori() {
-  const mode = getDraftRuntimeMode();
-  if (mode === "ollama") return false;
-  if (mode === "hatori") return process.env.REPLY_USE_HATORI === "1";
-  return process.env.REPLY_USE_HATORI === "1";
-}
-
-/** Ingest to Hatori before suggest when Hatori is on and not ollama-only. */
-function shouldRunHatoriIngestBeforeSuggest() {
-  return process.env.REPLY_USE_HATORI === "1" && getDraftRuntimeMode() !== "ollama";
 }
 
 module.exports = {
@@ -124,6 +106,4 @@ module.exports = {
   resolveOllamaHttpBase,
   getOllamaUrlParts,
   getDraftRuntimeMode,
-  shouldRouteDraftToHatori,
-  shouldRunHatoriIngestBeforeSuggest,
 };

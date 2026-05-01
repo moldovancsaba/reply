@@ -20,18 +20,17 @@
 
 ## Product Overview
 
-`{reply}` is your unified communication bridge. It continuously scrapes, polls, and listens to webhook events from all your major messaging platforms, vectors them into an embedded [LanceDB](https://lancedb.github.io/lancedb/) engine, and ties directly into your local offline intelligence engine (`{hatori}`). 
+`{reply}` is your unified communication bridge. It continuously scrapes, polls, and listens to webhook events from your messaging platforms, vectors them into an embedded [LanceDB](https://lancedb.github.io/lancedb/) engine, and drafts locally through Ollama.
 
 Capabilities:
 - **WhatsApp Webhook Ingress**: Works exclusively via `OpenClaw` hardware routing.
 - **iMessage Scraping**: Scans `~/Library/Messages/chat.db` every few minutes.
 - **Unified RAG Search**: Semantically search your multi-channel history.
-- **AI Suggest & Magic**: Hooks up to `23572` (Hatori) to draft, refine, and plan messages.
+- **AI Suggest & Magic**: Uses local Ollama-backed drafting and refinement.
 - **Knowledge annotation (Ollama, local):** Ingest first, then run **`cd chat && npm run annotate`** (or rely on the **background worker** timer). Tags, summaries, and facts land on each LanceDB row; **`/api/suggest-reply`** returns them on each `snippets[]` item when annotated, and the reply pipeline uses the same enriched text as **`context-engine`** RAG facts. See **[docs/INGESTION.md](docs/INGESTION.md)** and `REPLY_ANNOTATION_*` in **`chat/.env.example`**.
 - **Context engine & voice:** Recipient-scoped history and hybrid RAG are assembled in **`chat/context-engine.js`** (see **[docs/CONTEXT_ENGINE.md](docs/CONTEXT_ENGINE.md)**). **Mic** in the hub uses the browser **Web Speech API** to fill the composer; pair with **Suggest** for an AI draft.
 - **Alias merge (reversible):** Merging contacts moves channels/notes to the primary and keeps the other SQLite row as an **`primary_contact_id` alias**. The KYC panel lists linked profiles with **Unlink**; APIs: **`GET /api/contacts/aliases?for=`** and **`POST /api/contacts/unlink-alias`** (`aliasContactId`). See **[reply#19](https://github.com/moldovancsaba/reply/issues/19)**.
 - **Auto-triage & zero-inbox hints:** Rule file **`chat/triage-rules.json`** drives `triage-engine.evaluate()` — each hit logs **`suggestedActions`** (`reply`, `archive`, `upload`) and **`priority`**. Dashboard shows a **priority queue** plus log columns; **`GET /api/triage-queue`**. See **[reply#24](https://github.com/moldovancsaba/reply/issues/24)**.
-- **{hatori} sensitivity contract:** Cross-system options and **`SensitivityMeta`** typedef for phased redaction/indexing — **[docs/HATORI_SENSITIVITY_CONTRACT.md](docs/HATORI_SENSITIVITY_CONTRACT.md)** ([reply#16](https://github.com/moldovancsaba/reply/issues/16)).
 - **Unified brain (scale-out):** Ingest paths + style profile + **`npm run fingerprint`** status JSON — **[docs/UNIFIED_BRAIN.md](docs/UNIFIED_BRAIN.md)** ([reply#12](https://github.com/moldovancsaba/reply/issues/12)).
 - **Multiple mailboxes:** `settings.json` **`mailAccounts[]`** + **`defaultMailAccountId`** on **`GET/POST /api/settings`**; **Email** settings tab to add IMAP rows. **`sync-mail.js`** syncs primary IMAP then each extra account (namespaced LanceDB ids + `imap_sync_state.json`). See **[docs/MULTI_MAILBOX.md](docs/MULTI_MAILBOX.md)** ([reply#21](https://github.com/moldovancsaba/reply/issues/21)).
 
@@ -66,7 +65,6 @@ Required:
 
 External Dependencies:
 - **OpenClaw** (for WhatsApp routing)
-- **`{hatori}`** (optional; for AI drafting via the Hatori API). Clone as a **sibling** of this repo and enable `REPLY_USE_HATORI=1` — see **[docs/LOCAL_MACHINE_DEPLOYMENT.md](docs/LOCAL_MACHINE_DEPLOYMENT.md)** (section *Optional — `{hatori}`*) and **[moldovancsaba/hatori](https://github.com/moldovancsaba/hatori)**.
 
 ### 1. Environment Bootstrap
 
@@ -75,7 +73,7 @@ Copy the example file:
 cd chat
 cp .env.example .env
 ```
-Ensure your ports line up with what your ecosystem expects (default: `PORT=45311`). For Hatori-backed suggest, install the sibling repo and set `REPLY_USE_HATORI=1` (see [LOCAL_MACHINE_DEPLOYMENT.md](docs/LOCAL_MACHINE_DEPLOYMENT.md)); otherwise suggestions use **Ollama** only.
+Ensure your ports line up with what your ecosystem expects (default: `PORT=45311`). Suggestions use **Ollama** locally.
 
 ### 2. Configure Hardware Routing
 
@@ -91,7 +89,7 @@ openclaw channels login --channel whatsapp
 
 ### 1) Background Scripts (Recommended)
 
-To run {reply}, {hatori}, and OpenClaw all in tandem, use the provided wrapper:
+To run `{reply}` as a managed local service, use:
 
 ```bash
 make run
@@ -100,20 +98,11 @@ make status
 ```
 Logs are automatically written to `/tmp/reply-hub.log`. **Install details, `.env`, Ollama, iMessage `chat.db` / Full Disk Access, and port behavior** are in **[docs/LOCAL_MACHINE_DEPLOYMENT.md](docs/LOCAL_MACHINE_DEPLOYMENT.md)**.
 
-### 2) macOS Menu Bar App
-
-We supply a compiled Swift app identical to Hatori's to quickly observe database ingestion status and jump to specific URLs. It complements the hub; **service install, health checks, and troubleshooting** still follow **[docs/LOCAL_MACHINE_DEPLOYMENT.md](docs/LOCAL_MACHINE_DEPLOYMENT.md)**. **Build prerequisites and rebuild-after-move** are in **[tools/macos/ReplyMenubar/README.md](tools/macos/ReplyMenubar/README.md)**.
-
-```bash
-make install-ReplyMenubar
-make run-ReplyMenubar # or open ~/Applications/ReplyMenubar.app
-```
-
-### 3) Foreground Debugging
+### 2) Foreground Debugging
 
 ```bash
 cd chat
-npm run dev
+npm start
 ```
 
 ---
@@ -124,12 +113,11 @@ npm run dev
 - **WhatsApp**: Hard-wired to use `openclaw message send --target <b64> --message <text> --channel whatsapp`.
 - **iMessage**: Generates localized AppleScripts pointing to `1st service whose service type is iMessage`.
 - **Email**: Attempts `sendGmail()` via OAuth if configured; otherwise, launches `Mail.app` via GUI scripting.
-- **LinkedIn**: Generates payload via `{hatori}`, assigns to `pbcopy` (clipboard), and spawns `open https://www.linkedin.com/messaging/`.
+- **LinkedIn**: Copies the draft to the clipboard and opens `https://www.linkedin.com/messaging/`.
 
 ### Intelligence Loop
-- `{reply}` automatically triggers `{hatori}` draft generation for every inbound message via `background-worker.js`.
-- **Annotation Loop**: Every sent message is compared against its original draft. `{reply}` reports outcomes (`sent_as_is` or `edited_then_sent` with diffs) back to `{hatori}` at `POST /v1/agent/outcome` for model fine-tuning.
-- **Manual Drafting**: Use "💡 Suggest" for forced regeneration or "✨ Magic" for context-aware refinement via Hatori/Gemini.
+- `{reply}` generates drafts locally for inbound activity via `background-worker.js`.
+- **Manual Drafting**: Use "💡 Suggest" for forced regeneration or "✨ Magic" for context-aware refinement.
 - **Background Backfill**: A periodic task runs every 5 minutes to generate missing drafts for older active conversations.
 
 ## Troubleshooting
@@ -137,7 +125,6 @@ npm run dev
 - **Hub exits or LaunchAgent loops; log shows `SQLITE_CANTOPEN`**: The hub is designed to stay up even when Apple’s `chat.db` is missing or blocked; see [docs/LOCAL_MACHINE_DEPLOYMENT.md](docs/LOCAL_MACHINE_DEPLOYMENT.md) (sections 4–5) for Full Disk Access, `REPLY_IMESSAGE_DB_PATH`, and what was fixed in `sync-imessage` / the worker.
 - **WhatsApp failing with "refactor pending" or AppleScript errors**: We recently scrubbed all legacy desktop automation fallbacks from the system. Ensure you are exclusively using `OpenClaw` and running the correct CLI.
 - **iMessage Missing?**: Go to System Settings -> Privacy & Security -> Full Disk Access -> Give Terminal / VSCode permissions.
-- **Hatori Magic is red?**: Hatori operates on `http://127.0.0.1:23572`. Check the Menu Bar App to see if it is down.
 - **Refine / suggestions need Ollama**: Default local model is `gemma3:1b` (see `chat/.env.example` for supported tags). Details in [docs/LOCAL_MACHINE_DEPLOYMENT.md](docs/LOCAL_MACHINE_DEPLOYMENT.md).
 
 ## Contributing

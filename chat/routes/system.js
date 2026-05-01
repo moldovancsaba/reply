@@ -10,15 +10,15 @@ const fs = require("fs");
 const path = require("path");
 const hubRuntime = require("../hub-runtime");
 const { ensureWorkerCanStartFromHub } = require("../ensure-hub-worker.js");
-const { resolveHatoriProjectPath } = require("../hatori-lifecycle.js");
 const { resolveOllamaHttpBase } = require("../ai-runtime-config.js");
+const { execFile } = require("child_process");
+const { getDataHome, dataPath } = require("../app-paths.js");
 
-const DATA_DIR = path.join(__dirname, "..", "data");
+const DATA_DIR = getDataHome();
 const CHAT_DIR = path.join(__dirname, "..");
-let hatoriConsecutiveFailures = 0;
 
 function readStatus(filename) {
-    const p = path.join(DATA_DIR, filename);
+    const p = dataPath(filename);
     if (fs.existsSync(p)) {
         try {
             return JSON.parse(fs.readFileSync(p, "utf8"));
@@ -32,7 +32,7 @@ function readStatus(filename) {
 async function countIngested(source) {
     try {
         const sqlite3 = require("sqlite3");
-        const CHAT_DB = path.join(DATA_DIR, "chat.db");
+        const CHAT_DB = dataPath("chat.db");
         if (!fs.existsSync(CHAT_DB)) return 0;
 
         const db = new sqlite3.Database(CHAT_DB);
@@ -74,7 +74,7 @@ async function countIngested(source) {
 }
 
 function getNotesCount() {
-    const notesMetadata = path.join(__dirname, '../../knowledge/notes-metadata.json');
+    const notesMetadata = dataPath("notes-metadata.json");
     if (fs.existsSync(notesMetadata)) {
         try {
             const data = JSON.parse(fs.readFileSync(notesMetadata, "utf8"));
@@ -84,6 +84,86 @@ function getNotesCount() {
         }
     }
     return 0;
+}
+
+function getIMessageCheckpointLastSync() {
+    const checkpointPath = dataPath("sync_state.json");
+    if (!fs.existsSync(checkpointPath)) return null;
+    try {
+        const state = JSON.parse(fs.readFileSync(checkpointPath, "utf8"));
+        return state?.lastSync || null;
+    } catch {
+        return null;
+    }
+}
+
+function execFileAsync(command, args, opts = {}) {
+    return new Promise((resolve, reject) => {
+        execFile(command, args, opts, (error, stdout, stderr) => {
+            if (error) {
+                error.stdout = stdout;
+                error.stderr = stderr;
+                return reject(error);
+            }
+            resolve({ stdout, stderr });
+        });
+    });
+}
+
+async function controlOpenClawGateway(action) {
+    const { resolveOpenClawBinary } = require("../utils/whatsapp-utils");
+    const { getOpenClawGatewayExecEnv } = require("../openclaw-gateway-env.js");
+    const bin = resolveOpenClawBinary();
+    const env = getOpenClawGatewayExecEnv();
+
+    if (action === "start") {
+        try {
+            await execFileAsync(bin, ["gateway", "status"], { env, timeout: 8000 });
+        } catch (error) {
+            const combined = `${error.stdout || ""}\n${error.stderr || ""}\n${error.message || ""}`;
+            if (/not installed|unit not found|not loaded/i.test(combined)) {
+                await execFileAsync(bin, ["gateway", "install"], { env, timeout: 30000 });
+            }
+        }
+        await execFileAsync(bin, ["gateway", "start"], { env, timeout: 30000 });
+        return;
+    }
+
+    if (action === "restart") {
+        try {
+            await execFileAsync(bin, ["gateway", "restart"], { env, timeout: 30000 });
+        } catch (error) {
+            const combined = `${error.stdout || ""}\n${error.stderr || ""}\n${error.message || ""}`;
+            if (/not installed|unit not found|not loaded/i.test(combined)) {
+                await execFileAsync(bin, ["gateway", "install"], { env, timeout: 30000 });
+                await execFileAsync(bin, ["gateway", "start"], { env, timeout: 30000 });
+                return;
+            }
+            throw error;
+        }
+        return;
+    }
+
+    if (action === "stop") {
+        await execFileAsync(bin, ["gateway", "stop"], { env, timeout: 30000 });
+    }
+}
+
+function normalizeChannelStatus(baseStatus, ingestedTotal, extras = {}) {
+    const state = String(baseStatus?.state || baseStatus?.status || "idle").toLowerCase();
+    const lastSuccessfulSync = baseStatus?.lastSuccessfulSync || baseStatus?.lastSync || null;
+    const lastAttemptedSync = baseStatus?.lastAttemptedSync || baseStatus?.timestamp || lastSuccessfulSync || null;
+    return {
+        ...baseStatus,
+        state,
+        status: state === "error" ? "repair_required" : (state || "idle"),
+        ingestedTotal,
+        processed: ingestedTotal,
+        total: ingestedTotal,
+        lastSuccessfulSync,
+        lastAttemptedSync,
+        ...extras
+    };
 }
 
 const serviceManager = require("../service-manager");
@@ -96,17 +176,9 @@ let lastPreflightAtMs = 0;
 async function buildSystemHealthPayloadCore() {
     const settings = readSettings();
     const healthCfg = settings?.health || {};
-    const hatoriProbeMs = Math.max(
-        3000,
-        Math.min(parseInt(healthCfg.hatoriProbeTimeoutMs, 10) || 12000, 120000)
-    );
     const ollamaProbeMs = Math.max(
         1000,
         Math.min(parseInt(healthCfg.ollamaProbeTimeoutMs, 10) || 3000, 30000)
-    );
-    const hatoriFailThresh = Math.max(
-        1,
-        Math.min(parseInt(healthCfg.hatoriWatchdogFailureThreshold, 10) || 3, 20)
     );
     const mailStatus = readStatus("mail_sync_status.json");
     const gmailOk = isGmailConfigured(settings);
@@ -120,76 +192,11 @@ async function buildSystemHealthPayloadCore() {
     const imessageStatus = readStatus("imessage_sync_status.json");
     const whatsappStatus = readStatus("whatsapp_sync_status.json");
     const notesStatus = readStatus("notes_sync_status.json");
+    const calendarStatus = readStatus("calendar_sync_status.json");
     const kycStatus = readStatus("kyc_sync_status.json");
 
-    // ── Check Hatori ────────────────────────────────────────────────────
-    // Probe when REPLY_USE_HATORI=1 and either the sibling checkout exists or the API is
-    // managed externally (LaunchAgent / Docker) — do not require ../hatori on disk for external.
-    const hatoriProjectPath = resolveHatoriProjectPath(CHAT_DIR);
-    const hatoriRequired = String(process.env.REPLY_USE_HATORI || "").trim() === "1";
-    const hatoriExternal = String(process.env.REPLY_HATORI_EXTERNAL || "").trim() === "1";
-    const hatoriRepoPresent = fs.existsSync(hatoriProjectPath);
-    const shouldProbeHatori = hatoriRequired && (hatoriExternal || hatoriRepoPresent);
-    const hatoriHealth = shouldProbeHatori
-        ? { status: "degraded", detail: "unreachable" }
-        : hatoriRequired
-          ? {
-                status: "skipped",
-                detail: `Hatori checkout missing at ${hatoriProjectPath} — set REPLY_HATORI_EXTERNAL=1 if the API runs elsewhere`
-            }
-          : { status: "skipped", detail: "REPLY_USE_HATORI not enabled" };
-
-    if (shouldProbeHatori) {
-        try {
-            const hatoriPort = process.env.REPLY_HATORI_PORT || "23572";
-            const hRes = await fetch(`http://127.0.0.1:${hatoriPort}/v1/health`, {
-                signal: AbortSignal.timeout(hatoriProbeMs)
-            });
-            if (hRes.ok) {
-                hatoriConsecutiveFailures = 0;
-                hatoriHealth.status = "online";
-                let detail = "ok";
-                try {
-                    const hj = await hRes.json();
-                    const tr = hj.task_model_routing || {};
-                    const lanes = ["writer", "drafter", "judge"].map((key) => {
-                        const lane = tr[key] || {};
-                        return {
-                            role: key,
-                            ok: Boolean(lane.ok),
-                            task: lane.task || null,
-                            backend: lane.backend || null,
-                            model: lane.model || null,
-                            fallback_used: Boolean(lane.fallback_used),
-                            error: lane.error ? String(lane.error) : null
-                        };
-                    });
-                    hatoriHealth.agents = lanes;
-                    hatoriHealth.ui_port = hj.ui_port != null ? Number(hj.ui_port) : 23571;
-                    hatoriHealth.ui_url = `http://127.0.0.1:${hatoriHealth.ui_port}/chat`;
-                    const bad = lanes.filter((l) => !l.ok);
-                    detail = bad.length ? `degraded · ${bad.map((b) => b.role).join(", ")}` : "ok · writer / drafter / judge";
-                } catch {
-                    detail = "ok";
-                }
-                hatoriHealth.detail = detail;
-            } else {
-                hatoriConsecutiveFailures += 1;
-                hatoriHealth.status = hatoriConsecutiveFailures >= hatoriFailThresh ? "offline" : "degraded";
-                hatoriHealth.detail = `http_${hRes.status}`;
-            }
-        } catch (e) {
-            hatoriConsecutiveFailures += 1;
-            hatoriHealth.status = hatoriConsecutiveFailures >= hatoriFailThresh ? "offline" : "degraded";
-            hatoriHealth.detail = e?.name === "TimeoutError" ? "timeout" : "unreachable";
-        }
-    } else {
-        hatoriConsecutiveFailures = 0;
-    }
-
     // ── Check Ollama directly (OLLAMA_HOST / port from env or Settings) ─
-    // IMPORTANT: Do NOT derive Ollama status from Hatori — Hatori may time out
-    // even when Ollama is running fine. Check Ollama's own API directly.
+    // Check Ollama's own API directly instead of inferring availability from another service.
     let ollamaStatus = "offline";
     try {
         const oRes = await fetch(`${resolveOllamaHttpBase()}/api/tags`, {
@@ -200,36 +207,7 @@ async function buildSystemHealthPayloadCore() {
         ollamaStatus = "offline";
     }
 
-    // ── Hatori watchdog ─────────────────────────────────────────────────
-    // After N consecutive Hatori failures: kickstart LaunchAgent if external, else restart managed uvicorn.
-    if (shouldProbeHatori && hatoriConsecutiveFailures === hatoriFailThresh) {
-        const hatoriService = serviceManager.getStatus("hatori");
-        const st = hatoriService.status;
-        if (st === "external") {
-            const { kickstartHatoriJob } = require("../hatori-lifecycle.js");
-            console.warn("[Watchdog] Hatori API failing while marked external — trying launchctl kickstart…");
-            try {
-                await kickstartHatoriJob();
-            } catch (e) {
-                console.error("[Watchdog] Hatori kickstart failed:", e.message);
-            }
-            hatoriConsecutiveFailures = 0;
-        } else if (
-            st !== "online" &&
-            st !== "loading in queue" &&
-            !String(st).startsWith("restarting") &&
-            st !== "skipped"
-        ) {
-            console.warn(`[Watchdog] Hatori unreachable for ${hatoriFailThresh} checks — attempting auto-restart...`);
-            try {
-                await serviceManager.restart("hatori");
-            } catch (e) {
-                console.error("[Watchdog] Hatori auto-restart failed:", e.message);
-            }
-        }
-    }
-
-    const [imessageCount, whatsappCount, mailCount, linkedinMessagesCount, linkedinPostsCount, notesCountIngested] = await Promise.all([
+    const [imessageCount, whatsappCount, mailCount, linkedinMessagesCount, linkedinPostsCount, notesCountIngested, calendarCount] = await Promise.all([
         countIngested("iMessage"),
         countIngested("WhatsApp"),
         (async () => {
@@ -264,15 +242,10 @@ async function buildSystemHealthPayloadCore() {
                 return await table.countRows("source IN ('apple-notes')");
             } catch { return 0; }
         })(),
+        countIngested("apple-calendar"),
     ]);
 
     const services = serviceManager.getStatus();
-
-    let hatoriApiDetail = hatoriHealth.detail;
-    const hatoriSvc = services.hatori;
-    if (hatoriHealth.status === "online" && hatoriSvc && String(hatoriSvc.status).includes("external")) {
-        hatoriApiDetail = `${hatoriApiDetail} · external process`;
-    }
 
     // Collect automated repair alerts from service manager
     const repairAlerts = serviceManager.getRepairAlerts();
@@ -281,7 +254,7 @@ async function buildSystemHealthPayloadCore() {
     if (ollamaStatus !== 'online') {
         repairAlerts.push({
             service: 'ollama',
-            severity: hatoriConsecutiveFailures >= hatoriFailThresh ? 'critical' : 'warning',
+            severity: 'warning',
             message: 'Ollama is not running. AI features (suggestions, KYC) will be unavailable.',
             hint: 'Open Terminal and run: ollama serve',
             logPath: null,
@@ -292,7 +265,7 @@ async function buildSystemHealthPayloadCore() {
     const systemStatus = readStatus("system_status.json");
 
     // Simple DB check: if chat.db exists and is readable
-    const dbPath = path.join(DATA_DIR, "chat.db");
+    const dbPath = dataPath("chat.db");
     const dbExists = fs.existsSync(dbPath);
     const dbStatus = dbExists ? "ok" : "repair_required";
 
@@ -348,19 +321,15 @@ async function buildSystemHealthPayloadCore() {
         repair: repairAlerts,
         services: {
             ...services,
-            hatori_api: {
-                status: hatoriHealth.status,
-                detail: hatoriApiDetail,
-                ...(Array.isArray(hatoriHealth.agents) ? { agents: hatoriHealth.agents } : {}),
-                ...(hatoriHealth.ui_port != null ? { ui_port: hatoriHealth.ui_port } : {}),
-                ...(hatoriHealth.ui_url ? { ui_url: hatoriHealth.ui_url } : {})
-            },
             ollama: { status: ollamaStatus }
         },
         channels: {
-            imessage: { ...imessageStatus, processed: imessageCount, total: imessageCount },
-            whatsapp: { ...whatsappStatus, processed: whatsappCount, total: whatsappCount },
-            notes: { ...notesStatus, processed: notesCountIngested, total: getNotesCount() },
+            imessage: normalizeChannelStatus(imessageStatus, imessageCount, {
+                lastSuccessfulSync: imessageStatus?.lastSuccessfulSync || imessageStatus?.lastSync || getIMessageCheckpointLastSync()
+            }),
+            whatsapp: normalizeChannelStatus(whatsappStatus, whatsappCount),
+            notes: normalizeChannelStatus(notesStatus, notesCountIngested, { total: getNotesCount() }),
+            calendar: normalizeChannelStatus(calendarStatus, calendarCount),
             mail: {
                 ...mailStatus,
                 lastAt: mailStatus.lastSync || null,
@@ -383,7 +352,7 @@ async function buildSystemHealthPayloadCore() {
                 total: linkedinPostsCount,
                 lastAt: readChannelSyncState().linkedin_posts || null
             },
-            contacts: readStatus("sync_state.json"),
+            contacts: readStatus("contacts_sync_status.json"),
             kyc: kycStatus
         },
         stats: await contactStore.getStats(),
@@ -416,7 +385,7 @@ async function serveSystemHealth(req, res) {
 }
 
 /**
- * Standalone preflight JSON for scripts, menubar, or clients that only need foundation checks.
+ * Standalone preflight JSON for scripts or clients that only need foundation checks.
  */
 async function servePreflight(req, res) {
     const health = await buildSystemHealthPayload();
@@ -458,9 +427,17 @@ async function serveServiceControl(req, res) {
             if (name === "worker") {
                 ensureWorkerCanStartFromHub(CHAT_DIR);
             }
-            await serviceManager.restart(name);
+            if (name === "openclaw") {
+                await controlOpenClawGateway("restart");
+            } else {
+                await serviceManager.restart(name);
+            }
         } else if (action === "stop") {
-            await serviceManager.stop(name);
+            if (name === "openclaw") {
+                await controlOpenClawGateway("stop");
+            } else {
+                await serviceManager.stop(name);
+            }
         } else if (action === "start") {
             const { resolveOpenClawBinary } = require("../utils/whatsapp-utils");
             let script = null;
@@ -470,8 +447,7 @@ async function serveServiceControl(req, res) {
                 ensureWorkerCanStartFromHub(CHAT_DIR);
                 script = path.join(__dirname, "..", "background-worker.js");
             } else if (name === 'openclaw') {
-                script = resolveOpenClawBinary();
-                args = ['gateway'];
+                await controlOpenClawGateway("start");
             } else if (name === 'ollama') {
                 // Ollama is an external binary — find it and spawn 'ollama serve'
                 // Common install locations on macOS
@@ -485,6 +461,10 @@ async function serveServiceControl(req, res) {
             }
 
             if (!script) {
+                if (name === 'openclaw') {
+                    writeJson(res, 200, { status: "ok", service: { name: "openclaw", status: "starting" } });
+                    return;
+                }
                 writeJson(res, 400, { error: `Unknown service or missing configuration for ${name}` });
                 return;
             }
@@ -498,6 +478,8 @@ async function serveServiceControl(req, res) {
         // Return a synthesized status
         const svcStatus = name === 'ollama'
             ? { name: 'ollama', status: 'starting' }
+            : name === 'openclaw'
+                ? { name: 'openclaw', status: action === 'stop' ? 'stopping' : 'starting' }
             : serviceManager.getStatus(name);
         writeJson(res, 200, { status: "ok", service: svcStatus });
     } catch (e) {
@@ -513,9 +495,19 @@ async function serveOpenClawStatus(req, res) {
     try {
         const data = await probeOpenClawGatewayHealth(resolveOpenClawBinary());
         const ok = openclawGatewayResponseOk(data);
+        const whatsappStatus = readStatus("whatsapp_sync_status.json");
+        const fallbackChannels = ok ? ["whatsapp"] : [];
+        const heartbeat =
+            whatsappStatus?.lastAttemptedSync ||
+            whatsappStatus?.lastSuccessfulSync ||
+            whatsappStatus?.lastSync ||
+            whatsappStatus?.timestamp ||
+            null;
         writeJson(res, 200, {
             status: ok ? "online" : "offline",
             ...data,
+            channels: data?.channels || fallbackChannels,
+            heartbeat,
             ok
         });
     } catch (error) {

@@ -2,7 +2,7 @@
 
 This document answers: **“Where is X in the UI?”** and **“Where is X in the code?”**
 
-**Running the hub on this Mac** (LaunchAgent, default port, logs, Ollama, iMessage database permissions): [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md).
+**Running the hub on this Mac** (session startup, default port, logs, Ollama, iMessage database permissions): [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md).
 
 ## UI Navigation
 

@@ -176,6 +176,40 @@ function escapeDashboardAttr(s) {
     .replace(/</g, '&lt;');
 }
 
+function summarizeChannelState(channel, options = {}) {
+  const state = String(channel?.state || channel?.status || 'idle').toLowerCase();
+  const hasRecentSuccess = Boolean(channel?.lastSuccessfulSync || channel?.lastSync);
+  const sourceReadable = options.sourceReadable === true;
+  const ingestedTotal = Number(channel?.ingestedTotal ?? channel?.processed) || 0;
+  const canTrustHealthyMirror = sourceReadable && hasRecentSuccess && ingestedTotal >= 0;
+  if ((state === 'error' || state === 'repair_required') && canTrustHealthyMirror) {
+    return {
+      value: ingestedTotal,
+      statusText: '● Synced',
+      statusClass: 'tag-online'
+    };
+  }
+  if (state === 'error' || state === 'repair_required') {
+    return {
+      value: 'Blocked',
+      statusText: '● Sync blocked',
+      statusClass: 'tag-offline'
+    };
+  }
+  if (state === 'running') {
+    return {
+      value: `${Math.max(0, Math.min(100, Number(channel?.progress) || 0))}%`,
+      statusText: '● Sync running',
+      statusClass: 'tag-warning'
+    };
+  }
+  return {
+    value: Number(channel?.ingestedTotal ?? channel?.processed) || 0,
+    statusText: '● Synced',
+    statusClass: 'tag-online'
+  };
+}
+
 /**
  * Foundation / preflight matrix (hub contract + path probes).
  * @param {object|null} preflight - health.preflight from /api/system-health
@@ -192,6 +226,28 @@ function renderPreflightPanel(preflight, health) {
   const contractLine = ac
     ? ` · contract hub ${escapeDashboardText(String(ac.hub))} / schema ${escapeDashboardText(String(ac.preflightSchema ?? ''))}`
     : '';
+  const blockedCount = preflight.checks.filter((c) => c.status === 'blocked').length;
+  const degradedCount = preflight.checks.filter((c) => c.status === 'degraded').length;
+  const okCount = preflight.checks.filter((c) => c.status === 'ok').length;
+  const issues = preflight.checks
+    .filter((c) => c.status === 'blocked' || c.status === 'degraded')
+    .slice(0, 3);
+  const issueSummary = issues.length
+    ? `<div class="preflight-problems">${issues
+      .map((c) => {
+        const issueClass = c.status === 'blocked' ? 'preflight-problem preflight-problem--blocked' : 'preflight-problem preflight-problem--degraded';
+        return `<div class="${issueClass}">
+          <strong>${escapeDashboardText(c.title)}</strong>
+          <span>${escapeDashboardText(c.detail)}</span>
+        </div>`;
+      })
+      .join('')}</div>`
+    : `<div class="preflight-problems preflight-problems--ok">
+        <div class="preflight-problem preflight-problem--ok">
+          <strong>Foundation ready</strong>
+          <span>All core runtime, data, channel, and AI checks are passing.</span>
+        </div>
+      </div>`;
 
   const rows = preflight.checks
     .map((c) => {
@@ -220,48 +276,26 @@ function renderPreflightPanel(preflight, health) {
         <h4><span class="health-card-icon">🧱</span><span>Foundation (preflight)</span></h4>
         <div class="health-status-tag ${tagClass}">${escapeDashboardText(overall)}</div>
       </div>
+      <div class="preflight-summary" aria-label="Preflight summary">
+        <span class="preflight-summary-pill preflight-summary-pill--ok">${escapeDashboardText(String(okCount))} ok</span>
+        <span class="preflight-summary-pill ${blockedCount ? 'preflight-summary-pill--blocked' : 'preflight-summary-pill--muted'}">${escapeDashboardText(String(blockedCount))} blocked</span>
+        <span class="preflight-summary-pill ${degradedCount ? 'preflight-summary-pill--degraded' : 'preflight-summary-pill--muted'}">${escapeDashboardText(String(degradedCount))} degraded</span>
+        <span class="preflight-summary-text">${escapeDashboardText(String(preflight.checks.length))} checks total</span>
+      </div>
       <div class="preflight-meta">Run <code>${escapeDashboardText(runShort)}</code>… · preflight v${escapeDashboardText(String(preflight.schemaVersion ?? '?'))}${contractLine}</div>
+      ${issueSummary}
       <div class="preflight-actions">
         <button type="button" class="btn btn-sm btn-secondary" data-preflight-refresh title="Re-fetch health">↻ Refresh checks</button>
-        <a class="btn btn-sm btn-secondary" href="settings.html#ai-status" title="Hatori, Ollama, OpenClaw gateway">⚙️ AI &amp; gateways</a>
+        <a class="btn btn-sm btn-secondary" href="settings.html#ai-status" title="Ollama and OpenClaw gateway">⚙️ AI &amp; gateways</a>
       </div>
       <div class="preflight-table">${rows}</div>
-    </div>`;
-}
-
-/**
- * Hatori UI + writer/drafter/judge chips from `/v1/health` (when hub exposes them).
- * @param {object} health
- */
-function renderHatoriWatchStrip(health) {
-  const api = health.services?.hatori_api;
-  if (!api || !Array.isArray(api.agents) || api.agents.length === 0) return '';
-  const uiPort = api.ui_port != null ? Number(api.ui_port) : 23571;
-  const url = api.ui_url || `http://127.0.0.1:${uiPort}/chat`;
-  const chips = api.agents
-    .map((a) => {
-      const ok = Boolean(a.ok);
-      const cls = ok ? 'hatori-agent-chip hatori-agent-chip--ok' : 'hatori-agent-chip hatori-agent-chip--bad';
-      const model = a.model ? ` · ${escapeDashboardText(String(a.model))}` : '';
-      return `<span class="${cls}" title="${escapeDashboardAttr(a.task || '')}">${escapeDashboardText(a.role)}${model}</span>`;
-    })
-    .join('');
-
-  return `
-    <div class="health-card health-card--span-full hatori-watch-strip">
-      <div class="health-card-header">
-        <h4><span class="health-card-icon">🤖</span><span>Hatori — watch &amp; three lanes</span></h4>
-        <a class="btn btn-sm btn-secondary" href="${escapeDashboardAttr(url)}" target="_blank" rel="noopener noreferrer">Open UI ↗</a>
-      </div>
-      <p class="settings-hint" style="margin:0 0 10px 2px">Writer, drafter, and judge routing from Hatori <code>/v1/health</code>. Red lane = model or backend issue in Hatori.</p>
-      <div class="hatori-agent-chips">${chips}</div>
     </div>`;
 }
 
 function renderAlertsPanel(repairs) {
   if (!Array.isArray(repairs) || repairs.length === 0) return '';
 
-  const SERVICE_ICONS = { worker: '⚙️', openclaw: '🛡️', hatori: '🤖', ollama: '🦙' };
+  const SERVICE_ICONS = { worker: '⚙️', openclaw: '🛡️', ollama: '🦙' };
   const SEVERITY_CLASSES = { critical: 'alert-critical', warning: 'alert-warning' };
 
   const items = repairs.map(alert => {
@@ -269,7 +303,7 @@ function renderAlertsPanel(repairs) {
     const severityClass = SEVERITY_CLASSES[alert.severity] || 'alert-warning';
 
     // All services (including ollama) get a direct launch button
-    const startLabel = { ollama: '🦙 Start Ollama', worker: '🔄 Restart Worker', openclaw: '🔄 Start OpenClaw', hatori: '🔄 Start Hatori' };
+    const startLabel = { ollama: '🦙 Start Ollama', worker: '🔄 Restart Worker', openclaw: '🔄 Start OpenClaw' };
     const actionBtn = `<button type="button" class="btn btn-sm btn-repair" data-dashboard-service-control="${alert.service}" data-dashboard-action="${alert.service === 'ollama' ? 'start' : 'restart'}" title="${startLabel[alert.service] || 'Restart'}">${startLabel[alert.service] || '🔄 Try Again'}</button>`;
 
     const logBtn = alert.logPath
@@ -305,9 +339,11 @@ export async function renderDashboard() {
   const dashboard = document.getElementById('dashboard');
   if (!dashboard) return;
 
-  // Show loading state
-  dashboard.innerHTML = '<div style="padding:40px; text-align:center; color:#666;">Loading dashboard...</div>';
-  UI.showLoading();
+  const hadContent = dashboard.children.length > 0;
+  if (!hadContent) {
+    dashboard.innerHTML = '<div style="padding:40px; text-align:center; color:#666;">Loading dashboard...</div>';
+  }
+  dashboard.setAttribute('aria-busy', 'true');
 
   try {
     // Fetch dashboard data safely
@@ -348,22 +384,32 @@ export async function renderDashboard() {
       return date.toLocaleString();
     };
 
+    const imessageSourceCheck = Array.isArray(health.preflight?.checks)
+      ? health.preflight.checks.find((c) => c.id === 'imessage_source')
+      : null;
+    const imessageSummary = summarizeChannelState(imessageSync, {
+      sourceReadable: imessageSourceCheck?.status === 'ok'
+    });
+
     // Format OpenClaw status
+    const openClawOnline = String(openClawStatus.status || '').toLowerCase() === 'online';
     const shortError = openClawStatus.error || 'OpenClaw health check failed';
-    const openClawStatusText = openClawStatus.status === 'online' ? '● Gateway Running' : `● ${shortError}`;
-    const openClawStatusClass = openClawStatus.status === 'online' ? 'tag-online' : 'tag-offline';
+    const openClawStatusText = openClawOnline ? '● Gateway Running' : `● ${shortError}`;
+    const openClawStatusClass = openClawOnline ? 'tag-online' : 'tag-offline';
+    const fallbackOpenClawChannels = openClawOnline ? ['whatsapp'] : [];
+    const openClawHeartbeat = openClawStatus.heartbeat || whatsappSync.lastAttemptedSync || whatsappSync.lastSuccessfulSync || whatsappSync.lastSync || null;
 
     const openClawMeta = [
       {
         wrap: true,
-        text: `Linked: ${formatOpenClawChannelsSummary(openClawStatus.channels)}`
+        text: `Linked: ${formatOpenClawChannelsSummary(openClawStatus.channels || fallbackOpenClawChannels)}`
       },
-      { wrap: true, text: `Heartbeat: ${formatLastSync(openClawStatus.heartbeat)}` }
+      { wrap: true, text: `Heartbeat: ${formatLastSync(openClawHeartbeat)}` }
     ];
     const openClawActions = [
       { type: 'settings', channel: 'whatsapp', title: 'OpenClaw Settings' }
     ];
-    if (openClawStatus.status !== 'online') {
+    if (!openClawOnline) {
       openClawActions.push({ type: 'service', name: 'openclaw', action: 'start', emoji: '🟢', title: 'Start OpenClaw Gateway' });
     } else {
       openClawActions.push({ type: 'service', name: 'openclaw', action: 'restart', emoji: '🔄', title: 'Restart OpenClaw Gateway' });
@@ -371,16 +417,16 @@ export async function renderDashboard() {
 
     // Render dashboard HTML
     dashboard.innerHTML = `
-      ${renderAlertsPanel(health.repair || [])}
+      <div class="dashboard-section-stack">
+        ${renderAlertsPanel(health.repair || [])}
+        ${renderPreflightPanel(health.preflight || null, health)}
+      </div>
 
-      ${renderPreflightPanel(health.preflight || null, health)}
-
-      ${renderHatoriWatchStrip(health)}
-
+      <div class="dashboard-grid">
       ${renderHealthCard({
       title: 'OpenClaw Health',
       icon: '🛡️',
-      value: openClawStatus.status === 'online' ? (openClawStatus.version || 'Connected') : 'Offline',
+      value: openClawOnline ? (openClawStatus.version || 'Connected') : 'Offline',
       statusText: openClawStatusText,
       statusClass: openClawStatusClass,
       meta: openClawMeta,
@@ -436,9 +482,14 @@ export async function renderDashboard() {
       ${renderHealthCard({
         title: 'iMessage Sync',
         icon: '/public/imessage.svg',
-        value: imessageSync.processed || 0,
-        statusText: '● Messages Scanned',
-        meta: [{ text: `Sync: ${formatLastSync(imessageSync.lastSync)}` }],
+        value: imessageSummary.value,
+        statusText: imessageSummary.statusText,
+        statusClass: imessageSummary.statusClass,
+        meta: [
+          { text: `History: ${Number(imessageSync.ingestedTotal ?? imessageSync.processed) || 0} messages` },
+          { text: `Last success: ${formatLastSync(imessageSync.lastSuccessfulSync || imessageSync.lastSync)}` },
+          { wrap: true, title: imessageSync.message || '', text: imessageSync.message || `Last attempt: ${formatLastSync(imessageSync.lastAttemptedSync)}` }
+        ],
         actions: [
           { type: 'settings', channel: 'imessage', title: 'Configure iMessage' },
           { type: 'sync', channel: 'imessage', icon: '/public/imessage.svg', title: 'Sync iMessage' }
@@ -546,30 +597,33 @@ export async function renderDashboard() {
         ]
       })
       }
+      </div>
 
-  <div class="health-card health-card--span-full dashboard-triage-card">
-    <div class="health-card-header">
-      <h4><span class="health-card-icon">📌</span><span>Triage queue (priority)</span></h4>
-    </div>
-    <div class="triage-log-header triage-log-header--4" aria-hidden="true">
-      <span>Priority</span><span>Actions</span><span>Rule</span><span>Contact</span>
-    </div>
-    <div id="dashboard-triage-queue" class="triage-log triage-log--4">
-    </div>
-  </div>
+      <div class="dashboard-section-stack">
+        <div class="health-card health-card--span-full dashboard-triage-card">
+          <div class="health-card-header">
+            <h4><span class="health-card-icon">📌</span><span>Triage queue (priority)</span></h4>
+          </div>
+          <div class="triage-log-header triage-log-header--4" aria-hidden="true">
+            <span>Priority</span><span>Actions</span><span>Rule</span><span>Contact</span>
+          </div>
+          <div id="dashboard-triage-queue" class="triage-log triage-log--4">
+          </div>
+        </div>
 
-  <div class="health-card health-card--span-full dashboard-triage-card">
-    <div class="health-card-header">
-      <h4><span class="health-card-icon">📋</span><span>Recent Triage Log</span></h4>
-    </div>
-    <div class="triage-log-header triage-log-header--4" aria-hidden="true">
-      <span>Time</span><span>Action</span><span>Suggested</span><span>Contact</span>
-    </div>
-    <div id="dashboard-triage-log" class="triage-log triage-log--4">
-      <!-- Triage entries will be injected safely via JS -->
-    </div>
-  </div>
-  `;
+        <div class="health-card health-card--span-full dashboard-triage-card">
+          <div class="health-card-header">
+            <h4><span class="health-card-icon">📋</span><span>Recent Triage Log</span></h4>
+          </div>
+          <div class="triage-log-header triage-log-header--4" aria-hidden="true">
+            <span>Time</span><span>Action</span><span>Suggested</span><span>Contact</span>
+          </div>
+          <div id="dashboard-triage-log" class="triage-log triage-log--4">
+            <!-- Triage entries will be injected safely via JS -->
+          </div>
+        </div>
+      </div>
+    `;
     const queueContainer = dashboard.querySelector('#dashboard-triage-queue');
     if (queueContainer) {
       queueContainer.innerHTML = '';
@@ -661,32 +715,34 @@ export async function renderDashboard() {
     wireDashboardActions(dashboard);
   } catch (error) {
     console.error('Failed to render dashboard:', error);
-    dashboard.innerHTML = '';
-    const errorContainer = document.createElement('div');
-    errorContainer.style.padding = '40px';
-    errorContainer.style.textAlign = 'center';
-    errorContainer.style.color = '#d32f2f';
+    if (!hadContent) {
+      dashboard.innerHTML = '';
+      const errorContainer = document.createElement('div');
+      errorContainer.style.padding = '40px';
+      errorContainer.style.textAlign = 'center';
+      errorContainer.style.color = '#d32f2f';
 
-    const errorTitle = document.createElement('h3');
-    errorTitle.textContent = 'Failed to load dashboard';
-    errorContainer.appendChild(errorTitle);
+      const errorTitle = document.createElement('h3');
+      errorTitle.textContent = 'Failed to load dashboard';
+      errorContainer.appendChild(errorTitle);
 
-    const errorMsg = document.createElement('p');
-    errorMsg.textContent = error.message;
-    errorContainer.appendChild(errorMsg);
+      const errorMsg = document.createElement('p');
+      errorMsg.textContent = error.message;
+      errorContainer.appendChild(errorMsg);
 
-    const retryBtn = document.createElement('button');
-    retryBtn.type = 'button';
-    retryBtn.className = 'btn btn-secondary';
-    retryBtn.style.marginTop = '1rem';
-    retryBtn.textContent = 'Retry';
-    retryBtn.onclick = () => renderDashboard();
-    errorContainer.appendChild(retryBtn);
+      const retryBtn = document.createElement('button');
+      retryBtn.type = 'button';
+      retryBtn.className = 'btn btn-secondary';
+      retryBtn.style.marginTop = '1rem';
+      retryBtn.textContent = 'Retry';
+      retryBtn.onclick = () => renderDashboard();
+      errorContainer.appendChild(retryBtn);
 
-    dashboard.appendChild(errorContainer);
-    UI.showToast(error.message || 'Failed to load dashboard', 'error');
+      dashboard.appendChild(errorContainer);
+      UI.showToast(error.message || 'Failed to load dashboard', 'error');
+    }
   } finally {
-    UI.hideLoading();
+    dashboard.removeAttribute('aria-busy');
   }
 }
 
@@ -731,22 +787,6 @@ async function refreshAlertsPanel() {
       }
     } else if (preflightRoot) {
       preflightRoot.remove();
-    }
-
-    const hatoriStrip = dashboard.querySelector('.hatori-watch-strip');
-    const hatoriHtml = renderHatoriWatchStrip(health);
-    if (hatoriHtml) {
-      if (hatoriStrip) hatoriStrip.outerHTML = hatoriHtml;
-      else {
-        const pref = dashboard.querySelector('.preflight-panel');
-        if (pref) pref.insertAdjacentHTML('afterend', hatoriHtml);
-        else {
-          const firstCard = dashboard.querySelector('.health-card');
-          if (firstCard) firstCard.insertAdjacentHTML('beforebegin', hatoriHtml);
-        }
-      }
-    } else if (hatoriStrip) {
-      hatoriStrip.remove();
     }
 
     // Re-wire buttons after DOM update (alerts + preflight refresh)

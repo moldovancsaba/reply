@@ -3,7 +3,7 @@
  * Handles message thread loading, display, and sending
  */
 
-import { fetchMessages, sendMessage, reportHatoriOutcome } from './api.js';
+import { fetchMessages, sendMessage } from './api.js';
 import { APP_DISPLAY_NAME } from './branding.js';
 import { UI } from './ui.js';
 import { appendLinkedText, createPlatformIcon, resolvePlatformTarget } from './platform-icons.js';
@@ -15,27 +15,152 @@ let hasMoreMessages = true;
 const MESSAGE_LIMIT = 30;
 const SEND_CAPABLE_CHANNELS = new Set(['imessage', 'whatsapp', 'email', 'linkedin']);
 const DRAFT_ONLY_CHANNELS = new Set(['telegram', 'discord']);
+const THREAD_CACHE_VERSION = 'v3';
+let activeThreadLoadToken = 0;
+let sendInFlight = false;
 
-// {hatori} annotation state: tracks the active draft seeded into the composer
-// so we can report whether the user sent it as-is or made edits.
-let activeHatoriContext = null; // { hatori_id, original_draft }
+function threadCacheKey(handle) {
+    return `reply.thread.${THREAD_CACHE_VERSION}.${encodeURIComponent(String(handle || ''))}`;
+}
 
-/**
- * Seeds the composer with a {hatori} draft and records annotation context.
- * @param {string} draftText - The text to seed.
- * @param {string} hatoriId - Associated {hatori} generation ID.
- * @param {boolean} force - If true, overwrites existing text.
- */
-function seedHatoriDraft(draftText, hatoriId, force = false) {
+function readCachedThread(handle) {
+    try {
+        const raw = window.localStorage?.getItem(threadCacheKey(handle));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || !Array.isArray(parsed.messages)) return null;
+        return parsed;
+    } catch {
+        return null;
+    }
+}
+
+function writeCachedThread(handle, messages) {
+    try {
+        if (!window.localStorage || !handle || !Array.isArray(messages)) return;
+        window.localStorage.setItem(threadCacheKey(handle), JSON.stringify({
+            messages,
+            cachedAt: new Date().toISOString(),
+        }));
+    } catch {
+        // Non-blocking cache only.
+    }
+}
+
+function createMessageBubble(msg) {
+    const bubble = document.createElement('div');
+    const isFromMe = !!(msg.is_from_me ?? (msg.role === 'me'));
+    const channelKey = normalizeChannelKey(msg.channel || msg.source || '');
+    bubble.className = `message-bubble ${isFromMe ? 'me' : 'contact'} channel-${channelKey}`;
+
+    const text = document.createElement('div');
+    text.className = 'message-text';
+    text.innerHTML = formatPleasant(msg.text || '', { channel: channelKey });
+    bubble.appendChild(text);
+
+    const date = msg.date ? new Date(msg.date) : null;
+    if (date && !Number.isNaN(date.getTime())) {
+        const info = document.createElement('div');
+        info.className = 'message-info';
+        const channel = msg.channel || msg.source || '';
+        info.classList.add('message-info--with-icon');
+        const platform = resolvePlatformTarget(msg.text || '', { channelHint: channel }).platform;
+        const icon = createPlatformIcon(platform, channel || 'message');
+        icon.classList.add('platform-icon--sm');
+        info.appendChild(icon);
+        const time = document.createElement('span');
+        time.textContent = date.toLocaleString();
+        info.appendChild(time);
+
+        const starBtn = document.createElement('span');
+        starBtn.className = 'material-symbols-outlined msg-star-btn';
+        starBtn.style.fontSize = '16px';
+        starBtn.style.cursor = 'pointer';
+        starBtn.style.marginLeft = '6px';
+        starBtn.style.color = msg.is_annotated ? '#fbbc04' : '#ccc';
+        starBtn.style.transition = 'color 0.2s';
+        starBtn.textContent = msg.is_annotated ? 'star' : 'star_border';
+        starBtn.title = msg.is_annotated ? 'Remove Golden Example' : 'Mark as Golden Example';
+
+        starBtn.onclick = async (e) => {
+            e.stopPropagation();
+            const nextState = !(starBtn.textContent === 'star');
+
+            starBtn.textContent = nextState ? 'star' : 'star_border';
+            starBtn.style.color = nextState ? '#fbbc04' : '#ccc';
+            starBtn.title = nextState ? 'Remove Golden Example' : 'Mark as Golden Example';
+
+            try {
+                const { buildSecurityHeaders } = await import('./api.js');
+                const res = await fetch('/api/messages/annotate', {
+                    method: 'POST',
+                    headers: buildSecurityHeaders(),
+                    body: JSON.stringify({ id: msg.id || msg._id, is_annotated: nextState })
+                });
+                if (!res.ok) throw new Error('Failed to update annotation');
+            } catch (err) {
+                console.error('Annotation failed:', err);
+                starBtn.textContent = !nextState ? 'star' : 'star_border';
+                starBtn.style.color = !nextState ? '#fbbc04' : '#ccc';
+            }
+        };
+        info.appendChild(starBtn);
+
+        const src = (msg.source || '').toString();
+        const ch = (msg.channel || '').toString();
+        info.title = [ch ? `Channel: ${ch}` : null, src ? `Source: ${src}` : null].filter(Boolean).join('\n');
+        bubble.appendChild(info);
+    }
+
+    return bubble;
+}
+
+function renderMessagesPage(messagesEl, messages, append = false) {
+    if (!append) {
+        messagesEl.innerHTML = '';
+    }
+
+    const loadMoreWrap = messagesEl.querySelector('.load-more-messages-wrap');
+    if (loadMoreWrap) loadMoreWrap.remove();
+
+    const orderedMessages = Array.isArray(messages) ? [...messages].reverse() : [];
+
+    if (append) {
+        const previousHeight = messagesEl.scrollHeight;
+        const fragment = document.createDocumentFragment();
+        orderedMessages.forEach((msg) => fragment.appendChild(createMessageBubble(msg)));
+        messagesEl.prepend(fragment);
+        const nextHeight = messagesEl.scrollHeight;
+        messagesEl.scrollTop += (nextHeight - previousHeight);
+    } else {
+        orderedMessages.forEach((msg) => messagesEl.appendChild(createMessageBubble(msg)));
+    }
+
+    hasMoreMessages = messages.length === MESSAGE_LIMIT;
+    if (hasMoreMessages) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-secondary load-more-messages';
+        btn.textContent = 'Load older messages…';
+        btn.onclick = () => {
+            messageOffset += MESSAGE_LIMIT;
+            loadMessages(window.currentHandle, true);
+        };
+
+        const wrap = document.createElement('div');
+        wrap.className = 'load-more-messages-wrap';
+        wrap.appendChild(btn);
+        messagesEl.prepend(wrap);
+    }
+}
+
+function seedDraft(draftText, force = false) {
     const chatInput = document.getElementById('chat-input');
     if (!chatInput || !draftText) return;
-    // Only pre-fill if the composer is currently empty, or if forced (regenerate)
     if (force || !chatInput.value.trim()) {
         chatInput.value = draftText;
         chatInput.dispatchEvent(new Event('input', { bubbles: true }));
     }
-    activeHatoriContext = { hatori_id: hatoriId || null, original_draft: draftText };
-    window.__replyActiveHatoriContext = activeHatoriContext;
 }
 
 function normalizeChannelKey(channel) {
@@ -94,17 +219,17 @@ function setSendButtonForChannel(channel) {
     const v = String(channel || 'imessage').toLowerCase();
     if (v === 'email') {
         btn.textContent = 'Send Email';
-        btn.disabled = false;
+        btn.disabled = sendInFlight;
         return;
     }
     if (v === 'whatsapp') {
         btn.textContent = 'Send WhatsApp';
-        btn.disabled = false;
+        btn.disabled = sendInFlight;
         return;
     }
     if (v === 'linkedin') {
         btn.textContent = 'Send LinkedIn';
-        btn.disabled = false;
+        btn.disabled = sendInFlight;
         return;
     }
     if (DRAFT_ONLY_CHANNELS.has(v)) {
@@ -113,7 +238,19 @@ function setSendButtonForChannel(channel) {
         return;
     }
     btn.textContent = 'Send iMessage';
-    btn.disabled = false;
+    btn.disabled = sendInFlight;
+}
+
+function setSendPending(channel, pending) {
+    sendInFlight = pending;
+    const btn = document.getElementById('btn-send');
+    if (!btn) return;
+    if (pending) {
+        btn.disabled = true;
+        btn.textContent = `Sending ${channelLabel(channel)}…`;
+        return;
+    }
+    setSendButtonForChannel(channel);
 }
 
 function applyComposerChannel(channel) {
@@ -181,121 +318,27 @@ async function copyToClipboard(text) {
 export async function loadMessages(handle, append = false) {
     const messagesEl = document.getElementById('messages');
     if (!messagesEl) return;
+    const loadToken = ++activeThreadLoadToken;
 
     try {
-        // Show loading state
         if (!append) {
-            messagesEl.innerHTML = '<div style="padding:40px; text-align:center; color:#888;">Loading messages...</div>';
             messageOffset = 0;
-        }
-
-        // Fetch messages
-        const messages = await fetchMessages(handle, messageOffset, MESSAGE_LIMIT, !append);
-
-        // Update state
-        hasMoreMessages = messages.length === MESSAGE_LIMIT;
-
-        if (!append) {
-            messagesEl.innerHTML = '';
-        }
-
-        // Remove "Load More" button if it exists
-        const loadMoreWrap = messagesEl.querySelector('.load-more-messages-wrap');
-        if (loadMoreWrap) loadMoreWrap.remove();
-
-        // Render messages
-        messages.forEach(msg => {
-            const bubble = document.createElement('div');
-            const isFromMe = !!(msg.is_from_me ?? (msg.role === 'me'));
-            const channelKey = normalizeChannelKey(msg.channel || msg.source || '');
-            bubble.className = `message-bubble ${isFromMe ? 'me' : 'contact'} channel-${channelKey}`;
-
-            const text = document.createElement('div');
-            text.className = 'message-text';
-
-            // Use rich formatting for all messages (Markdown/HTML support)
-            text.innerHTML = formatPleasant(msg.text || '', { channel: channelKey });
-            bubble.appendChild(text);
-
-            const date = msg.date ? new Date(msg.date) : null;
-            if (date && !Number.isNaN(date.getTime())) {
-                const info = document.createElement('div');
-                info.className = 'message-info';
-                const channel = msg.channel || msg.source || '';
-                info.classList.add('message-info--with-icon');
-                const platform = resolvePlatformTarget(msg.text || '', { channelHint: channel }).platform;
-                const icon = createPlatformIcon(platform, channel || 'message');
-                icon.classList.add('platform-icon--sm');
-                info.appendChild(icon);
-                const time = document.createElement('span');
-                time.textContent = date.toLocaleString();
-                info.appendChild(time);
-
-                // Annotation Star Button
-                const starBtn = document.createElement('span');
-                starBtn.className = 'material-symbols-outlined msg-star-btn';
-                starBtn.style.fontSize = '16px';
-                starBtn.style.cursor = 'pointer';
-                starBtn.style.marginLeft = '6px';
-                starBtn.style.color = msg.is_annotated ? '#fbbc04' : '#ccc';
-                starBtn.style.transition = 'color 0.2s';
-                starBtn.textContent = msg.is_annotated ? 'star' : 'star_border';
-                starBtn.title = msg.is_annotated ? 'Remove Golden Example' : 'Mark as Golden Example';
-
-                starBtn.onclick = async (e) => {
-                    e.stopPropagation();
-                    const nextState = !(starBtn.textContent === 'star');
-
-                    // Optimistic UI update
-                    starBtn.textContent = nextState ? 'star' : 'star_border';
-                    starBtn.style.color = nextState ? '#fbbc04' : '#ccc';
-                    starBtn.title = nextState ? 'Remove Golden Example' : 'Mark as Golden Example';
-
-                    try {
-                        const { buildSecurityHeaders } = await import('./api.js');
-                        const res = await fetch('/api/messages/annotate', {
-                            method: 'POST',
-                            headers: buildSecurityHeaders(),
-                            body: JSON.stringify({ id: msg.id || msg._id, is_annotated: nextState })
-                        });
-                        if (!res.ok) throw new Error('Failed to update annotation');
-                    } catch (err) {
-                        console.error('Annotation failed:', err);
-                        // Revert UI on failure
-                        starBtn.textContent = !nextState ? 'star' : 'star_border';
-                        starBtn.style.color = !nextState ? '#fbbc04' : '#ccc';
-                    }
-                };
-                info.appendChild(starBtn);
-
-                const src = (msg.source || '').toString();
-                const ch = (msg.channel || '').toString();
-                info.title = [ch ? `Channel: ${ch}` : null, src ? `Source: ${src}` : null].filter(Boolean).join('\n');
-                bubble.appendChild(info);
+            const cached = readCachedThread(handle);
+            if (cached?.messages?.length) {
+                renderMessagesPage(messagesEl, cached.messages, false);
+            } else if (!messagesEl.children.length) {
+                messagesEl.innerHTML = '<div style="padding:40px; text-align:center; color:#888;">Loading messages...</div>';
             }
-
-            messagesEl.appendChild(bubble);
-        });
-
-        // Add "Load More" button if there are more messages
-        if (hasMoreMessages) {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'btn btn-secondary load-more-messages';
-            btn.textContent = 'Load older messages…';
-            btn.onclick = () => {
-                messageOffset += MESSAGE_LIMIT;
-                loadMessages(handle, true);
-            };
-
-            const wrap = document.createElement('div');
-            wrap.className = 'load-more-messages-wrap';
-            wrap.appendChild(btn);
-            messagesEl.appendChild(wrap);
         }
 
-        // Keep the view at the newest messages (top of the list)
-        if (!append) messagesEl.scrollTop = 0;
+        const messages = await fetchMessages(handle, messageOffset, MESSAGE_LIMIT, false);
+        if (loadToken !== activeThreadLoadToken || window.currentHandle !== handle) return;
+
+        renderMessagesPage(messagesEl, messages, append);
+        if (!append) writeCachedThread(handle, messages);
+
+        // Keep the view at the newest messages near the composer.
+        if (!append) messagesEl.scrollTop = messagesEl.scrollHeight;
 
         // Default channel: match the most recent incoming message when possible or context
         if (!append) {
@@ -311,25 +354,28 @@ export async function loadMessages(handle, append = false) {
         }
 
     } catch (error) {
+        if (loadToken !== activeThreadLoadToken || window.currentHandle !== handle) return;
         console.error('Failed to load messages:', error);
         UI.showToast(error?.message || 'Failed to load messages', 'error');
-        messagesEl.innerHTML = '';
-        const errorContainer = document.createElement('div');
-        errorContainer.style.padding = '40px';
-        errorContainer.style.textAlign = 'center';
-        errorContainer.style.color = '#d32f2f';
+        if (!messagesEl.children.length) {
+            messagesEl.innerHTML = '';
+            const errorContainer = document.createElement('div');
+            errorContainer.style.padding = '40px';
+            errorContainer.style.textAlign = 'center';
+            errorContainer.style.color = '#d32f2f';
 
-        const errorMsg = document.createElement('p');
-        errorMsg.textContent = 'Failed to load messages';
-        errorContainer.appendChild(errorMsg);
+            const errorMsg = document.createElement('p');
+            errorMsg.textContent = 'Failed to load messages';
+            errorContainer.appendChild(errorMsg);
 
-        const retryBtn = document.createElement('button');
-        retryBtn.className = 'btn btn-secondary mt-md';
-        retryBtn.textContent = 'Retry';
-        retryBtn.onclick = () => window.loadMessages(handle);
-        errorContainer.appendChild(retryBtn);
+            const retryBtn = document.createElement('button');
+            retryBtn.className = 'btn btn-secondary mt-md';
+            retryBtn.textContent = 'Retry';
+            retryBtn.onclick = () => window.loadMessages(handle);
+            errorContainer.appendChild(retryBtn);
 
-        messagesEl.appendChild(errorContainer);
+            messagesEl.appendChild(errorContainer);
+        }
     }
 }
 
@@ -345,6 +391,7 @@ export async function handleSendMessage() {
 
     const text = chatInput.value.trim();
     if (!text) return;
+    if (sendInFlight) return;
 
     try {
         const channel = getSelectedChannel();
@@ -392,11 +439,8 @@ export async function handleSendMessage() {
         }
 
         console.log(`[SendMessage] channel=${channel}, targetHandle=${targetHandle}, textLen=${text.length}`);
-        // Send message — pass hatoriContext so annotation fires automatically
-        const result = await sendMessage(targetHandle, text, channel, activeHatoriContext);
-        // Clear the annotation state after send
-        activeHatoriContext = null;
-        window.__replyActiveHatoriContext = null;
+        setSendPending(channel, true);
+        const result = await sendMessage(targetHandle, text, channel);
         console.log(`[SendMessage] Result status: ${result?.status}`);
 
         if (result?.status !== 'ok') {
@@ -413,34 +457,9 @@ export async function handleSendMessage() {
         if (typeof window.loadConversations === 'function') {
             await window.loadConversations();
         }
-        // Load messages for the actual target handle (phone/email) if it differs
-        const loadHandle = targetHandle !== currentHandle ? targetHandle : currentHandle;
-        await loadMessages(loadHandle);
+        // Reload the selected contact thread; the server now resolves aliases/verified handles.
+        await loadMessages(currentHandle);
         try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
-
-        // Optimistically add message to UI
-        const bubble = document.createElement('div');
-        bubble.className = `message-bubble me channel-${normalizeChannelKey(channel)}`;
-
-        const textEl = document.createElement('div');
-        textEl.className = 'message-text';
-        appendLinkedText(textEl, text, { channelHint: channel });
-        bubble.appendChild(textEl);
-
-        const info = document.createElement('div');
-        info.className = 'message-info';
-        info.classList.add('message-info--with-icon');
-        const platform = resolvePlatformTarget(text, { channelHint: channel }).platform;
-        const icon = createPlatformIcon(platform, channel || 'message');
-        icon.classList.add('platform-icon--sm');
-        info.appendChild(icon);
-        const time = document.createElement('span');
-        time.textContent = new Date().toLocaleString();
-        info.appendChild(time);
-        bubble.appendChild(info);
-
-        messagesEl.prepend(bubble);
-        messagesEl.scrollTop = 0;
 
     } catch (error) {
         console.error('Failed to send message:', error);
@@ -454,13 +473,15 @@ export async function handleSendMessage() {
             return;
         }
         UI.showToast(base, 'error');
+    } finally {
+        setSendPending(getSelectedChannel(), false);
     }
 }
 
 // Export to window for onclick handlers
 window.loadMessages = loadMessages;
 window.handleSendMessage = handleSendMessage;
-window.seedHatoriDraft = seedHatoriDraft;
+window.seedDraft = seedDraft;
 window.setSelectedChannel = (channel) => {
     applyComposerChannel(channel);
 };

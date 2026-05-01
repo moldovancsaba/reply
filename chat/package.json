@@ -16,8 +16,7 @@
     "linkedin:install-browsers": "playwright install chromium",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test": "node --test test/*.test.js",
-    "verify:hatori": "node test-hatori-verify.js"
+    "test": "node --test test/*.test.js"
   },
   "engines": {
     "node": ">=20.17.0"

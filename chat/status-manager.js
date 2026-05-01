@@ -1,17 +1,14 @@
 const fs = require('fs');
-const path = require('path');
+const { ensureDataHome, dataPath } = require('./app-paths.js');
 
 // Singleton status manager to prevent race conditions
 class StatusManager {
     constructor() {
-        this.dataDir = path.join(__dirname, 'data');
-        if (!fs.existsSync(this.dataDir)) {
-            fs.mkdirSync(this.dataDir, { recursive: true, mode: 0o700 });
-        }
+        this.dataDir = ensureDataHome();
     }
 
     _read(filename) {
-        const filepath = path.join(this.dataDir, filename);
+        const filepath = dataPath(filename);
         if (fs.existsSync(filepath)) {
             try {
                 return JSON.parse(fs.readFileSync(filepath, 'utf8'));
@@ -24,7 +21,7 @@ class StatusManager {
     }
 
     _write(filename, data) {
-        const filepath = path.join(this.dataDir, filename);
+        const filepath = dataPath(filename);
         const tmppath = `${filepath}.tmp`;
         try {
             // Atomic write: write to temp file then rename

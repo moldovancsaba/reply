@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Wipe Reply-derived local state (NOT Apple Messages / WhatsApp source DBs), git pull, restart hub.
+# Wipe {reply}-derived local state (NOT Apple Messages / WhatsApp source DBs), git pull, restart hub.
 # Removes: LanceDB index, unified chat.db, contacts.db, sync cursors, worker pid, suggestion queue.
 # Preserves: chat/.env*, chat/data/settings.json, chat/data/system_persona.txt, OAuth tokens in settings.
 set -euo pipefail
@@ -12,7 +12,7 @@ LANCE="${REPO_ROOT}/knowledge/lancedb"
 
 echo "==> Repo: ${REPO_ROOT}"
 
-echo "==> Stopping Reply hub (launchd + node on hub ports)…"
+echo "==> Stopping {reply} hub (launchd + node on hub ports)…"
 chmod +x "${SCRIPT_DIR}/stop.sh" 2>/dev/null || true
 "${SCRIPT_DIR}/stop.sh" || true
 sleep 3
@@ -44,7 +44,7 @@ echo "==> Recreating empty unified_messages schema (chat.db)…"
 cd "${CHAT}"
 node -e "require('./message-store').initialize();"
 
-echo "==> Reloading Reply hub (make run from repo root)…"
+echo "==> Reloading {reply} hub (make run from repo root)…"
 cd "${REPO_ROOT}"
 chmod +x ./tools/scripts/reply_service.sh 2>/dev/null || true
 make run

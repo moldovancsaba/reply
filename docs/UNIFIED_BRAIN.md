@@ -1,6 +1,6 @@
 # {reply} — Unified brain (ingestion at scale) (reply#12)
 
-**Goal:** Combine **email history**, **calendar context**, and **chat transcripts** into a single **stylistic + factual** model the local stack can query (LanceDB + Ollama + optional `{hatori}`).
+**Goal:** Combine **email history**, **calendar context**, and **chat transcripts** into a single **stylistic + factual** model the local stack can query (LanceDB + Ollama).
 
 ## Current building blocks (already in repo)
 

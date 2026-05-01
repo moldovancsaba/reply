@@ -122,6 +122,10 @@ function sanitizeConversationItemForApi(it, sort) {
     const o = { ...it };
     delete o._recScore;
     delete o._freq;
+    delete o.contact;
+    delete o.key;
+    delete o.sortTime;
+    delete o.firstTimestamp;
     if (sort !== "recommendation") delete o._rankTrace;
     return o;
 }
@@ -140,10 +144,10 @@ const { autoAnnotateSentMessage } = require("../utils/annotation-utils");
 const { generateReply } = require("../reply-engine");
 const { getSnippets } = require("../knowledge");
 const { refineReply } = require("../gemini-client");
+const { addDocuments } = require("../vector-store");
 const { execFile, spawn } = require("child_process");
 const { readSettings } = require("../settings-store");
 const messageStore = require("../message-store");
-const hatori = require("../hatori-client.js");
 const { checkOutboundAllowed, appendOutboundDenial } = require("../utils/outbound-policy.js");
 const { maybeBlockOutboundOnPreflight } = require("./system.js");
 
@@ -165,6 +169,10 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
 
     let items;
 
+    const canUseSqlHotPath =
+        !q &&
+        (sort === "newest" || sort === "oldest");
+
     const cacheOk =
         !q &&
         conversationsIndexCache.rawItems &&
@@ -173,57 +181,97 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
     if (cacheOk) {
         items = conversationsIndexCache.rawItems.map((row) => ({ ...row }));
     } else {
-        const statsIndex = await getUnifiedIndex();
-        const contacts = await contactStore.refresh();
+        const contacts = await contactStore.refreshIfChanged();
         const itemsMap = new Map();
 
-        for (const [handle, stats] of statsIndex.entries()) {
-            const contact = contactStore.findContact(handle);
-            const key = contact?.id || handle;
+        if (canUseSqlHotPath) {
+            const rows = await messageStore.getConversationIndexRows();
+            for (const row of rows) {
+                const handle = String(row.handle || "").trim();
+                if (!handle) continue;
+                const contact = contactStore.findContact(handle);
+                const key = contact?.id || handle;
+                const latestTimestamp = safeDateMs(row.timestamp);
+                const firstTimestamp = safeDateMs(row.first_timestamp);
+                const path = String(row.path || "");
+                const latestChannel =
+                    path.startsWith("imessage://") ? "imessage" :
+                    path.startsWith("whatsapp://") ? "whatsapp" :
+                    path.startsWith("mailto:") ? "email" :
+                    path.startsWith("linkedin://") ? "linkedin" :
+                    inferChannelFromHandle(handle);
 
-            if (!itemsMap.has(key)) {
-                itemsMap.set(key, {
-                    key,
-                    handle,
-                    latestHandle: stats.latestHandle || handle,
-                    sortTime: stats.latestTimestamp,
-                    channel: stats.latestChannel,
-                    source: stats.latestSource,
-                    contact: contact || null,
-                    displayName: contact?.displayName || handle,
-                    lastMessage: stats.latestMessage,
-                    preview: stats.latestMessage,
-                    previewDate: stats.latestTimestamp
-                        ? new Date(stats.latestTimestamp).toISOString()
-                        : null,
-                    count: stats.count,
-                    countIn: stats.countIn || 0,
-                    countOut: stats.countOut || 0,
-                    firstTimestamp: stats.firstTimestamp != null ? stats.firstTimestamp : null
-                });
-            } else {
-                const item = itemsMap.get(key);
-                item.count += stats.count;
-                item.countIn = (item.countIn || 0) + (stats.countIn || 0);
-                item.countOut = (item.countOut || 0) + (stats.countOut || 0);
-                const fts = stats.firstTimestamp;
-                if (
-                    fts != null &&
-                    fts > 0 &&
-                    (item.firstTimestamp == null || fts < item.firstTimestamp)
-                ) {
-                    item.firstTimestamp = fts;
+                if (!itemsMap.has(key)) {
+                    itemsMap.set(key, {
+                        key,
+                        handle,
+                        latestHandle: handle,
+                        sortTime: latestTimestamp,
+                        channel: latestChannel,
+                        source: row.source || inferSourceFromChannel(latestChannel),
+                        contact: contact || null,
+                        displayName: contact?.displayName || handle,
+                        lastMessage: row.text || "No recent messages",
+                        preview: row.text || "No recent messages",
+                        previewDate: latestTimestamp ? new Date(latestTimestamp).toISOString() : null,
+                        count: Number(row.total_count) || 0,
+                        countIn: Number(row.total_count) || 0,
+                        countOut: 0,
+                        firstTimestamp: firstTimestamp || null
+                    });
                 }
-                if (stats.latestTimestamp > item.sortTime) {
-                    item.sortTime = stats.latestTimestamp;
-                    item.latestHandle = stats.latestHandle || handle;
-                    item.channel = stats.latestChannel;
-                    item.source = stats.latestSource;
-                    item.lastMessage = stats.latestMessage;
-                    item.preview = stats.latestMessage;
-                    item.previewDate = stats.latestTimestamp
-                        ? new Date(stats.latestTimestamp).toISOString()
-                        : null;
+            }
+        } else {
+            const statsIndex = await getUnifiedIndex();
+
+            for (const [handle, stats] of statsIndex.entries()) {
+                const contact = contactStore.findContact(handle);
+                const key = contact?.id || handle;
+
+                if (!itemsMap.has(key)) {
+                    itemsMap.set(key, {
+                        key,
+                        handle,
+                        latestHandle: stats.latestHandle || handle,
+                        sortTime: stats.latestTimestamp,
+                        channel: stats.latestChannel,
+                        source: stats.latestSource,
+                        contact: contact || null,
+                        displayName: contact?.displayName || handle,
+                        lastMessage: stats.latestMessage,
+                        preview: stats.latestMessage,
+                        previewDate: stats.latestTimestamp
+                            ? new Date(stats.latestTimestamp).toISOString()
+                            : null,
+                        count: stats.count,
+                        countIn: stats.countIn || 0,
+                        countOut: stats.countOut || 0,
+                        firstTimestamp: stats.firstTimestamp != null ? stats.firstTimestamp : null
+                    });
+                } else {
+                    const item = itemsMap.get(key);
+                    item.count += stats.count;
+                    item.countIn = (item.countIn || 0) + (stats.countIn || 0);
+                    item.countOut = (item.countOut || 0) + (stats.countOut || 0);
+                    const fts = stats.firstTimestamp;
+                    if (
+                        fts != null &&
+                        fts > 0 &&
+                        (item.firstTimestamp == null || fts < item.firstTimestamp)
+                    ) {
+                        item.firstTimestamp = fts;
+                    }
+                    if (stats.latestTimestamp > item.sortTime) {
+                        item.sortTime = stats.latestTimestamp;
+                        item.latestHandle = stats.latestHandle || handle;
+                        item.channel = stats.latestChannel;
+                        item.source = stats.latestSource;
+                        item.lastMessage = stats.latestMessage;
+                        item.preview = stats.latestMessage;
+                        item.previewDate = stats.latestTimestamp
+                            ? new Date(stats.latestTimestamp).toISOString()
+                            : null;
+                    }
                 }
             }
         }
@@ -328,27 +376,62 @@ async function serveThread(req, res, url) {
     const prefixes = Array.from(new Set(allHandles.flatMap((h) => pathPrefixesForHandle(h))));
 
     try {
-        const historyBatches = await Promise.all(prefixes.map((p) => getHistory(p)));
+        const [historyBatches, storeResult] = await Promise.all([
+            Promise.all(prefixes.map((p) => getHistory(p))),
+            messageStore.getMessagesForHandles(allHandles, { limit, offset })
+        ]);
         const allDocs = historyBatches.flat();
 
-        const allMessages = allDocs.map(d => {
-            const isFromMe = (d.text || "").includes("] Me:");
-            const dateObj = extractDateFromText(d.text || "");
-            return {
-                role: isFromMe ? "me" : "contact",
-                is_from_me: isFromMe,
-                text: stripMessagePrefix(d.text || ""),
-                date: dateObj ? dateObj.toISOString() : null,
-                channel: channelFromDoc(d),
-                source: d.source || null,
-                path: d.path || null,
-            };
-        }).sort((a, b) => (b.date ? new Date(b.date) : 0) - (a.date ? new Date(a.date) : 0));
+        const vectorDirectionHints = new Map();
+        for (const d of allDocs) {
+            const raw = String(d.text || '');
+            const dateObj = extractDateFromText(raw);
+            const key = `${String(d.path || '')}|${dateObj ? dateObj.toISOString() : ''}|${stripMessagePrefix(raw)}`;
+            vectorDirectionHints.set(key, raw.includes('] Me:'));
+        }
+
+        let allMessages = [];
+        if (Array.isArray(storeResult?.rows) && storeResult.rows.length > 0) {
+            allMessages = storeResult.rows.map((row) => {
+                const pathValue = String(row.path || '');
+                const textValue = String(row.text || '');
+                const dateIso = row.timestamp ? new Date(row.timestamp).toISOString() : null;
+                const hintKey = `${pathValue}|${dateIso || ''}|${textValue}`;
+                const isFromMe = row.is_from_me == null
+                    ? Boolean(vectorDirectionHints.get(hintKey))
+                    : Boolean(row.is_from_me);
+                return {
+                    id: row.id || null,
+                    role: isFromMe ? "me" : "contact",
+                    is_from_me: isFromMe,
+                    text: textValue,
+                    date: dateIso,
+                    channel: channelFromDoc({ path: row.path, source: row.source }),
+                    source: row.source || null,
+                    path: row.path || null,
+                    handle: row.handle || null,
+                };
+            });
+        } else {
+            allMessages = allDocs.map(d => {
+                const isFromMe = (d.text || "").includes("] Me:");
+                const dateObj = extractDateFromText(d.text || "");
+                return {
+                    role: isFromMe ? "me" : "contact",
+                    is_from_me: isFromMe,
+                    text: stripMessagePrefix(d.text || ""),
+                    date: dateObj ? dateObj.toISOString() : null,
+                    channel: channelFromDoc(d),
+                    source: d.source || null,
+                    path: d.path || null,
+                };
+            }).sort((a, b) => (b.date ? new Date(b.date) : 0) - (a.date ? new Date(a.date) : 0));
+        }
 
         writeJson(res, 200, {
-            messages: allMessages.slice(offset, offset + limit),
-            hasMore: allMessages.length > offset + limit,
-            total: allMessages.length
+            messages: allMessages,
+            hasMore: Number(storeResult?.total || allMessages.length) > offset + allMessages.length,
+            total: Number(storeResult?.total || allMessages.length)
         });
     } catch (err) {
         writeJson(res, 500, { error: err.message });
@@ -379,6 +462,19 @@ async function serveSuggest(req, res) {
             inferredChannel = (picked?.channel || inferChannelFromHandle(handle) || "other")
                 .toString()
                 .toLowerCase();
+
+            if (!message) {
+                const dbRow = await messageStore.getLatestContextForHandles(handles, { limit: 120 });
+                message = String(dbRow?.text || '').trim();
+                const dbPath = String(dbRow?.path || '');
+                inferredChannel = (
+                    dbPath.startsWith('imessage://') ? 'imessage' :
+                    dbPath.startsWith('whatsapp://') ? 'whatsapp' :
+                    dbPath.startsWith('mailto:') ? 'email' :
+                    dbPath.startsWith('linkedin://') ? 'linkedin' :
+                    inferChannelFromHandle(dbRow?.handle || handle) || 'other'
+                ).toLowerCase();
+            }
         }
 
         if (!message) {
@@ -392,29 +488,12 @@ async function serveSuggest(req, res) {
 
         const snippets = await getSnippets(message, 3);
 
-        // Ingest into Hatori before suggestion if enabled
-        if (process.env.REPLY_USE_HATORI === '1') {
-            try {
-                await hatori.ingestEvent({
-                    external_event_id: `reply:msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                    kind: inferredChannel === "email" ? "email" : (inferredChannel || "other"),
-                    conversation_id: `reply:${handle}`,
-                    sender_id: `reply:${handle}`,
-                    content: message,
-                    metadata: { source: 'api-suggest', channel: inferredChannel, omnichannel: true }
-                });
-            } catch (e) {
-                console.warn("[Hatori] Ingest failed, continuing to suggestion:", e.message);
-            }
-        }
-
         const suggestionResult = await generateReply(message, snippets, handle);
         const suggestion = typeof suggestionResult === 'string' ? suggestionResult : (suggestionResult.suggestion || "");
         const explanation = suggestionResult.explanation || "";
-        const hatori_id = suggestionResult.hatori_id || null;
         const contextMeta = suggestionResult.contextMeta || null;
 
-        writeJson(res, 200, { suggestion, explanation, hatori_id, contextMeta });
+        writeJson(res, 200, { suggestion, explanation, contextMeta });
     } catch (e) {
         writeJson(res, 500, { error: e.message || "Suggest failed" });
     }
@@ -520,9 +599,27 @@ end run
             writeJson(res, 500, { error: error.message });
             return;
         }
+        const sentAt = new Date().toISOString();
+        const localId = `local-imessage-out-${Date.now()}-${Buffer.from(String(recipient)).toString('base64url').slice(0, 16)}`;
+        await messageStore.saveMessages([{
+            id: localId,
+            text,
+            source: 'iMessage',
+            handle: recipient,
+            timestamp: sentAt,
+            path: `imessage://${recipient}`,
+            is_from_me: 1
+        }]);
+        await addDocuments([{
+            id: localId,
+            text: `[${sentAt}] Me: ${text}`,
+            source: 'iMessage',
+            path: `imessage://${recipient}`
+        }]);
+        contactStore.updateLastContacted(recipient, sentAt, { channel: 'imessage' });
         await contactStore.clearDraft(recipient);
         await autoAnnotateSentMessage("imessage", recipient, text);
-        writeJson(res, 200, { status: "ok" });
+        writeJson(res, 200, { status: "ok", sentAt, id: localId, recipient });
     });
 }
 
@@ -679,26 +776,6 @@ async function serveSendWhatsApp(req, res) {
     }
 }
 
-async function serveHatoriOutcome(req, res) {
-    try {
-        const payload = await readJsonBody(req);
-        if (process.env.REPLY_USE_HATORI !== '1') {
-            return writeJson(res, 403, { error: "Hatori is disabled" });
-        }
-        const result = await hatori.reportOutcome({
-            external_outcome_id: payload.external_outcome_id || `reply:outcome-${Date.now()}`,
-            assistant_interaction_id: payload.assistant_interaction_id,
-            status: payload.status, // sent_as_is | edited_then_sent | not_sent
-            original_text: payload.original_text,
-            final_sent_text: payload.final_sent_text,
-            diff: payload.diff
-        });
-        writeJson(res, 200, result);
-    } catch (e) {
-        writeJson(res, 500, { error: e.message });
-    }
-}
-
 // `normalizeConversationSort` + `CONVERSATION_SORT_MODES`: exported for `chat/test/conversations-meta.test.js` (reply#31).
 module.exports = {
     serveConversations,
@@ -708,10 +785,10 @@ module.exports = {
     serveFeedback,
     serveSendMessage,
     serveSendWhatsApp,
-    serveHatoriOutcome,
     normalizeConversationSort,
     CONVERSATION_SORT_MODES,
     AVAILABLE_CONVERSATION_SORT_MODES,
+    getConversationsIndexFresh,
     applyConversationSort,
     sanitizeConversationItemForApi,
     invalidateConversationsCache: () => {

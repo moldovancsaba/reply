@@ -1,8 +1,19 @@
-# Local deploy (macOS): `make run` installs/reloads `com.reply.hub` LaunchAgent from this repo.
-# Validate plist vs checkout: `make doctor`. CI build gate: `cd chat && npm test && npm run lint`.
+# Local run (macOS): `make run` starts the hub in the current user session.
+# Optional legacy LaunchAgent install remains under `make run-launchd`. CI build gate: `cd chat && npm test && npm run lint`.
 .PHONY: run
 run:
-	$(MAKE) install-service
+	chmod +x ./tools/scripts/reply_session_start.sh
+	./tools/scripts/reply_session_start.sh
+
+.PHONY: run-app
+run-app:
+	chmod +x ./script/build_and_run.sh ./app/ReplyApp/build-bundle.sh
+	./script/build_and_run.sh --verify
+
+.PHONY: build-app
+build-app:
+	chmod +x ./app/ReplyApp/build-bundle.sh
+	cd ./app/ReplyApp && ./build-bundle.sh
 
 .PHONY: stop
 stop:
@@ -13,19 +24,14 @@ stop:
 status:
 	./runbook/status.sh
 
+.PHONY: run-launchd
+run-launchd:
+	$(MAKE) install-service
+
 .PHONY: doctor
 doctor:
 	chmod +x ./runbook/doctor.sh
 	./runbook/doctor.sh
-
-.PHONY: install-ReplyMenubar
-install-ReplyMenubar:
-	chmod +x ./tools/macos/ReplyMenubar/install_ReplyMenubar.sh
-	./tools/macos/ReplyMenubar/install_ReplyMenubar.sh
-
-.PHONY: run-ReplyMenubar
-run-ReplyMenubar:
-	open "$$HOME/Applications/ReplyMenubar.app"
 
 .PHONY: install-service
 install-service:
@@ -42,26 +48,3 @@ uninstall-service:
 	@launchctl unload "$$HOME/Library/LaunchAgents/com.reply.hub.plist" >/dev/null 2>&1 || true
 	@rm -f "$$HOME/Library/LaunchAgents/com.reply.hub.plist"
 	@echo "Service removed: com.reply.hub"
-
-# --- {hatori} sibling (https://github.com/moldovancsaba/hatori) — expected at ../hatori from this repo root ---
-.PHONY: hatori-clone
-hatori-clone:
-	@if [ -d "$$(cd .. && pwd)/hatori/.git" ]; then echo "Already present: $$(cd .. && pwd)/hatori"; \
-	else echo "Cloning moldovancsaba/hatori -> $$(cd .. && pwd)/hatori ..." && git clone https://github.com/moldovancsaba/hatori.git "$$(cd .. && pwd)/hatori"; fi
-
-.PHONY: hatori-bootstrap
-hatori-bootstrap:
-	@$(MAKE) hatori-clone
-	@HATORI_ROOT="$$(cd .. && pwd)/hatori"; \
-	test -d "$$HATORI_ROOT/.git" || (echo "Missing $$HATORI_ROOT — run: make hatori-clone" && exit 1); \
-	echo "Running official Hatori bootstrap (venv, DB reset, models, LaunchAgent)…"; \
-	cd "$$HATORI_ROOT" && make up && sleep 6 && ./tools/scripts/hatori_bootstrap.sh
-
-.PHONY: hatori-doctor
-hatori-doctor:
-	@test -d "$$(cd .. && pwd)/hatori" && (cd "$$(cd .. && pwd)/hatori" && $(MAKE) doctor) || echo "No ../hatori — run: make hatori-clone"
-
-.PHONY: hatori-preflight
-hatori-preflight:
-	@chmod +x ./tools/scripts/reply_hatori_preflight.sh
-	@./tools/scripts/reply_hatori_preflight.sh

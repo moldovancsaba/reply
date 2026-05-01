@@ -236,7 +236,6 @@ function switchTab(tabId) {
 async function refreshAiProviderStatuses() {
   const ollamaLine = el('settings-providers-ollama-line');
   const ocLine = el('settings-providers-openclaw-line');
-  const hatLine = el('settings-providers-hatori-line');
   if (!ollamaLine && !ocLine) return;
   try {
     const { fetchSystemHealth, fetchOpenClawStatus } = await import('./api.js');
@@ -252,19 +251,6 @@ async function refreshAiProviderStatuses() {
     if (ocLine) {
       const s = oc.status || 'unknown';
       ocLine.textContent = `Status: ${s}${oc.error ? ` — ${oc.error}` : ''}${oc.detail ? ` (${oc.detail})` : ''}`;
-    }
-    if (hatLine) {
-      const api = health.services?.hatori_api || {};
-      const h = api.status || 'unknown';
-      const d = api.detail || '';
-      const agents = api.agents;
-      let extra = '';
-      if (Array.isArray(agents) && agents.length) {
-        const bad = agents.filter((a) => !a.ok).map((a) => a.role).join(', ');
-        extra = bad ? ` · lanes fault: ${bad}` : ' · writer/drafter/judge ok';
-      }
-      const watch = api.ui_url ? ` · watch ${api.ui_url}` : '';
-      hatLine.textContent = `Status: ${h}${d ? ` (${d})` : ''}${extra}${watch}`;
     }
   } catch (e) {
     if (ollamaLine) ollamaLine.textContent = `Check failed: ${e?.message || e}`;
@@ -329,9 +315,7 @@ async function loadIntoForm() {
   setVal('settings-worker-notes-max', worker.quantities?.notes !== undefined ? String(worker.quantities.notes) : '0');
 
   const health = data?.health || {};
-  setVal('settings-health-hatori-timeout', String(health.hatoriProbeTimeoutMs ?? 12000));
   setVal('settings-health-ollama-timeout', String(health.ollamaProbeTimeoutMs ?? 3000));
-  setVal('settings-health-hatori-threshold', String(health.hatoriWatchdogFailureThreshold ?? 3));
   setVal('settings-health-ui-poll', String(health.uiHealthPollIntervalMs ?? 15000));
   standaloneHealthPollMs = Math.max(
     5000,
@@ -342,7 +326,7 @@ async function loadIntoForm() {
   const ai = data?.ai || {};
   const draftSel = el('settings-ai-draft-runtime');
   if (draftSel) {
-    const v = ai.draftRuntime === 'ollama' || ai.draftRuntime === 'hatori' ? ai.draftRuntime : 'auto';
+    const v = ai.draftRuntime === 'ollama' ? ai.draftRuntime : 'auto';
     draftSel.value = v;
   }
   setVal('settings-ai-ollama-host', ai.ollamaHost || '');
@@ -358,18 +342,12 @@ async function loadIntoForm() {
   if (ocHint) {
     ocHint.textContent = ai.hasOpenclawGatewayToken ? `Saved: ${maskHint(ai.openclawGatewayTokenHint)}` : 'Not set';
   }
-  setVal('settings-ai-hatori-url', ai.hatoriApiUrl || '');
 
   const rt = data?.runtime || {};
   try {
     window.replySettingsRuntimeCache = rt;
   } catch {
     /* ignore */
-  }
-  const hatWrap = el('settings-providers-hatori-wrap');
-  if (hatWrap) {
-    hatWrap.classList.toggle('u-display-none', !rt.useHatori);
-    hatWrap.style.display = rt.useHatori ? '' : 'none';
   }
 
   // Security
@@ -439,9 +417,7 @@ async function onSave() {
         }
       },
       health: {
-        hatoriProbeTimeoutMs: Number(el('settings-health-hatori-timeout')?.value) || 12000,
         ollamaProbeTimeoutMs: Number(el('settings-health-ollama-timeout')?.value) || 3000,
-        hatoriWatchdogFailureThreshold: Number(el('settings-health-hatori-threshold')?.value) || 3,
         uiHealthPollIntervalMs: Number(el('settings-health-ui-poll')?.value) || 15000,
       },
       ai: {
@@ -454,7 +430,6 @@ async function onSave() {
         openclawBinary: el('settings-ai-openclaw-bin')?.value?.trim() || '',
         openclawGatewayUrl: el('settings-ai-openclaw-gateway-url')?.value?.trim() || '',
         openclawGatewayToken: el('settings-ai-openclaw-gateway-token')?.value || null,
-        hatoriApiUrl: el('settings-ai-hatori-url')?.value?.trim() || '',
       },
       channelBridge: {
         channels: {
@@ -757,9 +732,6 @@ export async function wireDom() {
     refreshAiProviderStatuses().catch((e) => console.warn(e));
   });
   el('settings-providers-check-openclaw')?.addEventListener('click', () => {
-    refreshAiProviderStatuses().catch((e) => console.warn(e));
-  });
-  el('settings-providers-check-hatori')?.addEventListener('click', () => {
     refreshAiProviderStatuses().catch((e) => console.warn(e));
   });
   el('settings-providers-check-all')?.addEventListener('click', () => {

@@ -2,3 +2,16 @@
 !.env.example
 chat/.env
 knowledge/lancedb/
+knowledge/notes-metadata.json
+.DS_Store
+.codex/
+app/ReplyApp/.build/
+app/ReplyApp/dist/
+chat/data/security_audit.jsonl
+chat/data/apple-source-mirrors/
+chat/data/imessage-mirror.pid
+chat/logs/
+chat/*.log
+gateway.log
+server.log
+sync.log

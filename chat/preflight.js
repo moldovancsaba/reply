@@ -122,48 +122,6 @@ function buildPreflightReport(health, pathCtx, options = {}) {
         hint: olOk ? null : "Start with: ollama serve"
     });
 
-    const hatApi = health.services?.hatori_api || {};
-    const hat = hatApi.status || "skipped";
-    const hatDetail = hatApi.detail != null ? String(hatApi.detail) : String(hat);
-    const hatAgents = Array.isArray(hatApi.agents) ? hatApi.agents : [];
-    const agentsBad = hatAgents.filter((a) => !a.ok);
-    const hatoriRequired = process.env.REPLY_USE_HATORI === "1";
-    if (hatoriRequired) {
-        const apiUp = hat === "online";
-        const agentsOk = hatAgents.length === 0 || agentsBad.length === 0;
-        const rowStatus = !apiUp ? "blocked" : !agentsOk ? "degraded" : "ok";
-        const rowSeverity = !apiUp ? "critical" : !agentsOk ? "warning" : "info";
-        let detail = hatDetail;
-        if (apiUp && !agentsOk) {
-            detail = `${hatDetail} — lanes not ok: ${agentsBad.map((b) => b.role).join(", ")}`;
-        }
-        checks.push({
-            id: "hatori_api",
-            category: "ai",
-            title: "Hatori API (writer / drafter / judge)",
-            severity: rowSeverity,
-            status: rowStatus,
-            detail,
-            hint: apiUp
-                ? hatApi.ui_url
-                    ? `Watch & chat: ${hatApi.ui_url}`
-                    : "Open Hatori UI (default http://127.0.0.1:23571/chat)."
-                : process.env.REPLY_HATORI_EXTERNAL === "1"
-                  ? "Check Hatori on REPLY_HATORI_PORT (default 23572), launchctl, or `make run` in REPLY_HATORI_PROJECT_PATH."
-                  : "Start Hatori on its port, use launchctl, or set REPLY_HATORI_EXTERNAL=1 if it runs outside this hub."
-        });
-    } else {
-        checks.push({
-            id: "hatori_api",
-            category: "ai",
-            title: "Hatori API",
-            severity: "info",
-            status: "skipped",
-            detail: "REPLY_USE_HATORI not enabled",
-            hint: null
-        });
-    }
-
     const summary = { ok: 0, degraded: 0, blocked: 0, skipped: 0 };
     for (const c of checks) {
         if (summary[c.status] !== undefined) summary[c.status] += 1;
@@ -188,11 +146,20 @@ function collectPathContext() {
     const { resolveWhatsAppChatStoragePath } = require("./utils/whatsapp-db-path.js");
     const imessageDbPath = resolveIMessageDbPath();
     const whatsappDbPath = resolveWhatsAppChatStoragePath();
+    const isReadable = (targetPath) => {
+        if (!targetPath) return false;
+        try {
+            fs.accessSync(targetPath, fs.constants.R_OK);
+            return true;
+        } catch {
+            return false;
+        }
+    };
     return {
         imessageDbPath,
-        imessageDbReadable: fs.existsSync(imessageDbPath),
+        imessageDbReadable: isReadable(imessageDbPath),
         whatsappDbPath: whatsappDbPath || "",
-        whatsappDbReadable: !!(whatsappDbPath && fs.existsSync(whatsappDbPath))
+        whatsappDbReadable: isReadable(whatsappDbPath)
     };
 }
 

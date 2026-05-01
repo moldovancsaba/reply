@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Quick operational snapshot for `make status` and the Reply menubar app.
+# Quick operational snapshot for `make status`.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -8,6 +8,17 @@ ENV_FILE="${REPO_ROOT}/chat/.env"
 
 UID_NUM="$(id -u)"
 LABEL="gui/${UID_NUM}/com.reply.hub"
+
+echo "=== session hub ==="
+SESSION_PID="$(pgrep -f "node .*server\\.js" | head -1 || true)"
+if [[ -n "$SESSION_PID" ]]; then
+  echo "running (pid ${SESSION_PID})"
+  ps -p "$SESSION_PID" -o pid=,ppid=,command= || true
+else
+  echo "(not running in foreground session mode)"
+fi
+
+echo ""
 
 echo "=== launchd: ${LABEL} ==="
 if launchctl print "$LABEL" >/dev/null 2>&1; then
@@ -55,7 +66,7 @@ fi
 
 echo ""
 echo "=== hub.log (last 25 lines) ==="
-HUB_LOG="${HOME}/Library/Logs/Reply/hub.log"
+HUB_LOG="${HOME}/Library/Logs/reply/hub.log"
 if [[ -f "$HUB_LOG" ]]; then
   tail -25 "$HUB_LOG"
 else

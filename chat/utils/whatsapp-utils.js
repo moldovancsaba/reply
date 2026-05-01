@@ -37,7 +37,21 @@ function applyOpenClawWhatsAppGuard(force = false) {
 
 function resolveOpenClawBinary() {
     const configured = String(process.env.OPENCLAW_BIN || "").trim();
-    return configured || "openclaw";
+    if (configured) return configured;
+
+    // Default to 'openclaw' if in PATH
+    const fs = require("fs");
+    const commonPaths = [
+        "/usr/local/bin/openclaw",
+        "/opt/homebrew/bin/openclaw",
+        "/usr/bin/openclaw"
+    ];
+
+    for (const p of commonPaths) {
+        if (fs.existsSync(p)) return p;
+    }
+
+    return "openclaw";
 }
 
 function buildOpenClawWhatsAppHint(rawErrorText, execErrorText, shortErrorText) {

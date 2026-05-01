@@ -17,7 +17,7 @@ function getOpenClawGatewayProcessEnv() {
         out.OPENCLAW_GATEWAY_URL = url;
     }
     const token = String(process.env.REPLY_OPENCLAW_GATEWAY_TOKEN || "").trim();
-    if (token) {
+    if (url && token) {
         out.OPENCLAW_GATEWAY_TOKEN = token;
     }
     return out;
@@ -68,33 +68,44 @@ function wsGatewayUrlToHealthzHttpUrl(wsBase) {
  */
 async function probeOpenClawGatewayHealthzFromEnv(timeoutMs) {
     const wsBase = String(process.env.REPLY_OPENCLAW_GATEWAY_URL || "").trim();
-    if (!wsBase || (!wsBase.startsWith("ws:") && !wsBase.startsWith("wss:"))) {
-        return null;
-    }
-    let healthUrl;
-    try {
-        healthUrl = wsGatewayUrlToHealthzHttpUrl(wsBase);
-    } catch {
-        return null;
-    }
-    if (!healthUrl) {
-        return null;
-    }
-    const ms = timeoutMs ?? 4000;
-    const ac = new AbortController();
-    const id = setTimeout(() => ac.abort(), ms);
-    try {
-        const r = await fetch(healthUrl, { signal: ac.signal });
-        if (!r.ok) {
-            throw new Error(`healthz HTTP ${r.status}`);
+    const candidates = [];
+    if (wsBase && (wsBase.startsWith("ws:") || wsBase.startsWith("wss:"))) {
+        try {
+            const mapped = wsGatewayUrlToHealthzHttpUrl(wsBase);
+            if (mapped) candidates.push(mapped);
+        } catch {
+            /* ignore malformed ws base and fall back to local defaults */
         }
-        return await r.json();
-    } catch {
-        /* Let CLI `gateway health` run as fallback when healthz is down or TLS blocked */
-        return null;
-    } finally {
-        clearTimeout(id);
     }
+
+    const localPort = Number(
+        process.env.REPLY_OPENCLAW_GATEWAY_PORT ||
+        process.env.OPENCLAW_GATEWAY_PORT ||
+        18790
+    );
+    if (Number.isFinite(localPort) && localPort > 0) {
+        candidates.push(`http://127.0.0.1:${localPort}/healthz`);
+        candidates.push(`http://[::1]:${localPort}/healthz`);
+    }
+
+    const ms = timeoutMs ?? 4000;
+    for (const healthUrl of candidates) {
+        const ac = new AbortController();
+        const id = setTimeout(() => ac.abort(), ms);
+        try {
+            const r = await fetch(healthUrl, { signal: ac.signal });
+            if (!r.ok) {
+                throw new Error(`healthz HTTP ${r.status}`);
+            }
+            return await r.json();
+        } catch {
+            /* try next candidate */
+        } finally {
+            clearTimeout(id);
+        }
+    }
+    /* Let CLI fallback run when healthz is down */
+    return null;
 }
 
 /**
@@ -125,21 +136,31 @@ async function probeOpenClawGatewayHealth(bin, opts = {}) {
 
     const childEnv = getOpenClawGatewayExecEnv();
     const args = ["gateway", "health", "--json"];
-    if (!childEnv.OPENCLAW_GATEWAY_URL) {
-        const tok =
-            String(process.env.REPLY_OPENCLAW_GATEWAY_TOKEN || "").trim() ||
-            readGatewayTokenFromHomeConfig();
-        if (tok) {
-            args.push("--token", tok);
+    try {
+        const { stdout } = await execFileAsync(bin, args, { timeout: timeoutMs, env: childEnv });
+        const jsonStart = stdout.indexOf("{");
+        if (jsonStart === -1) {
+            throw new Error("No JSON object found in gateway health output");
         }
+        const parsed = JSON.parse(stdout.slice(jsonStart));
+        return { ...parsed, ok: openclawGatewayResponseOk(parsed) };
+    } catch (error) {
+        const { stdout } = await execFileAsync(bin, ["channels", "status", "--json"], {
+            timeout: timeoutMs,
+            env: childEnv
+        });
+        const jsonStart = stdout.indexOf("{");
+        if (jsonStart === -1) {
+            throw error;
+        }
+        const parsed = JSON.parse(stdout.slice(jsonStart));
+        return {
+            ...parsed,
+            ok: true,
+            status: "live",
+            probe: "channels_status_fallback"
+        };
     }
-    const { stdout } = await execFileAsync(bin, args, { timeout: timeoutMs, env: childEnv });
-    const jsonStart = stdout.indexOf("{");
-    if (jsonStart === -1) {
-        throw new Error("No JSON object found in gateway health output");
-    }
-    const parsed = JSON.parse(stdout.slice(jsonStart));
-    return { ...parsed, ok: openclawGatewayResponseOk(parsed) };
 }
 
 module.exports = {

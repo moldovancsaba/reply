@@ -183,10 +183,8 @@ async function processOneSuggestionDraft(opts) {
     const snippets = await getSnippets(message, 3);
     const draftResult = await generateReply(message, snippets, handle);
     const draftText = typeof draftResult === "string" ? draftResult : draftResult?.suggestion || "";
-    const draftHatoriId = typeof draftResult === "object" ? draftResult?.hatori_id || null : null;
-
     if (String(draftText || "").trim()) {
-      await contactStore.setDraft(handle, draftText, { hatori_id: draftHatoriId });
+      await contactStore.setDraft(handle, draftText);
       return { ok: true, handle };
     }
     enqueueSuggestionDraft(handle);

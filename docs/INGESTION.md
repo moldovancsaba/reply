@@ -49,7 +49,7 @@
     }
     ```
 *   **Mechanism:** Uses `osascript` to query the Apple Notes app via AppleScript. This approach is read-only and respects the user's local permissions without needing direct database access.
-*   **Delta Sync:** Tracks note modification dates in `knowledge/notes-metadata.json`. Only notes with a newer modification date are re-processed.
+*   **Delta Sync:** Tracks note modification dates in `~/Library/Application Support/reply/notes-metadata.json` (or `REPLY_DATA_HOME/notes-metadata.json`). Only notes with a newer modification date are re-processed.
 *   **Config:** Requires no special environment variables. It automatically detects notes available to the currently logged-in macOS user (iCloud or "On My Mac").
 
 ### 4. Email Sync (Apple Mail or IMAP/Gmail)

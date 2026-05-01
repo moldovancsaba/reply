@@ -3,13 +3,15 @@ const path = require('path');
 const fs = require('fs');
 const { addDocuments } = require('./vector-store.js');
 const { enqueueSuggestionDraftsFromDocBatch } = require('./suggestion-draft-queue.js');
+const { ensureDataHome, dataPath } = require('./app-paths.js');
+ensureDataHome();
 
 const statusManager = require('./status-manager.js');
 const { withDefaults, readSettings } = require('./settings-store.js');
 const { resolveWhatsAppChatStoragePath } = require('./utils/whatsapp-db-path.js');
 
 const WA_DB_PATH = resolveWhatsAppChatStoragePath();
-const STATE_FILE = path.join(__dirname, 'data', 'whatsapp_sync_state.json');
+const STATE_FILE = dataPath('whatsapp_sync_state.json');
 
 // Ensure data dir exists
 if (!fs.existsSync(path.dirname(STATE_FILE))) {

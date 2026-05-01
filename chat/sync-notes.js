@@ -2,6 +2,7 @@ const { execFile } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const { addDocuments } = require("./vector-store.js");
+const { dataPath, ensureDataHome } = require("./app-paths.js");
 
 /**
  * Run an AppleScript string via osascript and return the output.
@@ -9,7 +10,7 @@ const { addDocuments } = require("./vector-store.js");
  */
 function runAppleScript(script) {
     return new Promise((resolve, reject) => {
-        execFile("/usr/bin/osascript", ["-e", script], { maxBuffer: 10 * 1024 * 1024 }, (err, stdout, _stderr) => {
+        execFile("/usr/bin/osascript", ["-e", script], { maxBuffer: 50 * 1024 * 1024, timeout: 120000 }, (err, stdout, _stderr) => {
             if (err) return reject(err);
             resolve(stdout.trim());
         });
@@ -18,12 +19,10 @@ function runAppleScript(script) {
 
 const statusManager = require('./status-manager.js');
 
-const KNOWLEDGE_DIR = path.join(__dirname, "..", "knowledge");
-const DATA_DIR = path.join(__dirname, "data");
-const META_PATH = path.join(KNOWLEDGE_DIR, "notes-metadata.json");
+const DATA_DIR = ensureDataHome();
+const META_PATH = dataPath("notes-metadata.json");
 
 // Ensure directories exist
-if (!fs.existsSync(KNOWLEDGE_DIR)) fs.mkdirSync(KNOWLEDGE_DIR, { recursive: true });
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 function updateStatus(status) {
@@ -66,7 +65,14 @@ async function getNoteBody(id) {
  */
 async function syncNotes(limit = null) {
     console.log("Starting Apple Notes sync...");
-    updateStatus({ state: "running", progress: 0, message: "Analyzing Apple Notes metadata..." });
+    updateStatus({
+        state: "running",
+        progress: 0,
+        processed: 0,
+        total: 0,
+        updated: 0,
+        message: "Analyzing Apple Notes metadata..."
+    });
 
     // Load local cache to see what's changed
     let cache = {};
@@ -95,7 +101,15 @@ async function syncNotes(limit = null) {
 
     if (toUpdate.length === 0) {
         console.log("Everything is up to date.");
-        updateStatus({ state: "idle", lastSync: new Date().toISOString(), total: currentNotes.length, updated: 0 });
+        updateStatus({
+            state: "idle",
+            progress: 100,
+            message: "Notes are up to date.",
+            lastSync: new Date().toISOString(),
+            total: currentNotes.length,
+            processed: currentNotes.length,
+            updated: 0
+        });
         return { total: currentNotes.length, updated: 0 };
     }
 
@@ -153,7 +167,15 @@ async function syncNotes(limit = null) {
     fs.writeFileSync(META_PATH, JSON.stringify(newCache, null, 2));
 
     // Don't set 'total' or 'processed' - server reads from notes-metadata.json
-    const finalStats = { state: "idle", lastSync: new Date().toISOString() };
+    const finalStats = {
+        state: "idle",
+        progress: 100,
+        message: `Notes sync complete. ${snippets.length} notes updated.`,
+        lastSync: new Date().toISOString(),
+        total: currentNotes.length,
+        processed: currentNotes.length,
+        updated: snippets.length
+    };
     updateStatus(finalStats);
     console.log("Sync complete.");
     return finalStats;
