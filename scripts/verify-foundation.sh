@@ -10,7 +10,8 @@
 set -e
 
 # --- Configuration ---
-REPLY_DIR="/Users/moldovancsaba/Projects/reply"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPLY_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 MAIN_STATE="$HOME/.openclaw"
 PARALLEL_STATE="$HOME/.openclaw-parallel"
 MAIN_PORT=18789
