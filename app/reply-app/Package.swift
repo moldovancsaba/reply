@@ -2,22 +2,22 @@
 import PackageDescription
 
 let package = Package(
-    name: "ReplyApp",
+    name: "reply-app",
     platforms: [
         .macOS(.v13)
     ],
     products: [
-        .executable(name: "reply", targets: ["ReplyApp"]),
-        .executable(name: "reply-helper", targets: ["ReplyHelper"])
+        .executable(name: "reply", targets: ["replyshell"]),
+        .executable(name: "reply-helper", targets: ["replyhelper"])
     ],
     targets: [
         .executableTarget(
-            name: "ReplyApp",
+            name: "replyshell",
             path: "Sources",
             exclude: ["ReplyHelper"]
         ),
         .executableTarget(
-            name: "ReplyHelper",
+            name: "replyhelper",
             path: "Sources/ReplyHelper"
         )
     ]
