@@ -644,7 +644,7 @@
 {reply} Sprint Status — Sprint X, Week Y
 
 ✅ Completed (this week):
-- #XXX: [Brief description] (commit SHA: abc123)
+- [issue-id]: [Brief description] (commit SHA: abc123)
 
 🟡 In Progress (ETA):
 - #YYY: [Brief description] — ETA [date]

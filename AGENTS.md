@@ -48,6 +48,6 @@ npm run channel-bridge:ingest -- --event '{"channel":"telegram","peer":{"handle"
 - Service health checks are centralized in `runbook/status.sh`.
 - ReplyMenubar install/run entrypoints are maintained in the root `Makefile`.
 
-## TODO
+## Known Notes
 
 - `README.md` still references `npm run dev`, but `chat/package.json` currently has no `dev` script. Prefer `npm start` unless/until a real `dev` command is added.
