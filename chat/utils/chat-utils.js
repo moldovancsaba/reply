@@ -275,7 +275,10 @@ function hasUsableConversationHandle(handle, options = {}) {
         || inferChannelFromHandle(raw, "");
 
     if (channel === "whatsapp") {
-        return /^[a-z0-9._:+-]{6,}$/i.test(stripped);
+        if (/^\d{6,}$/.test(stripped)) return true;
+        if (/^120\d{6,}$/.test(stripped)) return true;
+        if (/^[a-z0-9._:+-]+@(?:g\.us|s\.whatsapp\.net|lid)$/i.test(stripped)) return true;
+        return false;
     }
     if (channel === "linkedin") {
         if (/^https?:\/\/(www\.)?linkedin\.com\//i.test(stripped)) return true;
