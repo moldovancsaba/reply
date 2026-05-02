@@ -1,7 +1,7 @@
 const lancedb = require("@lancedb/lancedb");
 const path = require("path");
 const fs = require("fs");
-const { channelFromDoc } = require("./utils/chat-utils");
+const { channelFromDoc, isConversationDataSource } = require("./utils/chat-utils");
 const { dataPath } = require("./app-paths.js");
 
 function escapeSqlString(value) {
@@ -444,6 +444,7 @@ async function getUnifiedIndex() {
                 const doc = row && row.toJSON ? row.toJSON() : row;
                 const path = doc.path || "";
                 if (!path) continue;
+                if (!isConversationDataSource(doc)) continue;
 
                 const id = String(doc.id || "").trim();
                 if (id) {
