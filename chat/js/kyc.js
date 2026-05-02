@@ -187,6 +187,111 @@ function createEmptyRow(text) {
   return row;
 }
 
+function formatWhen(value) {
+  if (!value) return 'Unknown activity';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown activity';
+  return date.toLocaleString();
+}
+
+function closeHiddenContactsModal() {
+  const modal = el('hidden-contacts-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function renderHiddenContactsModal(contacts) {
+  const list = el('hidden-contacts-list-inline');
+  const count = el('hidden-contacts-count-inline');
+  if (!list || !count) return;
+
+  const items = Array.isArray(contacts) ? contacts : [];
+  count.textContent = items.length === 1 ? '1 hidden contact' : `${items.length} hidden contacts`;
+  list.innerHTML = '';
+
+  if (!items.length) {
+    list.innerHTML = '<div class="hidden-contacts-empty">No archived, removed, or blocked contacts.</div>';
+    return;
+  }
+
+  for (const contact of items) {
+    const card = document.createElement('article');
+    card.className = 'hidden-contact-card';
+
+    const main = document.createElement('div');
+    main.className = 'hidden-contact-main';
+
+    const title = document.createElement('h2');
+    title.className = 'hidden-contact-title';
+    title.textContent = contact.presentationDisplayName || contact.displayName || contact.handle || 'Unknown contact';
+    main.appendChild(title);
+
+    const handle = document.createElement('p');
+    handle.className = 'hidden-contact-handle';
+    handle.textContent = contact.handle || '';
+    main.appendChild(handle);
+
+    const meta = document.createElement('div');
+    meta.className = 'hidden-contact-meta';
+
+    const stateChip = document.createElement('span');
+    stateChip.className = `kyc-visibility-badge is-${String(contact.visibilityState || 'active').toLowerCase()}`;
+    stateChip.textContent = visibilityLabel(contact.visibilityState);
+    meta.appendChild(stateChip);
+
+    const channelChip = document.createElement('span');
+    channelChip.className = 'hidden-contact-meta-chip';
+    channelChip.textContent = contact.lastChannel ? `Last channel: ${contact.lastChannel}` : 'No channel recorded';
+    meta.appendChild(channelChip);
+
+    const whenChip = document.createElement('span');
+    whenChip.className = 'hidden-contact-meta-chip';
+    whenChip.textContent = `Last active: ${formatWhen(contact.lastContacted)}`;
+    meta.appendChild(whenChip);
+
+    const annotationChip = document.createElement('span');
+    annotationChip.className = 'hidden-contact-meta-chip';
+    annotationChip.textContent = contact.annotationEnabled ? 'Annotation enabled' : 'Annotation blocked';
+    meta.appendChild(annotationChip);
+
+    main.appendChild(meta);
+    card.appendChild(main);
+
+    const actions = document.createElement('div');
+    actions.className = 'hidden-contact-actions';
+
+    const restoreBtn = document.createElement('button');
+    restoreBtn.type = 'button';
+    restoreBtn.className = 'btn btn-primary btn-sm';
+    restoreBtn.textContent = 'Bring Back';
+    restoreBtn.onclick = async () => {
+      restoreBtn.disabled = true;
+      try {
+        const { restoreContact } = await import('./api.js');
+        await restoreContact(contact.handle);
+        UI.showToast('Contact restored.', 'success', 2200);
+        if (typeof window.loadConversations === 'function') {
+          await window.loadConversations(false);
+        }
+        await loadHiddenContactsModal();
+      } catch (error) {
+        UI.showToast(error.message || 'Restore failed', 'error');
+      } finally {
+        restoreBtn.disabled = false;
+      }
+    };
+    actions.appendChild(restoreBtn);
+    card.appendChild(actions);
+
+    list.appendChild(card);
+  }
+}
+
+async function loadHiddenContactsModal() {
+  const { fetchHiddenContacts } = await import('./api.js');
+  const payload = await fetchHiddenContacts();
+  renderHiddenContactsModal(Array.isArray(payload.contacts) ? payload.contacts : []);
+}
+
 function renderNotes(notes) {
   const log = el('notes-log');
   if (!log) return;
@@ -1043,7 +1148,11 @@ window.closeMergeModal = () => {
 };
 
 window.openHiddenContactsPage = () => {
-  window.location.href = 'hidden-contacts.html';
+  const modal = el('hidden-contacts-modal');
+  if (modal) modal.style.display = 'flex';
+  loadHiddenContactsModal().catch((error) => {
+    UI.showToast(error.message || 'Failed to load hidden contacts', 'error');
+  });
 };
 
 window.archiveCurrentProfile = () => {
@@ -1145,6 +1254,32 @@ function wireAnalyzeButton() {
   };
 }
 
+function wireHiddenContactsModal() {
+  const closeBtn = el('btn-hidden-close-inline');
+  if (closeBtn && closeBtn.dataset.wired !== '1') {
+    closeBtn.dataset.wired = '1';
+    closeBtn.addEventListener('click', closeHiddenContactsModal);
+  }
+
+  const refreshBtn = el('btn-hidden-refresh-inline');
+  if (refreshBtn && refreshBtn.dataset.wired !== '1') {
+    refreshBtn.dataset.wired = '1';
+    refreshBtn.addEventListener('click', () => {
+      loadHiddenContactsModal().catch((error) => {
+        UI.showToast(error.message || 'Refresh failed', 'error');
+      });
+    });
+  }
+
+  const modal = el('hidden-contacts-modal');
+  if (modal && modal.dataset.wired !== '1') {
+    modal.dataset.wired = '1';
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) closeHiddenContactsModal();
+    });
+  }
+}
+
 function wireLocalIntelligenceInput() {
   const input = document.getElementById('new-note-input');
   if (!input) return;
@@ -1161,9 +1296,11 @@ function wireLocalIntelligenceInput() {
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     wireAnalyzeButton();
+    wireHiddenContactsModal();
     wireLocalIntelligenceInput();
   });
 } else {
   wireAnalyzeButton();
+  wireHiddenContactsModal();
   wireLocalIntelligenceInput();
 }
