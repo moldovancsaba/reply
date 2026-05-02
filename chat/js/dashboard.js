@@ -62,6 +62,16 @@ function materialIcon(name, extraClass = '') {
   return `<span class="${className}" data-icon="${escapeDashboardAttr(name)}" aria-hidden="true"></span>`;
 }
 
+function renderDashboardIcon({ iconName = '', iconAsset = '', title = '' } = {}) {
+  if (iconAsset) {
+    return `<img src="${escapeDashboardAttr(iconAsset)}" alt="${escapeDashboardAttr(title)}" class="platform-icon platform-icon--sm">`;
+  }
+  if (iconName) {
+    return materialIcon(iconName, 'health-card-icon');
+  }
+  return '';
+}
+
 function wireDashboardActions(root) {
   if (!root) return;
 
@@ -111,7 +121,8 @@ function wireDashboardActions(root) {
  * @param {string} [config.statusClass] - Optional status class (e.g., 'online' or 'tag-online')
  * @param {Object} [config.meta] - Metadata lines
  * @param {Object} [config.actions] - Action buttons configuration
- * @param {string} [config.icon] - Header icon (emoji or svg path)
+ * @param {string} [config.iconName] - Local material icon name
+ * @param {string} [config.iconAsset] - Local image asset path
  * @returns {string} HTML string for the card
  */
 function renderHealthCard(config) {
@@ -122,7 +133,8 @@ function renderHealthCard(config) {
     statusClass = '',
     meta = [],
     actions = [],
-    icon = ''
+    iconName = '',
+    iconAsset = ''
   } = config;
 
   const actionsHtml = actions.length > 0 ? `
@@ -155,9 +167,7 @@ function renderHealthCard(config) {
   }).join('');
 
   const safeTitle = escapeDashboardText(title);
-  const iconHtml = icon ? (icon.includes('.svg') || icon.includes('.png') || icon.includes('/')
-    ? `<img src="${icon}" alt="${safeTitle}" class="platform-icon platform-icon--sm">`
-    : `<span class="health-card-icon">${icon}</span>`) : '';
+  const iconHtml = renderDashboardIcon({ iconName, iconAsset, title: safeTitle });
 
   return `
     <div class="health-card">
@@ -287,7 +297,7 @@ function renderPreflightPanel(preflight, health) {
   return `
     <div class="health-card health-card--span-full preflight-panel">
       <div class="health-card-header">
-        <h4><span class="health-card-icon">🧱</span><span>Foundation (preflight)</span></h4>
+        <h4>${materialIcon('deployed_code', 'health-card-icon')}<span>Foundation (preflight)</span></h4>
         <div class="health-status-tag ${tagClass}">${escapeDashboardText(overall)}</div>
       </div>
       <div class="preflight-summary" aria-label="Preflight summary">
@@ -439,7 +449,7 @@ export async function renderDashboard() {
       <div class="dashboard-grid">
       ${renderHealthCard({
       title: 'OpenClaw Health',
-      icon: materialIcon('warning'),
+      iconName: 'warning',
       value: openClawOnline ? (openClawStatus.version || 'Connected') : 'Offline',
       statusText: openClawStatusText,
       statusClass: openClawStatusClass,
@@ -450,7 +460,7 @@ export async function renderDashboard() {
 
        ${renderHealthCard({
         title: 'System Status',
-        icon: '🖥️',
+        iconName: 'desktop_windows',
         value: 'Online',
         statusText: '● Server Running',
         statusClass: 'tag-online',
@@ -477,7 +487,7 @@ export async function renderDashboard() {
         const startedLabel = worker.startedAt ? formatLastSync(worker.startedAt) : '—';
         return renderHealthCard({
           title: 'Background Worker',
-          icon: materialIcon('settings'),
+          iconName: 'sync',
           value: worker.status === 'online' ? 'Running' : 'Offline',
           statusText: `● Process ${worker.status}`,
           statusClass: worker.status === 'online' ? 'tag-online' : 'tag-offline',
@@ -495,7 +505,7 @@ export async function renderDashboard() {
       
       ${renderHealthCard({
         title: 'iMessage Sync',
-        icon: '/public/imessage.svg',
+        iconAsset: '/public/imessage.svg',
         value: imessageSummary.value,
         statusText: imessageSummary.statusText,
         statusClass: imessageSummary.statusClass,
@@ -513,7 +523,7 @@ export async function renderDashboard() {
       
       ${renderHealthCard({
         title: 'WhatsApp Sync',
-        icon: '/public/whatsapp.svg',
+        iconAsset: '/public/whatsapp.svg',
         value: whatsappSync.processed || 0,
         statusText: '● Messages Scanned',
         meta: [{ text: `Sync: ${formatLastSync(whatsappSync.lastSync)}` }],
@@ -526,7 +536,7 @@ export async function renderDashboard() {
       
       ${renderHealthCard({
         title: 'LinkedIn Messages',
-        icon: '/public/linkedin.svg',
+        iconAsset: '/public/linkedin.svg',
         value: linkedinMessagesSync.processed || 0,
         statusText: '● Messages Scanned',
         meta: [{ text: `Sync: ${formatLastSync(linkedinMessagesSync.lastAt)}` }],
@@ -539,7 +549,7 @@ export async function renderDashboard() {
       
       ${renderHealthCard({
         title: 'Email Sync',
-        icon: '/public/mail.svg',
+        iconAsset: '/public/mail.svg',
         value: metricValue(mailSync.total, mailSync.processed, mailSync.ingestedTotal),
         statusText: mailSync.connected ? `● ${mailSync.provider === 'gmail' ? 'Gmail' : 'IMAP'} Connected` : '● Disconnected',
         statusClass: mailSync.connected ? 'tag-online' : 'tag-offline',
@@ -556,7 +566,7 @@ export async function renderDashboard() {
       
       ${renderHealthCard({
         title: 'LinkedIn Posts',
-        icon: '/public/linkedin.svg',
+        iconAsset: '/public/linkedin.svg',
         value: linkedinPostsSync.processed || 0,
         statusText: '● Posts Scanned',
         meta: [{ text: `Sync: ${formatLastSync(linkedinPostsSync.lastAt)}` }],
@@ -569,7 +579,7 @@ export async function renderDashboard() {
       
       ${renderHealthCard({
         title: 'Notes Sync',
-        icon: materialIcon('attachment'),
+        iconName: 'description',
         value: metricValue(notesSync.total, notesSync.ingestedTotal, notesSync.processed, notesSync.updated),
         statusText: '● Notes Scanned',
         meta: [{ text: `Sync: ${formatLastSync(notesSync.lastSync)}` }],
@@ -582,7 +592,7 @@ export async function renderDashboard() {
       
       ${renderHealthCard({
         title: 'Contacts Sync',
-        icon: materialIcon('person'),
+        iconName: 'contacts',
         value: health.stats?.total || 0,
         statusText: '● Shared Storage',
         meta: [
@@ -597,7 +607,7 @@ export async function renderDashboard() {
       
       ${renderHealthCard({
         title: 'Contact Intelligence',
-        icon: materialIcon('school'),
+        iconName: 'neurology',
         value: kycSync.index != null ? kycSync.index + 1 : 0,
         statusText: kycSync.state === 'running' ? '● Analyzing Contacts...' : '● Idle',
         statusClass: kycSync.state === 'running' ? 'tag-online' : '',
