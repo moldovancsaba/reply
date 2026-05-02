@@ -133,11 +133,11 @@
       }
 
       .shell-icon-button {
-        width: 36px;
-        height: 36px;
+        width: 44px;
+        height: 44px;
         padding: 0;
         border: 1px solid var(--control-border);
-        border-radius: 12px;
+        border-radius: 14px;
         background: var(--control-bg);
         color: var(--text-primary);
         display: inline-flex;
@@ -532,15 +532,18 @@
       .chat-header-group--actions {
         flex: 0 0 auto;
         justify-content: flex-end;
-        gap: 8px;
+        gap: 10px;
       }
 
       .shell-action-button {
-        min-height: 44px;
-        padding: 0 14px;
+        width: 46px;
+        min-width: 46px;
+        min-height: 46px;
+        padding: 0;
         border-radius: 16px;
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 10px;
         font-weight: 700;
         box-shadow: none;
@@ -551,12 +554,23 @@
       }
 
       .shell-action-button__icon {
-        font-size: 1rem;
+        width: 1.2rem;
+        height: 1.2rem;
       }
 
       .shell-action-button__label {
         line-height: 1;
         white-space: nowrap;
+      }
+
+      .shell-action-button--icon-only,
+      .shell-toolbar-button--icon-only {
+        width: 46px;
+        min-width: 46px;
+        height: 46px;
+        padding: 0;
+        gap: 0;
+        justify-content: center;
       }
 
       .messages-container {
@@ -1152,7 +1166,7 @@
 
       .kyc-editor-actions {
         display: flex;
-        gap: 8px;
+        gap: 10px;
         align-items: center;
         flex-wrap: nowrap;
         justify-content: flex-end;
@@ -1161,10 +1175,10 @@
       }
 
       .kyc-editor-actions .btn {
-        height: 36px;
+        height: 46px;
         padding: 0 14px;
-        border-radius: 999px;
-        line-height: 36px;
+        border-radius: 16px;
+        line-height: 46px;
         white-space: nowrap;
       }
 
@@ -1181,17 +1195,18 @@
         position: absolute;
         top: calc(100% + 8px);
         right: 0;
-        min-width: 220px;
-        padding: 8px;
-        border-radius: 16px;
+        min-width: 0;
+        width: 176px;
+        padding: 10px;
+        border-radius: 18px;
         background: color-mix(in srgb, var(--surface-overlay-strong) 98%, transparent);
         border: 1px solid var(--control-border);
         box-shadow: var(--menu-shadow);
         -webkit-backdrop-filter: blur(18px);
         backdrop-filter: blur(18px);
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
         z-index: 30;
       }
 
@@ -1200,14 +1215,16 @@
         border: none;
         background: transparent;
         color: var(--text-primary);
-        text-align: left;
-        padding: 10px 12px;
-        border-radius: 12px;
+        text-align: center;
+        padding: 0;
+        height: 46px;
+        border-radius: 14px;
         cursor: pointer;
         font: inherit;
         display: flex;
         align-items: center;
-        gap: 10px;
+        justify-content: center;
+        gap: 0;
       }
 
       .profile-actions-menu-item:hover {
@@ -2226,8 +2243,8 @@
         line-height: 1;
         font-family: inherit;
         font-weight: 700;
-        width: 1.1rem;
-        height: 1.1rem;
+        width: 1.25rem;
+        height: 1.25rem;
         color: currentColor;
       }
 
@@ -2250,8 +2267,8 @@
 
       .shell-toolbar-button__icon,
       .profile-actions-menu-item__icon {
-        width: 1rem;
-        height: 1rem;
+        width: 1.15rem;
+        height: 1.15rem;
         flex-shrink: 0;
       }
 
