@@ -2,6 +2,7 @@ const path = require("path");
 const { execFile } = require("child_process");
 const contactStore = require("../contact-store.js");
 const { mergeProfile } = require("../kyc-merge.js");
+const { normalizeStoredDisplayName, presentContactLabel } = require("../utils/contact-labels.js");
 
 /** Allowed channel buckets on a profile (reply#22). */
 function sanitizeClientChannels(raw) {
@@ -69,7 +70,8 @@ async function serveKyc(req, res, url, authorizeSensitiveRoute, onUpdate, bodyDa
       contactId: contact?.id || null,
       visibilityState: contact?.visibility_state || contact?.visibilityState || "active",
       visibilityChangedAt: contact?.visibility_changed_at || null,
-      displayName: contact?.displayName || contact?.name || handle,
+      displayName: normalizeStoredDisplayName(contact?.displayName || contact?.name || "", handle),
+      presentationDisplayName: presentContactLabel(contact || {}, { handle }),
       profession: contact?.profession || "",
       relationship: contact?.relationship || "",
       intro: contact?.intro || "",

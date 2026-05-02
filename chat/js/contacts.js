@@ -94,19 +94,9 @@ function renderConversationsPage(contacts, append = false) {
         const channel = contact.lastChannel || contact.channel || contact.lastSource || contact.source || '';
         const handleForHint = contact.latestHandle || contact.handle || '';
         const rawLabel = formatContactLabel(
-            contact.displayName || contact.name || contact.handle
+            contact.presentationDisplayName || contact.displayName || contact.name || contact.handle
         );
-        const lidish =
-            /^[a-zA-Z0-9+/]+={0,2}$/.test(String(handleForHint)) &&
-            String(handleForHint).length >= 16;
-        const looksUnresolved =
-            lidish &&
-            (rawLabel === String(contact.handle || '').trim() ||
-                rawLabel === String(handleForHint).trim());
-        const displayName = looksUnresolved
-            ? `WhatsApp · ${String(handleForHint).slice(0, 10)}…`
-            : rawLabel;
-        name.textContent = displayName;
+        name.textContent = rawLabel;
 
         topRow.appendChild(name);
 
@@ -464,7 +454,7 @@ export async function selectContact(handle) {
         return;
     }
     if (contact) {
-        activeNameEl.textContent = formatContactLabel(contact.displayName || contact.name || contact.handle);
+        activeNameEl.textContent = formatContactLabel(contact.presentationDisplayName || contact.displayName || contact.name || contact.handle);
         if (typeof window.setSelectedChannel === 'function') {
             window.setSelectedChannel(contact.channel || (handle.includes('@') ? 'email' : 'imessage'));
         }
