@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 const { ensureDataHome, dataPath } = require('./app-paths.js');
+const { isConversationDataSource } = require('./utils/chat-utils.js');
 
 ensureDataHome();
 const DB_PATH = dataPath('chat.db');
@@ -17,6 +18,28 @@ function openMessageStoreDb(mode) {
     });
     return db;
 }
+
+function isConversationMessageRow(row) {
+    return isConversationDataSource({
+        path: row?.path,
+        source: row?.source
+    });
+}
+
+const CONVERSATION_SOURCE_SQL = `
+    (
+        LOWER(COALESCE(path, '')) LIKE 'imessage://%' OR
+        LOWER(COALESCE(path, '')) LIKE 'whatsapp://%' OR
+        LOWER(COALESCE(path, '')) LIKE 'mailto:%' OR
+        LOWER(COALESCE(path, '')) LIKE 'email://%' OR
+        LOWER(COALESCE(path, '')) LIKE 'linkedin://%' OR
+        LOWER(COALESCE(path, '')) LIKE 'telegram://%' OR
+        LOWER(COALESCE(path, '')) LIKE 'discord://%' OR
+        LOWER(COALESCE(path, '')) LIKE 'signal://%' OR
+        LOWER(COALESCE(path, '')) LIKE 'viber://%' OR
+        LOWER(COALESCE(source, '')) IN ('imessage', 'imessage-live', 'whatsapp', 'mail', 'gmail', 'imap', 'linkedin', 'telegram', 'discord', 'signal', 'viber')
+    )
+`;
 
 /**
  * Initialize the unified messages table
@@ -218,7 +241,7 @@ async function getConversationIndexRows(filter = {}) {
                 MIN(timestamp) OVER (PARTITION BY handle) AS first_timestamp,
                 COUNT(*) OVER (PARTITION BY handle) AS total_count
             FROM unified_messages
-            ${whereClause}
+            ${whereClause ? `${whereClause} AND ${CONVERSATION_SOURCE_SQL}` : `WHERE ${CONVERSATION_SOURCE_SQL}`}
         )
         SELECT
             handle,
@@ -261,6 +284,7 @@ async function getLatestContextForHandles(handles = [], options = {}) {
         SELECT handle, text, source, timestamp, path
         FROM unified_messages
         WHERE handle IN (${placeholders})
+          AND ${CONVERSATION_SOURCE_SQL}
           AND text IS NOT NULL
           AND TRIM(text) != ''
         ORDER BY timestamp DESC
@@ -308,12 +332,14 @@ async function getMessagesForHandles(handles = [], filter = {}) {
         SELECT COUNT(*) as total
         FROM unified_messages
         WHERE handle IN (${placeholders})
+          AND ${CONVERSATION_SOURCE_SQL}
     `;
 
     const rowsQuery = `
         SELECT id, text, source, handle, timestamp, path, is_from_me
         FROM unified_messages
         WHERE handle IN (${placeholders})
+          AND ${CONVERSATION_SOURCE_SQL}
         ORDER BY timestamp DESC
         LIMIT ?
         OFFSET ?
