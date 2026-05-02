@@ -438,10 +438,13 @@ function refreshSuggestButtonState() {
   const btnSuggest = document.getElementById('btn-suggest');
   if (!btnSuggest) return;
   const label = btnSuggest.querySelector('.shell-action-button__label');
+  const icon = btnSuggest.querySelector('.reply-shell-icon');
   const handle = window.currentHandle;
   if (!handle) {
     btnSuggest.disabled = true;
     if (label) label.textContent = 'Suggest';
+    setMaterialIcon(icon, 'lightbulb');
+    btnSuggest.setAttribute('aria-label', 'Select a conversation to generate draft suggestions');
     btnSuggest.dataset.tooltip = 'Select a conversation to generate draft suggestions';
     return;
   }
@@ -451,13 +454,18 @@ function refreshSuggestButtonState() {
   if (job?.status === 'pending') {
     btnSuggest.disabled = true;
     if (label) label.textContent = 'Suggesting…';
+    setMaterialIcon(icon, 'info');
+    btnSuggest.setAttribute('aria-label', 'Generating 3 draft suggestions');
     btnSuggest.dataset.tooltip = 'Generating 3 draft suggestions';
     return;
   }
 
   btnSuggest.disabled = false;
   if (label) label.textContent = cached?.suggestion ? 'Ready' : 'Suggest';
-  btnSuggest.dataset.tooltip = cached?.suggestion ? 'Draft suggestions are ready' : 'Generate 3 draft suggestions';
+  setMaterialIcon(icon, cached?.suggestion ? 'check-circle' : 'lightbulb');
+  const tooltip = cached?.suggestion ? 'Draft suggestions are ready' : 'Generate 3 draft suggestions';
+  btnSuggest.setAttribute('aria-label', tooltip);
+  btnSuggest.dataset.tooltip = tooltip;
 }
 
 function applyCachedSuggestionForHandle(handle, options = {}) {
@@ -828,6 +836,7 @@ function setupEventListeners() {
       if (label) label.textContent = 'Recording';
       btn.style.color = 'white';
       btn.style.background = 'var(--danger)';
+      btn.setAttribute('aria-label', 'Stop dictation');
       btn.dataset.tooltip = 'Stop dictation';
     } else {
       btn.classList.remove('recording');
@@ -835,6 +844,7 @@ function setupEventListeners() {
       if (label) label.textContent = 'Mic';
       btn.style.color = '';
       btn.style.background = '';
+      btn.setAttribute('aria-label', 'Dictate into the composer');
       btn.dataset.tooltip = 'Dictate into the composer';
     }
   }
@@ -935,10 +945,13 @@ function setupEventListeners() {
       }
 
       const originalLabel = btnMagic.querySelector('.shell-action-button__label')?.textContent || 'Refine';
+      const icon = btnMagic.querySelector('.reply-shell-icon');
       try {
         btnMagic.disabled = true;
         const label = btnMagic.querySelector('.shell-action-button__label');
         if (label) label.textContent = 'Refining…';
+        setMaterialIcon(icon, 'info');
+        btnMagic.setAttribute('aria-label', 'Refining the current draft');
         btnMagic.dataset.tooltip = 'Refining the current draft';
 
         const res = await fetch('/api/refine-reply', {
@@ -953,6 +966,7 @@ function setupEventListeners() {
           try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
           const label = btnMagic.querySelector('.shell-action-button__label');
           if (label) label.textContent = 'Refined';
+          setMaterialIcon(icon, 'check-circle');
         } else {
           let polished = val.trim();
           polished = polished.charAt(0).toUpperCase() + polished.slice(1);
@@ -960,6 +974,7 @@ function setupEventListeners() {
           chatInput.value = polished;
           const label = btnMagic.querySelector('.shell-action-button__label');
           if (label) label.textContent = 'Refined';
+          setMaterialIcon(icon, 'check-circle');
         }
       } catch (e) {
         console.warn('Refinement failed:', e);
@@ -969,11 +984,14 @@ function setupEventListeners() {
         chatInput.value = polished;
         const label = btnMagic.querySelector('.shell-action-button__label');
         if (label) label.textContent = 'Refined';
+        setMaterialIcon(icon, 'check-circle');
       } finally {
         btnMagic.disabled = false;
         setTimeout(() => {
           const label = btnMagic.querySelector('.shell-action-button__label');
           if (label) label.textContent = originalLabel;
+          setMaterialIcon(icon, 'auto-awesome');
+          btnMagic.setAttribute('aria-label', 'Refine the current draft');
           btnMagic.dataset.tooltip = 'Refine the current draft';
         }, 1500);
       }
