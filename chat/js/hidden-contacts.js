@@ -39,7 +39,7 @@ function renderHiddenContacts(contacts) {
 
     const title = document.createElement('h2');
     title.className = 'hidden-contact-title';
-    title.textContent = contact.displayName || contact.handle || 'Unknown contact';
+    title.textContent = contact.presentationDisplayName || contact.displayName || contact.handle || 'Unknown contact';
     main.appendChild(title);
 
     const handle = document.createElement('p');

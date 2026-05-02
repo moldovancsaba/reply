@@ -4,6 +4,7 @@
 
 const { writeJson, readJsonBody } = require("../utils/server-utils");
 const contactStore = require("../contact-store");
+const { presentContactLabel } = require("../utils/contact-labels.js");
 
 function inferNoteKindFromText(text) {
     const t = String(text || "").trim();
@@ -237,7 +238,8 @@ async function serveHiddenContacts(req, res) {
         const contacts = contactStore.listHiddenContacts().map((contact) => ({
             id: contact.id,
             handle: contact.handle,
-            displayName: contact.displayName || contact.handle,
+            displayName: contact.displayName || "",
+            presentationDisplayName: presentContactLabel(contact, { handle: contact.handle }),
             lastContacted: contact.lastContacted || null,
             lastChannel: contact.lastChannel || "",
             visibilityState: contact.visibility_state || contact.visibilityState || "active",
@@ -275,7 +277,8 @@ async function serveListAliases(req, res, url) {
         const aliases = raw.map((c) => ({
             id: c.id,
             handle: c.handle,
-            displayName: c.displayName || c.handle
+            displayName: c.displayName || "",
+            presentationDisplayName: presentContactLabel(c, { handle: c.handle })
         }));
         writeJson(res, 200, { canonicalId: canonical.id, aliases });
     } catch (e) {

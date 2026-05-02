@@ -57,7 +57,7 @@ async function refreshKycAliasStrip(forKey) {
       li.style.marginBottom = '4px';
       const label = document.createElement('span');
       const h = a.handle || a.id;
-      label.textContent = `${a.displayName || h} (${h})`;
+      label.textContent = `${a.presentationDisplayName || a.displayName || h} (${h})`;
       li.appendChild(label);
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -756,6 +756,12 @@ export async function loadKYCData(handle) {
     renderSuggestions(handle, data.pendingSuggestions);
     updateChannelOptionsFromKyc(handle, data);
     await refreshKycAliasStrip(data.contactId || handle);
+    if (window.currentHandle && String(window.currentHandle) === String(handle)) {
+      const activeName = el('active-contact-name-chat');
+      if (activeName) {
+        activeName.textContent = data.presentationDisplayName || data.displayName || handle;
+      }
+    }
   } catch (e) {
     console.warn('Failed to load KYC:', e);
     renderProfileVisibilityState({ visibilityState: 'active' });
