@@ -11,7 +11,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleIconFile</key>
-	<string>AppIcon</string>
+	<string>reply</string>
 	<key>CFBundleName</key>
 	<string>reply</string>
 	<key>CFBundleDisplayName</key>

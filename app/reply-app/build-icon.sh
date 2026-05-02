@@ -4,8 +4,9 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ASSET_DIR="$PROJECT_DIR/Assets"
 SVG_PATH="$ASSET_DIR/AppIcon.svg"
-ICONSET_DIR="$ASSET_DIR/AppIcon.iconset"
-ICNS_PATH="$ASSET_DIR/AppIcon.icns"
+BUILD_ICON_DIR="$PROJECT_DIR/.build/icon-assets"
+ICONSET_DIR="$BUILD_ICON_DIR/AppIcon.iconset"
+ICNS_PATH="$BUILD_ICON_DIR/reply.icns"
 
 if [[ ! -f "$SVG_PATH" ]]; then
   echo "Missing source SVG: $SVG_PATH" >&2
