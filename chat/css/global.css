@@ -1,8 +1,8 @@
 @import "./constellation.css";
 
-/* 
+/*
  * {reply} - Global Design System
- * Dark Theme by Default
+ * Theme-aware shell variables derived from semantic Constellation tokens.
  */
 
 :root {
@@ -18,7 +18,7 @@
   --text-placeholder: var(--cds-text-tertiary);
 
   --primary: var(--cds-accent-primary);
-  --primary-hover: #c46231;
+  --primary-hover: color-mix(in srgb, var(--primary) 84%, black);
   --danger: var(--cds-status-danger);
   --success: var(--cds-status-success);
   --warning: var(--cds-status-warning);
@@ -66,6 +66,88 @@
   /* Layout */
   --sidebar-width: 280px;
   --kyc-width: 360px;
+
+  /* Theme-derived shell surfaces */
+  --app-ambient-a: color-mix(in srgb, var(--primary) 18%, transparent);
+  --app-ambient-b: color-mix(in srgb, var(--cds-accent-secondary) 12%, transparent);
+  --app-background-start: color-mix(in srgb, var(--bg-app) 72%, white);
+  --app-background-end: var(--bg-app);
+  --surface-shell: color-mix(in srgb, var(--bg-sidebar) 88%, white);
+  --surface-shell-strong: color-mix(in srgb, var(--bg-card) 92%, white);
+  --surface-chat: color-mix(in srgb, var(--bg-app) 96%, black);
+  --surface-chat-elevated: color-mix(in srgb, var(--bg-card) 94%, white);
+  --surface-inspector: color-mix(in srgb, var(--bg-card) 88%, white);
+  --surface-overlay: color-mix(in srgb, var(--bg-card) 94%, white);
+  --surface-overlay-strong: color-mix(in srgb, var(--bg-input) 96%, white);
+  --surface-muted-strong: color-mix(in srgb, var(--bg-hover) 78%, white);
+  --control-bg: color-mix(in srgb, var(--bg-input) 82%, white);
+  --control-bg-strong: color-mix(in srgb, var(--bg-input) 92%, white);
+  --control-hover: color-mix(in srgb, var(--bg-hover) 82%, white);
+  --control-border: color-mix(in srgb, var(--border) 92%, white);
+  --control-border-strong: color-mix(in srgb, var(--border-light) 94%, white);
+  --focus-ring: color-mix(in srgb, var(--primary) 24%, transparent);
+  --menu-shadow: 0 18px 40px rgba(18, 23, 34, 0.12);
+  --tooltip-shadow: 0 14px 32px rgba(18, 23, 34, 0.18);
+  --divider-strong: color-mix(in srgb, var(--border) 88%, white);
+  --scrollbar-thumb: color-mix(in srgb, var(--text-tertiary) 42%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--text-secondary) 55%, transparent);
+  --contact-preview-color: var(--text-secondary);
+  --contact-preview-empty: color-mix(in srgb, var(--text-tertiary) 86%, transparent);
+  --selection-surface: color-mix(in srgb, var(--primary) 18%, white);
+  --selection-border: color-mix(in srgb, var(--primary) 30%, white);
+  --selection-text: var(--text-primary);
+  --bridge-badge-text: color-mix(in srgb, var(--primary) 72%, white);
+  --bridge-badge-bg: color-mix(in srgb, var(--primary) 12%, white);
+  --bridge-badge-border: color-mix(in srgb, var(--primary) 24%, white);
+  --status-select-bg: color-mix(in srgb, var(--bg-input) 94%, white);
+  --status-select-text: var(--text-primary);
+  --status-select-border: var(--control-border);
+  --composer-surface: color-mix(in srgb, var(--bg-card) 94%, white);
+  --composer-shell: color-mix(in srgb, var(--bg-card) 86%, white);
+  --contact-bubble: color-mix(in srgb, var(--bg-input) 92%, white);
+  --contact-bubble-border: color-mix(in srgb, var(--border) 78%, white);
+}
+
+[data-theme="night"] {
+  --primary-hover: color-mix(in srgb, var(--primary) 82%, white);
+  --app-ambient-a: color-mix(in srgb, var(--primary) 20%, transparent);
+  --app-ambient-b: color-mix(in srgb, var(--cds-accent-secondary) 14%, transparent);
+  --app-background-start: #0f1116;
+  --app-background-end: var(--bg-app);
+  --surface-shell: color-mix(in srgb, var(--bg-sidebar) 90%, black);
+  --surface-shell-strong: color-mix(in srgb, var(--bg-card) 94%, black);
+  --surface-chat: color-mix(in srgb, var(--bg-app) 96%, black);
+  --surface-chat-elevated: color-mix(in srgb, var(--bg-card) 90%, black);
+  --surface-inspector: color-mix(in srgb, var(--bg-card) 92%, black);
+  --surface-overlay: color-mix(in srgb, var(--bg-card) 94%, black);
+  --surface-overlay-strong: color-mix(in srgb, var(--bg-input) 94%, black);
+  --surface-muted-strong: color-mix(in srgb, var(--bg-hover) 84%, black);
+  --control-bg: color-mix(in srgb, var(--bg-input) 80%, black);
+  --control-bg-strong: color-mix(in srgb, var(--bg-input) 92%, black);
+  --control-hover: color-mix(in srgb, var(--bg-hover) 84%, black);
+  --control-border: color-mix(in srgb, var(--border) 90%, black);
+  --control-border-strong: color-mix(in srgb, var(--border-light) 94%, black);
+  --focus-ring: color-mix(in srgb, var(--primary) 30%, transparent);
+  --menu-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
+  --tooltip-shadow: 0 14px 32px rgba(0, 0, 0, 0.4);
+  --divider-strong: color-mix(in srgb, var(--border) 96%, black);
+  --scrollbar-thumb: color-mix(in srgb, var(--text-tertiary) 48%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--text-secondary) 60%, transparent);
+  --contact-preview-color: color-mix(in srgb, var(--text-secondary) 86%, white);
+  --contact-preview-empty: color-mix(in srgb, var(--text-tertiary) 78%, transparent);
+  --selection-surface: color-mix(in srgb, var(--primary) 72%, transparent);
+  --selection-border: color-mix(in srgb, var(--primary) 52%, transparent);
+  --selection-text: var(--cds-text-inverse);
+  --bridge-badge-text: #dce9ff;
+  --bridge-badge-bg: color-mix(in srgb, var(--primary) 18%, transparent);
+  --bridge-badge-border: color-mix(in srgb, var(--primary) 36%, transparent);
+  --status-select-bg: color-mix(in srgb, var(--bg-input) 92%, black);
+  --status-select-text: var(--text-primary);
+  --status-select-border: var(--control-border);
+  --composer-surface: color-mix(in srgb, var(--bg-card) 90%, black);
+  --composer-shell: color-mix(in srgb, var(--bg-card) 84%, black);
+  --contact-bubble: color-mix(in srgb, var(--bg-input) 90%, black);
+  --contact-bubble-border: color-mix(in srgb, var(--border) 74%, black);
 }
 
 /* Base Reset & Typography */
@@ -78,20 +160,18 @@ body {
   padding: 0;
   font-family: var(--cds-font-family-sans);
   background:
-    radial-gradient(circle at top left, rgba(77, 150, 255, 0.16), transparent 24%),
-    radial-gradient(circle at top right, rgba(47, 156, 138, 0.10), transparent 20%),
-    linear-gradient(180deg, #f7fbff 0%, var(--bg-app) 100%);
+    radial-gradient(circle at top left, var(--app-ambient-a), transparent 24%),
+    radial-gradient(circle at top right, var(--app-ambient-b), transparent 20%),
+    linear-gradient(180deg, var(--app-background-start) 0%, var(--app-background-end) 100%);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   height: 100vh;
   overflow: hidden;
+  color-scheme: light;
 }
 
 [data-theme="night"] body {
-  background:
-    radial-gradient(circle at top left, rgba(77, 150, 255, 0.18), transparent 24%),
-    radial-gradient(circle at top right, rgba(47, 156, 138, 0.12), transparent 20%),
-    linear-gradient(180deg, #0f1116 0%, var(--bg-app) 100%);
+  color-scheme: dark;
 }
 
 /* Layout Utilities */
@@ -114,13 +194,13 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-hover);
+  background: var(--scrollbar-thumb);
   border-radius: var(--radius-full);
   border: 2px solid var(--bg-app);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-tertiary);
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* Buttons */
@@ -141,7 +221,7 @@ body {
 
 .btn-primary {
   background: var(--primary);
-  color: #1a1611;
+  color: var(--cds-text-inverse);
   box-shadow: var(--shadow-sm);
 }
 
@@ -151,13 +231,13 @@ body {
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--control-bg);
   color: var(--text-primary);
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.10);
+  background: var(--control-hover);
 }
 
 .btn-ghost {
@@ -186,7 +266,7 @@ body {
 }
 
 .btn-icon:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--control-hover);
 }
 
 .btn-icon-sm {
