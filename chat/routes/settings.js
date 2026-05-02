@@ -17,6 +17,7 @@ const {
     resolveOllamaHttpBase,
     getDraftRuntimeMode
 } = require("../ai-runtime-config.js");
+const { getTrinityRuntimeStatusSync } = require("../brain-runtime.js");
 const { buildAuthUrl, connectGmailFromCallback, disconnectGmail, checkGmailConnection } = require("../gmail-connector");
 const {
     getReplyOllamaModel,
@@ -56,6 +57,33 @@ function serveSettings(req, res) {
             effectiveOllamaBase: resolveOllamaHttpBase(),
             draftRuntime: getDraftRuntimeMode(),
         };
+        try {
+            client.runtime.trinity = getTrinityRuntimeStatusSync();
+        } catch (error) {
+            client.runtime.trinity = {
+                provider: process.env.TRINITY_MODEL_PROVIDER || "ollama",
+                provider_status: "offline",
+                provider_error: error.message,
+                available_models: [],
+                roles: {
+                    generator: {
+                        provider: process.env.TRINITY_MODEL_PROVIDER || "ollama",
+                        model: client.ai.trinityGeneratorModel,
+                        installed: false,
+                    },
+                    refiner: {
+                        provider: process.env.TRINITY_MODEL_PROVIDER || "ollama",
+                        model: client.ai.trinityRefinerModel,
+                        installed: false,
+                    },
+                    evaluator: {
+                        provider: process.env.TRINITY_MODEL_PROVIDER || "ollama",
+                        model: client.ai.trinityEvaluatorModel,
+                        installed: false,
+                    },
+                },
+            };
+        }
         writeJson(res, 200, client);
         return;
     }

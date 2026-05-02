@@ -326,6 +326,33 @@ async function exportDraftTrace(cycleId) {
   return callTrinityRuntime("reply-export-trace", null, { cycleId });
 }
 
+function getTrinityRuntimeStatusSync() {
+  const pythonBin = resolveTrinityPythonBin();
+  const trinityRepoRoot = resolveTrinityRuntimeRoot();
+  const env = {
+    ...process.env,
+    PYTHONPATH: buildPythonPath(trinityRepoRoot),
+  };
+  const result = spawnSync(
+    pythonBin,
+    ["-m", "trinity_core.cli", "reply-runtime-status"],
+    {
+      cwd: trinityRepoRoot,
+      env,
+      encoding: "utf-8",
+    },
+  );
+  if (result.status !== 0) {
+    const detail = String(result.stderr || result.stdout || "").trim();
+    throw new Error(detail || "{trinity} runtime status check failed.");
+  }
+  try {
+    return JSON.parse(result.stdout || "{}");
+  } catch (error) {
+    throw new Error(`Failed to parse {trinity} runtime status: ${error.message}`);
+  }
+}
+
 async function callTrinityRuntime(command, payload = null, options = {}) {
   const pythonBin = resolveTrinityPythonBin();
   const trinityRepoRoot = resolveTrinityRuntimeRoot();
@@ -581,6 +608,7 @@ module.exports = {
   resolveReplyCompanyId,
   resolveTrinityPythonBin,
   resolveTrinityRuntimeRoot,
+  getTrinityRuntimeStatusSync,
   tokenOverlapRatio,
   trinityDraftsEnabled,
   trinityShadowEnabled,
