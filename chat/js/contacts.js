@@ -26,7 +26,7 @@ let conversationsQuery = '';
 let conversationsSort = 'newest';
 let contactObserver = null;
 let isLoadingContacts = false;
-const CONVERSATIONS_CACHE_VERSION = 'v3';
+const CONVERSATIONS_CACHE_VERSION = 'v4';
 
 function conversationsCacheKey(query = conversationsQuery, sort = conversationsSort) {
     return `reply.conversations.${CONVERSATIONS_CACHE_VERSION}.${String(query || '').trim().toLowerCase()}::${normalizeConversationSort(sort)}`;
@@ -454,6 +454,15 @@ export async function selectContact(handle) {
         conversations.find(c => String(c.handle) === String(handle)) ||
         conversations.find(c => String(c.latestHandle || '') === String(handle)) ||
         null;
+    if (!contact) {
+        window.currentHandle = null;
+        if (typeof window.refreshSuggestButtonState === 'function') {
+            window.refreshSuggestButtonState();
+        }
+        UI.showToast('This conversation is no longer available in {reply}.', 'warning', 3200);
+        await selectContact(null);
+        return;
+    }
     if (contact) {
         activeNameEl.textContent = formatContactLabel(contact.displayName || contact.name || contact.handle);
         if (typeof window.setSelectedChannel === 'function') {

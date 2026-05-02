@@ -11,6 +11,17 @@ const { dataPath, ensureDataHome } = require("./app-paths.js");
 const QUEUE_PATH = dataPath("pending-suggestion-draft-queue.json");
 const MAX_ITEMS = 500;
 
+function contactEligibleForInbox(contactStore, contact) {
+  if (!contact) return false;
+  if (typeof contactStore?.isInboxEligible === "function") {
+    return contactStore.isInboxEligible(contact);
+  }
+  if (typeof contactStore?.isVisibleInInbox === "function") {
+    return contactStore.isVisibleInInbox(contact);
+  }
+  return true;
+}
+
 function readQueue() {
   try {
     if (!fs.existsSync(QUEUE_PATH)) return { items: [] };
@@ -94,7 +105,7 @@ function seedQueueFromUndraftedContacts(contactStore) {
       c &&
       c.handle &&
       c.status !== "closed" &&
-      contactStore.isVisibleInInbox(c) &&
+      contactEligibleForInbox(contactStore, c) &&
       !String(c.draft || "").trim()
     )
     .sort((a, b) => {
@@ -164,7 +175,7 @@ async function processOneSuggestionDraft(opts) {
   }
 
   const contact = contactStore.findContact(handle);
-  if (!contact || contact.status === "closed" || !contactStore.isVisibleInInbox(contact)) {
+  if (!contact || contact.status === "closed" || !contactEligibleForInbox(contactStore, contact)) {
     return { ok: false, handle, reason: "no_contact_or_closed" };
   }
 

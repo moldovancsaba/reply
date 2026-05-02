@@ -204,7 +204,7 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
         items = conversationsIndexCache.rawItems.map((row) => ({ ...row }));
     } else {
         const contacts = (await contactStore.refreshIfChanged()).filter((contact) =>
-            contactStore.isVisibleInInbox(contact)
+            contactStore.isInboxEligible(contact)
         );
         const itemsMap = new Map();
 
@@ -214,7 +214,7 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
                 const handle = String(row.handle || "").trim();
                 if (!handle) continue;
                 const contact = contactStore.findContact(handle);
-                if (contact && !contactStore.isVisibleInInbox(contact)) continue;
+                if (!contactStore.isInboxEligible(contact)) continue;
                 const key = contact?.id || handle;
                 const { latestTimestamp, firstTimestamp, previewDate } = resolveConversationTimestamps(row);
                 const path = String(row.path || "");
@@ -250,7 +250,7 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
 
             for (const [handle, stats] of statsIndex.entries()) {
                 const contact = contactStore.findContact(handle);
-                if (contact && !contactStore.isVisibleInInbox(contact)) continue;
+                if (!contactStore.isInboxEligible(contact)) continue;
                 const key = contact?.id || handle;
 
                 if (!itemsMap.has(key)) {
@@ -386,8 +386,8 @@ async function serveThread(req, res, url) {
         writeJson(res, 400, { error: "Missing handle" });
         return;
     }
-    if (!contactStore.isVisibleInInbox(handle)) {
-        writeJson(res, 404, { error: "Conversation is hidden in {reply}." });
+    if (!contactStore.isInboxEligible(handle)) {
+        writeJson(res, 404, { error: "Conversation is unavailable in {reply}." });
         return;
     }
 
@@ -477,8 +477,8 @@ async function serveSuggest(req, res) {
             writeJson(res, 400, { error: "Missing handle" });
             return;
         }
-        if (!contactStore.isVisibleInInbox(handle)) {
-            writeJson(res, 404, { error: "Conversation is hidden in {reply}." });
+        if (!contactStore.isInboxEligible(handle)) {
+            writeJson(res, 404, { error: "Conversation is unavailable in {reply}." });
             return;
         }
 
