@@ -75,6 +75,20 @@ async function serveUpdateContact(req, res) {
     }
 }
 
+async function serveUpdateStatus(req, res) {
+    try {
+        const { handle, status } = await readJsonBody(req);
+        if (!handle || !status) {
+            writeJson(res, 400, { error: "Missing handle or status" });
+            return;
+        }
+        await contactStore.updateStatus(handle, status);
+        writeJson(res, 200, { status: "ok" });
+    } catch (e) {
+        writeJson(res, 500, { error: e.message });
+    }
+}
+
 async function serveAddNote(req, res) {
     try {
         const json = await readJsonBody(req);
@@ -183,6 +197,59 @@ async function serveDeclineSuggestion(req, res) {
     }
 }
 
+async function serveUpdateVisibility(req, res, invalidateCaches) {
+    try {
+        const payload = await readJsonBody(req);
+        const identifier = payload.handle || payload.id;
+        const state = payload.state;
+        if (!identifier || !state) {
+            writeJson(res, 400, { error: "handle or id and state are required" });
+            return;
+        }
+        const contact = await contactStore.setVisibilityState(identifier, state);
+        if (invalidateCaches) invalidateCaches();
+        writeJson(res, 200, { status: "ok", contact });
+    } catch (e) {
+        writeJson(res, 400, { error: e.message });
+    }
+}
+
+async function serveRestoreContact(req, res, invalidateCaches) {
+    try {
+        const payload = await readJsonBody(req);
+        const identifier = payload.handle || payload.id;
+        if (!identifier) {
+            writeJson(res, 400, { error: "handle or id is required" });
+            return;
+        }
+        const contact = await contactStore.restoreContact(identifier);
+        if (invalidateCaches) invalidateCaches();
+        writeJson(res, 200, { status: "ok", contact });
+    } catch (e) {
+        writeJson(res, 400, { error: e.message });
+    }
+}
+
+async function serveHiddenContacts(req, res) {
+    try {
+        await contactStore.waitUntilReady();
+        await contactStore.refreshIfChanged(0);
+        const contacts = contactStore.listHiddenContacts().map((contact) => ({
+            id: contact.id,
+            handle: contact.handle,
+            displayName: contact.displayName || contact.handle,
+            lastContacted: contact.lastContacted || null,
+            lastChannel: contact.lastChannel || "",
+            visibilityState: contact.visibility_state || contact.visibilityState || "active",
+            visibilityChangedAt: contact.visibility_changed_at || null,
+            annotationEnabled: contactStore.shouldUseForAnnotation(contact),
+        }));
+        writeJson(res, 200, { contacts, total: contacts.length });
+    } catch (e) {
+        writeJson(res, 500, { error: e.message });
+    }
+}
+
 /**
  * GET /api/contacts/aliases?for=<handle|id> — rows pointing at this canonical via `primary_contact_id`.
  */
@@ -242,7 +309,11 @@ module.exports = {
     serveMerge,
     serveListAliases,
     serveUnlinkAlias,
+    serveUpdateStatus,
     serveUpdateContact,
+    serveUpdateVisibility,
+    serveRestoreContact,
+    serveHiddenContacts,
     serveAddNote,
     serveUpdateNote,
     serveDeleteNote,

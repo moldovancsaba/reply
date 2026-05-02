@@ -230,6 +230,35 @@ export async function reportTrinityOutcome(outcome) {
     return res.json();
 }
 
+export async function updateContactVisibility(handle, state) {
+    const res = await _request(`${API_BASE}/api/contacts/visibility`, {
+        method: 'POST',
+        headers: buildSecurityHeaders(),
+        body: JSON.stringify(withApproval({ handle, state }, 'ui-contact-visibility')),
+        _showLoading: false,
+    });
+    return res.json();
+}
+
+export async function restoreContact(handle) {
+    const res = await _request(`${API_BASE}/api/contacts/restore`, {
+        method: 'POST',
+        headers: buildSecurityHeaders(),
+        body: JSON.stringify(withApproval({ handle }, 'ui-contact-restore')),
+        _showLoading: false,
+    });
+    return res.json();
+}
+
+export async function fetchHiddenContacts() {
+    const res = await _request(`${API_BASE}/api/contacts/hidden`, {
+        headers: buildSecurityHeaders({ includeJsonContentType: false }),
+        _showLoading: false,
+        _silent: true,
+    });
+    return res.json();
+}
+
 /**
  * Send a message to a contact
  * @param {string} handle - Contact handle

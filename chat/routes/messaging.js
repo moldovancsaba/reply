@@ -138,6 +138,20 @@ function sanitizeConversationItemForApi(it, sort) {
     if (sort !== "recommendation") delete o._rankTrace;
     return o;
 }
+
+function resolveConversationTimestamps(row) {
+    const fallbackLatest = safeDateMs(row?.timestamp);
+    const fallbackFirst = safeDateMs(row?.first_timestamp);
+    const embeddedDate = extractDateFromText(String(row?.text || ""));
+    const embeddedLatest = embeddedDate ? embeddedDate.getTime() : 0;
+    const latestTimestamp = embeddedLatest || fallbackLatest || 0;
+    const firstTimestamp = fallbackFirst || latestTimestamp || 0;
+    return {
+        latestTimestamp,
+        firstTimestamp,
+        previewDate: latestTimestamp ? new Date(latestTimestamp).toISOString() : null,
+    };
+}
 const { writeJson, readJsonBody, normalizeErrorText, parseJsonSafe } = require("../utils/server-utils");
 const {
     applyOpenClawWhatsAppGuard,
@@ -189,7 +203,9 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
     if (cacheOk) {
         items = conversationsIndexCache.rawItems.map((row) => ({ ...row }));
     } else {
-        const contacts = await contactStore.refreshIfChanged();
+        const contacts = (await contactStore.refreshIfChanged()).filter((contact) =>
+            contactStore.isVisibleInInbox(contact)
+        );
         const itemsMap = new Map();
 
         if (canUseSqlHotPath) {
@@ -198,9 +214,9 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
                 const handle = String(row.handle || "").trim();
                 if (!handle) continue;
                 const contact = contactStore.findContact(handle);
+                if (contact && !contactStore.isVisibleInInbox(contact)) continue;
                 const key = contact?.id || handle;
-                const latestTimestamp = safeDateMs(row.timestamp);
-                const firstTimestamp = safeDateMs(row.first_timestamp);
+                const { latestTimestamp, firstTimestamp, previewDate } = resolveConversationTimestamps(row);
                 const path = String(row.path || "");
                 const latestChannel =
                     path.startsWith("imessage://") ? "imessage" :
@@ -221,7 +237,7 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
                         displayName: contact?.displayName || handle,
                         lastMessage: row.text || "No recent messages",
                         preview: row.text || "No recent messages",
-                        previewDate: latestTimestamp ? new Date(latestTimestamp).toISOString() : null,
+                        previewDate,
                         count: Number(row.total_count) || 0,
                         countIn: Number(row.total_count) || 0,
                         countOut: 0,
@@ -234,6 +250,7 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
 
             for (const [handle, stats] of statsIndex.entries()) {
                 const contact = contactStore.findContact(handle);
+                if (contact && !contactStore.isVisibleInInbox(contact)) continue;
                 const key = contact?.id || handle;
 
                 if (!itemsMap.has(key)) {
@@ -369,6 +386,10 @@ async function serveThread(req, res, url) {
         writeJson(res, 400, { error: "Missing handle" });
         return;
     }
+    if (!contactStore.isVisibleInInbox(handle)) {
+        writeJson(res, 404, { error: "Conversation is hidden in {reply}." });
+        return;
+    }
 
     const handles = contactStore.getAllHandles(handle);
     const { getHistory } = require("../vector-store");
@@ -454,6 +475,10 @@ async function serveSuggest(req, res) {
 
         if (!handle) {
             writeJson(res, 400, { error: "Missing handle" });
+            return;
+        }
+        if (!contactStore.isVisibleInInbox(handle)) {
+            writeJson(res, 404, { error: "Conversation is hidden in {reply}." });
             return;
         }
 
@@ -682,7 +707,10 @@ end run
             source: 'iMessage',
             path: `imessage://${recipient}`
         }]);
-        contactStore.updateLastContacted(recipient, sentAt, { channel: 'imessage' });
+        contactStore.updateLastContacted(recipient, sentAt, {
+            channel: 'imessage',
+            direction: 'outbound'
+        });
         await contactStore.clearDraft(recipient);
         await autoAnnotateSentMessage("imessage", recipient, text);
         await finalizeDraftSendOutcome(draftContext, text, "ok");
@@ -924,6 +952,7 @@ module.exports = {
     getConversationsIndexFresh,
     applyConversationSort,
     sanitizeConversationItemForApi,
+    resolveConversationTimestamps,
     invalidateConversationsCache: () => {
         conversationsIndexCache.builtAtMs = 0;
         conversationsIndexCache.rawItems = null;

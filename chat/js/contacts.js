@@ -26,7 +26,7 @@ let conversationsQuery = '';
 let conversationsSort = 'newest';
 let contactObserver = null;
 let isLoadingContacts = false;
-const CONVERSATIONS_CACHE_VERSION = 'v2';
+const CONVERSATIONS_CACHE_VERSION = 'v3';
 
 function conversationsCacheKey(query = conversationsQuery, sort = conversationsSort) {
     return `reply.conversations.${CONVERSATIONS_CACHE_VERSION}.${String(query || '').trim().toLowerCase()}::${normalizeConversationSort(sort)}`;

@@ -90,6 +90,7 @@ const server = http.createServer(async (req, res) => {
   // 2. Static Content & Assets
   if (pathname === "/" || pathname === "/index.html") return staticRoutes.serveIndex(req, res, securityPolicy);
   if (pathname === "/settings" || pathname === "/settings.html") return staticRoutes.serveSettingsPage(req, res, securityPolicy);
+  if (pathname === "/hidden-contacts" || pathname === "/hidden-contacts.html") return staticRoutes.serveHiddenContactsPage(req, res, securityPolicy);
   if (pathname.startsWith('/css/') || pathname.startsWith('/js/') || pathname.startsWith('/public/') || pathname.startsWith('/fragments/')) {
     return staticRoutes.serveAsset(req, res, pathname);
   }
@@ -141,6 +142,11 @@ const server = http.createServer(async (req, res) => {
     return auth({ route: pathname, action: "merge-contact" }) && contactRoutes.serveUnlinkAlias(req, res, () => messagingRoutes.invalidateConversationsCache());
   }
   if (pathname === "/api/contacts/update-status" || pathname === "/api/update-status" || pathname === "/api/status") return contactRoutes.serveUpdateStatus(req, res);
+  if (pathname === "/api/contacts/visibility") return auth({ route: pathname, action: "manage-contact-visibility" }) && contactRoutes.serveUpdateVisibility(req, res, () => messagingRoutes.invalidateConversationsCache());
+  if (pathname === "/api/contacts/restore") return auth({ route: pathname, action: "manage-contact-visibility" }) && contactRoutes.serveRestoreContact(req, res, () => messagingRoutes.invalidateConversationsCache());
+  if (pathname === "/api/contacts/hidden" && req.method === "GET") {
+    return auth({ route: pathname, action: "manage-contact-visibility", requireHumanApproval: false }) && contactRoutes.serveHiddenContacts(req, res);
+  }
   if (pathname === "/api/update-contact") return auth({ route: pathname, action: "update-contact" }) && contactRoutes.serveUpdateContact(req, res);
   if (pathname === "/api/add-note") return auth({ route: pathname, action: "add-note" }) && contactRoutes.serveAddNote(req, res);
   if (pathname === "/api/update-note") return auth({ route: pathname, action: "update-note" }) && contactRoutes.serveUpdateNote(req, res);

@@ -6,6 +6,7 @@ const assert = require("node:assert");
 
 const {
   applyConversationSort,
+  resolveConversationTimestamps,
   sanitizeConversationItemForApi,
 } = require("../routes/messaging.js");
 
@@ -86,4 +87,14 @@ test("recommendation: attaches _rankTrace and sanitize strips it for non-recomme
 
   const sanitizedRec = sanitizeConversationItemForApi({ ...withTrace }, "recommendation");
   assert.ok(sanitizedRec._rankTrace);
+});
+
+test("resolveConversationTimestamps prefers embedded bracket date over import timestamp", () => {
+  const out = resolveConversationTimestamps({
+    timestamp: "2026-05-01T19:18:00.245Z",
+    first_timestamp: "2026-05-01T19:18:00.245Z",
+    text: "[Monday, 13 December 2021 at 17:15:58] Note: legacy import",
+  });
+  assert.ok(String(out.previewDate || "").startsWith("2021-12-13T"));
+  assert.notEqual(out.latestTimestamp, Date.parse("2026-05-01T19:18:00.245Z"));
 });

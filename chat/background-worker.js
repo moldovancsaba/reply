@@ -187,6 +187,7 @@ async function maybeRunDeepAnalysis(handle, reason = 'new-message') {
     const contact = contactStore.findContact(handle);
     if (!contact) return;
     if (contact.status === 'closed') return;
+    if (!contactStore.shouldUseForAnnotation(contact)) return;
 
     const analyzedAt = contact?.kycAnalysis?.analyzedAt ? new Date(contact.kycAnalysis.analyzedAt) : null;
     const lastMs = analyzedAt && !Number.isNaN(analyzedAt.getTime()) ? analyzedAt.getTime() : 0;
@@ -215,7 +216,7 @@ async function runAutoDeepAnalyzeSweepOnce() {
 
     // Prefer recently-active contacts first.
     const sorted = [...contacts]
-        .filter((c) => c && c.handle && c.status !== 'closed')
+        .filter((c) => c && c.handle && c.status !== 'closed' && contactStore.shouldUseForAnnotation(c))
         .sort((a, b) => {
             const da = a.lastContacted ? new Date(a.lastContacted) : new Date(0);
             const db = b.lastContacted ? new Date(b.lastContacted) : new Date(0);

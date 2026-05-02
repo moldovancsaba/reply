@@ -119,7 +119,7 @@ export const UI = {
         const preference = UI.getThemePreference();
         const symbol = preference === 'auto' ? '◐' : preference === 'day' ? '☼' : '☾';
         const title = preference === 'auto' ? 'Theme: Auto' : preference === 'day' ? 'Theme: Light' : 'Theme: Dark';
-        ['btn-theme', 'btn-theme-settings'].forEach((id) => {
+        ['btn-theme', 'btn-theme-settings', 'btn-hidden-theme'].forEach((id) => {
             const node = document.getElementById(id);
             if (!node) return;
             node.textContent = symbol;
@@ -157,7 +157,7 @@ export const UI = {
         UI.applyThemePreference();
         UI.updateThemeButtonState();
 
-        ['btn-theme', 'btn-theme-settings'].forEach((id) => {
+        ['btn-theme', 'btn-theme-settings', 'btn-hidden-theme'].forEach((id) => {
             const node = document.getElementById(id);
             if (!node || node.dataset.themeBound === '1') return;
             node.dataset.themeBound = '1';

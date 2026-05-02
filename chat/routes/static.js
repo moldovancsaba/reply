@@ -8,6 +8,7 @@ const path = require("path");
 
 const HTML_PATH = path.join(__dirname, "..", "index.html");
 const SETTINGS_HTML_PATH = path.join(__dirname, "..", "settings.html");
+const HIDDEN_CONTACTS_HTML_PATH = path.join(__dirname, "..", "hidden-contacts.html");
 const PUBLIC_DIR = path.join(__dirname, "..", "..", "public");
 
 /**
@@ -45,6 +46,26 @@ function serveSettingsPage(req, res, securityPolicy) {
             return;
         }
         // Inject operator token into window scope
+        let content = data;
+        if (securityPolicy.operatorToken) {
+            const inject = `<script>window.REPLY_OPERATOR_TOKEN = "${securityPolicy.operatorToken}";</script>\n</head>`;
+            content = content.replace("</head>", inject);
+        }
+        res.writeHead(200, {
+            "Content-Type": "text/html",
+            "Cache-Control": "no-store, no-cache, must-revalidate"
+        });
+        res.end(content);
+    });
+}
+
+function serveHiddenContactsPage(req, res, securityPolicy) {
+    fs.readFile(HIDDEN_CONTACTS_HTML_PATH, "utf8", (err, data) => {
+        if (err) {
+            res.writeHead(404);
+            res.end("Hidden contacts page not found");
+            return;
+        }
         let content = data;
         if (securityPolicy.operatorToken) {
             const inject = `<script>window.REPLY_OPERATOR_TOKEN = "${securityPolicy.operatorToken}";</script>\n</head>`;
@@ -110,6 +131,7 @@ async function serveRootSvg(req, res, pathname) {
 module.exports = {
     serveIndex,
     serveSettingsPage,
+    serveHiddenContactsPage,
     serveAsset,
     serveRootSvg
 };

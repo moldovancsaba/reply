@@ -1070,6 +1070,96 @@
         box-shadow: 0 8px 18px rgba(10, 132, 255, 0.22);
       }
 
+      .profile-actions-wrap {
+        position: relative;
+      }
+
+      .profile-actions-menu {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        min-width: 220px;
+        padding: 8px;
+        border-radius: 16px;
+        background: rgba(24, 24, 28, 0.98);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 16px 32px rgba(0, 0, 0, 0.28);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        z-index: 15;
+      }
+
+      .profile-actions-menu-item {
+        width: 100%;
+        border: none;
+        background: transparent;
+        color: var(--text-primary);
+        text-align: left;
+        padding: 10px 12px;
+        border-radius: 12px;
+        cursor: pointer;
+        font: inherit;
+      }
+
+      .profile-actions-menu-item:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .profile-actions-menu-item--danger {
+        color: #ff8f89;
+      }
+
+      .profile-actions-menu-item--danger:hover {
+        background: rgba(255, 69, 58, 0.12);
+      }
+
+      .kyc-visibility-strip {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin: 0 0 12px;
+      }
+
+      .kyc-visibility-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 28px;
+        padding: 0 12px;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .kyc-visibility-badge.is-active {
+        background: rgba(52, 199, 89, 0.14);
+        color: #8ee59b;
+      }
+
+      .kyc-visibility-badge.is-archived {
+        background: rgba(255, 214, 10, 0.14);
+        color: #ffe27a;
+      }
+
+      .kyc-visibility-badge.is-removed {
+        background: rgba(10, 132, 255, 0.14);
+        color: #8bbcff;
+      }
+
+      .kyc-visibility-badge.is-blocked {
+        background: rgba(255, 69, 58, 0.14);
+        color: #ff9d97;
+      }
+
+      .kyc-visibility-note {
+        color: var(--text-secondary);
+        font-size: 0.86rem;
+      }
+
       .kyc-field {
         margin-bottom: 14px;
       }
@@ -2087,6 +2177,115 @@
         margin: 0;
         width: 100%;
         border-radius: 0;
+      }
+
+      .hidden-contacts-page {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .hidden-contacts-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 20px 32px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: var(--bg-app);
+      }
+
+      .hidden-contacts-header h1 {
+        margin: 0;
+        font-size: 1.4rem;
+        letter-spacing: -0.02em;
+      }
+
+      .hidden-contacts-body {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 24px 32px 40px;
+      }
+
+      .hidden-contacts-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+
+      .hidden-contacts-summary {
+        color: var(--text-secondary);
+        font-size: 0.92rem;
+      }
+
+      .hidden-contacts-list {
+        display: grid;
+        gap: 14px;
+      }
+
+      .hidden-contact-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 18px;
+        padding: 18px 20px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 16px;
+      }
+
+      .hidden-contact-main {
+        min-width: 0;
+      }
+
+      .hidden-contact-title {
+        margin: 0 0 6px;
+        font-size: 1rem;
+        font-weight: 700;
+      }
+
+      .hidden-contact-handle {
+        margin: 0 0 10px;
+        color: var(--text-secondary);
+        font-family: 'Menlo', 'Monaco', monospace;
+        font-size: 0.84rem;
+        word-break: break-all;
+      }
+
+      .hidden-contact-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .hidden-contact-meta-chip {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+      }
+
+      .hidden-contact-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .hidden-contacts-empty {
+        padding: 48px 24px;
+        text-align: center;
+        color: var(--text-secondary);
+        background: var(--bg-card);
+        border: 1px dashed var(--border-color);
+        border-radius: 18px;
       }
 
       /* First-run onboarding (reply#47) — above modals (1000) */

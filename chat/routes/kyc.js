@@ -67,6 +67,8 @@ async function serveKyc(req, res, url, authorizeSensitiveRoute, onUpdate, bodyDa
     writeJson(res, 200, {
       handle,
       contactId: contact?.id || null,
+      visibilityState: contact?.visibility_state || contact?.visibilityState || "active",
+      visibilityChangedAt: contact?.visibility_changed_at || null,
       displayName: contact?.displayName || contact?.name || handle,
       profession: contact?.profession || "",
       relationship: contact?.relationship || "",
@@ -208,6 +210,10 @@ async function serveAnalyzeContact(req, res, authorizeSensitiveRoute, analysisIn
     const handle = (payload?.handle || "").toString().trim();
     if (!handle) {
       writeJson(res, 400, { error: "Missing handle" });
+      return;
+    }
+    if (!contactStore.shouldUseForAnnotation(handle)) {
+      writeJson(res, 409, { error: "Blocked contacts are excluded from annotation and analysis." });
       return;
     }
 
