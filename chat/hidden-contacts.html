@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <script>
+        (function () {
+            try {
+                const stored = localStorage.getItem("reply.theme") || "auto";
+                const mode = stored === "auto"
+                    ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "day")
+                    : stored;
+                document.documentElement.dataset.theme = mode;
+            } catch {
+                document.documentElement.dataset.theme = "night";
+            }
+        })();
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{reply} — Hidden Contacts</title>
+    <link rel="stylesheet" href="css/global.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/app.css">
+</head>
+
+<body class="mode-settings settings-standalone">
+    <div class="app-container">
+        <main class="chat-area settings-standalone-main">
+            <section class="hidden-contacts-page">
+                <header class="hidden-contacts-header">
+                    <div>
+                        <h1>Hidden Contacts</h1>
+                        <div class="hidden-contacts-summary">Archive hides a conversation until a new inbound message arrives. Remove keeps annotation access. Block excludes annotation and analysis.</div>
+                    </div>
+                    <div class="u-flex-center-gap">
+                        <button id="btn-hidden-theme" class="btn btn-secondary btn-sm" type="button">Theme</button>
+                        <button id="btn-hidden-back" class="btn btn-primary btn-sm" type="button">Back to {reply}</button>
+                    </div>
+                </header>
+                <div class="hidden-contacts-body">
+                    <div class="hidden-contacts-toolbar">
+                        <div id="hidden-contacts-count" class="hidden-contacts-summary">Loading…</div>
+                        <button id="btn-hidden-refresh" class="btn btn-secondary btn-sm" type="button">Refresh</button>
+                    </div>
+                    <div id="hidden-contacts-list" class="hidden-contacts-list"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="global-spinner" class="spinner-overlay">
+        <div class="spinner"></div>
+    </div>
+    <div id="toast-container"></div>
+
+    <script type="module" src="js/hidden-contacts.js"></script>
+</body>
+
+</html>

@@ -90,7 +90,13 @@ function enqueueSuggestionDraftsFromDocBatch(docs) {
 function seedQueueFromUndraftedContacts(contactStore) {
   const contacts = Array.isArray(contactStore.contacts) ? contactStore.contacts : [];
   const pending = contacts
-    .filter((c) => c && c.handle && c.status !== "closed" && !String(c.draft || "").trim())
+    .filter((c) =>
+      c &&
+      c.handle &&
+      c.status !== "closed" &&
+      contactStore.isVisibleInInbox(c) &&
+      !String(c.draft || "").trim()
+    )
     .sort((a, b) => {
       const da = a.lastContacted ? new Date(a.lastContacted).getTime() : 0;
       const db = b.lastContacted ? new Date(b.lastContacted).getTime() : 0;
@@ -158,7 +164,7 @@ async function processOneSuggestionDraft(opts) {
   }
 
   const contact = contactStore.findContact(handle);
-  if (!contact || contact.status === "closed") {
+  if (!contact || contact.status === "closed" || !contactStore.isVisibleInInbox(contact)) {
     return { ok: false, handle, reason: "no_contact_or_closed" };
   }
 
