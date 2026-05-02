@@ -154,16 +154,6 @@ function renderProfileVisibilityState(data) {
   }
 }
 
-function closeProfileActionsMenu() {
-  el('profile-actions-menu')?.classList.add('u-display-none');
-}
-
-function toggleProfileActionsMenu() {
-  const menu = el('profile-actions-menu');
-  if (!menu) return;
-  menu.classList.toggle('u-display-none');
-}
-
 function renderHandlePreview(handle) {
   const input = el('kyc-handle-input');
   const parent = input?.parentElement;
@@ -708,7 +698,6 @@ function updateChannelOptionsFromKyc(handle, data) {
 export async function loadKYCData(handle) {
   const emptyState = el('kyc-empty-state');
   const editor = el('kyc-content-editor');
-  closeProfileActionsMenu();
 
   if (!handle) {
     setVisible(emptyState, true);
@@ -821,7 +810,6 @@ async function applyVisibilityState(state) {
 
   const { updateContactVisibility } = await import('./api.js');
   await updateContactVisibility(handle, action);
-  closeProfileActionsMenu();
 
   const emptyState = el('kyc-empty-state');
   const editor = el('kyc-content-editor');
@@ -1039,7 +1027,6 @@ window.acceptKYC = dismissKYC;
 window.editKYC = dismissKYC;
 
 window.openMergeModal = () => {
-  closeProfileActionsMenu();
   const handle = el('kyc-handle-input')?.value?.trim();
   if (!handle) return alert('No contact selected');
   const sourceHandleEl = el('merge-source-handle');
@@ -1158,27 +1145,6 @@ function wireAnalyzeButton() {
   };
 }
 
-function wireProfileActions() {
-  const toggleBtn = el('btn-profile-actions');
-  if (toggleBtn && toggleBtn.dataset.wired !== '1') {
-    toggleBtn.dataset.wired = '1';
-    toggleBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      toggleProfileActionsMenu();
-    });
-  }
-  if (document.body && document.body.dataset.profileActionsWired !== '1') {
-    document.body.dataset.profileActionsWired = '1';
-    document.addEventListener('click', (event) => {
-      const menu = el('profile-actions-menu');
-      const toggle = el('btn-profile-actions');
-      if (!menu || menu.classList.contains('u-display-none')) return;
-      if (menu.contains(event.target) || toggle?.contains(event.target)) return;
-      closeProfileActionsMenu();
-    });
-  }
-}
-
 function wireLocalIntelligenceInput() {
   const input = document.getElementById('new-note-input');
   if (!input) return;
@@ -1195,11 +1161,9 @@ function wireLocalIntelligenceInput() {
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     wireAnalyzeButton();
-    wireProfileActions();
     wireLocalIntelligenceInput();
   });
 } else {
   wireAnalyzeButton();
-  wireProfileActions();
   wireLocalIntelligenceInput();
 }

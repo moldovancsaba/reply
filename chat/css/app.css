@@ -1186,59 +1186,6 @@
         box-shadow: 0 8px 18px color-mix(in srgb, var(--primary) 22%, transparent);
       }
 
-      .profile-actions-wrap {
-        position: relative;
-        z-index: 24;
-      }
-
-      .profile-actions-menu {
-        position: absolute;
-        top: calc(100% + 8px);
-        right: 0;
-        min-width: 0;
-        width: 176px;
-        padding: 10px;
-        border-radius: 18px;
-        background: color-mix(in srgb, var(--surface-overlay-strong) 98%, transparent);
-        border: 1px solid var(--control-border);
-        box-shadow: var(--menu-shadow);
-        -webkit-backdrop-filter: blur(18px);
-        backdrop-filter: blur(18px);
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 8px;
-        z-index: 30;
-      }
-
-      .profile-actions-menu-item {
-        width: 100%;
-        border: none;
-        background: transparent;
-        color: var(--text-primary);
-        text-align: center;
-        padding: 0;
-        height: 46px;
-        border-radius: 14px;
-        cursor: pointer;
-        font: inherit;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0;
-      }
-
-      .profile-actions-menu-item:hover {
-        background: var(--control-hover);
-      }
-
-      .profile-actions-menu-item--danger {
-        color: var(--danger);
-      }
-
-      .profile-actions-menu-item--danger:hover {
-        background: color-mix(in srgb, var(--danger) 12%, transparent);
-      }
-
       .kyc-visibility-strip {
         display: flex;
         align-items: center;
@@ -2265,8 +2212,7 @@
         gap: 8px;
       }
 
-      .shell-toolbar-button__icon,
-      .profile-actions-menu-item__icon {
+      .shell-toolbar-button__icon {
         width: 1.15rem;
         height: 1.15rem;
         flex-shrink: 0;
@@ -2278,6 +2224,15 @@
 
       .shell-toolbar-button--primary .reply-shell-icon {
         color: currentColor;
+      }
+
+      .shell-toolbar-button--danger {
+        color: var(--danger);
+      }
+
+      .shell-toolbar-button--danger:hover {
+        border-color: color-mix(in srgb, var(--danger) 42%, transparent);
+        background: color-mix(in srgb, var(--danger) 10%, transparent);
       }
 
       .reply-tooltip {
