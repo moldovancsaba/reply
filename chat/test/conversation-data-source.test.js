@@ -36,8 +36,11 @@ test("communication channel helper excludes document-like channels", () => {
 test("usable conversation handle rejects placeholders and accepts real identifiers", () => {
   assert.equal(hasUsableConversationHandle("unknown", { channel: "imessage" }), false);
   assert.equal(hasUsableConversationHandle("Contact not found", { channel: "email" }), false);
+  assert.equal(hasUsableConversationHandle("- barackos nestea", { channel: "whatsapp", source: "apple-notes" }), false);
+  assert.equal(hasUsableConversationHandle("status", { channel: "whatsapp", source: "WhatsApp" }), false);
   assert.equal(hasUsableConversationHandle("+36 70 123 4567", { channel: "imessage" }), true);
   assert.equal(hasUsableConversationHandle("founder@example.com", { channel: "email" }), true);
+  assert.equal(hasUsableConversationHandle("160442966126843", { channel: "whatsapp" }), true);
   assert.equal(hasUsableConversationHandle("120363041234567890@g.us", { channel: "whatsapp" }), true);
   assert.equal(hasUsableConversationHandle("thread-1", { channel: "linkedin" }), false);
 });

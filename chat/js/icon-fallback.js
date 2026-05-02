@@ -62,16 +62,27 @@ function shouldDecorateNode(node) {
   return node instanceof HTMLElement;
 }
 
+function isExplicitIconNode(node) {
+  return shouldDecorateNode(node) && (
+    node.classList.contains('material-symbols-outlined') ||
+    node.classList.contains('reply-shell-icon') ||
+    node.hasAttribute('data-icon') ||
+    node.hasAttribute('data-icon-name')
+  );
+}
+
 function resolveTargetNodes(root) {
   const seen = new Set();
   const nodes = [];
   const maybePush = (node) => {
-    if (!shouldDecorateNode(node) || seen.has(node)) return;
+    if (!isExplicitIconNode(node) || seen.has(node)) return;
     seen.add(node);
     nodes.push(node);
   };
 
-  maybePush(root);
+  if (root instanceof HTMLElement) {
+    maybePush(root);
+  }
   if (root && typeof root.querySelectorAll === 'function') {
     root.querySelectorAll('.material-symbols-outlined, .reply-shell-icon, [data-icon]').forEach(maybePush);
   }

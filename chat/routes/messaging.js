@@ -23,6 +23,7 @@ const {
     inferChannelFromHandle,
     inferSourceFromChannel,
     pickLatestInboundFromVectorDocs,
+    isConversationDataSource,
     buildSearchHaystack,
     matchesQuery
 } = require("../utils/chat-utils");
@@ -185,6 +186,13 @@ const conversationsIndexCache = {
     rawItems: null
 };
 
+function isConversationCandidate(row) {
+    return isConversationDataSource({
+        path: row?.path,
+        source: row?.source
+    });
+}
+
 async function getConversationsIndexFresh(q = "", sortMode = "newest") {
     const nowMs = Date.now();
     const sort = normalizeConversationSort(sortMode);
@@ -212,6 +220,7 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
         if (canUseSqlHotPath) {
             const rows = await messageStore.getConversationIndexRows();
             for (const row of rows) {
+                if (!isConversationCandidate(row)) continue;
                 const handle = String(row.handle || "").trim();
                 if (!handle) continue;
                 const contact = contactStore.findContact(handle);
@@ -231,6 +240,7 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
                         key,
                         handle,
                         latestHandle: handle,
+                        path,
                         sortTime: latestTimestamp,
                         channel: latestChannel,
                         source: row.source || inferSourceFromChannel(latestChannel),
@@ -251,6 +261,7 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
             const statsIndex = await getUnifiedIndex();
 
             for (const [handle, stats] of statsIndex.entries()) {
+                if (!isConversationCandidate({ path: stats?.path, source: stats?.latestSource || stats?.source })) continue;
                 const contact = contactStore.findContact(handle);
                 if (!contactStore.isInboxEligible(contact)) continue;
                 const key = contact?.id || handle;
@@ -260,6 +271,7 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
                         key,
                         handle,
                         latestHandle: stats.latestHandle || handle,
+                        path: stats.path || null,
                         sortTime: stats.latestTimestamp,
                         channel: stats.latestChannel,
                         source: stats.latestSource,
@@ -310,6 +322,7 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
                     key: c.id,
                     handle: c.handle,
                     latestHandle: c.handle,
+                    path: pathPrefixesForHandle(c.handle)[0] || "",
                     sortTime: safeDateMs(c.lastContacted),
                     channel: c.lastChannel || inferChannelFromHandle(c.handle),
                     source: inferSourceFromChannel(
@@ -329,7 +342,13 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
             }
         });
 
-        items = Array.from(itemsMap.values());
+        items = Array.from(itemsMap.values()).filter((item) => {
+            if (!contactStore.isInboxEligible(item.contact || item.handle)) return false;
+            return isConversationCandidate({
+                path: item.path || pathPrefixesForHandle(item.latestHandle || item.handle || "")[0],
+                source: item.source
+            });
+        });
 
         if (!q) {
             conversationsIndexCache.rawItems = items.map((row) => ({ ...row }));
@@ -413,7 +432,9 @@ async function serveThread(req, res, url) {
             Promise.all(prefixes.map((p) => getHistory(p))),
             messageStore.getMessagesForHandles(allHandles, { limit, offset })
         ]);
-        const allDocs = historyBatches.flat();
+        const allDocs = historyBatches
+            .flat()
+            .filter((doc) => isConversationDataSource(doc));
 
         const vectorDirectionHints = new Map();
         for (const d of allDocs) {
