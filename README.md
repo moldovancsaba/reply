@@ -6,7 +6,7 @@
 <p align="center"><strong>A unified aggregation proxy and outbound transport engine for iMessage, WhatsApp, Mail, and LinkedIn.</strong></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.5.13-2563EB?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/version-v0.5.14-2563EB?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS-0F172A?style=for-the-badge" alt="Platform">
   <img src="https://img.shields.io/badge/transport-OpenClaw%20%7C%20AppleScript-0EA5E9?style=for-the-badge" alt="Transports">
 </p>
@@ -140,6 +140,7 @@ npm start
 - **Runtime**: local Node hub + managed background worker
 - **Storage**: SQLite-backed local stores + LanceDB + app-owned data/log paths
 - **Current UI reality**: native product shell with a still-transitional embedded workspace UI while native surfaces continue replacing browser-era ones
+- **Theme contract**: shipped day/night surfaces must derive from semantic Constellation theme adapters rather than screen-local hardcoded chrome values
 
 ## Troubleshooting
 
