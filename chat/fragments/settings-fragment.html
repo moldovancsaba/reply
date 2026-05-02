@@ -8,22 +8,22 @@
             </div>
             <nav class="settings-nav">
                 <button class="settings-nav-item active" data-tab="general">
-                    <span class="reply-settings-icon" aria-hidden="true">☷</span> General
+                    <span class="reply-settings-icon material-symbols-outlined" data-icon="dashboard" aria-hidden="true"></span> General
                 </button>
                 <button class="settings-nav-item" data-tab="email">
-                    <span class="reply-settings-icon" aria-hidden="true">✉</span> Email
+                    <span class="reply-settings-icon material-symbols-outlined" data-icon="attachment" aria-hidden="true"></span> Email
                 </button>
                 <button class="settings-nav-item" data-tab="messaging">
-                    <span class="reply-settings-icon" aria-hidden="true">💬</span> Messaging
+                    <span class="reply-settings-icon material-symbols-outlined" data-icon="lightbulb" aria-hidden="true"></span> Messaging
                 </button>
                 <button class="settings-nav-item" data-tab="worker">
-                    <span class="reply-settings-icon" aria-hidden="true">↻</span> Worker
+                    <span class="reply-settings-icon material-symbols-outlined" data-icon="refresh" aria-hidden="true"></span> Worker
                 </button>
                 <button class="settings-nav-item" data-tab="ai-status">
-                    <span class="reply-settings-icon" aria-hidden="true">◉</span> AI &amp; status
+                    <span class="reply-settings-icon material-symbols-outlined" data-icon="radio-button-checked" aria-hidden="true"></span> AI &amp; status
                 </button>
                 <button class="settings-nav-item" data-tab="security">
-                    <span class="reply-settings-icon" aria-hidden="true">🔒</span> Privacy & Security
+                    <span class="reply-settings-icon material-symbols-outlined" data-icon="settings" aria-hidden="true"></span> Privacy &amp; Security
                 </button>
             </nav>
             <div class="settings-sidebar-footer">
@@ -44,7 +44,7 @@
                 <section id="tab-content-general" class="settings-tab-content">
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="reply-settings-icon" aria-hidden="true">✨</span> Generative Persona
+                            <span class="reply-settings-icon material-symbols-outlined" data-icon="auto-awesome" aria-hidden="true"></span> Generative Persona
                         </div>
                         <div class="settings-grid">
                             <div class="settings-field">
@@ -59,7 +59,7 @@
 
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="reply-settings-icon" aria-hidden="true">🎨</span> UI Aesthetics
+                            <span class="reply-settings-icon material-symbols-outlined" data-icon="contrast" aria-hidden="true"></span> UI Aesthetics
                         </div>
                         <p class="settings-hint mb-md">Personalize how message bubbles appear for each secondary
                             channel.</p>
@@ -96,7 +96,7 @@
                 <section id="tab-content-email" class="settings-tab-content u-display-none">
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="reply-settings-icon" aria-hidden="true">✉</span> Gmail (OAuth)
+                            <span class="reply-settings-icon material-symbols-outlined" data-icon="attachment" aria-hidden="true"></span> Gmail (OAuth)
                         </div>
                         <div class="settings-info-card-premium mb-lg">
                             <div class="u-flex-center-gap">
@@ -170,7 +170,7 @@
 
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="reply-settings-icon" aria-hidden="true">✉</span> Additional IMAP mailboxes
+                            <span class="reply-settings-icon material-symbols-outlined" data-icon="attachment" aria-hidden="true"></span> Additional IMAP mailboxes
                         </div>
                         <p class="settings-hint mb-lg">Each row syncs after the primary IMAP (worker / “Sync Email”).
                             Vector IDs are namespaced per account. Duplicate host+user as primary is skipped.</p>
@@ -333,7 +333,7 @@
                                     placeholder="default: same as main model (REPLY_ANNOTATION_MODEL)" title="LanceDB batch annotation job">
                             </div>
                             <div class="settings-field" style="grid-column:1/-1;">
-                                <label class="settings-label" for="settings-ai-kyc-model">KYC / ✨ Analyze model (optional)</label>
+                                <label class="settings-label" for="settings-ai-kyc-model">KYC / Analyze model (optional)</label>
                                 <input id="settings-ai-kyc-model" type="text" class="settings-input"
                                     placeholder="e.g. qwen2.5:7b (REPLY_KYC_OLLAMA_MODEL)" title="Profile analyze Ollama tag">
                             </div>
@@ -358,7 +358,7 @@
 
                     <div class="settings-card">
                         <div class="settings-section-title">
-                            <span class="reply-settings-icon" aria-hidden="true">↻</span> Background worker
+                            <span class="reply-settings-icon material-symbols-outlined" data-icon="refresh" aria-hidden="true"></span> Background worker
                         </div>
                         <p class="settings-hint mb-md">Calls <code>POST /api/system/service/control</code> (operator token
                             required if enforcement is on). Use after changing models synced to <code>chat/.env</code>, or

@@ -112,6 +112,58 @@
         gap: 4px;
       }
 
+      .shell-chrome-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .shell-chrome-group--dense {
+        gap: 4px;
+      }
+
+      .reply-inline-icon {
+        width: 1em;
+        height: 1em;
+        display: inline-block;
+        vertical-align: middle;
+        fill: currentColor;
+        stroke: currentColor;
+        flex-shrink: 0;
+      }
+
+      .shell-icon-button {
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text-primary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+      }
+
+      .shell-icon-button:hover {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.16);
+        transform: translateY(-0.5px);
+      }
+
+      .shell-icon-button:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.24);
+      }
+
+      .shell-icon-button--strong {
+        background: rgba(77, 150, 255, 0.14);
+        border-color: rgba(77, 150, 255, 0.28);
+        color: #dfeaff;
+      }
+
       .sidebar-search {
         padding: 10px 12px 12px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -446,12 +498,13 @@
       }
 
       .chat-header {
-        padding: 0 20px;
-        height: 52px;
+        padding: 10px 16px;
+        min-height: 68px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         display: flex;
         justify-content: space-between;
         align-items: center;
+        gap: 12px;
         background:
           linear-gradient(180deg, rgba(27, 27, 31, 0.78) 0%, rgba(22, 22, 25, 0.72) 100%);
         -webkit-backdrop-filter: blur(20px);
@@ -471,13 +524,47 @@
       .chat-header #btn-show-sidebar,
       .chat-header #btn-show-profile {
         flex-shrink: 0;
-        width: 30px;
-        height: 30px;
-        padding: 0;
-        border-radius: 999px;
+      }
+
+      .chat-header-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      .chat-header-group--leading {
+        flex: 1 1 auto;
+      }
+
+      .chat-header-group--actions {
+        flex: 0 0 auto;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .shell-action-button {
+        min-height: 44px;
+        padding: 0 14px;
+        border-radius: 16px;
         display: inline-flex;
         align-items: center;
-        justify-content: center;
+        gap: 10px;
+        font-weight: 700;
+        box-shadow: none;
+      }
+
+      .shell-action-button--primary {
+        box-shadow: 0 10px 26px rgba(66, 133, 244, 0.24);
+      }
+
+      .shell-action-button__icon {
+        font-size: 1rem;
+      }
+
+      .shell-action-button__label {
+        line-height: 1;
+        white-space: nowrap;
       }
 
       .messages-container {
@@ -1032,6 +1119,7 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        flex-wrap: wrap;
         gap: 12px;
         margin-bottom: 12px;
         position: sticky;
@@ -1048,21 +1136,24 @@
         font-size: 1rem;
         font-weight: 800;
         letter-spacing: -0.2px;
+        flex: 0 0 auto;
       }
 
       .kyc-editor-actions {
         display: flex;
         gap: 8px;
         align-items: center;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         justify-content: flex-end;
+        flex: 1 1 auto;
+        min-width: 0;
       }
 
       .kyc-editor-actions .btn {
-        height: 32px;
+        height: 36px;
         padding: 0 14px;
         border-radius: 999px;
-        line-height: 32px;
+        line-height: 36px;
         white-space: nowrap;
       }
 
@@ -1100,6 +1191,9 @@
         border-radius: 12px;
         cursor: pointer;
         font: inherit;
+        display: flex;
+        align-items: center;
+        gap: 10px;
       }
 
       .profile-actions-menu-item:hover {
@@ -2097,6 +2191,10 @@
       .u-chat-active-contact {
         font-weight: 700 !important;
         font-size: 1.1rem !important;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .u-margin-auto {
@@ -2114,6 +2212,9 @@
         line-height: 1;
         font-family: inherit;
         font-weight: 700;
+        width: 1.1rem;
+        height: 1.1rem;
+        color: currentColor;
       }
 
       .reply-settings-icon {
@@ -2125,6 +2226,70 @@
         font-family: inherit;
         font-size: 0.95rem;
         flex-shrink: 0;
+      }
+
+      .shell-toolbar-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .shell-toolbar-button__icon,
+      .profile-actions-menu-item__icon {
+        width: 1rem;
+        height: 1rem;
+        flex-shrink: 0;
+      }
+
+      .shell-toolbar-button__label {
+        line-height: 1;
+      }
+
+      .shell-toolbar-button--primary .reply-shell-icon {
+        color: currentColor;
+      }
+
+      .reply-tooltip {
+        position: fixed;
+        z-index: 12000;
+        max-width: 240px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(20, 22, 28, 0.96);
+        color: rgba(255, 255, 255, 0.92);
+        font-size: 0.78rem;
+        line-height: 1.35;
+        box-shadow: 0 14px 28px rgba(0, 0, 0, 0.32);
+        opacity: 0;
+        transform: translateY(-4px);
+        pointer-events: none;
+        transition: opacity 120ms ease, transform 120ms ease;
+      }
+
+      .reply-tooltip.is-visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      @media (max-width: 1180px) {
+        .chat-header {
+          flex-wrap: wrap;
+          align-items: flex-start;
+        }
+
+        .chat-header-group--leading,
+        .chat-header-group--actions {
+          width: 100%;
+        }
+
+        .chat-header-group--actions {
+          justify-content: flex-start;
+        }
+
+        .kyc-editor-actions {
+          flex-wrap: wrap;
+        }
       }
 
       /* settings.html — same horizontal layout as index (contacts sidebar | settings) */
@@ -2191,6 +2356,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
+        flex-wrap: wrap;
         gap: 16px;
         padding: 20px 32px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);

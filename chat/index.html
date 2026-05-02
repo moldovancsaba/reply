@@ -39,19 +39,19 @@
     <!-- PANE A: SIDEBAR -->
     <aside class="sidebar" id="sidebar-pane">
       <div class="sidebar-header">
-        <div class="u-flex-center-gap">
-          <span id="btn-toggle-sidebar" class="u-sidebar-icon reply-shell-icon" title="Collapse contacts" aria-hidden="true">
-            ◧
-          </span>
-          <span id="btn-dash" class="u-sidebar-icon-lg reply-shell-icon" title="Go to Dashboard" aria-hidden="true">
-            ◫
-          </span>
-          <span id="btn-settings" class="u-sidebar-icon reply-shell-icon" title="Settings" aria-hidden="true">
-            ⚙
-          </span>
-          <span id="btn-theme" class="u-sidebar-icon reply-shell-icon" title="Theme" aria-hidden="true">
-            ◐
-          </span>
+        <div class="shell-chrome-group shell-chrome-group--dense">
+          <button id="btn-toggle-sidebar" class="shell-icon-button" type="button" aria-label="Collapse contacts" data-tooltip="Collapse contacts">
+            <span class="reply-shell-icon" data-icon="panel-left-close" aria-hidden="true"></span>
+          </button>
+          <button id="btn-dash" class="shell-icon-button shell-icon-button--strong" type="button" aria-label="Open dashboard" data-tooltip="Open dashboard">
+            <span class="reply-shell-icon" data-icon="dashboard" aria-hidden="true"></span>
+          </button>
+          <button id="btn-settings" class="shell-icon-button" type="button" aria-label="Open settings" data-tooltip="Open settings">
+            <span class="reply-shell-icon" data-icon="settings" aria-hidden="true"></span>
+          </button>
+          <button id="btn-theme" class="shell-icon-button" type="button" aria-label="Theme: Auto" data-tooltip="Theme: Auto">
+            <span class="reply-shell-icon" data-icon="contrast" aria-hidden="true"></span>
+          </button>
         </div>
         <div id="services-health-status" class="services-health-status" title="Services Health">
           <span id="services-health-dot" class="status-dot online"></span>
@@ -84,25 +84,34 @@
     <!-- PANE B: MAIN CHAT -->
     <main class="chat-area">
       <header class="chat-header">
-        <div class="u-flex-center-gap-12">
-          <button id="btn-show-sidebar" class="btn btn-secondary btn-icon btn-icon-sm u-display-none" title="Show contacts" aria-label="Show contacts">
-            <span class="reply-shell-icon" aria-hidden="true">◨</span>
+        <div class="chat-header-group chat-header-group--leading">
+          <button id="btn-show-sidebar" class="shell-icon-button u-display-none" type="button" aria-label="Show contacts" data-tooltip="Show contacts">
+            <span class="reply-shell-icon" data-icon="panel-left-open" aria-hidden="true"></span>
           </button>
           <div id="active-contact-name-chat" class="u-chat-active-contact">Select a contact</div>
           <select id="status-select" onchange="updateManualStatus()"
             style="font-size:0.8rem; border-radius:12px; border:1px solid #ddd; padding:2px 8px; cursor:pointer; display:none;">
-            <option value="open">🟢 Active</option>
-            <option value="draft">🟠 Draft Ready</option>
-            <option value="closed">🔵 Resolved</option>
+            <option value="open">Active</option>
+            <option value="draft">Draft Ready</option>
+            <option value="closed">Resolved</option>
           </select>
         </div>
-        <div class="u-flex-center-gap">
-          <button id="btn-show-profile" class="btn btn-secondary btn-icon btn-icon-sm u-display-none" title="Show profile" aria-label="Show profile">
-            <span class="reply-shell-icon" aria-hidden="true">▣</span>
+        <div class="chat-header-group chat-header-group--actions">
+          <button id="btn-show-profile" class="shell-icon-button u-display-none" type="button" aria-label="Show profile" data-tooltip="Show profile">
+            <span class="reply-shell-icon" data-icon="panel-right-open" aria-hidden="true"></span>
           </button>
-          <button class="btn btn-primary" id="btn-mic" title="Voice Input" style="display:none;">🎤 Mic</button>
-          <button class="btn btn-primary" id="btn-magic" title="Refine draft" style="display:none;">✨ Refine</button>
-          <button class="btn btn-primary" id="btn-suggest" style="display:none;">💡 Suggest</button>
+          <button class="btn btn-secondary shell-action-button" id="btn-mic" type="button" data-tooltip="Dictate into the composer" style="display:none;">
+            <span class="reply-shell-icon shell-action-button__icon" data-icon="mic" aria-hidden="true"></span>
+            <span class="shell-action-button__label">Mic</span>
+          </button>
+          <button class="btn btn-secondary shell-action-button" id="btn-magic" type="button" data-tooltip="Refine the current draft" style="display:none;">
+            <span class="reply-shell-icon shell-action-button__icon" data-icon="auto-awesome" aria-hidden="true"></span>
+            <span class="shell-action-button__label">Refine</span>
+          </button>
+          <button class="btn btn-primary shell-action-button shell-action-button--primary" id="btn-suggest" type="button" data-tooltip="Generate 3 draft suggestions" style="display:none;">
+            <span class="reply-shell-icon shell-action-button__icon" data-icon="lightbulb" aria-hidden="true"></span>
+            <span class="shell-action-button__label">Suggest</span>
+          </button>
         </div>
       </header>
 
@@ -136,11 +145,14 @@
 
     <!-- PANE C: KYC DATA -->
     <section class="kyc-pane" id="profile-pane">
-      <div id="kyc-empty-state" class="kyc-empty">
+        <div id="kyc-empty-state" class="kyc-empty">
         <div class="kyc-editor-header">
           <h3 class="kyc-empty-title">Profile</h3>
           <div class="kyc-editor-actions">
-            <button id="btn-toggle-profile-empty" class="btn btn-secondary btn-sm" title="Collapse profile">Collapse</button>
+            <button id="btn-toggle-profile-empty" class="btn btn-secondary btn-sm shell-toolbar-button" type="button" data-tooltip="Collapse profile">
+              <span class="reply-shell-icon shell-toolbar-button__icon" data-icon="panel-right-close" aria-hidden="true"></span>
+              <span class="shell-toolbar-button__label">Collapse</span>
+            </button>
           </div>
         </div>
         <p class="kyc-empty-text">Select a contact from the sidebar to view their profile and history.</p>
@@ -150,20 +162,46 @@
         <div class="kyc-editor-header">
           <h3 class="kyc-editor-title">Profile</h3>
           <div class="kyc-editor-actions">
-            <button id="btn-toggle-profile" class="btn btn-secondary btn-sm" title="Collapse profile">Collapse</button>
-            <button id="btn-deep-analyze" class="btn btn-secondary btn-sm" title="Run Deep Analysis with Ollama">✨
-              Analyze</button>
-            <button class="btn btn-secondary btn-sm" onclick="openMergeModal()">Merge</button>
+            <button id="btn-toggle-profile" class="btn btn-secondary btn-sm shell-toolbar-button" type="button" data-tooltip="Collapse profile">
+              <span class="reply-shell-icon shell-toolbar-button__icon" data-icon="panel-right-close" aria-hidden="true"></span>
+              <span class="shell-toolbar-button__label">Collapse</span>
+            </button>
+            <button id="btn-deep-analyze" class="btn btn-secondary btn-sm shell-toolbar-button" type="button" data-tooltip="Run profile analysis">
+              <span class="reply-shell-icon shell-toolbar-button__icon" data-icon="analytics" aria-hidden="true"></span>
+              <span class="shell-toolbar-button__label">Analyze</span>
+            </button>
             <div class="profile-actions-wrap">
-              <button id="btn-profile-actions" class="btn btn-secondary btn-sm" type="button" title="Profile actions">Manage</button>
+              <button id="btn-profile-actions" class="btn btn-secondary btn-sm shell-toolbar-button" type="button" data-tooltip="Profile actions">
+                <span class="reply-shell-icon shell-toolbar-button__icon" data-icon="more-horiz" aria-hidden="true"></span>
+                <span class="shell-toolbar-button__label">Manage</span>
+              </button>
               <div id="profile-actions-menu" class="profile-actions-menu u-display-none">
-                <button class="profile-actions-menu-item" type="button" onclick="archiveCurrentProfile()">Archive</button>
-                <button class="profile-actions-menu-item" type="button" onclick="removeCurrentProfile()">Remove</button>
-                <button class="profile-actions-menu-item profile-actions-menu-item--danger" type="button" onclick="blockCurrentProfile()">Block</button>
-                <button class="profile-actions-menu-item" type="button" onclick="openHiddenContactsPage()">Hidden Contacts</button>
+                <button class="profile-actions-menu-item" type="button" onclick="openMergeModal()">
+                  <span class="reply-shell-icon profile-actions-menu-item__icon" data-icon="merge" aria-hidden="true"></span>
+                  <span>Merge</span>
+                </button>
+                <button class="profile-actions-menu-item" type="button" onclick="archiveCurrentProfile()">
+                  <span class="reply-shell-icon profile-actions-menu-item__icon" data-icon="archive" aria-hidden="true"></span>
+                  <span>Archive</span>
+                </button>
+                <button class="profile-actions-menu-item" type="button" onclick="removeCurrentProfile()">
+                  <span class="reply-shell-icon profile-actions-menu-item__icon" data-icon="delete" aria-hidden="true"></span>
+                  <span>Remove</span>
+                </button>
+                <button class="profile-actions-menu-item profile-actions-menu-item--danger" type="button" onclick="blockCurrentProfile()">
+                  <span class="reply-shell-icon profile-actions-menu-item__icon" data-icon="block" aria-hidden="true"></span>
+                  <span>Block</span>
+                </button>
+                <button class="profile-actions-menu-item" type="button" onclick="openHiddenContactsPage()">
+                  <span class="reply-shell-icon profile-actions-menu-item__icon" data-icon="inventory" aria-hidden="true"></span>
+                  <span>Hidden Contacts</span>
+                </button>
               </div>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="saveInlineProfile(this)">Save</button>
+            <button class="btn btn-primary btn-sm shell-toolbar-button shell-toolbar-button--primary" type="button" onclick="saveInlineProfile(this)" data-tooltip="Save profile changes">
+              <span class="reply-shell-icon shell-toolbar-button__icon" data-icon="save" aria-hidden="true"></span>
+              <span class="shell-toolbar-button__label">Save</span>
+            </button>
           </div>
         </div>
 

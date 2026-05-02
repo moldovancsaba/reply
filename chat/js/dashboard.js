@@ -4,6 +4,7 @@
  */
 
 import { fetchSystemHealth, fetchTriageLogs, fetchTriageQueue, fetchBridgeSummary, fetchOpenClawStatus, triggerSync, buildSecurityHeaders } from './api.js';
+import { applyIconFallback } from './icon-fallback.js';
 import { UI } from './ui.js';
 
 /**
@@ -54,6 +55,11 @@ function metricValue(...values) {
     if (Number.isFinite(parsed) && parsed > 0) return parsed;
   }
   return 0;
+}
+
+function materialIcon(name, extraClass = '') {
+  const className = ['material-symbols-outlined', extraClass].filter(Boolean).join(' ');
+  return `<span class="${className}" data-icon="${escapeDashboardAttr(name)}" aria-hidden="true"></span>`;
 }
 
 function wireDashboardActions(root) {
@@ -123,16 +129,16 @@ function renderHealthCard(config) {
     <div class="health-card-actions">
       ${actions.map(action => {
     if (action.type === 'settings') {
-      return `<button type="button" class="btn-icon" data-dashboard-open-settings="${escapeDashboardAttr(action.channel)}" title="${escapeDashboardAttr(action.title || 'Configure')}">⚙️</button>`;
+      return `<button type="button" class="btn-icon" data-dashboard-open-settings="${escapeDashboardAttr(action.channel)}" title="${escapeDashboardAttr(action.title || 'Configure')}">${materialIcon('settings')}</button>`;
     }
     if (action.type === 'sync') {
       return `<button type="button" class="btn-icon" data-dashboard-sync="${escapeDashboardAttr(action.channel)}" title="${escapeDashboardAttr(action.title || 'Sync')}">
-            ${action.icon ? `<img src="${escapeDashboardAttr(action.icon)}" alt="${escapeDashboardText(action.channel)}" class="platform-icon platform-icon--sm">` : action.emoji || '🔄'}
+            ${action.icon ? `<img src="${escapeDashboardAttr(action.icon)}" alt="${escapeDashboardText(action.channel)}" class="platform-icon platform-icon--sm">` : materialIcon(action.materialIcon || 'refresh')}
           </button>`;
     }
     if (action.type === 'service') {
       return `<button type="button" class="btn-icon" data-dashboard-service-control="${escapeDashboardAttr(action.name)}" data-dashboard-action="${escapeDashboardAttr(action.action)}" title="${escapeDashboardAttr(action.title || 'Control')}">
-            ${action.emoji || '🔄'}
+            ${materialIcon(action.materialIcon || 'refresh')}
           </button>`;
     }
     return '';
@@ -293,8 +299,8 @@ function renderPreflightPanel(preflight, health) {
       <div class="preflight-meta">Run <code>${escapeDashboardText(runShort)}</code>… · preflight v${escapeDashboardText(String(preflight.schemaVersion ?? '?'))}${contractLine}</div>
       ${issueSummary}
       <div class="preflight-actions">
-        <button type="button" class="btn btn-sm btn-secondary" data-preflight-refresh title="Re-fetch health">↻ Refresh checks</button>
-        <a class="btn btn-sm btn-secondary" href="settings.html#ai-status" title="Ollama and OpenClaw gateway">⚙️ AI &amp; gateways</a>
+        <button type="button" class="btn btn-sm btn-secondary" data-preflight-refresh title="Re-fetch health">${materialIcon('refresh')} Refresh checks</button>
+        <a class="btn btn-sm btn-secondary" href="settings.html#ai-status" title="Ollama and OpenClaw gateway">${materialIcon('settings')} AI &amp; gateways</a>
       </div>
       <div class="preflight-table">${rows}</div>
     </div>`;
@@ -303,19 +309,19 @@ function renderPreflightPanel(preflight, health) {
 function renderAlertsPanel(repairs) {
   if (!Array.isArray(repairs) || repairs.length === 0) return '';
 
-  const SERVICE_ICONS = { worker: '⚙️', openclaw: '🛡️', ollama: '🦙' };
+  const SERVICE_ICONS = { worker: 'settings', openclaw: 'warning', ollama: 'auto-awesome' };
   const SEVERITY_CLASSES = { critical: 'alert-critical', warning: 'alert-warning' };
 
   const items = repairs.map(alert => {
-    const icon = SERVICE_ICONS[alert.service] || '⚠️';
+    const icon = SERVICE_ICONS[alert.service] || 'warning';
     const severityClass = SEVERITY_CLASSES[alert.severity] || 'alert-warning';
 
     // All services (including ollama) get a direct launch button
-    const startLabel = { ollama: '🦙 Start Ollama', worker: '🔄 Restart Worker', openclaw: '🔄 Start OpenClaw' };
-    const actionBtn = `<button type="button" class="btn btn-sm btn-repair" data-dashboard-service-control="${alert.service}" data-dashboard-action="${alert.service === 'ollama' ? 'start' : 'restart'}" title="${startLabel[alert.service] || 'Restart'}">${startLabel[alert.service] || '🔄 Try Again'}</button>`;
+    const startLabel = { ollama: 'Start Ollama', worker: 'Restart Worker', openclaw: 'Start OpenClaw' };
+    const actionBtn = `<button type="button" class="btn btn-sm btn-repair" data-dashboard-service-control="${alert.service}" data-dashboard-action="${alert.service === 'ollama' ? 'start' : 'restart'}" title="${startLabel[alert.service] || 'Restart'}">${materialIcon('refresh')} ${startLabel[alert.service] || 'Try Again'}</button>`;
 
     const logBtn = alert.logPath
-      ? `<button type="button" class="btn btn-sm btn-muted" onclick="navigator.clipboard&&navigator.clipboard.writeText('tail -f ${alert.logPath}')" title="Copy log command">📋 Copy Log Cmd</button>`
+      ? `<button type="button" class="btn btn-sm btn-muted" onclick="navigator.clipboard&&navigator.clipboard.writeText('tail -f ${alert.logPath}')" title="Copy log command">${materialIcon('inventory')} Copy Log Cmd</button>`
       : '';
 
     const attemptsText = alert.attempts > 0 ? ` (auto-restarted ${alert.attempts}× already)` : '';
@@ -323,7 +329,7 @@ function renderAlertsPanel(repairs) {
     return `
       <div class="system-alert ${severityClass}">
         <div class="system-alert-header">
-          <span class="system-alert-icon">${icon}</span>
+          <span class="system-alert-icon">${materialIcon(icon)}</span>
           <strong class="system-alert-name">${alert.service}</strong>
           <span class="system-alert-severity">${alert.severity.toUpperCase()}${attemptsText}</span>
         </div>
@@ -335,7 +341,7 @@ function renderAlertsPanel(repairs) {
   return `
     <div class="system-alerts-panel">
       <div class="system-alerts-header">
-        <span>⚠️</span>
+        ${materialIcon('warning')}
         <strong>System Alerts — ${repairs.length} issue${repairs.length > 1 ? 's' : ''} detected</strong>
         <span class="system-alerts-note">Auto-repair has been attempted where possible.</span>
       </div>
@@ -418,9 +424,9 @@ export async function renderDashboard() {
       { type: 'settings', channel: 'whatsapp', title: 'OpenClaw Settings' }
     ];
     if (!openClawOnline) {
-      openClawActions.push({ type: 'service', name: 'openclaw', action: 'start', emoji: '🟢', title: 'Start OpenClaw Gateway' });
+      openClawActions.push({ type: 'service', name: 'openclaw', action: 'start', materialIcon: 'radio-button-checked', title: 'Start OpenClaw Gateway' });
     } else {
-      openClawActions.push({ type: 'service', name: 'openclaw', action: 'restart', emoji: '🔄', title: 'Restart OpenClaw Gateway' });
+      openClawActions.push({ type: 'service', name: 'openclaw', action: 'restart', materialIcon: 'refresh', title: 'Restart OpenClaw Gateway' });
     }
 
     // Render dashboard HTML
@@ -433,7 +439,7 @@ export async function renderDashboard() {
       <div class="dashboard-grid">
       ${renderHealthCard({
       title: 'OpenClaw Health',
-      icon: '🛡️',
+      icon: materialIcon('warning'),
       value: openClawOnline ? (openClawStatus.version || 'Connected') : 'Offline',
       statusText: openClawStatusText,
       statusClass: openClawStatusClass,
@@ -463,15 +469,15 @@ export async function renderDashboard() {
 
         const workerActions = [];
         if (worker.status === 'online') {
-          workerActions.push({ type: 'service', name: 'worker', action: 'restart', emoji: '🔄', title: 'Restart Worker' });
+          workerActions.push({ type: 'service', name: 'worker', action: 'restart', materialIcon: 'refresh', title: 'Restart Worker' });
         } else {
-          workerActions.push({ type: 'service', name: 'worker', action: 'start', emoji: '🟢', title: 'Start Worker' });
+          workerActions.push({ type: 'service', name: 'worker', action: 'start', materialIcon: 'radio-button-checked', title: 'Start Worker' });
         }
 
         const startedLabel = worker.startedAt ? formatLastSync(worker.startedAt) : '—';
         return renderHealthCard({
           title: 'Background Worker',
-          icon: '⚙️',
+          icon: materialIcon('settings'),
           value: worker.status === 'online' ? 'Running' : 'Offline',
           statusText: `● Process ${worker.status}`,
           statusClass: worker.status === 'online' ? 'tag-online' : 'tag-offline',
@@ -563,20 +569,20 @@ export async function renderDashboard() {
       
       ${renderHealthCard({
         title: 'Notes Sync',
-        icon: '📝',
+        icon: materialIcon('attachment'),
         value: metricValue(notesSync.total, notesSync.ingestedTotal, notesSync.processed, notesSync.updated),
         statusText: '● Notes Scanned',
         meta: [{ text: `Sync: ${formatLastSync(notesSync.lastSync)}` }],
         actions: [
           { type: 'settings', channel: 'notes', title: 'Configure Notes' },
-          { type: 'sync', channel: 'notes', emoji: '📝', title: 'Sync Notes' }
+          { type: 'sync', channel: 'notes', materialIcon: 'attachment', title: 'Sync Notes' }
         ]
       })
       }
       
       ${renderHealthCard({
         title: 'Contacts Sync',
-        icon: '👤',
+        icon: materialIcon('person'),
         value: health.stats?.total || 0,
         statusText: '● Shared Storage',
         meta: [
@@ -584,14 +590,14 @@ export async function renderDashboard() {
           { text: `Sync: ${formatLastSync(contactSync.lastSync)}` }
         ],
         actions: [
-          { type: 'sync', channel: 'contacts', emoji: '👤', title: 'Sync Contacts from Apple Contacts' }
+          { type: 'sync', channel: 'contacts', materialIcon: 'person', title: 'Sync Contacts from Apple Contacts' }
         ]
       })
       }
       
       ${renderHealthCard({
         title: 'Contact Intelligence',
-        icon: '🧠',
+        icon: materialIcon('school'),
         value: kycSync.index != null ? kycSync.index + 1 : 0,
         statusText: kycSync.state === 'running' ? '● Analyzing Contacts...' : '● Idle',
         statusClass: kycSync.state === 'running' ? 'tag-online' : '',
@@ -601,7 +607,7 @@ export async function renderDashboard() {
           { text: `Pulse: ${formatLastSync(kycSync.timestamp)}` }
         ],
         actions: [
-          { type: 'sync', channel: 'kyc', emoji: '🧠', title: 'Run Intelligence Sweep' }
+          { type: 'sync', channel: 'kyc', materialIcon: 'school', title: 'Run Intelligence Sweep' }
         ]
       })
       }
@@ -610,7 +616,7 @@ export async function renderDashboard() {
       <div class="dashboard-section-stack">
         <div class="health-card health-card--span-full dashboard-triage-card">
           <div class="health-card-header">
-            <h4><span class="health-card-icon">📌</span><span>Triage queue (priority)</span></h4>
+            <h4>${materialIcon('inventory', 'health-card-icon')}<span>Triage queue (priority)</span></h4>
           </div>
           <div class="triage-log-header triage-log-header--4" aria-hidden="true">
             <span>Priority</span><span>Actions</span><span>Rule</span><span>Contact</span>
@@ -621,7 +627,7 @@ export async function renderDashboard() {
 
         <div class="health-card health-card--span-full dashboard-triage-card">
           <div class="health-card-header">
-            <h4><span class="health-card-icon">📋</span><span>Recent Triage Log</span></h4>
+            <h4>${materialIcon('inventory', 'health-card-icon')}<span>Recent Triage Log</span></h4>
           </div>
           <div class="triage-log-header triage-log-header--4" aria-hidden="true">
             <span>Time</span><span>Action</span><span>Suggested</span><span>Contact</span>
@@ -721,6 +727,7 @@ export async function renderDashboard() {
     }
 
     wireDashboardActions(dashboard);
+    applyIconFallback(dashboard);
   } catch (error) {
     console.error('Failed to render dashboard:', error);
     if (!hadContent) {
