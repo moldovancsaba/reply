@@ -16,6 +16,7 @@ final class ReplyCoreService: ObservableObject {
     @Published var isLoadingSettings = false
     @Published var isSavingSettings = false
     @Published var syncInFlight: Set<SyncChannel> = []
+    @Published var runtimeInfo: NativeRuntimeInfo?
 
     private var launchProcess: Process?
     private var refreshTask: Task<Void, Never>?
@@ -207,6 +208,7 @@ final class ReplyCoreService: ObservableObject {
             }
             let payload = try JSONDecoder().decode(NativeSettingsPayload.self, from: data)
             settingsDraft = NativeSettingsDraft(payload: payload)
+            runtimeInfo = payload.runtime
         } catch {
             settingsLoadError = error.localizedDescription
         }
@@ -242,6 +244,7 @@ final class ReplyCoreService: ObservableObject {
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 throw NSError(domain: "ReplyCoreService", code: 3, userInfo: [NSLocalizedDescriptionKey: "Saving settings failed."])
             }
+            await loadSettings(force: true)
         } catch {
             settingsSaveError = error.localizedDescription
         }

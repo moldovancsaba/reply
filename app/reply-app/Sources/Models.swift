@@ -124,6 +124,7 @@ struct NativeSettingsPayload: Decodable {
     let ai: NativeAISettings?
     let worker: NativeWorkerSettings?
     let health: NativeHealthSettings?
+    let runtime: NativeRuntimeInfo?
 }
 
 struct NativeAISettings: Codable {
@@ -153,6 +154,74 @@ struct NativeWorkerQuantities: Codable {
 struct NativeHealthSettings: Codable {
     var ollamaProbeTimeoutMs: Int?
     var uiHealthPollIntervalMs: Int?
+}
+
+struct NativeRuntimeInfo: Decodable {
+    let ollamaPort: String?
+    let platform: String?
+    let effectiveOllamaBase: String?
+    let draftRuntime: String?
+    let trinity: TrinityRuntimeStatus?
+}
+
+struct TrinityRuntimeStatus: Decodable {
+    let configPath: String?
+    let provider: String?
+    let llmEnabled: Bool?
+    let ollamaBaseURL: String?
+    let timeoutSeconds: Double?
+    let providerStatus: String?
+    let providerError: String?
+    let availableModels: [TrinityAvailableModel]?
+    let roles: TrinityRoleStatusMap?
+
+    enum CodingKeys: String, CodingKey {
+        case configPath = "config_path"
+        case provider
+        case llmEnabled = "llm_enabled"
+        case ollamaBaseURL = "ollama_base_url"
+        case timeoutSeconds = "timeout_seconds"
+        case providerStatus = "provider_status"
+        case providerError = "provider_error"
+        case availableModels = "available_models"
+        case roles
+    }
+}
+
+struct TrinityRoleStatusMap: Decodable {
+    let generator: TrinityRoleStatus?
+    let refiner: TrinityRoleStatus?
+    let evaluator: TrinityRoleStatus?
+}
+
+struct TrinityRoleStatus: Decodable {
+    let provider: String?
+    let model: String?
+    let temperature: Double?
+    let keepAlive: String?
+    let installed: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case provider
+        case model
+        case temperature
+        case keepAlive = "keep_alive"
+        case installed
+    }
+}
+
+struct TrinityAvailableModel: Decodable, Hashable, Identifiable {
+    let name: String
+    let size: Int64?
+    let modifiedAt: String?
+
+    var id: String { name }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case size
+        case modifiedAt = "modified_at"
+    }
 }
 
 struct NativeSettingsDraft: Codable {
