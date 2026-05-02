@@ -190,6 +190,51 @@ function channelFromDoc(doc) {
     return "imessage";
 }
 
+function isCommunicationChannel(channel) {
+    const c = String(channel || "").toLowerCase().trim();
+    return new Set([
+        "imessage",
+        "whatsapp",
+        "email",
+        "linkedin",
+        "telegram",
+        "discord",
+        "signal",
+        "viber"
+    ]).has(c);
+}
+
+function isConversationDataSource(doc) {
+    const path = String(doc?.path || "").toLowerCase().trim();
+    const source = String(doc?.source || "").toLowerCase().trim();
+    if (
+        path.startsWith("imessage://") ||
+        path.startsWith("whatsapp://") ||
+        path.startsWith("mailto:") ||
+        path.startsWith("email://") ||
+        path.startsWith("linkedin://") ||
+        path.startsWith("telegram://") ||
+        path.startsWith("discord://") ||
+        path.startsWith("signal://") ||
+        path.startsWith("viber://")
+    ) {
+        return true;
+    }
+    return new Set([
+        "imessage",
+        "imessage-live",
+        "whatsapp",
+        "mail",
+        "gmail",
+        "imap",
+        "linkedin",
+        "telegram",
+        "discord",
+        "signal",
+        "viber"
+    ]).has(source);
+}
+
 function buildSearchHaystack(contact, convo) {
     const parts = [];
     const c = contact || {};
@@ -231,6 +276,8 @@ module.exports = {
     extractDateFromText,
     stripMessagePrefix,
     channelFromDoc,
+    isCommunicationChannel,
+    isConversationDataSource,
     inferRoleFromIndexedLine,
     pickLatestInboundFromVectorDocs,
     buildSearchHaystack,
