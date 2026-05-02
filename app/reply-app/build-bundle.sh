@@ -15,7 +15,9 @@ TRINITY_REPO_ROOT="$(cd "$REPO_ROOT/../trinity" && pwd)"
 TRINITY_RUNTIME_DIR_NAME="trinity-runtime"
 NODE_PREFIX="$(cd "$(dirname "$NODE_BIN")/.." && pwd)"
 LIBNODE_PATH="$(find "$NODE_PREFIX/lib" -maxdepth 1 -name 'libnode*.dylib' | head -n 1 || true)"
-ICON_PATH="$PROJECT_DIR/Assets/AppIcon.icns"
+ICON_PATH="$PROJECT_DIR/Assets/reply.icns"
+ICON_BUILD_DIR="$PROJECT_DIR/.build/icon-assets"
+ICON_PATH="$ICON_BUILD_DIR/reply.icns"
 
 cd "$PROJECT_DIR"
 swift build
@@ -54,7 +56,7 @@ rsync -a --delete \
   --exclude ".ruff_cache/" \
   "$TRINITY_REPO_ROOT/core/" "$APP_BUNDLE/Contents/Resources/$CORE_DIR_NAME/$TRINITY_RUNTIME_DIR_NAME/core/"
 cp "$PROJECT_DIR/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
-cp "$ICON_PATH" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+cp "$ICON_PATH" "$APP_BUNDLE/Contents/Resources/reply.icns"
 echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
 
 codesign --force --deep --sign - "$APP_BUNDLE" >/dev/null 2>&1 || true
