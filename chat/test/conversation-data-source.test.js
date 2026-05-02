@@ -9,6 +9,10 @@ const {
   hasUsableConversationHandle,
   contactHasUsableConversationIdentity,
 } = require("../utils/chat-utils.js");
+const {
+  normalizeStoredDisplayName,
+  presentContactLabel,
+} = require("../utils/contact-labels.js");
 
 test("conversation data source: notes and calendar stay out of inbox", () => {
   assert.equal(isConversationDataSource({ source: "apple-notes", path: "note://abc" }), false);
@@ -57,4 +61,18 @@ test("contact identity requires a real communication coordinate", () => {
     linkedinUrl: "https://www.linkedin.com/in/bob-example/",
     channels: {},
   }), true);
+});
+
+test("presentation labels hide opaque machine ids and preserve real contact labels", () => {
+  assert.equal(normalizeStoredDisplayName("CObm1s8GGhl0MzIzNzUzNjQ4M...", "CObm1s8GGhl0MzIzNzUzNjQ4M..."), "");
+  assert.equal(normalizeStoredDisplayName("Alice Example", "alice@example.com"), "Alice Example");
+
+  assert.equal(
+    presentContactLabel({ handle: "CObm1s8GGhl0MzIzNzUzNjQ4M123456", lastChannel: "whatsapp" }, { handle: "CObm1s8GGhl0MzIzNzUzNjQ4M123456", channel: "whatsapp" }),
+    "WhatsApp · CObm1s8G…3456"
+  );
+  assert.equal(
+    presentContactLabel({ handle: "alice@example.com" }, { handle: "alice@example.com", channel: "email" }),
+    "alice@example.com"
+  );
 });

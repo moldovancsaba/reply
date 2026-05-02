@@ -26,6 +26,7 @@ const {
     buildSearchHaystack,
     matchesQuery
 } = require("../utils/chat-utils");
+const { presentContactLabel } = require("../utils/contact-labels");
 
 function conversationSearchHaystack(item) {
     const c = item.contact;
@@ -234,7 +235,8 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
                         channel: latestChannel,
                         source: row.source || inferSourceFromChannel(latestChannel),
                         contact: contact || null,
-                        displayName: contact?.displayName || handle,
+                        displayName: contact?.displayName || "",
+                        presentationDisplayName: presentContactLabel(contact || {}, { handle, channel: latestChannel }),
                         lastMessage: row.text || "No recent messages",
                         preview: row.text || "No recent messages",
                         previewDate,
@@ -262,7 +264,8 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
                         channel: stats.latestChannel,
                         source: stats.latestSource,
                         contact: contact || null,
-                        displayName: contact?.displayName || handle,
+                        displayName: contact?.displayName || "",
+                        presentationDisplayName: presentContactLabel(contact || {}, { handle, channel: stats.latestChannel }),
                         lastMessage: stats.latestMessage,
                         preview: stats.latestMessage,
                         previewDate: stats.latestTimestamp
@@ -313,7 +316,8 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
                         c.lastChannel || inferChannelFromHandle(c.handle)
                     ),
                     contact: c,
-                    displayName: c.displayName,
+                    displayName: c.displayName || "",
+                    presentationDisplayName: presentContactLabel(c, { handle: c.handle }),
                     lastMessage: "No recent messages",
                     preview: "No recent messages",
                     previewDate: c.lastContacted,

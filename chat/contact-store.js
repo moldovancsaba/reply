@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { ensureDataHome, dataPath } = require('./app-paths.js');
 const { contactHasUsableConversationIdentity, hasUsableConversationHandle } = require('./utils/chat-utils.js');
+const { normalizeStoredDisplayName } = require('./utils/contact-labels.js');
 
 ensureDataHome();
 const DB_PATH = process.env.REPLY_CONTACTS_DB_PATH || dataPath('contacts.db');
@@ -159,6 +160,7 @@ class ContactStore {
 
                             const hydrated = (rows || []).map(c => {
                                 const contact = { ...c };
+                                contact.displayName = normalizeStoredDisplayName(contact.displayName, contact.handle);
                                 contact.visibility_state = normalizeVisibilityState(contact.visibility_state);
                                 contact.visibility_changed_at = contact.visibility_changed_at || null;
                                 contact.visibilityState = contact.visibility_state;
@@ -455,7 +457,7 @@ class ContactStore {
             contact = {
                 id: 'id-' + Math.random().toString(36).substr(2, 9),
                 handle: handle,
-                displayName: handle,
+                displayName: "",
                 lastContacted: new Date().toISOString(),
                 status: 'open',
                 visibility_state: 'active',
@@ -503,7 +505,7 @@ class ContactStore {
                     contact = {
                         id: 'id-' + Math.random().toString(36).substr(2, 9),
                         handle: handle,
-                        displayName: handle,
+                        displayName: "",
                         lastContacted: date.toISOString(),
                         lastChannel: channel,
                         status: 'open',

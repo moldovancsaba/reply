@@ -1046,6 +1046,7 @@
         max-height: 100vh;
         -webkit-backdrop-filter: blur(22px);
         backdrop-filter: blur(22px);
+        isolation: isolate;
       }
 
       .kyc-card {
@@ -1121,14 +1122,16 @@
         align-items: center;
         flex-wrap: wrap;
         gap: 12px;
-        margin-bottom: 12px;
+        margin: -1rem -1rem 14px;
         position: sticky;
         top: 0;
-        z-index: 8;
-        padding: 2px 0 10px;
-        background: linear-gradient(180deg, rgba(25, 25, 29, 0.94) 0%, rgba(25, 25, 29, 0.72) 72%, rgba(25, 25, 29, 0) 100%);
+        z-index: 18;
+        padding: 14px 16px 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: linear-gradient(180deg, rgba(20, 22, 28, 0.98) 0%, rgba(20, 22, 28, 0.96) 100%);
         -webkit-backdrop-filter: blur(18px);
         backdrop-filter: blur(18px);
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
       }
 
       .kyc-editor-title {
@@ -1163,6 +1166,7 @@
 
       .profile-actions-wrap {
         position: relative;
+        z-index: 24;
       }
 
       .profile-actions-menu {
@@ -1175,10 +1179,12 @@
         background: rgba(24, 24, 28, 0.98);
         border: 1px solid rgba(255, 255, 255, 0.08);
         box-shadow: 0 16px 32px rgba(0, 0, 0, 0.28);
+        -webkit-backdrop-filter: blur(18px);
+        backdrop-filter: blur(18px);
         display: flex;
         flex-direction: column;
         gap: 4px;
-        z-index: 15;
+        z-index: 30;
       }
 
       .profile-actions-menu-item {
