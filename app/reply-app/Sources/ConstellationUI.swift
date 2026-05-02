@@ -2,13 +2,14 @@ import AppKit
 import SwiftUI
 
 enum ReplyConstellationPalette {
-    static let canvas = adaptiveReplyColor(light: NSColor(red: 0.93, green: 0.96, blue: 1.0, alpha: 1), dark: NSColor(red: 0.07, green: 0.08, blue: 0.10, alpha: 1))
-    static let panel = adaptiveReplyColor(light: NSColor.white.withAlphaComponent(0.92), dark: NSColor(red: 0.11, green: 0.13, blue: 0.15, alpha: 0.96))
-    static let elevated = adaptiveReplyColor(light: NSColor(red: 0.88, green: 0.92, blue: 0.98, alpha: 1), dark: NSColor(red: 0.14, green: 0.16, blue: 0.19, alpha: 1))
-    static let border = adaptiveReplyColor(light: NSColor(red: 0.77, green: 0.83, blue: 0.93, alpha: 1), dark: NSColor(red: 0.23, green: 0.25, blue: 0.29, alpha: 1))
-    static let textPrimary = adaptiveReplyColor(light: NSColor(red: 0.09, green: 0.16, blue: 0.28, alpha: 1), dark: NSColor(red: 0.96, green: 0.94, blue: 0.91, alpha: 1))
-    static let textSecondary = adaptiveReplyColor(light: NSColor(red: 0.27, green: 0.36, blue: 0.49, alpha: 1), dark: NSColor(red: 0.78, green: 0.74, blue: 0.69, alpha: 1))
-    static let accent = adaptiveReplyColor(light: NSColor(red: 0.15, green: 0.39, blue: 0.92, alpha: 1), dark: NSColor(red: 0.30, green: 0.59, blue: 1.0, alpha: 1))
+    static let chrome = adaptiveReplyColor(light: NSColor(red: 0.97, green: 0.98, blue: 1.0, alpha: 1), dark: NSColor(red: 0.06, green: 0.07, blue: 0.09, alpha: 1))
+    static let canvas = adaptiveReplyColor(light: NSColor(red: 0.92, green: 0.95, blue: 0.99, alpha: 1), dark: NSColor(red: 0.08, green: 0.10, blue: 0.12, alpha: 1))
+    static let panel = adaptiveReplyColor(light: NSColor.white.withAlphaComponent(0.94), dark: NSColor(red: 0.13, green: 0.15, blue: 0.18, alpha: 0.98))
+    static let elevated = adaptiveReplyColor(light: NSColor(red: 0.89, green: 0.93, blue: 0.98, alpha: 1), dark: NSColor(red: 0.17, green: 0.20, blue: 0.24, alpha: 1))
+    static let border = adaptiveReplyColor(light: NSColor(red: 0.76, green: 0.83, blue: 0.92, alpha: 1), dark: NSColor(red: 0.26, green: 0.30, blue: 0.35, alpha: 1))
+    static let textPrimary = adaptiveReplyColor(light: NSColor(red: 0.08, green: 0.14, blue: 0.24, alpha: 1), dark: NSColor(red: 0.95, green: 0.94, blue: 0.92, alpha: 1))
+    static let textSecondary = adaptiveReplyColor(light: NSColor(red: 0.28, green: 0.37, blue: 0.50, alpha: 1), dark: NSColor(red: 0.76, green: 0.74, blue: 0.70, alpha: 1))
+    static let accent = adaptiveReplyColor(light: NSColor(red: 0.20, green: 0.43, blue: 0.96, alpha: 1), dark: NSColor(red: 0.36, green: 0.63, blue: 1.0, alpha: 1))
     static let success = adaptiveReplyColor(light: NSColor(red: 0.16, green: 0.48, blue: 0.28, alpha: 1), dark: NSColor(red: 0.31, green: 0.77, blue: 0.48, alpha: 1))
     static let warning = adaptiveReplyColor(light: NSColor(red: 0.66, green: 0.42, blue: 0.0, alpha: 1), dark: NSColor(red: 0.88, green: 0.63, blue: 0.20, alpha: 1))
     static let danger = adaptiveReplyColor(light: NSColor(red: 0.69, green: 0.23, blue: 0.18, alpha: 1), dark: NSColor(red: 0.89, green: 0.40, blue: 0.35, alpha: 1))
@@ -29,7 +30,7 @@ struct ReplyConstellationShell<Content: View>: View {
         ZStack {
             LinearGradient(
                 colors: [
-                    Color(red: 0.06, green: 0.07, blue: 0.09),
+                    ReplyConstellationPalette.chrome,
                     ReplyConstellationPalette.canvas
                 ],
                 startPoint: .topLeading,
