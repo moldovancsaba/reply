@@ -99,17 +99,17 @@
           <button id="btn-show-profile" class="shell-icon-button u-display-none" type="button" aria-label="Show profile" data-tooltip="Show profile">
             <span class="reply-shell-icon" data-icon="panel-right-open" aria-hidden="true"></span>
           </button>
-          <button class="btn btn-secondary shell-action-button" id="btn-mic" type="button" data-tooltip="Dictate into the composer" style="display:none;">
+          <button class="btn btn-secondary shell-action-button shell-action-button--icon-only" id="btn-mic" type="button" aria-label="Dictate into the composer" data-tooltip="Dictate into the composer" style="display:none;">
             <span class="reply-shell-icon shell-action-button__icon" data-icon="mic" aria-hidden="true"></span>
-            <span class="shell-action-button__label">Mic</span>
+            <span class="shell-action-button__label u-sr-only">Mic</span>
           </button>
-          <button class="btn btn-secondary shell-action-button" id="btn-magic" type="button" data-tooltip="Refine the current draft" style="display:none;">
+          <button class="btn btn-secondary shell-action-button shell-action-button--icon-only" id="btn-magic" type="button" aria-label="Refine the current draft" data-tooltip="Refine the current draft" style="display:none;">
             <span class="reply-shell-icon shell-action-button__icon" data-icon="auto-awesome" aria-hidden="true"></span>
-            <span class="shell-action-button__label">Refine</span>
+            <span class="shell-action-button__label u-sr-only">Refine</span>
           </button>
-          <button class="btn btn-primary shell-action-button shell-action-button--primary" id="btn-suggest" type="button" data-tooltip="Generate 3 draft suggestions" style="display:none;">
+          <button class="btn btn-primary shell-action-button shell-action-button--icon-only shell-action-button--primary" id="btn-suggest" type="button" aria-label="Generate 3 draft suggestions" data-tooltip="Generate 3 draft suggestions" style="display:none;">
             <span class="reply-shell-icon shell-action-button__icon" data-icon="lightbulb" aria-hidden="true"></span>
-            <span class="shell-action-button__label">Suggest</span>
+            <span class="shell-action-button__label u-sr-only">Suggest</span>
           </button>
         </div>
       </header>
@@ -148,9 +148,9 @@
         <div class="kyc-editor-header">
           <h3 class="kyc-empty-title">Profile</h3>
           <div class="kyc-editor-actions">
-            <button id="btn-toggle-profile-empty" class="btn btn-secondary btn-sm shell-toolbar-button" type="button" data-tooltip="Collapse profile">
+            <button id="btn-toggle-profile-empty" class="btn btn-secondary btn-sm shell-toolbar-button shell-toolbar-button--icon-only" type="button" aria-label="Collapse profile" data-tooltip="Collapse profile">
               <span class="reply-shell-icon shell-toolbar-button__icon" data-icon="panel-right-close" aria-hidden="true"></span>
-              <span class="shell-toolbar-button__label">Collapse</span>
+              <span class="shell-toolbar-button__label u-sr-only">Collapse</span>
             </button>
           </div>
         </div>
@@ -161,45 +161,45 @@
         <div class="kyc-editor-header">
           <h3 class="kyc-editor-title">Profile</h3>
           <div class="kyc-editor-actions">
-            <button id="btn-toggle-profile" class="btn btn-secondary btn-sm shell-toolbar-button" type="button" data-tooltip="Collapse profile">
+            <button id="btn-toggle-profile" class="btn btn-secondary btn-sm shell-toolbar-button shell-toolbar-button--icon-only" type="button" aria-label="Collapse profile" data-tooltip="Collapse profile">
               <span class="reply-shell-icon shell-toolbar-button__icon" data-icon="panel-right-close" aria-hidden="true"></span>
-              <span class="shell-toolbar-button__label">Collapse</span>
+              <span class="shell-toolbar-button__label u-sr-only">Collapse</span>
             </button>
-            <button id="btn-deep-analyze" class="btn btn-secondary btn-sm shell-toolbar-button" type="button" data-tooltip="Run profile analysis">
+            <button id="btn-deep-analyze" class="btn btn-secondary btn-sm shell-toolbar-button shell-toolbar-button--icon-only" type="button" aria-label="Run profile analysis" data-tooltip="Run profile analysis">
               <span class="reply-shell-icon shell-toolbar-button__icon" data-icon="analytics" aria-hidden="true"></span>
-              <span class="shell-toolbar-button__label">Analyze</span>
+              <span class="shell-toolbar-button__label u-sr-only">Analyze</span>
             </button>
             <div class="profile-actions-wrap">
-              <button id="btn-profile-actions" class="btn btn-secondary btn-sm shell-toolbar-button" type="button" data-tooltip="Profile actions">
+              <button id="btn-profile-actions" class="btn btn-secondary btn-sm shell-toolbar-button shell-toolbar-button--icon-only" type="button" aria-label="Profile actions" data-tooltip="Profile actions">
                 <span class="reply-shell-icon shell-toolbar-button__icon" data-icon="more-horiz" aria-hidden="true"></span>
-                <span class="shell-toolbar-button__label">Manage</span>
+                <span class="shell-toolbar-button__label u-sr-only">Manage</span>
               </button>
               <div id="profile-actions-menu" class="profile-actions-menu u-display-none">
-                <button class="profile-actions-menu-item" type="button" onclick="openMergeModal()">
+                <button class="profile-actions-menu-item profile-actions-menu-item--icon-only" type="button" aria-label="Merge" data-tooltip="Merge" onclick="openMergeModal()">
                   <span class="reply-shell-icon profile-actions-menu-item__icon" data-icon="merge" aria-hidden="true"></span>
-                  <span>Merge</span>
+                  <span class="u-sr-only">Merge</span>
                 </button>
-                <button class="profile-actions-menu-item" type="button" onclick="archiveCurrentProfile()">
+                <button class="profile-actions-menu-item profile-actions-menu-item--icon-only" type="button" aria-label="Archive" data-tooltip="Archive" onclick="archiveCurrentProfile()">
                   <span class="reply-shell-icon profile-actions-menu-item__icon" data-icon="archive" aria-hidden="true"></span>
-                  <span>Archive</span>
+                  <span class="u-sr-only">Archive</span>
                 </button>
-                <button class="profile-actions-menu-item" type="button" onclick="removeCurrentProfile()">
+                <button class="profile-actions-menu-item profile-actions-menu-item--icon-only" type="button" aria-label="Remove" data-tooltip="Remove" onclick="removeCurrentProfile()">
                   <span class="reply-shell-icon profile-actions-menu-item__icon" data-icon="delete" aria-hidden="true"></span>
-                  <span>Remove</span>
+                  <span class="u-sr-only">Remove</span>
                 </button>
-                <button class="profile-actions-menu-item profile-actions-menu-item--danger" type="button" onclick="blockCurrentProfile()">
+                <button class="profile-actions-menu-item profile-actions-menu-item--icon-only profile-actions-menu-item--danger" type="button" aria-label="Block" data-tooltip="Block" onclick="blockCurrentProfile()">
                   <span class="reply-shell-icon profile-actions-menu-item__icon" data-icon="block" aria-hidden="true"></span>
-                  <span>Block</span>
+                  <span class="u-sr-only">Block</span>
                 </button>
-                <button class="profile-actions-menu-item" type="button" onclick="openHiddenContactsPage()">
+                <button class="profile-actions-menu-item profile-actions-menu-item--icon-only" type="button" aria-label="Hidden contacts" data-tooltip="Hidden contacts" onclick="openHiddenContactsPage()">
                   <span class="reply-shell-icon profile-actions-menu-item__icon" data-icon="inventory" aria-hidden="true"></span>
-                  <span>Hidden Contacts</span>
+                  <span class="u-sr-only">Hidden Contacts</span>
                 </button>
               </div>
             </div>
-            <button class="btn btn-primary btn-sm shell-toolbar-button shell-toolbar-button--primary" type="button" onclick="saveInlineProfile(this)" data-tooltip="Save profile changes">
+            <button class="btn btn-primary btn-sm shell-toolbar-button shell-toolbar-button--icon-only shell-toolbar-button--primary" type="button" aria-label="Save profile changes" onclick="saveInlineProfile(this)" data-tooltip="Save profile changes">
               <span class="reply-shell-icon shell-toolbar-button__icon" data-icon="save" aria-hidden="true"></span>
-              <span class="shell-toolbar-button__label">Save</span>
+              <span class="shell-toolbar-button__label u-sr-only">Save</span>
             </button>
           </div>
         </div>

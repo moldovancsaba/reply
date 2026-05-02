@@ -4,6 +4,7 @@
  */
 import { createPlatformValueNode, resolvePlatformTarget } from './platform-icons.js';
 import { UI } from './ui.js';
+import { setMaterialIcon } from './icon-fallback.js';
 
 async function fetchJson(url, options) {
   const res = await fetch(url, options);
@@ -30,6 +31,17 @@ async function fetchJson(url, options) {
 
 function el(id) {
   return document.getElementById(id);
+}
+
+function setIconButtonBusyState(btn, { busy, busyIcon = 'info', idleIcon, busyLabel, idleLabel, busyTooltip, idleTooltip }) {
+  if (!btn) return;
+  const icon = btn.querySelector('.reply-shell-icon');
+  const label = btn.querySelector('.shell-toolbar-button__label, .shell-action-button__label');
+  btn.disabled = !!busy;
+  setMaterialIcon(icon, busy ? busyIcon : idleIcon);
+  if (label) label.textContent = busy ? busyLabel : idleLabel;
+  btn.setAttribute('aria-label', busy ? busyTooltip : idleTooltip);
+  btn.dataset.tooltip = busy ? busyTooltip : idleTooltip;
 }
 
 /** Show merged alias rows for this canonical profile (reply#19). */
@@ -825,10 +837,16 @@ async function applyVisibilityState(state) {
 }
 
 export async function saveInlineProfile(btn = null) {
-  const originalText = btn ? btn.textContent : null;
   if (btn) {
-    btn.disabled = true;
-    btn.textContent = '⏳ Saving...';
+    setIconButtonBusyState(btn, {
+      busy: true,
+      busyIcon: 'info',
+      idleIcon: 'save',
+      busyLabel: 'Saving',
+      idleLabel: 'Save',
+      busyTooltip: 'Saving profile changes',
+      idleTooltip: 'Save profile changes',
+    });
   }
 
   try {
@@ -883,8 +901,15 @@ export async function saveInlineProfile(btn = null) {
     }
   } finally {
     if (btn) {
-      btn.disabled = false;
-      btn.textContent = originalText;
+      setIconButtonBusyState(btn, {
+        busy: false,
+        busyIcon: 'info',
+        idleIcon: 'save',
+        busyLabel: 'Saving',
+        idleLabel: 'Save',
+        busyTooltip: 'Saving profile changes',
+        idleTooltip: 'Save profile changes',
+      });
     }
   }
 }
@@ -1102,10 +1127,16 @@ function wireAnalyzeButton() {
   btn.onclick = async () => {
     const handle = document.getElementById('kyc-handle-input')?.value?.trim();
     if (!handle) return;
-    const original = btn.textContent;
     try {
-      btn.disabled = true;
-      btn.textContent = '⏳';
+      setIconButtonBusyState(btn, {
+        busy: true,
+        busyIcon: 'info',
+        idleIcon: 'analytics',
+        busyLabel: 'Analyzing',
+        idleLabel: 'Analyze',
+        busyTooltip: 'Analyzing profile',
+        idleTooltip: 'Run profile analysis',
+      });
       UI.showLoading();
       await analyzeContact(handle);
       UI.showToast('KYC analysis complete', 'success', 2500);
@@ -1114,8 +1145,15 @@ function wireAnalyzeButton() {
       UI.showToast(e.message || 'Analyze failed', 'error');
     } finally {
       UI.hideLoading();
-      btn.disabled = false;
-      btn.textContent = original;
+      setIconButtonBusyState(btn, {
+        busy: false,
+        busyIcon: 'info',
+        idleIcon: 'analytics',
+        busyLabel: 'Analyzing',
+        idleLabel: 'Analyze',
+        busyTooltip: 'Analyzing profile',
+        idleTooltip: 'Run profile analysis',
+      });
     }
   };
 }
