@@ -3,12 +3,15 @@
  * Standardized feedback for async operations and errors.
  */
 
-import { applyIconFallback } from './icon-fallback.js';
+import { applyIconFallback, setMaterialIcon } from './icon-fallback.js';
 
 export const UI = {
     _recentToastKeys: new Map(),
     _themeMediaQuery: null,
     _themeListener: null,
+    _tooltipTimer: null,
+    _tooltipNode: null,
+    _tooltipTarget: null,
     /**
      * Show the global loading spinner
      */
@@ -117,14 +120,14 @@ export const UI = {
 
     updateThemeButtonState: () => {
         const preference = UI.getThemePreference();
-        const symbol = preference === 'auto' ? '◐' : preference === 'day' ? '☼' : '☾';
         const title = preference === 'auto' ? 'Theme: Auto' : preference === 'day' ? 'Theme: Light' : 'Theme: Dark';
         ['btn-theme', 'btn-theme-settings', 'btn-hidden-theme'].forEach((id) => {
             const node = document.getElementById(id);
             if (!node) return;
-            node.textContent = symbol;
-            node.title = title;
+            const iconHost = node.querySelector('.reply-shell-icon') || node;
+            setMaterialIcon(iconHost, 'contrast', { label: title, tooltip: title });
             node.setAttribute('aria-label', title);
+            node.dataset.tooltip = title;
         });
     },
 
@@ -156,6 +159,7 @@ export const UI = {
 
         UI.applyThemePreference();
         UI.updateThemeButtonState();
+        UI.initTooltips();
 
         ['btn-theme', 'btn-theme-settings', 'btn-hidden-theme'].forEach((id) => {
             const node = document.getElementById(id);
@@ -163,7 +167,81 @@ export const UI = {
             node.dataset.themeBound = '1';
             node.addEventListener('click', UI.cycleTheme);
         });
-    }
+    },
+
+    initTooltips: () => {
+        if (document.body?.dataset.replyTooltipsBound === '1') return;
+        if (!document.body) return;
+        document.body.dataset.replyTooltipsBound = '1';
+
+        document.addEventListener('pointerover', (event) => {
+            const target = event.target instanceof Element ? event.target.closest('[data-tooltip]') : null;
+            if (!target) return;
+            UI.scheduleTooltip(target);
+        });
+
+        document.addEventListener('pointerout', (event) => {
+            const target = event.target instanceof Element ? event.target.closest('[data-tooltip]') : null;
+            const related = event.relatedTarget instanceof Element ? event.relatedTarget.closest('[data-tooltip]') : null;
+            if (target && related === target) return;
+            if (target) UI.hideTooltip(target);
+        });
+
+        document.addEventListener('focusin', (event) => {
+            const target = event.target instanceof Element ? event.target.closest('[data-tooltip]') : null;
+            if (target) UI.scheduleTooltip(target);
+        });
+
+        document.addEventListener('focusout', () => UI.hideTooltip());
+        document.addEventListener('pointerdown', () => UI.hideTooltip());
+        document.addEventListener('keydown', () => UI.hideTooltip());
+        window.addEventListener('scroll', () => UI.hideTooltip(), true);
+        window.addEventListener('resize', () => UI.hideTooltip());
+    },
+
+    scheduleTooltip: (target) => {
+        UI.hideTooltip();
+        const content = String(target?.getAttribute('data-tooltip') || '').trim();
+        if (!target || !content) return;
+        UI._tooltipTarget = target;
+        UI._tooltipTimer = window.setTimeout(() => {
+            if (UI._tooltipTarget !== target) return;
+            UI.showTooltip(target, content);
+        }, 1000);
+    },
+
+    showTooltip: (target, content) => {
+        if (!target || !content) return;
+        let tooltip = UI._tooltipNode;
+        if (!tooltip) {
+            tooltip = document.createElement('div');
+            tooltip.className = 'reply-tooltip';
+            tooltip.setAttribute('role', 'tooltip');
+            document.body.appendChild(tooltip);
+            UI._tooltipNode = tooltip;
+        }
+        tooltip.textContent = content;
+        tooltip.classList.add('is-visible');
+        const rect = target.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+        const top = Math.max(12, rect.bottom + 12);
+        const centeredLeft = rect.left + (rect.width / 2) - (tooltipRect.width / 2);
+        const left = Math.min(window.innerWidth - tooltipRect.width - 12, Math.max(12, centeredLeft));
+        tooltip.style.top = `${top}px`;
+        tooltip.style.left = `${left}px`;
+    },
+
+    hideTooltip: (target = null) => {
+        if (target && UI._tooltipTarget && target !== UI._tooltipTarget) return;
+        if (UI._tooltipTimer) {
+            window.clearTimeout(UI._tooltipTimer);
+            UI._tooltipTimer = null;
+        }
+        UI._tooltipTarget = null;
+        if (UI._tooltipNode) {
+            UI._tooltipNode.classList.remove('is-visible');
+        }
+    },
 };
 
 // Make accessible on window for non-module scripts

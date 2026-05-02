@@ -1,4 +1,5 @@
 import { fetchHiddenContacts, restoreContact } from './api.js';
+import { applyIconFallback } from './icon-fallback.js';
 import { UI } from './ui.js';
 
 function formatWhen(value) {
@@ -104,6 +105,7 @@ async function loadHiddenContacts() {
 }
 
 function init() {
+  applyIconFallback(document);
   UI.initThemeControls();
   document.getElementById('btn-hidden-back')?.addEventListener('click', () => {
     window.location.href = 'index.html';

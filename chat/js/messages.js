@@ -5,7 +5,7 @@
 
 import { fetchMessages, sendMessage } from './api.js';
 import { APP_DISPLAY_NAME } from './branding.js';
-import { applyIconFallback } from './icon-fallback.js';
+import { applyIconFallback, setMaterialIcon } from './icon-fallback.js';
 import { UI } from './ui.js';
 import { appendLinkedText, createPlatformIcon, resolvePlatformTarget } from './platform-icons.js';
 import { formatPleasant } from './message-formatter.js';
@@ -57,6 +57,7 @@ function createMessageBubble(msg) {
     const text = document.createElement('div');
     text.className = 'message-text';
     text.innerHTML = formatPleasant(msg.text || '', { channel: channelKey });
+    applyIconFallback(text);
     bubble.appendChild(text);
 
     const date = msg.date ? new Date(msg.date) : null;
@@ -80,19 +81,21 @@ function createMessageBubble(msg) {
         starBtn.style.marginLeft = '6px';
         starBtn.style.color = msg.is_annotated ? '#fbbc04' : '#ccc';
         starBtn.style.transition = 'color 0.2s';
-        starBtn.textContent = msg.is_annotated ? 'star' : 'star_border';
-        starBtn.title = msg.is_annotated ? 'Remove Golden Example' : 'Mark as Golden Example';
-        applyIconFallback(starBtn.parentElement || starBtn);
+        setMaterialIcon(starBtn, msg.is_annotated ? 'star' : 'star-border', {
+            label: msg.is_annotated ? 'Remove Golden Example' : 'Mark as Golden Example',
+            tooltip: msg.is_annotated ? 'Remove Golden Example' : 'Mark as Golden Example',
+        });
 
         starBtn.onclick = async (e) => {
             e.stopPropagation();
             const currentState = starBtn.dataset.iconName === 'star';
             const nextState = !currentState;
 
-            starBtn.textContent = nextState ? 'star' : 'star_border';
             starBtn.style.color = nextState ? '#fbbc04' : '#ccc';
-            starBtn.title = nextState ? 'Remove Golden Example' : 'Mark as Golden Example';
-            applyIconFallback(starBtn.parentElement || starBtn);
+            setMaterialIcon(starBtn, nextState ? 'star' : 'star-border', {
+                label: nextState ? 'Remove Golden Example' : 'Mark as Golden Example',
+                tooltip: nextState ? 'Remove Golden Example' : 'Mark as Golden Example',
+            });
 
             try {
                 const { buildSecurityHeaders } = await import('./api.js');
@@ -104,9 +107,11 @@ function createMessageBubble(msg) {
                 if (!res.ok) throw new Error('Failed to update annotation');
             } catch (err) {
                 console.error('Annotation failed:', err);
-                starBtn.textContent = !nextState ? 'star' : 'star_border';
                 starBtn.style.color = !nextState ? '#fbbc04' : '#ccc';
-                applyIconFallback(starBtn.parentElement || starBtn);
+                setMaterialIcon(starBtn, !nextState ? 'star' : 'star-border', {
+                    label: !nextState ? 'Remove Golden Example' : 'Mark as Golden Example',
+                    tooltip: !nextState ? 'Remove Golden Example' : 'Mark as Golden Example',
+                });
             }
         };
         info.appendChild(starBtn);

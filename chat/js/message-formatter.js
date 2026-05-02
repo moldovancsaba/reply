@@ -119,7 +119,7 @@ export function formatPleasant(text, options = {}) {
         attachments.forEach(att => {
             html += `
                 <a href="#" class="msg-attachment-item" onclick="event.preventDefault(); alert('Attachment downloads will be implemented in a follow-up')">
-                    <span class="material-symbols-outlined" style="font-size:16px;">attachment</span>
+                    <span class="material-symbols-outlined" data-icon="attachment" style="font-size:16px;"></span>
                     <span>${att.name || 'document'} (${(att.size / 1024).toFixed(1)} KB)</span>
                 </a>`;
         });

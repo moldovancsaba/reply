@@ -27,19 +27,19 @@
     <div class="app-container">
         <aside class="sidebar">
             <div class="sidebar-header">
-                <div class="u-flex-center-gap">
-                    <span id="btn-dash" class="u-sidebar-icon-lg reply-shell-icon" title="Go to Dashboard" aria-hidden="true">
-                        ◫
-                    </span>
-                    <span id="btn-settings" class="u-sidebar-icon reply-shell-icon" title="Settings" aria-hidden="true">
-                        ⚙
-                    </span>
-                    <span id="btn-theme-settings" class="u-sidebar-icon reply-shell-icon" title="Theme" aria-hidden="true">
-                        ◐
-                    </span>
-                    <span id="btn-training" class="u-sidebar-icon reply-shell-icon" title="Agent Training" aria-hidden="true">
-                        🧠
-                    </span>
+                <div class="shell-chrome-group shell-chrome-group--dense">
+                    <button id="btn-dash" class="shell-icon-button shell-icon-button--strong" type="button" aria-label="Back to {reply}" data-tooltip="Back to {reply}">
+                        <span class="reply-shell-icon" data-icon="dashboard" aria-hidden="true"></span>
+                    </button>
+                    <button id="btn-settings" class="shell-icon-button" type="button" aria-label="Settings" data-tooltip="Settings">
+                        <span class="reply-shell-icon" data-icon="settings" aria-hidden="true"></span>
+                    </button>
+                    <button id="btn-theme-settings" class="shell-icon-button" type="button" aria-label="Theme: Auto" data-tooltip="Theme: Auto">
+                        <span class="reply-shell-icon" data-icon="contrast" aria-hidden="true"></span>
+                    </button>
+                    <button id="btn-training" class="shell-icon-button" type="button" aria-label="Open training workspace" data-tooltip="Open training workspace">
+                        <span class="reply-shell-icon" data-icon="school" aria-hidden="true"></span>
+                    </button>
                 </div>
                 <div id="services-health-status" class="services-health-status" title="Services Health">
                     <span id="services-health-dot" class="status-dot online"></span>

@@ -18,7 +18,7 @@ import { getSettings, buildSecurityHeaders, reportDraftReplacement, reportTrinit
 import './dashboard.js?v=2.2';
 import './kyc.js?v=2.1';
 import { applyReplyUiSettings } from './settings.js?v=2.5';
-import { applyIconFallback } from './icon-fallback.js';
+import { applyIconFallback, setMaterialIcon } from './icon-fallback.js';
 import { UI } from './ui.js';
 import { maybeShowOnboarding } from './onboarding.js?v=2.1';
 
@@ -389,12 +389,20 @@ function applyLayoutChromeState() {
   const profileCollapsed = body.classList.contains('profile-collapsed');
   document.getElementById('btn-show-sidebar')?.classList.toggle('u-display-none', !sidebarCollapsed);
   document.getElementById('btn-show-profile')?.classList.toggle('u-display-none', !profileCollapsed);
-  const sidebarToggle = document.getElementById('btn-toggle-sidebar');
-  if (sidebarToggle) sidebarToggle.textContent = sidebarCollapsed ? 'left_panel_open' : 'left_panel_close';
-  const profileToggle = document.getElementById('btn-toggle-profile');
-  if (profileToggle) profileToggle.textContent = profileCollapsed ? 'right_panel_open' : 'Collapse';
-  const profileToggleEmpty = document.getElementById('btn-toggle-profile-empty');
-  if (profileToggleEmpty) profileToggleEmpty.textContent = profileCollapsed ? 'Expand' : 'Collapse';
+  const sidebarToggle = document.querySelector('#btn-toggle-sidebar .reply-shell-icon');
+  if (sidebarToggle) {
+    setMaterialIcon(sidebarToggle, sidebarCollapsed ? 'panel-left-open' : 'panel-left-close');
+    document.getElementById('btn-toggle-sidebar')?.setAttribute('data-tooltip', sidebarCollapsed ? 'Show contacts' : 'Collapse contacts');
+  }
+  document.querySelectorAll('#btn-toggle-profile .reply-shell-icon, #btn-toggle-profile-empty .reply-shell-icon').forEach((node) => {
+    setMaterialIcon(node, profileCollapsed ? 'panel-right-open' : 'panel-right-close');
+  });
+  document.querySelectorAll('#btn-toggle-profile .shell-toolbar-button__label, #btn-toggle-profile-empty .shell-toolbar-button__label').forEach((node) => {
+    node.textContent = profileCollapsed ? 'Expand' : 'Collapse';
+  });
+  document.querySelectorAll('#btn-toggle-profile, #btn-toggle-profile-empty').forEach((node) => {
+    node.setAttribute('data-tooltip', profileCollapsed ? 'Expand profile' : 'Collapse profile');
+  });
 }
 
 function setSidebarCollapsed(collapsed) {
@@ -429,10 +437,12 @@ function restoreLayoutChromeState() {
 function refreshSuggestButtonState() {
   const btnSuggest = document.getElementById('btn-suggest');
   if (!btnSuggest) return;
+  const label = btnSuggest.querySelector('.shell-action-button__label');
   const handle = window.currentHandle;
   if (!handle) {
     btnSuggest.disabled = true;
-    btnSuggest.textContent = '💡 Suggest';
+    if (label) label.textContent = 'Suggest';
+    btnSuggest.dataset.tooltip = 'Select a conversation to generate draft suggestions';
     return;
   }
 
@@ -440,12 +450,14 @@ function refreshSuggestButtonState() {
   const cached = readCachedSuggestion(handle);
   if (job?.status === 'pending') {
     btnSuggest.disabled = true;
-    btnSuggest.textContent = '⏳ Suggesting…';
+    if (label) label.textContent = 'Suggesting…';
+    btnSuggest.dataset.tooltip = 'Generating 3 draft suggestions';
     return;
   }
 
   btnSuggest.disabled = false;
-  btnSuggest.textContent = cached?.suggestion ? '💡 Suggest Ready' : '💡 Suggest';
+  if (label) label.textContent = cached?.suggestion ? 'Ready' : 'Suggest';
+  btnSuggest.dataset.tooltip = cached?.suggestion ? 'Draft suggestions are ready' : 'Generate 3 draft suggestions';
 }
 
 function applyCachedSuggestionForHandle(handle, options = {}) {
@@ -808,16 +820,22 @@ function setupEventListeners() {
 
   function setMicUiRecording(btn, recording) {
     if (!btn) return;
+    const icon = btn.querySelector('.reply-shell-icon');
+    const label = btn.querySelector('.shell-action-button__label');
     if (recording) {
       btn.classList.add('recording');
-      btn.textContent = '🔴 Rec';
+      setMaterialIcon(icon, 'radio-button-checked');
+      if (label) label.textContent = 'Recording';
       btn.style.color = 'white';
       btn.style.background = 'var(--danger)';
+      btn.dataset.tooltip = 'Stop dictation';
     } else {
       btn.classList.remove('recording');
-      btn.textContent = '🎤 Mic';
+      setMaterialIcon(icon, 'mic');
+      if (label) label.textContent = 'Mic';
       btn.style.color = '';
       btn.style.background = '';
+      btn.dataset.tooltip = 'Dictate into the composer';
     }
   }
 
@@ -916,10 +934,12 @@ function setupEventListeners() {
         return;
       }
 
-      const originalText = btnMagic.textContent;
+      const originalLabel = btnMagic.querySelector('.shell-action-button__label')?.textContent || 'Refine';
       try {
         btnMagic.disabled = true;
-        btnMagic.textContent = '⏳ ...';
+        const label = btnMagic.querySelector('.shell-action-button__label');
+        if (label) label.textContent = 'Refining…';
+        btnMagic.dataset.tooltip = 'Refining the current draft';
 
         const res = await fetch('/api/refine-reply', {
           method: 'POST',
@@ -931,13 +951,15 @@ function setupEventListeners() {
         if (data.refined) {
           chatInput.value = data.refined;
           try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
-          btnMagic.textContent = '✨ Refined';
+          const label = btnMagic.querySelector('.shell-action-button__label');
+          if (label) label.textContent = 'Refined';
         } else {
           let polished = val.trim();
           polished = polished.charAt(0).toUpperCase() + polished.slice(1);
           if (!polished.endsWith('.') && !polished.endsWith('!') && !polished.endsWith('?')) polished += '.';
           chatInput.value = polished;
-          btnMagic.textContent = '✨ Refined';
+          const label = btnMagic.querySelector('.shell-action-button__label');
+          if (label) label.textContent = 'Refined';
         }
       } catch (e) {
         console.warn('Refinement failed:', e);
@@ -945,10 +967,15 @@ function setupEventListeners() {
         polished = polished.charAt(0).toUpperCase() + polished.slice(1);
         if (!polished.endsWith('.') && !polished.endsWith('!') && !polished.endsWith('?')) polished += '.';
         chatInput.value = polished;
-        btnMagic.textContent = '✨ Refined';
+        const label = btnMagic.querySelector('.shell-action-button__label');
+        if (label) label.textContent = 'Refined';
       } finally {
         btnMagic.disabled = false;
-        setTimeout(() => (btnMagic.textContent = originalText), 1500);
+        setTimeout(() => {
+          const label = btnMagic.querySelector('.shell-action-button__label');
+          if (label) label.textContent = originalLabel;
+          btnMagic.dataset.tooltip = 'Refine the current draft';
+        }, 1500);
       }
     };
   }

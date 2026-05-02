@@ -33,14 +33,23 @@
                         <div class="hidden-contacts-summary">Archive hides a conversation until a new inbound message arrives. Remove keeps annotation access. Block excludes annotation and analysis.</div>
                     </div>
                     <div class="u-flex-center-gap">
-                        <button id="btn-hidden-theme" class="btn btn-secondary btn-sm" type="button">Theme</button>
-                        <button id="btn-hidden-back" class="btn btn-primary btn-sm" type="button">Back to {reply}</button>
+                        <button id="btn-hidden-theme" class="btn btn-secondary btn-sm shell-toolbar-button" type="button" data-tooltip="Theme: Auto">
+                            <span class="reply-shell-icon shell-toolbar-button__icon" data-icon="contrast" aria-hidden="true"></span>
+                            <span class="shell-toolbar-button__label">Theme</span>
+                        </button>
+                        <button id="btn-hidden-back" class="btn btn-primary btn-sm shell-toolbar-button shell-toolbar-button--primary" type="button" data-tooltip="Back to {reply}">
+                            <span class="reply-shell-icon shell-toolbar-button__icon" data-icon="arrow-back" aria-hidden="true"></span>
+                            <span class="shell-toolbar-button__label">Back to {reply}</span>
+                        </button>
                     </div>
                 </header>
                 <div class="hidden-contacts-body">
                     <div class="hidden-contacts-toolbar">
                         <div id="hidden-contacts-count" class="hidden-contacts-summary">Loading…</div>
-                        <button id="btn-hidden-refresh" class="btn btn-secondary btn-sm" type="button">Refresh</button>
+                        <button id="btn-hidden-refresh" class="btn btn-secondary btn-sm shell-toolbar-button" type="button" data-tooltip="Refresh hidden contacts">
+                            <span class="reply-shell-icon shell-toolbar-button__icon" data-icon="refresh" aria-hidden="true"></span>
+                            <span class="shell-toolbar-button__label">Refresh</span>
+                        </button>
                     </div>
                     <div id="hidden-contacts-list" class="hidden-contacts-list"></div>
                 </div>
