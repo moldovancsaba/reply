@@ -42,3 +42,33 @@ test("enqueueSuggestionDraft moves handle to front (newest first)", () => {
     delete require.cache[require.resolve("../suggestion-draft-queue.js")];
   }
 });
+
+test("processOneSuggestionDraft skips hidden contacts", async () => {
+  const prev = fs.existsSync(QUEUE_PATH) ? fs.readFileSync(QUEUE_PATH, "utf8") : null;
+  try {
+    if (fs.existsSync(QUEUE_PATH)) fs.unlinkSync(QUEUE_PATH);
+    delete require.cache[require.resolve("../suggestion-draft-queue.js")];
+    const q = require("../suggestion-draft-queue.js");
+    q.writeQueue([{ handle: "hidden-contact", queuedAt: new Date().toISOString() }]);
+    const result = await q.processOneSuggestionDraft({
+      contactStore: {
+        findContact: () => ({ handle: "hidden-contact", status: "open", draft: "" }),
+        isVisibleInInbox: () => false,
+      },
+      generateReply: async () => {
+        throw new Error("should not generate");
+      },
+      getSnippets: async () => [],
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, "no_contact_or_closed");
+  } finally {
+    try {
+      if (prev) fs.writeFileSync(QUEUE_PATH, prev, "utf8");
+      else if (fs.existsSync(QUEUE_PATH)) fs.unlinkSync(QUEUE_PATH);
+    } catch {
+      /* ignore */
+    }
+    delete require.cache[require.resolve("../suggestion-draft-queue.js")];
+  }
+});

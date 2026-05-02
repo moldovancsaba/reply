@@ -30,16 +30,18 @@ async function processAnnotationQueue() {
 async function _internalAutoAnnotate(channel, handle, text) {
     try {
         const { addDocuments } = require("../vector-store");
-        const dateStr = new Date().toLocaleString();
-        const formatted = `[${dateStr}] Me: ${text}`;
         const msgId = `urn:reply:manual:${Date.now()}`;
-        await addDocuments([{
-            id: msgId,
-            text: formatted,
-            source: channel,
-            path: `${channel}://${handle}`,
-            is_annotated: true
-        }]);
+        if (contactStore.shouldUseForAnnotation(handle)) {
+            const dateStr = new Date().toLocaleString();
+            const formatted = `[${dateStr}] Me: ${text}`;
+            await addDocuments([{
+                id: msgId,
+                text: formatted,
+                source: channel,
+                path: `${channel}://${handle}`,
+                is_annotated: true
+            }]);
+        }
 
         const { saveMessages } = require("../message-store");
         await saveMessages([{
@@ -51,7 +53,10 @@ async function _internalAutoAnnotate(channel, handle, text) {
             path: `${channel}://${handle}`
         }]);
 
-        await contactStore.updateLastContacted(handle, new Date().toISOString(), { channel });
+        await contactStore.updateLastContacted(handle, new Date().toISOString(), {
+            channel,
+            direction: "outbound"
+        });
 
         return { id: msgId };
     } catch (e) {

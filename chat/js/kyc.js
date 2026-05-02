@@ -116,6 +116,42 @@ function setVisible(element, visible) {
   element.style.display = visible ? 'block' : 'none';
 }
 
+function visibilityLabel(state) {
+  const key = String(state || 'active').toLowerCase();
+  if (key === 'archived') return 'Archived';
+  if (key === 'removed') return 'Removed';
+  if (key === 'blocked') return 'Blocked';
+  return 'Active';
+}
+
+function renderProfileVisibilityState(data) {
+  const badge = el('kyc-visibility-badge');
+  const note = el('kyc-visibility-note');
+  if (!badge || !note) return;
+  const state = String(data?.visibilityState || 'active').toLowerCase();
+  badge.textContent = visibilityLabel(state);
+  badge.className = `kyc-visibility-badge is-${state}`;
+  if (state === 'archived') {
+    note.textContent = 'Hidden from {reply} until a new inbound message arrives.';
+  } else if (state === 'removed') {
+    note.textContent = 'Hidden from {reply}. Historical data remains available for annotation.';
+  } else if (state === 'blocked') {
+    note.textContent = 'Hidden from {reply} and excluded from annotation and analysis.';
+  } else {
+    note.textContent = 'Visible in {reply}.';
+  }
+}
+
+function closeProfileActionsMenu() {
+  el('profile-actions-menu')?.classList.add('u-display-none');
+}
+
+function toggleProfileActionsMenu() {
+  const menu = el('profile-actions-menu');
+  if (!menu) return;
+  menu.classList.toggle('u-display-none');
+}
+
 function renderHandlePreview(handle) {
   const input = el('kyc-handle-input');
   const parent = input?.parentElement;
@@ -660,6 +696,7 @@ function updateChannelOptionsFromKyc(handle, data) {
 export async function loadKYCData(handle) {
   const emptyState = el('kyc-empty-state');
   const editor = el('kyc-content-editor');
+  closeProfileActionsMenu();
 
   if (!handle) {
     setVisible(emptyState, true);
@@ -692,6 +729,7 @@ export async function loadKYCData(handle) {
     const data = await fetchJson(`/api/kyc?handle=${encodeURIComponent(handle)}`, {
       headers: buildSecurityHeaders()
     });
+    renderProfileVisibilityState(data);
     if (nameInput) {
       nameInput.value = data.displayName || '';
       nameInput.placeholder = 'Display Name';
@@ -720,6 +758,7 @@ export async function loadKYCData(handle) {
     await refreshKycAliasStrip(data.contactId || handle);
   } catch (e) {
     console.warn('Failed to load KYC:', e);
+    renderProfileVisibilityState({ visibilityState: 'active' });
     if (nameInput) {
       nameInput.value = '';
       nameInput.placeholder = 'Display Name';
@@ -748,6 +787,35 @@ export async function loadKYCData(handle) {
     updateChannelOptionsFromKyc(handle, null);
     await refreshKycAliasStrip(handle);
   }
+}
+
+async function applyVisibilityState(state) {
+  const handle = el('kyc-handle-input')?.value?.trim();
+  if (!handle) return;
+
+  const action = String(state || '').toLowerCase();
+  const confirmText = {
+    archived: 'Archive this contact until a new inbound message arrives?',
+    removed: 'Remove this contact and conversation from {reply} while keeping it available for annotation?',
+    blocked: 'Block this contact in {reply} and exclude it from annotation and analysis?',
+  }[action] || 'Apply this contact action?';
+  if (!window.confirm(confirmText)) return;
+
+  const { updateContactVisibility } = await import('./api.js');
+  await updateContactVisibility(handle, action);
+  closeProfileActionsMenu();
+
+  const emptyState = el('kyc-empty-state');
+  const editor = el('kyc-content-editor');
+  if (emptyState) emptyState.style.display = 'block';
+  if (editor) editor.style.display = 'none';
+  if (typeof window.selectContact === 'function') {
+    await window.selectContact(null);
+  }
+  if (typeof window.loadConversations === 'function') {
+    await window.loadConversations(false);
+  }
+  UI.showToast(`${visibilityLabel(action)} contact updated.`, 'success', 2400);
 }
 
 export async function saveInlineProfile(btn = null) {
@@ -940,6 +1008,7 @@ window.acceptKYC = dismissKYC;
 window.editKYC = dismissKYC;
 
 window.openMergeModal = () => {
+  closeProfileActionsMenu();
   const handle = el('kyc-handle-input')?.value?.trim();
   if (!handle) return alert('No contact selected');
   const sourceHandleEl = el('merge-source-handle');
@@ -953,6 +1022,31 @@ window.openMergeModal = () => {
 window.closeMergeModal = () => {
   const modal = el('merge-modal');
   if (modal) modal.style.display = 'none';
+};
+
+window.openHiddenContactsPage = () => {
+  window.location.href = 'hidden-contacts.html';
+};
+
+window.archiveCurrentProfile = () => {
+  applyVisibilityState('archived').catch((e) => {
+    console.error('Archive failed:', e);
+    UI.showToast(e.message || 'Archive failed', 'error');
+  });
+};
+
+window.removeCurrentProfile = () => {
+  applyVisibilityState('removed').catch((e) => {
+    console.error('Remove failed:', e);
+    UI.showToast(e.message || 'Remove failed', 'error');
+  });
+};
+
+window.blockCurrentProfile = () => {
+  applyVisibilityState('blocked').catch((e) => {
+    console.error('Block failed:', e);
+    UI.showToast(e.message || 'Block failed', 'error');
+  });
 };
 
 window.executeMerge = async (btn) => {
@@ -1020,6 +1114,27 @@ function wireAnalyzeButton() {
   };
 }
 
+function wireProfileActions() {
+  const toggleBtn = el('btn-profile-actions');
+  if (toggleBtn && toggleBtn.dataset.wired !== '1') {
+    toggleBtn.dataset.wired = '1';
+    toggleBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleProfileActionsMenu();
+    });
+  }
+  if (document.body && document.body.dataset.profileActionsWired !== '1') {
+    document.body.dataset.profileActionsWired = '1';
+    document.addEventListener('click', (event) => {
+      const menu = el('profile-actions-menu');
+      const toggle = el('btn-profile-actions');
+      if (!menu || menu.classList.contains('u-display-none')) return;
+      if (menu.contains(event.target) || toggle?.contains(event.target)) return;
+      closeProfileActionsMenu();
+    });
+  }
+}
+
 function wireLocalIntelligenceInput() {
   const input = document.getElementById('new-note-input');
   if (!input) return;
@@ -1036,9 +1151,11 @@ function wireLocalIntelligenceInput() {
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     wireAnalyzeButton();
+    wireProfileActions();
     wireLocalIntelligenceInput();
   });
 } else {
   wireAnalyzeButton();
+  wireProfileActions();
   wireLocalIntelligenceInput();
 }

@@ -104,6 +104,14 @@ function extractDateFromText(text) {
         d = new Date(raw.replace(/\s+/, "T"));
         if (!Number.isNaN(d.getTime())) return d;
     }
+    const normalizedNatural = raw
+        .replace(/^[A-Za-z]+,\s*/, "")
+        .replace(/\s+at\s+/i, " ")
+        .trim();
+    if (normalizedNatural && normalizedNatural !== raw) {
+        d = new Date(normalizedNatural);
+        if (!Number.isNaN(d.getTime())) return d;
+    }
     return null;
 }
 

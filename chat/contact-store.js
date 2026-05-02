@@ -9,6 +9,12 @@ const CONTACT_STORE_REFRESH_TTL_MS = Math.max(
     0,
     parseInt(process.env.REPLY_CONTACTS_REFRESH_TTL_MS || '5000', 10) || 5000
 );
+const CONTACT_VISIBILITY_STATES = new Set(["active", "archived", "removed", "blocked"]);
+
+function normalizeVisibilityState(value, fallback = "active") {
+    const state = String(value || "").trim().toLowerCase();
+    return CONTACT_VISIBILITY_STATES.has(state) ? state : fallback;
+}
 
 function readStoreChangeStamp() {
     const candidates = [DB_PATH, `${DB_PATH}-wal`, `${DB_PATH}-shm`];
@@ -64,7 +70,9 @@ class ContactStore {
                     draft TEXT,
                     status TEXT,
                     lastMtimeMs INTEGER,
-                    primary_contact_id TEXT
+                    primary_contact_id TEXT,
+                    visibility_state TEXT,
+                    visibility_changed_at TEXT
                 )`);
                 this._db.run("ALTER TABLE contacts ADD COLUMN primary_contact_id TEXT", () => {
                     // Ignore expected error if column already exists
@@ -72,6 +80,8 @@ class ContactStore {
                 this._db.run("ALTER TABLE contacts ADD COLUMN company TEXT", () => { });
                 this._db.run("ALTER TABLE contacts ADD COLUMN linkedinUrl TEXT", () => { });
                 this._db.run("ALTER TABLE contacts ADD COLUMN intro TEXT", () => { });
+                this._db.run("ALTER TABLE contacts ADD COLUMN visibility_state TEXT", () => { });
+                this._db.run("ALTER TABLE contacts ADD COLUMN visibility_changed_at TEXT", () => { });
                 this._db.run(`CREATE TABLE IF NOT EXISTS contact_channels (
                     contact_id TEXT,
                     type TEXT,
@@ -148,6 +158,9 @@ class ContactStore {
 
                             const hydrated = (rows || []).map(c => {
                                 const contact = { ...c };
+                                contact.visibility_state = normalizeVisibilityState(contact.visibility_state);
+                                contact.visibility_changed_at = contact.visibility_changed_at || null;
+                                contact.visibilityState = contact.visibility_state;
                                 contact.channels = { phone: [], email: [] };
                                 contact.verifiedChannels = {};
                                 const contactChannels = channelsByContact.get(c.id) || [];
@@ -263,9 +276,14 @@ class ContactStore {
                 };
 
                 contacts.forEach(contact => {
+                    const hasVisibilityState =
+                        contact.visibility_state != null || contact.visibilityState != null;
+                    const visibilityState = hasVisibilityState
+                        ? normalizeVisibilityState(contact.visibility_state || contact.visibilityState)
+                        : null;
                     this._db.run(`
-                        INSERT INTO contacts (id, displayName, handle, lastContacted, lastChannel, profession, relationship, draft, status, primary_contact_id, company, linkedinUrl, intro)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO contacts (id, displayName, handle, lastContacted, lastChannel, profession, relationship, draft, status, primary_contact_id, company, linkedinUrl, intro, visibility_state, visibility_changed_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(handle) DO UPDATE SET
                             displayName = COALESCE(NULLIF(?, ''), displayName),
                             lastContacted = COALESCE(?, lastContacted),
@@ -277,11 +295,17 @@ class ContactStore {
                             primary_contact_id = COALESCE(NULLIF(?, ''), primary_contact_id),
                             company = COALESCE(NULLIF(?, ''), company),
                             linkedinUrl = COALESCE(NULLIF(?, ''), linkedinUrl),
-                            intro = COALESCE(NULLIF(?, ''), intro)
+                            intro = COALESCE(NULLIF(?, ''), intro),
+                            visibility_state = COALESCE(NULLIF(?, ''), visibility_state),
+                            visibility_changed_at = COALESCE(?, visibility_changed_at)
                     `,
                         [
                             contact.id, contact.displayName, contact.handle, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status, contact.primary_contact_id, contact.company, contact.linkedinUrl, contact.intro,
-                            contact.displayName, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status, contact.primary_contact_id, contact.company, contact.linkedinUrl, contact.intro
+                            visibilityState,
+                            contact.visibility_changed_at || null,
+                            contact.displayName, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status, contact.primary_contact_id, contact.company, contact.linkedinUrl, contact.intro,
+                            visibilityState,
+                            contact.visibility_changed_at || null
                         ],
                         (err) => {
                             if (err) handleError(err);
@@ -380,6 +404,32 @@ class ContactStore {
         return this._contactsByLookup.get(search) || null;
     }
 
+    isVisibleInInbox(identifier) {
+        const contact = typeof identifier === "object" && identifier
+            ? identifier
+            : this.findContact(identifier);
+        if (!contact) return true;
+        return normalizeVisibilityState(contact.visibility_state || contact.visibilityState) === "active";
+    }
+
+    shouldUseForAnnotation(identifier) {
+        const contact = typeof identifier === "object" && identifier
+            ? identifier
+            : this.findContact(identifier);
+        if (!contact) return true;
+        return normalizeVisibilityState(contact.visibility_state || contact.visibilityState) !== "blocked";
+    }
+
+    listHiddenContacts() {
+        return this._contacts
+            .filter((contact) => !this.isVisibleInInbox(contact))
+            .sort((a, b) => {
+                const da = a.visibility_changed_at ? new Date(a.visibility_changed_at).getTime() : 0;
+                const db = b.visibility_changed_at ? new Date(b.visibility_changed_at).getTime() : 0;
+                return db - da;
+            });
+    }
+
     getByHandle(handle) {
         if (!handle) return null;
         const search = String(handle).toLowerCase().trim();
@@ -399,6 +449,8 @@ class ContactStore {
                 displayName: handle,
                 lastContacted: new Date().toISOString(),
                 status: 'open',
+                visibility_state: 'active',
+                visibility_changed_at: null,
                 channels: { phone: [], email: [] }
             };
             if (handle.includes('@')) contact.channels.email.push(handle);
@@ -410,6 +462,9 @@ class ContactStore {
             delete data.channels;
         }
         Object.assign(contact, data);
+        contact.visibility_state = normalizeVisibilityState(contact.visibility_state || contact.visibilityState);
+        contact.visibilityState = contact.visibility_state;
+        if (!("visibility_changed_at" in contact)) contact.visibility_changed_at = null;
         await this.saveContact(contact);
         return contact;
     }
@@ -428,6 +483,7 @@ class ContactStore {
             let contact = this.findContact(handle);
             const date = new Date(timestamp);
             const channel = meta.channel || meta.lastChannel || "";
+            const direction = String(meta.direction || "").trim().toLowerCase();
 
             if (!contact) {
                 contact = toSaveMap.get(handle);
@@ -439,6 +495,8 @@ class ContactStore {
                         lastContacted: date.toISOString(),
                         lastChannel: channel,
                         status: 'open',
+                        visibility_state: 'active',
+                        visibility_changed_at: null,
                         channels: { phone: [], email: [] }
                     };
                     if (handle.includes('@')) contact.channels.email.push(handle);
@@ -452,6 +510,14 @@ class ContactStore {
             if (date > new Date(contact.lastContacted || 0)) {
                 contact.lastContacted = date.toISOString();
                 if (channel) contact.lastChannel = channel;
+                if (
+                    normalizeVisibilityState(contact.visibility_state || contact.visibilityState) === "archived" &&
+                    direction !== "outbound"
+                ) {
+                    contact.visibility_state = "active";
+                    contact.visibilityState = "active";
+                    contact.visibility_changed_at = date.toISOString();
+                }
                 toSaveMap.set(handle, contact);
             }
         }
@@ -548,7 +614,7 @@ class ContactStore {
 
     getProfileContext(identifier) {
         const contact = this.findContact(identifier);
-        if (!contact) return "";
+        if (!contact || !this.shouldUseForAnnotation(contact)) return "";
 
         let context = `\n\n[IDENTITY CONTEXT]\n`;
         context += `You are talking to: ${contact.displayName}\n`;
@@ -584,6 +650,28 @@ class ContactStore {
             contact.status = status;
             await this.saveContact(contact);
         }
+    }
+
+    async setVisibilityState(identifier, nextState) {
+        await this.waitUntilReady();
+        await this.refresh();
+        const normalized = normalizeVisibilityState(nextState);
+        const contact =
+            this.findById(identifier) ||
+            this.getContactRowByHandle(identifier) ||
+            this.findContact(identifier);
+        if (!contact) {
+            throw new Error("Contact not found");
+        }
+        contact.visibility_state = normalized;
+        contact.visibilityState = normalized;
+        contact.visibility_changed_at = new Date().toISOString();
+        await this.saveContact(contact);
+        return contact;
+    }
+
+    async restoreContact(identifier) {
+        return this.setVisibilityState(identifier, "active");
     }
 
     async updateNote(handle, noteId, text, opts = {}) {

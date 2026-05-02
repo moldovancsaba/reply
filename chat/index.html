@@ -154,8 +154,22 @@
             <button id="btn-deep-analyze" class="btn btn-secondary btn-sm" title="Run Deep Analysis with Ollama">✨
               Analyze</button>
             <button class="btn btn-secondary btn-sm" onclick="openMergeModal()">Merge</button>
+            <div class="profile-actions-wrap">
+              <button id="btn-profile-actions" class="btn btn-secondary btn-sm" type="button" title="Profile actions">Manage</button>
+              <div id="profile-actions-menu" class="profile-actions-menu u-display-none">
+                <button class="profile-actions-menu-item" type="button" onclick="archiveCurrentProfile()">Archive</button>
+                <button class="profile-actions-menu-item" type="button" onclick="removeCurrentProfile()">Remove</button>
+                <button class="profile-actions-menu-item profile-actions-menu-item--danger" type="button" onclick="blockCurrentProfile()">Block</button>
+                <button class="profile-actions-menu-item" type="button" onclick="openHiddenContactsPage()">Hidden Contacts</button>
+              </div>
+            </div>
             <button class="btn btn-primary btn-sm" onclick="saveInlineProfile(this)">Save</button>
           </div>
+        </div>
+
+        <div class="kyc-visibility-strip">
+          <span id="kyc-visibility-badge" class="kyc-visibility-badge is-active">Active</span>
+          <span id="kyc-visibility-note" class="kyc-visibility-note">Visible in {reply}.</span>
         </div>
 
         <div id="kyc-alias-strip" class="kyc-alias-strip u-display-none">
