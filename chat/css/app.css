@@ -2338,6 +2338,16 @@
         overflow: hidden;
       }
 
+      .hidden-contacts-modal-content {
+        width: min(920px, calc(100vw - 64px));
+        max-height: min(80vh, 860px);
+        padding: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-card);
+      }
+
       .hidden-contacts-header {
         display: flex;
         align-items: center;
