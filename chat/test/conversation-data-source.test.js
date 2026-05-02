@@ -6,6 +6,8 @@ const assert = require("node:assert/strict");
 const {
   isCommunicationChannel,
   isConversationDataSource,
+  hasUsableConversationHandle,
+  contactHasUsableConversationIdentity,
 } = require("../utils/chat-utils.js");
 
 test("conversation data source: notes and calendar stay out of inbox", () => {
@@ -25,4 +27,34 @@ test("communication channel helper excludes document-like channels", () => {
   assert.equal(isCommunicationChannel("email"), true);
   assert.equal(isCommunicationChannel("notes"), false);
   assert.equal(isCommunicationChannel("calendar"), false);
+});
+
+test("usable conversation handle rejects placeholders and accepts real identifiers", () => {
+  assert.equal(hasUsableConversationHandle("unknown", { channel: "imessage" }), false);
+  assert.equal(hasUsableConversationHandle("Contact not found", { channel: "email" }), false);
+  assert.equal(hasUsableConversationHandle("+36 70 123 4567", { channel: "imessage" }), true);
+  assert.equal(hasUsableConversationHandle("founder@example.com", { channel: "email" }), true);
+  assert.equal(hasUsableConversationHandle("120363041234567890@g.us", { channel: "whatsapp" }), true);
+  assert.equal(hasUsableConversationHandle("thread-1", { channel: "linkedin" }), false);
+});
+
+test("contact identity requires a real communication coordinate", () => {
+  assert.equal(contactHasUsableConversationIdentity({
+    handle: "unknown",
+    displayName: "Unknown",
+    channels: { phone: [], email: [] },
+  }), false);
+
+  assert.equal(contactHasUsableConversationIdentity({
+    handle: "unknown",
+    displayName: "Alice",
+    channels: { phone: ["+36 70 123 4567"], email: [] },
+  }), true);
+
+  assert.equal(contactHasUsableConversationIdentity({
+    handle: "linkedin://thread-1",
+    displayName: "Bob",
+    linkedinUrl: "https://www.linkedin.com/in/bob-example/",
+    channels: {},
+  }), true);
 });

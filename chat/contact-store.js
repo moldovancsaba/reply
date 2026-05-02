@@ -2,6 +2,7 @@ const sqlite3 = require('sqlite3').verbose();
 const fs = require('fs');
 const path = require('path');
 const { ensureDataHome, dataPath } = require('./app-paths.js');
+const { contactHasUsableConversationIdentity, hasUsableConversationHandle } = require('./utils/chat-utils.js');
 
 ensureDataHome();
 const DB_PATH = process.env.REPLY_CONTACTS_DB_PATH || dataPath('contacts.db');
@@ -412,6 +413,14 @@ class ContactStore {
         return normalizeVisibilityState(contact.visibility_state || contact.visibilityState) === "active";
     }
 
+    isInboxEligible(identifier) {
+        const contact = typeof identifier === "object" && identifier
+            ? identifier
+            : this.findContact(identifier);
+        if (!contact) return false;
+        return this.isVisibleInInbox(contact) && contactHasUsableConversationIdentity(contact);
+    }
+
     shouldUseForAnnotation(identifier) {
         const contact = typeof identifier === "object" && identifier
             ? identifier
@@ -479,6 +488,9 @@ class ContactStore {
         for (const update of updates) {
             const { handle, timestamp, meta } = update;
             if (!handle) continue;
+            if (!hasUsableConversationHandle(handle, { channel: meta?.channel || meta?.lastChannel || "", source: meta?.source || "" })) {
+                continue;
+            }
 
             let contact = this.findContact(handle);
             const date = new Date(timestamp);

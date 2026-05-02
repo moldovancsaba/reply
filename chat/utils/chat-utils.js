@@ -235,6 +235,96 @@ function isConversationDataSource(doc) {
     ]).has(source);
 }
 
+const PLACEHOLDER_CONVERSATION_IDENTIFIERS = new Set([
+    "",
+    "unknown",
+    "not found",
+    "contact not found",
+    "calendar",
+    "notes",
+    "note",
+    "mail",
+    "email",
+    "imessage",
+    "whatsapp",
+    "linkedin",
+    "telegram",
+    "discord",
+    "signal",
+    "viber",
+]);
+
+function hasUsableConversationHandle(handle, options = {}) {
+    const raw = String(handle || "").trim();
+    if (!raw) return false;
+
+    const lowered = raw.toLowerCase();
+    if (PLACEHOLDER_CONVERSATION_IDENTIFIERS.has(lowered)) return false;
+
+    const stripped = stripPathScheme(raw);
+    const strippedLower = stripped.toLowerCase();
+    if (!stripped || PLACEHOLDER_CONVERSATION_IDENTIFIERS.has(strippedLower)) return false;
+
+    if (normalizeEmail(stripped)) return true;
+    if (normalizePhone(stripped)) return true;
+
+    if (/@g\.us$/i.test(raw) || /@s\.whatsapp\.net$/i.test(raw) || /@lid$/i.test(raw)) return true;
+
+    const channel = String(options.channel || "").trim().toLowerCase()
+        || channelFromDoc({ path: raw, source: options.source || "" })
+        || inferChannelFromHandle(raw, "");
+
+    if (channel === "whatsapp") {
+        return /^[a-z0-9._:+-]{6,}$/i.test(stripped);
+    }
+    if (channel === "linkedin") {
+        if (/^https?:\/\/(www\.)?linkedin\.com\//i.test(stripped)) return true;
+        return /^[a-z0-9._-]{3,}$/i.test(stripped) && !/^thread[-_:/]/i.test(stripped);
+    }
+    if (["telegram", "discord", "signal", "viber"].includes(channel)) {
+        return /^[a-z0-9._:+-]{3,}$/i.test(stripped);
+    }
+
+    return false;
+}
+
+function contactHasUsableConversationIdentity(contact) {
+    if (!contact || typeof contact !== "object") return false;
+
+    const values = [];
+    const push = (value, channel = "", source = "") => {
+        if (value == null || value === "") return;
+        values.push({ value, channel, source });
+    };
+    const pushAll = (items, channel = "", source = "") => {
+        if (Array.isArray(items)) items.forEach((item) => push(item, channel, source));
+    };
+
+    push(contact.handle, contact.lastChannel || "", contact.lastSource || "");
+    push(contact.latestHandle, contact.lastChannel || "", contact.lastSource || "");
+    push(contact.linkedinUrl, "linkedin", "linkedin");
+
+    const channels = contact.channels || {};
+    pushAll(channels.phone, "imessage");
+    pushAll(channels.email, "email");
+    pushAll(channels.whatsapp, "whatsapp");
+    pushAll(channels.linkedin, "linkedin");
+    pushAll(channels.telegram, "telegram");
+    pushAll(channels.discord, "discord");
+    pushAll(channels.signal, "signal");
+    pushAll(channels.viber, "viber");
+
+    if (contact.verifiedChannels && typeof contact.verifiedChannels === "object") {
+        Object.keys(contact.verifiedChannels).forEach((key) => {
+            push(key, contact.lastChannel || "", contact.lastSource || "");
+        });
+    }
+
+    return values.some(({ value, channel, source }) =>
+        hasUsableConversationHandle(value, { channel, source })
+    );
+}
+
 function buildSearchHaystack(contact, convo) {
     const parts = [];
     const c = contact || {};
@@ -281,5 +371,7 @@ module.exports = {
     inferRoleFromIndexedLine,
     pickLatestInboundFromVectorDocs,
     buildSearchHaystack,
-    matchesQuery
+    matchesQuery,
+    hasUsableConversationHandle,
+    contactHasUsableConversationIdentity
 };
