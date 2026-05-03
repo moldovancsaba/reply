@@ -80,7 +80,9 @@ function authorizeSensitiveRoute(req, res, securityPolicy, options) {
     const route = options.route || "unknown";
     const action = options.action || route;
     const payload = options.payload || {};
-    const requireHumanApproval = options.requireHumanApproval !== false;
+    const method = String(req?.method || "GET").toUpperCase();
+    const readOnlyMethod = method === "GET" || method === "HEAD" || method === "OPTIONS";
+    const requireHumanApproval = readOnlyMethod ? false : options.requireHumanApproval !== false;
     const dryRun = Boolean(payload?.dryRun);
 
     if (securityPolicy.localWritesOnly && !isLocalRequest(req)) {
