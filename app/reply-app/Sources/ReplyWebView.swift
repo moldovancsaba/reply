@@ -2,17 +2,20 @@ import SwiftUI
 import WebKit
 
 @MainActor
-final class ReplyWorkspaceStore: ObservableObject {
+final class ReplyWorkspaceStore: NSObject, ObservableObject, WKNavigationDelegate {
     let webView: WKWebView
 
-    init() {
+    override init() {
         Self.clearTransientCaches()
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
         let view = WKWebView(frame: .zero, configuration: config)
         view.allowsBackForwardNavigationGestures = true
         view.setValue(false, forKey: "drawsBackground")
+        view.navigationDelegate = nil
         self.webView = view
+        super.init()
+        view.navigationDelegate = self
     }
 
     private static func clearTransientCaches() {
@@ -24,6 +27,40 @@ final class ReplyWorkspaceStore: ObservableObject {
             WKWebsiteDataTypeServiceWorkerRegistrations,
         ]
         WKWebsiteDataStore.default().removeData(ofTypes: cacheTypes, modifiedSince: .distantPast) {}
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            injectNativeShellMarker(into: webView)
+            openFirstConversationIfNeeded(in: webView)
+        }
+    }
+
+    private func injectNativeShellMarker(into webView: WKWebView) {
+        let script = """
+        document.body.classList.add('native-shell');
+        true;
+        """
+        webView.evaluateJavaScript(script, completionHandler: nil)
+    }
+
+    private func openFirstConversationIfNeeded(in webView: WKWebView) {
+        let script = """
+        (() => {
+          const handles = Array.from(document.querySelectorAll('.sidebar-item[data-handle]'))
+            .map((node) => String(node.getAttribute('data-handle') || '').trim())
+            .filter(Boolean);
+          const currentHandle = String(window.currentHandle || '').trim();
+          const inDashboard = document.body.classList.contains('mode-dashboard');
+          if ((!currentHandle || inDashboard) && handles.length > 0 && typeof window.selectContact === 'function') {
+            window.selectContact(handles[0]);
+            return { repaired: true, handle: handles[0], inDashboard };
+          }
+          return { repaired: false, handle: currentHandle, inDashboard, count: handles.length };
+        })();
+        """
+        webView.evaluateJavaScript(script, completionHandler: nil)
     }
 }
 
