@@ -35,10 +35,10 @@ const RATE_LIMITED_ROUTES = new Set([
 
 const CSP_HEADER = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://www.gravatar.com",
-    "font-src 'self' https://fonts.gstatic.com",
+    "font-src 'self'",
     "connect-src 'self' ws: wss:",
     "media-src 'self' blob:",
     "object-src 'none'",

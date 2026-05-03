@@ -6,12 +6,24 @@ final class ReplyWorkspaceStore: ObservableObject {
     let webView: WKWebView
 
     init() {
+        Self.clearTransientCaches()
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
         let view = WKWebView(frame: .zero, configuration: config)
         view.allowsBackForwardNavigationGestures = true
         view.setValue(false, forKey: "drawsBackground")
         self.webView = view
+    }
+
+    private static func clearTransientCaches() {
+        let cacheTypes: Set<String> = [
+            WKWebsiteDataTypeDiskCache,
+            WKWebsiteDataTypeMemoryCache,
+            WKWebsiteDataTypeFetchCache,
+            WKWebsiteDataTypeOfflineWebApplicationCache,
+            WKWebsiteDataTypeServiceWorkerRegistrations,
+        ]
+        WKWebsiteDataStore.default().removeData(ofTypes: cacheTypes, modifiedSince: .distantPast) {}
     }
 }
 

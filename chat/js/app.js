@@ -12,15 +12,15 @@ import {
   normalizeConversationSort,
   isValidConversationSortMode,
   CONVERSATION_SORT_STORAGE_KEY,
-} from './contacts.js';
-import { handleSendMessage } from './messages.js';
-import { getSettings, buildSecurityHeaders, reportDraftReplacement, reportTrinityOutcome } from './api.js';
-import './dashboard.js?v=2.2';
-import './kyc.js?v=2.1';
-import { applyReplyUiSettings } from './settings.js?v=2.5';
-import { applyIconFallback, setMaterialIcon } from './icon-fallback.js';
-import { UI } from './ui.js';
-import { maybeShowOnboarding } from './onboarding.js?v=2.1';
+} from './contacts.js?v=2.6.0';
+import { handleSendMessage } from './messages.js?v=2.6.0';
+import { getSettings, buildSecurityHeaders, reportDraftReplacement, reportTrinityOutcome } from './api.js?v=2.6.0';
+import './dashboard.js?v=2.6.0';
+import './kyc.js?v=2.6.0';
+import { applyReplyUiSettings } from './settings.js?v=2.6.0';
+import { applyIconFallback, setMaterialIcon } from './icon-fallback.js?v=2.6.0';
+import { UI } from './ui.js?v=2.6.0';
+import { maybeShowOnboarding } from './onboarding.js?v=2.6.0';
 
 // Global state
 window.currentHandle = null;
@@ -634,7 +634,14 @@ async function init() {
   if (pendingHandle) {
     await selectContact(pendingHandle);
   } else {
-    await selectContact(null);
+    const firstConversationHandle = Array.isArray(window.conversations)
+      ? String(window.conversations.find((item) => item?.handle)?.handle || '').trim()
+      : '';
+    if (firstConversationHandle) {
+      await selectContact(firstConversationHandle);
+    } else {
+      await selectContact(null);
+    }
   }
 
   maybeShowOnboarding();

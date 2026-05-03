@@ -1,3 +1,5 @@
+import DOMPurify from '../node_modules/dompurify/dist/purify.es.mjs';
+
 /**
  * {reply} - Message Formatter
  * Handles cleaning and formatting messages for "Pleasant Viewing"
@@ -10,32 +12,18 @@ const ALLOWED_TAGS = [
 ];
 
 /**
- * Sanitize HTML using DOMPurify to prevent XSS attacks.
- * Falls back to a basic escape function if DOMPurify is not available.
+ * Sanitize HTML using the bundled local DOMPurify runtime.
  * @param {string} html - The HTML string to sanitize
  * @returns {string} - Sanitized HTML string
  */
 function sanitizeHtml(html) {
     if (!html) return "";
-
-    // Use DOMPurify if available (loaded via CDN)
-    if (typeof window.DOMPurify !== 'undefined') {
-        return window.DOMPurify.sanitize(html, {
-            ALLOWED_TAGS: ALLOWED_TAGS,
-            ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'id', 'style'],
-            ALLOW_DATA_ATTR: false,
-            ADD_ATTR: ['target'], // Allow target="_blank" for links
-        });
-    }
-
-    // Fallback: Basic escaping if DOMPurify is not loaded
-    console.warn('[message-formatter] DOMPurify not available, using basic escape fallback');
-    return html
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+    return DOMPurify.sanitize(html, {
+        ALLOWED_TAGS: ALLOWED_TAGS,
+        ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'id', 'style'],
+        ALLOW_DATA_ATTR: false,
+        ADD_ATTR: ['target'],
+    });
 }
 
 function basicMarkdown(text) {
