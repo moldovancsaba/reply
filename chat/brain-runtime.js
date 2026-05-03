@@ -11,6 +11,11 @@ const { pathPrefixesForHandle, inferChannelFromHandle, extractDateFromText, stri
 
 const REPLY_TRINITY_CONTRACT_VERSION = "trinity.reply.v1alpha1";
 const TRUE_VALUES = new Set(["1", "true", "yes"]);
+const brainRuntimeTestHooks = {
+  legacyGenerateReply: null,
+  trinityRuntimeCall: null,
+  persistShadowComparison: null,
+};
 
 function envFlagEnabled(name) {
   const value = String(process.env[name] || "").trim().toLowerCase();
@@ -22,7 +27,7 @@ function releaseRuntimeEnforced() {
 }
 
 function allowLegacyBrain() {
-  return !releaseRuntimeEnforced() && envFlagEnabled("REPLY_ALLOW_LEGACY_BRAIN");
+  return false;
 }
 
 function allowExperimentalBrainModes() {
@@ -30,14 +35,14 @@ function allowExperimentalBrainModes() {
 }
 
 function loadLegacyReplyEngine() {
+  if (typeof brainRuntimeTestHooks.legacyGenerateReply === "function") {
+    return { generateReply: brainRuntimeTestHooks.legacyGenerateReply };
+  }
   return require("./reply-engine.js");
 }
 
 function getBrainRuntimeMode() {
   const raw = String(process.env.REPLY_BRAIN_RUNTIME || "trinity").trim().toLowerCase() || "trinity";
-  if (raw === "legacy") {
-    return allowLegacyBrain() ? "legacy" : "trinity";
-  }
   if (raw === "trinity-shadow") {
     return allowExperimentalBrainModes() ? "trinity-shadow" : "trinity";
   }
@@ -73,6 +78,163 @@ function normalizeSuggestionResult(result) {
     rankedDraftSet: result?.rankedDraftSet || null,
     trinityDraftCandidate: result?.trinityDraftCandidate || null,
   };
+}
+
+function buildDraftOutcomeEvent(outcome = {}) {
+  const payload = outcome && typeof outcome === "object" ? outcome : {};
+  const normalizedChannel = String(payload.channel || "").trim().toLowerCase();
+  const normalizedCandidateId = String(payload.candidate_id || "").trim() || null;
+  const normalizedNotes = String(payload.notes || "").trim() || null;
+  const normalizedSendResult = String(payload.send_result || "").trim() || null;
+  const originalDraftText = payload.original_draft_text == null
+    ? null
+    : String(payload.original_draft_text);
+  const finalText = payload.final_text == null ? null : String(payload.final_text);
+  const editDistance = payload.edit_distance == null ? null : Number(payload.edit_distance);
+  const latencyMs = payload.latency_ms == null ? null : Number(payload.latency_ms);
+
+  return {
+    company_id: String(payload.company_id || resolveReplyCompanyId()).trim(),
+    cycle_id: String(payload.cycle_id || "").trim(),
+    thread_ref: String(payload.thread_ref || "").trim(),
+    channel: normalizedChannel,
+    disposition: String(payload.disposition || "").trim(),
+    occurred_at: String(payload.occurred_at || new Date().toISOString()).trim(),
+    candidate_id: normalizedCandidateId,
+    original_draft_text: originalDraftText,
+    final_text: finalText,
+    edit_distance: Number.isFinite(editDistance) ? editDistance : null,
+    latency_ms: Number.isFinite(latencyMs) ? latencyMs : null,
+    send_result: normalizedSendResult,
+    notes: normalizedNotes,
+    contract_version: String(payload.contract_version || REPLY_TRINITY_CONTRACT_VERSION).trim(),
+  };
+}
+
+function classifyRuntimeFailure(error, options = {}) {
+  const fallbackMessage = String(options.fallbackMessage || "Reply runtime is unavailable.").trim();
+  const rawMessage = String(error?.message || error || "").trim();
+  const normalized = rawMessage.toLowerCase();
+
+  if (
+    normalized.includes("cannot connect to the docker daemon")
+    || normalized.includes("docker.sock")
+    || normalized.includes("failed to inspect sandbox image")
+    || normalized.includes("sandbox image")
+    || normalized.includes("colima")
+  ) {
+    return {
+      status: 503,
+      code: "local_sandbox_unavailable",
+      error: "Local agent runtime is unavailable.",
+      hint: "Start Docker or Colima and the local sandbox runtime, then retry.",
+      retriable: true,
+    };
+  }
+
+  if (
+    normalized.includes("openclaw")
+    || normalized.includes("gateway health")
+    || normalized.includes("gateway offline")
+  ) {
+    return {
+      status: 503,
+      code: "openclaw_unavailable",
+      error: "OpenClaw runtime is unavailable.",
+      hint: "Start OpenClaw or its gateway, then retry.",
+      retriable: true,
+    };
+  }
+
+  if (
+    normalized.includes("ollama")
+    || normalized.includes("model route")
+    || normalized.includes("runtime status check failed")
+  ) {
+    return {
+      status: 503,
+      code: "local_model_runtime_unavailable",
+      error: "Local model runtime is unavailable.",
+      hint: "Start Ollama and confirm the configured models are available, then retry.",
+      retriable: true,
+    };
+  }
+
+  if (
+    normalized.includes("{trinity} suggest failed")
+    || normalized.includes("trinity runtime exited")
+    || normalized.includes("failed to parse trinity runtime response")
+  ) {
+    return {
+      status: 503,
+      code: "trinity_runtime_unavailable",
+      error: "Reply drafting runtime is unavailable.",
+      hint: "Retry shortly. If the problem persists, check the local Trinity runtime health.",
+      retriable: true,
+    };
+  }
+
+  return {
+    status: 500,
+    code: "reply_runtime_failure",
+    error: fallbackMessage,
+    hint: null,
+    retriable: false,
+  };
+}
+
+function sanitizeDraftContext(draftContext = {}, options = {}) {
+  const payload = draftContext && typeof draftContext === "object" ? draftContext : {};
+  const expectedChannel = String(options.expectedChannel || payload.channel || "").trim().toLowerCase();
+  const normalizedCompanyId = String(payload.companyId || payload.company_id || "").trim();
+  const normalizedCycleId = String(payload.cycleId || payload.cycle_id || "").trim();
+  const normalizedThreadRef = String(payload.threadRef || payload.thread_ref || "").trim();
+  const normalizedCandidateId = String(
+    payload.selectedCandidateId || payload.selected_candidate_id || "",
+  ).trim();
+  const generatedAtMs = Number(payload.generatedAtMs ?? payload.generated_at_ms);
+
+  return {
+    companyId: normalizedCompanyId || resolveReplyCompanyId(),
+    cycleId: normalizedCycleId || "",
+    threadRef: normalizedThreadRef || "",
+    channel: expectedChannel || "",
+    acceptedArtifactVersion: payload.acceptedArtifactVersion || payload.accepted_artifact_version || null,
+    traceRef: String(payload.traceRef || payload.trace_ref || "").trim() || null,
+    selectedCandidateId: normalizedCandidateId || null,
+    selectedDraftText: String(payload.selectedDraftText || payload.selected_draft_text || "").trim(),
+    originalDraftText: String(payload.originalDraftText || payload.original_draft_text || "").trim(),
+    generatedAtMs: Number.isFinite(generatedAtMs) ? generatedAtMs : Date.now(),
+  };
+}
+
+function buildDraftOutcomeFact(draftContext = {}, outcome = {}, options = {}) {
+  const sanitized = sanitizeDraftContext(draftContext, options);
+  if (!sanitized.cycleId || !sanitized.threadRef || !sanitized.channel) {
+    return null;
+  }
+  const originalDraftText = outcome.original_draft_text != null
+    ? String(outcome.original_draft_text)
+    : sanitized.selectedDraftText || sanitized.originalDraftText || null;
+  const latencyMs = outcome.latency_ms != null
+    ? outcome.latency_ms
+    : Math.max(0, Date.now() - Number(sanitized.generatedAtMs || Date.now()));
+  return buildDraftOutcomeEvent({
+    company_id: outcome.company_id || sanitized.companyId,
+    cycle_id: sanitized.cycleId,
+    thread_ref: sanitized.threadRef,
+    channel: sanitized.channel,
+    candidate_id: outcome.candidate_id || sanitized.selectedCandidateId || null,
+    disposition: outcome.disposition,
+    occurred_at: outcome.occurred_at || new Date().toISOString(),
+    original_draft_text: originalDraftText,
+    final_text: outcome.final_text ?? null,
+    edit_distance: outcome.edit_distance ?? null,
+    latency_ms: latencyMs,
+    send_result: outcome.send_result || null,
+    notes: outcome.notes || null,
+    contract_version: outcome.contract_version || REPLY_TRINITY_CONTRACT_VERSION,
+  });
 }
 
 async function buildTrinityDraftCandidate(
@@ -166,6 +328,7 @@ async function buildThreadSnapshot(
       runtime_mode: getBrainRuntimeMode(),
       thread_message_count: String(messages.length),
     },
+    contract_version: REPLY_TRINITY_CONTRACT_VERSION,
   };
 }
 
@@ -205,6 +368,7 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
         trinityRationale: String(top?.rationale || "").trim(),
         cycleId: rankedDraftSet?.cycle_id || null,
         traceRef: rankedDraftSet?.trace_ref || null,
+        acceptedArtifactVersion: rankedDraftSet?.accepted_artifact_version || null,
         comparison: shadowComparison,
       });
       return {
@@ -215,6 +379,7 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
           shadowComparison,
           trinityCycleId: rankedDraftSet?.cycle_id || null,
           trinityTraceRef: rankedDraftSet?.trace_ref || null,
+          acceptedArtifactVersion: rankedDraftSet?.accepted_artifact_version || null,
         },
         runtimeMode: "trinity-shadow",
         rankedDraftSet: null,
@@ -257,6 +422,7 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
             runtime: "trinity",
             cycleId: rankedDraftSet.cycle_id || null,
             traceRef: rankedDraftSet.trace_ref || null,
+            acceptedArtifactVersion: rankedDraftSet.accepted_artifact_version || null,
           },
           runtimeMode: "trinity",
           rankedDraftSet,
@@ -270,53 +436,17 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
       }
       throw new Error("{trinity} returned no usable draft candidates.");
     } catch (error) {
-      if (!allowLegacyBrain()) {
-        throw new Error(`{trinity} suggest failed: ${error.message}`);
-      }
-      console.warn("[reply-runtime] Trinity suggest failed, falling back to legacy:", error.message);
-      const legacyResult = await loadLegacyReplyEngine().generateReply(
-        message,
-        contextSnippets,
-        recipient,
-        goldenExamples,
-      );
-      const normalized = normalizeSuggestionResult(legacyResult);
-      return {
-        ...normalized,
-        runtimeMode: `${runtimeMode || "trinity"}_fallback_legacy`,
-      };
+      throw new Error(`{trinity} suggest failed: ${error.message}`);
     }
   }
-
-  const legacyResult = await loadLegacyReplyEngine().generateReply(
-    message,
-    contextSnippets,
-    recipient,
-    goldenExamples,
-  );
-
-  if (runtimeMode === "legacy") {
-    return legacyResult;
-  }
-
-  const normalized = normalizeSuggestionResult(legacyResult);
-  return {
-    ...normalized,
-    runtimeMode,
-    trinityDraftCandidate: await buildTrinityDraftCandidate(
-      message,
-      contextSnippets,
-      recipient,
-      goldenExamples,
-    ),
-  };
+  throw new Error(`Unsupported brain runtime mode: ${runtimeMode}`);
 }
 
 async function recordDraftOutcome(outcome) {
   if (!outcome || !outcome.cycle_id) {
     return { status: "skipped", reason: "missing_cycle_id" };
   }
-  return callTrinityRuntime("reply-record-outcome", outcome);
+  return callTrinityRuntime("reply-record-outcome", buildDraftOutcomeEvent(outcome));
 }
 
 async function exportDraftTrace(cycleId) {
@@ -354,6 +484,9 @@ function getTrinityRuntimeStatusSync() {
 }
 
 async function callTrinityRuntime(command, payload = null, options = {}) {
+  if (typeof brainRuntimeTestHooks.trinityRuntimeCall === "function") {
+    return brainRuntimeTestHooks.trinityRuntimeCall(command, payload, options);
+  }
   const pythonBin = resolveTrinityPythonBin();
   const trinityRepoRoot = resolveTrinityRuntimeRoot();
   const env = {
@@ -527,6 +660,10 @@ function buildShadowComparisonSummary({ legacySuggestion, trinitySuggestion }) {
 }
 
 function persistShadowComparison(payload) {
+  if (typeof brainRuntimeTestHooks.persistShadowComparison === "function") {
+    brainRuntimeTestHooks.persistShadowComparison(payload);
+    return;
+  }
   try {
     ensureDataHome();
     const logFile = dataPath("shadow", "trinity-draft-comparisons.jsonl");
@@ -589,12 +726,26 @@ function tokenOverlapRatio(left, right) {
   return Number((overlap / Math.max(union.size, 1)).toFixed(4));
 }
 
+function setBrainRuntimeTestHooks(hooks = {}) {
+  brainRuntimeTestHooks.legacyGenerateReply = hooks.legacyGenerateReply || null;
+  brainRuntimeTestHooks.trinityRuntimeCall = hooks.trinityRuntimeCall || null;
+  brainRuntimeTestHooks.persistShadowComparison = hooks.persistShadowComparison || null;
+}
+
+function clearBrainRuntimeTestHooks() {
+  setBrainRuntimeTestHooks({});
+}
+
 module.exports = {
   allowExperimentalBrainModes,
   allowLegacyBrain,
+  buildDraftOutcomeFact,
+  buildDraftOutcomeEvent,
   buildShadowComparisonSummary,
   buildThreadSnapshot,
   buildTrinityDraftCandidate,
+  clearBrainRuntimeTestHooks,
+  classifyRuntimeFailure,
   exportDraftTrace,
   generateReply,
   getBrainRuntimeMode,
@@ -606,6 +757,8 @@ module.exports = {
   recordDraftOutcome,
   releaseRuntimeEnforced,
   resolveReplyCompanyId,
+  sanitizeDraftContext,
+  setBrainRuntimeTestHooks,
   resolveTrinityPythonBin,
   resolveTrinityRuntimeRoot,
   getTrinityRuntimeStatusSync,

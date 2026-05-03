@@ -509,7 +509,16 @@ final class ReplyCoreService: ObservableObject {
             let url = baseURL.appending(path: "api/sync-\(channel.rawValue)")
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
-            applyProtectedHeaders(to: &request, includeHumanApproval: false)
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            applyProtectedHeaders(to: &request, includeHumanApproval: true)
+            request.httpBody = try JSONSerialization.data(withJSONObject: [
+                "source": channel.rawValue,
+                "approval": [
+                    "confirmed": true,
+                    "source": "native-sync-\(channel.rawValue)",
+                    "at": ISO8601DateFormatter().string(from: Date())
+                ]
+            ])
             let (_, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 throw NSError(domain: "ReplyCoreService", code: 4, userInfo: [NSLocalizedDescriptionKey: "Sync trigger failed for \(channel.title)."])

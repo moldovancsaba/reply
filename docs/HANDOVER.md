@@ -2,46 +2,77 @@
 
 ## Current State
 
-- Repo root is now `/Users/Shared/Projects/reply`.
-- The local hub is running successfully from the relocated repo root.
-- LaunchAgent `com.reply.hub` has been regenerated to point at `/Users/Shared/Projects/reply/tools/scripts/reply_service.sh`.
-- Old hardcoded runtime fallback to `/Users/moldovancsaba/Projects/reply` has been removed.
-- Repo-local path references that still pointed at the old checkout path have been updated.
-- The LinkedIn Chrome extension manifest now matches the current localhost port-scan behavior.
-- Archived board-export payloads and ad hoc GraphQL mutation files are now treated as ignored local artifacts, not active repo inputs.
+- canonical repo root is `/Users/Shared/Projects/reply`
+- live drafting runtime is `{trinity}`
+- legacy drafting is no longer part of the normal live path
+- structured draft outcomes use `/api/trinity/outcome`
+- generic operator notes remain on `/api/feedback` and `/api/feedback/log`
+- the sidebar conversation list now comes from the unified message-backed index instead of requiring a preexisting contact row
+- thread rendering now uses explicit left/right sent-versus-received rows
+- initial thread load now preloads the oldest 20 and newest 20 messages and loads the middle gap progressively
+- native sync triggers now send approval-bearing protected requests correctly
 
-## Latest Changes
+## Latest Documentation Sync
 
-### 2026-05-01
+### 2026-05-03
 
-- Removed the hardcoded repo-root fallback from [app/reply-app/Sources/ReplyCoreService.swift](/Users/Shared/Projects/reply/app/reply-app/Sources/ReplyCoreService.swift).
-- Made [scripts/verify-foundation.sh](/Users/Shared/Projects/reply/scripts/verify-foundation.sh) resolve the repo root dynamically from the script location.
-- Relocated the checkout from `/Users/moldovancsaba/Projects/reply` to `/Users/Shared/Projects/reply`.
-- Reinstalled the LaunchAgent from the new repo root so `WorkingDirectory` and `ProgramArguments` now point at `/Users/Shared/Projects/reply`.
-- Updated stale documentation references in:
-  - [docs/SPRINT_PLAN_2W.md](/Users/Shared/Projects/reply/docs/SPRINT_PLAN_2W.md)
-  - [docs/CHANNEL_BRIDGE.md](/Users/Shared/Projects/reply/docs/CHANNEL_BRIDGE.md)
-  - [docs/NATIVE_MACOS_APP_PLAN.md](/Users/Shared/Projects/reply/docs/NATIVE_MACOS_APP_PLAN.md)
-- Added repo operator notes in [AGENTS.md](/Users/Shared/Projects/reply/AGENTS.md).
-- Added `npm run verify:openclaw` and aligned the Chrome extension manifest with localhost scanning.
+This documentation pass brings the repo docs up to date with the current runtime and product state.
+
+Documented changes:
+
+- native shell remains the intended operator shell for `{reply}`
+- `{reply}` / `{trinity}` / `{train}` runtime split is now reflected in `README`, install docs, architecture docs, and dependency docs
+- install docs now include:
+  - Node.js requirement
+  - Python 3.12+ requirement for `{trinity}`
+  - sibling repo runtime resolution for `{trinity}`
+  - Ollama and OpenClaw setup expectations
+- docs now reflect the live drafting path:
+  - `{reply}` builds `ThreadSnapshot`
+  - `{trinity}` owns live drafting, ranking, and artifact application
+  - `{train}` stays offline and bounded
+- docs now reflect feedback semantics migration:
+  - structured draft outcomes on `/api/trinity/outcome`
+  - freeform logs on `/api/feedback*`
+- docs now reflect operator-safe runtime error normalization
+- docs now reflect the conversation visibility fix:
+  - dashboard counts and sidebar visibility no longer diverge because of a tiny `contacts.db` whitelist
+
+### 2026-05-03 Runtime Fix Included
+
+Product fix shipped in the current working tree:
+
+- `contact-store` now allows valid message-backed handles into the inbox even when there is no contact row yet
+- conversation index routes now fall back to the actual handle when contact enrichment is absent
+- frontend conversation cache version advanced to invalidate stale tiny cached pages
+- thread API now supports deterministic oldest/newest ordering
+- message UI now preloads both ends of the thread and fills long-history gaps incrementally
+- WhatsApp sync now persists `is_from_me` for new unified message rows
+- native sync actions in `reply.app` now attach approval headers and payloads, matching the hub’s protected-route contract
+
+Validated on local data:
+
+- prior visible conversations: `11`
+- current visible conversations: `780`
 
 ## Validation
 
-- `make install-service`
-  - Result: regenerated `~/Library/LaunchAgents/com.reply.hub.plist` with `/Users/Shared/Projects/reply` paths.
-- `make status`
-  - Result: LaunchAgent running, hub running from the new repo, `/api/health` returned `ok: true`.
-- `rg -n '/Users/moldovancsaba/Projects/reply' /Users/Shared/Projects/reply`
-  - Result: no matches.
+Validated during this sync:
+
+- `node --test /Users/Shared/Projects/reply/chat/test/contact-store-inbox-eligibility.test.js /Users/Shared/Projects/reply/chat/test/conversation-data-source.test.js /Users/Shared/Projects/reply/chat/test/conversations-meta.test.js`
+- `node --check /Users/Shared/Projects/reply/chat/js/contacts.js`
+- `node --check /Users/Shared/Projects/reply/chat/contact-store.js`
+- `node --check /Users/Shared/Projects/reply/chat/routes/messaging.js`
 
 ## Known Notes
 
-- There are unrelated existing working-tree changes in the repo. They were left untouched.
-- `READMEDEV.md` expects this general handover file to exist; that expectation is now satisfied.
-- LinkedIn archive import handover remains documented separately in [docs/HANDOVER_LINKEDIN_IMPORT.md](/Users/Shared/Projects/reply/docs/HANDOVER_LINKEDIN_IMPORT.md).
+- there are additional in-progress working-tree changes related to policy-loop and runtime-boundary work; they were documented rather than reverted
+- `{trinity}` and `{train}` docs also required updates because the install and runtime story now spans all three repos
+- the native app and the local hub are both valid operator entrypoints, but the product direction remains native-shell first
 
 ## Immediate Next Actions
 
-1. Use `/Users/Shared/Projects/reply` as the canonical local checkout path in future ops and docs.
-2. If the native app is launched again from source, rebuild it from the relocated repo root.
-3. Keep `docs/HANDOVER.md` updated whenever runtime paths, startup workflow, or operational state changes.
+1. keep `README.md`, `LOCAL_MACHINE_DEPLOYMENT.md`, `ARCHITECTURE.md`, and `DEPENDENCY_MAP.md` in sync whenever runtime prerequisites or boundaries change
+2. treat conversation visibility as message-backed first and contact-enriched second in future indexing work
+3. keep raw substrate errors out of normal operator UI surfaces
+4. keep `{reply}` policy and transport authority separate from `{trinity}` learned behavior

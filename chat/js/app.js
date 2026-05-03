@@ -274,6 +274,8 @@ function currentDraftContext(handle) {
     cycleId: cached.rankedDraftSet.cycle_id,
     threadRef: cached.rankedDraftSet.thread_ref,
     channel: cached.rankedDraftSet.channel,
+    acceptedArtifactVersion: cached.rankedDraftSet.accepted_artifact_version || null,
+    traceRef: cached.rankedDraftSet.trace_ref || null,
     selectedCandidateId: selected?.candidate_id || '',
     selectedDraftText: selected?.draft_text || cached.suggestion || '',
     originalDraftText: selected?.draft_text || cached.suggestion || '',
@@ -301,6 +303,7 @@ async function reportSuggestionOutcome(handle, candidateId, disposition, extras 
     latency_ms: extras.latency_ms ?? Math.max(0, Date.now() - Number(cached?.generatedAtMs || Date.now())),
     send_result: extras.send_result || null,
     notes: extras.notes || null,
+    contract_version: rankedDraftSet.contract_version || 'trinity.reply.v1alpha1',
   });
 }
 
@@ -506,10 +509,25 @@ async function requestBackgroundSuggestion(handle, existingDraft = '') {
 
   const prior = readCachedSuggestion(handle);
   if (prior?.rankedDraftSet?.cycle_id && prior?.selectedCandidateId) {
-    await reportSuggestionOutcome(handle, prior.selectedCandidateId, 'IGNORED', {
-      original_draft_text: prior.suggestion || '',
-      notes: 'request_new_suggestion',
-    }).catch(() => null);
+    const priorDraftText = normalizeDraftText(prior.suggestion || '');
+    const normalizedExistingDraft = normalizeDraftText(existingDraft);
+    const replacingPriorTrinityDraft =
+      normalizedExistingDraft
+      && priorDraftText
+      && normalizedExistingDraft !== priorDraftText;
+
+    if (replacingPriorTrinityDraft) {
+      await reportSuggestionOutcome(handle, prior.selectedCandidateId, 'MANUAL_REPLACEMENT', {
+        original_draft_text: priorDraftText,
+        final_text: normalizedExistingDraft,
+        notes: 'request_new_suggestion_replaced_prior',
+      }).catch(() => null);
+    } else {
+      await reportSuggestionOutcome(handle, prior.selectedCandidateId, 'IGNORED', {
+        original_draft_text: priorDraftText || '',
+        notes: 'request_new_suggestion',
+      }).catch(() => null);
+    }
   }
 
   suggestionJobs.set(handle, { status: 'pending', startedAt: Date.now() });
@@ -519,7 +537,7 @@ async function requestBackgroundSuggestion(handle, existingDraft = '') {
   }
 
   try {
-    if (existingDraft) {
+    if (existingDraft && !prior?.rankedDraftSet?.cycle_id) {
       await reportDraftReplacement({
         handle,
         original_text: existingDraft,

@@ -26,7 +26,7 @@ let conversationsQuery = '';
 let conversationsSort = 'newest';
 let contactObserver = null;
 let isLoadingContacts = false;
-const CONVERSATIONS_CACHE_VERSION = 'v4';
+const CONVERSATIONS_CACHE_VERSION = 'v5';
 
 function setPanelVisible(element, visible, displayValue = '') {
     if (!element) return;

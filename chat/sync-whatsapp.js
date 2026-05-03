@@ -173,7 +173,8 @@ async function syncWhatsApp() {
                     source: 'WhatsApp',
                     handle: d._meta?.handle || d.path.replace('whatsapp://', ''),
                     timestamp: d._meta?.formattedDate,
-                    path: d.path
+                    path: d.path,
+                    is_from_me: String(d.text || '').includes('] Me:') ? 1 : 0,
                 }));
                 await saveMessages(unifiedDocs);
 

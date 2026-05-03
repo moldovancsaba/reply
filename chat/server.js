@@ -105,6 +105,8 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/api/suggest") return messagingRoutes.serveSuggest(req, res);
   if (pathname === "/api/refine-reply" || pathname === "/api/refine") return messagingRoutes.serveRefineReply(req, res);
   if (pathname === "/api/feedback") return messagingRoutes.serveFeedback(req, res);
+  if (pathname === "/api/feedback/log") return messagingRoutes.serveFeedback(req, res);
+  if (pathname === "/api/trinity/outcome") return messagingRoutes.serveTrinityOutcome(req, res);
   if (pathname === "/api/trinity-shadow-comparisons") return messagingRoutes.serveTrinityShadowComparisons(req, res, url);
   // Sending (Sensitive)
   if (pathname === "/api/send-whatsapp") return auth({ route: pathname, action: "send-whatsapp", requireHumanApproval: true }) && messagingRoutes.serveSendWhatsApp(req, res);

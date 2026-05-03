@@ -419,7 +419,9 @@ class ContactStore {
         const contact = typeof identifier === "object" && identifier
             ? identifier
             : this.findContact(identifier);
-        if (!contact) return false;
+        if (!contact) {
+            return hasUsableConversationHandle(identifier);
+        }
         return this.isVisibleInInbox(contact) && contactHasUsableConversationIdentity(contact);
     }
 
