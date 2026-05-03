@@ -52,7 +52,7 @@ verify_bundle "$SOURCE_BUNDLE"
 
 mkdir -p "$STAGING_ROOT"
 rm -rf "$STAGED_BUNDLE"
-/usr/bin/ditto "$SOURCE_BUNDLE" "$STAGED_BUNDLE"
+/usr/bin/rsync -a --delete "$SOURCE_BUNDLE/" "$STAGED_BUNDLE/"
 verify_bundle "$STAGED_BUNDLE"
 
 /usr/bin/pkill -f "/Applications/$APP_NAME.app|reply runtime|server.js" >/dev/null 2>&1 || true
@@ -63,7 +63,7 @@ if [[ -d "$TARGET_BUNDLE" ]]; then
   /bin/rm -rf "$TARGET_BUNDLE"
 fi
 
-/usr/bin/ditto "$STAGED_BUNDLE" "$TARGET_BUNDLE"
+/usr/bin/rsync -a --delete "$STAGED_BUNDLE/" "$TARGET_BUNDLE/"
 verify_bundle "$TARGET_BUNDLE"
 /usr/bin/touch "$TARGET_BUNDLE"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$TARGET_BUNDLE" >/dev/null 2>&1 || true

@@ -202,6 +202,10 @@
         border: 0;
       }
 
+      .u-display-none {
+        display: none !important;
+      }
+
       .sidebar-sort-select {
         width: 100%;
         margin-top: 8px;

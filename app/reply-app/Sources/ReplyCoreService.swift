@@ -20,7 +20,7 @@ final class ReplyCoreService: ObservableObject {
 
     private var launchProcess: Process?
     private var refreshTask: Task<Void, Never>?
-    private let preferredPorts = Array(45311...45326)
+    private let preferredPorts = Array(45431...45446)
     private var hasAttemptedAutoLaunch = false
     private var consecutiveHealthFailures = 0
     private var lastIMessageMirrorAt: Date?
@@ -86,6 +86,7 @@ final class ReplyCoreService: ObservableObject {
         }
 
         refreshAppleSourceMirrorsIfNeeded(force: true)
+        stopLegacyRepoRuntime()
 
         let process = Process()
         let output = Pipe()
@@ -101,6 +102,7 @@ final class ReplyCoreService: ObservableObject {
         env["REPLY_ALLOW_LEGACY_BRAIN"] = "0"
         env["REPLY_ALLOW_EXPERIMENTAL_BRAIN_MODES"] = "0"
         env["TRINITY_RUNTIME_ROOT"] = runtimeRoot.appending(path: "trinity-runtime").path
+        env["PORT"] = String(preferredPorts.first ?? 45431)
         if let mirrored = mirroredIMessageDbURL(), FileManager.default.fileExists(atPath: mirrored.path) {
             env["REPLY_IMESSAGE_DB_PATH"] = mirrored.path
         }
@@ -535,6 +537,39 @@ final class ReplyCoreService: ObservableObject {
         }
 
         return nil
+    }
+
+    private func stopLegacyRepoRuntime() {
+        let domainTarget = "gui/\(getuid())/com.reply.hub"
+        let plistPath = FileManager.default.homeDirectoryForCurrentUser
+            .appending(path: "Library")
+            .appending(path: "LaunchAgents")
+            .appending(path: "com.reply.hub.plist")
+            .path
+
+        let disable = Process()
+        disable.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        disable.arguments = ["disable", domainTarget]
+        disable.standardOutput = Pipe()
+        disable.standardError = Pipe()
+        try? disable.run()
+        disable.waitUntilExit()
+
+        let bootout = Process()
+        bootout.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        bootout.arguments = ["bootout", "gui/\(getuid())", plistPath]
+        bootout.standardOutput = Pipe()
+        bootout.standardError = Pipe()
+        try? bootout.run()
+        bootout.waitUntilExit()
+
+        let pkill = Process()
+        pkill.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+        pkill.arguments = ["-f", "/Users/Shared/Projects/reply/tools/scripts/reply_service.sh|/Users/Shared/Projects/reply/chat/server.js|/Users/Shared/Projects/reply/chat/background-worker.js"]
+        pkill.standardOutput = Pipe()
+        pkill.standardError = Pipe()
+        try? pkill.run()
+        pkill.waitUntilExit()
     }
 
     private func detectManagementStateIfNeeded() async {
