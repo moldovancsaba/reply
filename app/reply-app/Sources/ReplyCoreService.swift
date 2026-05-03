@@ -44,7 +44,11 @@ final class ReplyCoreService: ObservableObject {
     private var consecutiveHealthFailures = 0
     private var lastIMessageMirrorAt: Date?
     private var lastOllamaStartAttemptAt: Date?
-    private let nativeClientToken = UUID().uuidString
+    private let nativeClientToken: String
+
+    init() {
+        self.nativeClientToken = Self.loadOrCreateNativeClientToken()
+    }
 
     deinit {
         refreshTask?.cancel()
@@ -183,7 +187,7 @@ final class ReplyCoreService: ObservableObject {
             var components = URLComponents(url: baseURL.appending(path: "api/kyc"), resolvingAgainstBaseURL: false)
             components?.queryItems = [URLQueryItem(name: "handle", value: handle)]
             guard let url = components?.url else { return }
-            let payload: ReplyProfile = try await requestJSON(url: url)
+            let payload: ReplyProfile = try await requestJSON(url: url, protectedRoute: true)
             if selectedConversationHandle == handle {
                 selectedProfile = payload
                 profileDraft = ReplyProfileDraft(profile: payload)
@@ -719,13 +723,23 @@ final class ReplyCoreService: ObservableObject {
         return try JSONDecoder().decode(HealthPayload.self, from: data)
     }
 
-    private func requestJSON<T: Decodable>(url: URL) async throws -> T {
+    private func requestJSON<T: Decodable>(url: URL, protectedRoute: Bool = false, allowRecovery: Bool = true) async throws -> T {
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
         applyProtectedHeaders(to: &request, includeHumanApproval: false)
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+        guard let http = response as? HTTPURLResponse else {
             throw NSError(domain: "ReplyCoreService", code: 6, userInfo: [NSLocalizedDescriptionKey: "Request failed for \(url.lastPathComponent)."])
+        }
+        if !(200..<300).contains(http.statusCode) {
+            let body = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if protectedRoute, allowRecovery, http.statusCode == 401, body.contains("operator_token_required") {
+                await recoverProtectedRouteAccess()
+                return try await requestJSON(url: url, protectedRoute: protectedRoute, allowRecovery: false)
+            }
+            let detail = body.isEmpty ? "Request failed for \(url.lastPathComponent)." : body
+            throw NSError(domain: "ReplyCoreService", code: 6, userInfo: [NSLocalizedDescriptionKey: detail])
         }
         let decoder = JSONDecoder()
         return try decoder.decode(T.self, from: data)
@@ -775,6 +789,37 @@ final class ReplyCoreService: ObservableObject {
     private var operatorToken: String? {
         let envValue = String(ProcessInfo.processInfo.environment["REPLY_OPERATOR_TOKEN"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return envValue.isEmpty ? nil : envValue
+    }
+
+    private func recoverProtectedRouteAccess() async {
+        stopReply()
+        launchReply()
+        try? await Task.sleep(for: .seconds(2))
+        await refreshHealth()
+    }
+
+    private static func loadOrCreateNativeClientToken() -> String {
+        let root = FileManager.default.homeDirectoryForCurrentUser
+            .appending(path: "Library")
+            .appending(path: "Application Support")
+            .appending(path: "reply")
+        let fileURL = root.appending(path: "native-client-token.txt")
+
+        if let data = try? String(contentsOf: fileURL, encoding: .utf8) {
+            let token = data.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !token.isEmpty {
+                return token
+            }
+        }
+
+        let token = UUID().uuidString
+        do {
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            try token.write(to: fileURL, atomically: true, encoding: .utf8)
+        } catch {
+            return token
+        }
+        return token
     }
 
     private func handleHealthMiss(_ message: String) {
