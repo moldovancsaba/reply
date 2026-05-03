@@ -25,6 +25,8 @@ struct ReplyHelper {
         switch command {
         case "mirror-imessage":
             try mirrorIMessage(args: args)
+        case "export-imessage":
+            try IMessageExportCommand.run(args: args)
         default:
             throw ReplyHelperError.invalidArgument("Unknown command: \(command)\n\n\(Self.usageText)")
         }
@@ -34,6 +36,7 @@ struct ReplyHelper {
         """
         reply-helper usage:
           reply-helper mirror-imessage --target-root <dir> [--log-file <path>]
+          reply-helper export-imessage [--db-path <path>] --after-rowid <n> --limit <n>
         """
     }
 
