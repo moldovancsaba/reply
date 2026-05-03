@@ -326,6 +326,7 @@ async function getMessagesForHandles(handles = [], filter = {}) {
 
     const limit = Math.max(1, Math.min(Number(filter.limit) || 30, 1000));
     const offset = Math.max(0, Number(filter.offset) || 0);
+    const order = String(filter.order || "desc").trim().toLowerCase() === "asc" ? "ASC" : "DESC";
     const placeholders = uniqueHandles.map(() => '?').join(', ');
 
     const countQuery = `
@@ -340,7 +341,7 @@ async function getMessagesForHandles(handles = [], filter = {}) {
         FROM unified_messages
         WHERE handle IN (${placeholders})
           AND ${CONVERSATION_SOURCE_SQL}
-        ORDER BY timestamp DESC
+        ORDER BY timestamp ${order}
         LIMIT ?
         OFFSET ?
     `;
@@ -356,7 +357,8 @@ async function getMessagesForHandles(handles = [], filter = {}) {
                 if (rowsErr) return reject(rowsErr);
                 resolve({
                     rows: Array.isArray(rows) ? rows : [],
-                    total: Number(countRow?.total) || 0
+                    total: Number(countRow?.total) || 0,
+                    order: order.toLowerCase()
                 });
             });
         });

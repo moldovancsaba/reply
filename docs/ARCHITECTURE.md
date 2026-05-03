@@ -1,87 +1,179 @@
 # System Architecture
 
 ## Overview
-**{reply}** follows a minimalist, local-first architecture designed for privacy, speed, and maintainability. It avoids heavy frameworks and cloud dependencies.
+
+`{reply}` is now a local macOS product shell around three explicit layers:
+
+1. `{reply}` product and transport layer
+2. `{trinity}` live drafting runtime
+3. `{train}` offline bounded learning loop
+
+The important architectural rule is:
+
+- `{reply}` does not own live drafting behavior anymore
+- `{trinity}` does not own send semantics
+- `{train}` does not mutate live behavior directly
 
 ## High-Level Diagram
 
 ```mermaid
 graph TD
-    User[User / Web UI] -->|HTTP POST| Server[Node.js Server]
-    Server -->|Sync Request| SyncEngine[Ingestion Scripts]
-    Server -->|Query| VectorDB[(LanceDB)]
-    Server -->|Context + Prompt| LLM[Ollama (Local LLM)]
-    
-    subgraph "Background Services"
-        Worker[Background Worker (background-worker.js)] -->|Poll| AppleMessages[Messages.app]
-        Worker -->|Proactive Intelligence| ContactStore[(Contact Store)]
-        Worker -->|Embed| VectorDB
-    end
-
-    subgraph "Ingestion Pipeline"
-        SyncEngine -->|Read| AppleNotes[Apple Notes (AppleScript)]
-        SyncEngine -->|Optional OAuth| GmailAPI[Gmail API]
-        SyncEngine -->|Stream| Mbox[Email Archives (.mbox)]
-        SyncEngine -->|Scan| LocalFiles[Local Docs (.md/.txt)]
-        SyncEngine -->|Embed & Index| VectorDB
-    end
+    User["Operator / reply.app"] --> Hub["{reply} Hub API"]
+    Hub --> Stores["SQLite + LanceDB + Settings"]
+    Hub --> Trinity["{trinity} reply runtime CLI"]
+    Trinity --> Ollama["Ollama (optional local models)"]
+    Trinity --> Exports["Trace + Training Bundle Exports"]
+    Exports --> Train["{train} offline learners"]
+    Train --> Policy["Versioned policy proposal"]
+    Policy --> Trinity
+    Hub --> Transport["iMessage / OpenClaw / Mail / LinkedIn send paths"]
 ```
 
-## Core Components
+## Product Responsibilities
 
-### 1. The "Brain" (Vector Store)
-*   **Technology:** LanceDB (Node.js)
-*   **Model:** `Xenova/all-MiniLM-L6-v2` (Local Embedding Model)
-*   **Storage:** `~/Library/Application Support/reply/lancedb`
-*   **Search Strategy:** **Hybrid Search** (Reciprocal Rank Fusion of Vector Similarity + BM25 Keyword Search).
+### `{reply}` responsibilities
 
-### 2. The Interaction Layer (Server)
-*   **Technology:** Node.js (Vanilla HTTP Server)
-*   **Key Files:**
-    *   `server.js`: API endpoints and static file serving.
-    *   `reply-engine.js`: Orchestrates the LLM prompt construction.
-    *   `knowledge.js`: Interface for querying the vector store.
-    *   `settings-store.js`: Local settings read/write + masking for UI.
+- channel ingestion and sync orchestration
+- unified message storage
+- conversation assembly and browsing
+- contact/profile storage and enrichment
+- operator workflow and native shell
+- outbound execution
+- human approval and transport safety rules
+- structured outcome submission back to `{trinity}`
 
-### 3. The Ingestion Layer
-*   **Design Pattern:** Delta-Sync & Streaming.
-*   **Key Files:**
-    *   `ingest.js`: Handles file and mbox ingestion. features async generators for memory-efficient processing.
-    *   `sync-notes.js`: Bridges Node.js and macOS Apple Notes via `osascript`.
+### `{trinity}` responsibilities
 
-### 4. The Intelligence Layer (LLM)
-*   **Technology:** Ollama
-*   **Integration:** `ollama` npm package.
-*   **Role:** Generates natural language responses based on retrieved context.
+- thread snapshot intake
+- candidate generation
+- refinement
+- evaluation and ranking
+- behavior policy application
+- cycle trace persistence
+- training-bundle export
 
-### 5. Background Services
-*   **Unified Background Worker (`background-worker.js`):** A lightweight service that handles message polling, vectorization, proactive drafting, and KYC extraction.
-*   **Worker Strategy**: To prevent system overload, the worker uses a single-threaded "Intelligence Pipeline." Heavy tasks (like LLM drafting) are only triggered for new data.
-*   **Load Management**:
-    *   **Low-Level Polling**: Direct SQLite queries on `chat.db` are sub-millisecond and near-zero CPU.
-    *   **CPU Throttling**: The poll interval is configurable via Settings (`worker.pollIntervalSeconds`) and is clamped to 10–3600 seconds.
-    *   **Scalability**: Mail sync is supported; additional channels can be added as separate workers or modular fetchers within the same throttled loop.
-*   **Email sync:** Runs through `sync-mail.js` (prefers Gmail OAuth → IMAP → Mail.app) and is triggered from the same unified background worker when mail is configured.
+### `{train}` responsibilities
 
-## Runtime & deployment (macOS)
+- bounded offline learning from exported bundles
+- policy proposal generation
+- incumbent-vs-candidate eval reporting
+- artifact-level promotion inputs only
 
-*   **Hub process:** `chat/server.js` serves the UI and API; it starts the **background worker** (`background-worker.js`) as a managed child. Recommended local run: foreground session mode via `make run` from the repo root so Apple-private sources remain readable (see [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md) for logs under `~/Library/Logs/reply/` and the `/tmp/reply-hub.log` symlink). On **SIGTERM/SIGINT**, the hub closes the HTTP server and **`shutdownAllAsync`** stops managed children (worker, sidecars) before exit.
-*   **Default HTTP port:** `45311` (`PORT` in `chat/.env`); if busy, the server tries the next port and logs it. **`/api/health`** includes **`httpPort`** and **`httpHost`** for the actual bind address. **`make status`** probes `PORT` from `chat/.env` through `PORT+15`; **`make doctor`** compares the installed plist script path to the current repo root.
-*   **iMessage ingestion:** Batch sync (`sync-imessage.js`) and worker polling read Apple’s SQLite **`chat.db`** (default `~/Library/Messages/chat.db`, override `REPLY_IMESSAGE_DB_PATH`). The DB is opened **lazily** with error handling so the hub stays up when the file is missing or blocked by TCC; iMessage features degrade until Full Disk Access (or a valid path) is fixed — details in [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md).
-*   **Local LLM:** Ollama (base URL from `OLLAMA_HOST` / Settings; default `http://127.0.0.1:11434`); default model tag **`gemma3:1b`** via `chat/ollama-model.js` and `REPLY_OLLAMA_MODEL`. Refine (`gemini-client.js`) uses the same resolver (local Ollama, not a cloud Gemini call in the current code path).
+## `{reply}` Runtime Topology
 
-## UI & Settings
-* **UI:** Static HTML + ES modules served by `chat/server.js`.
-  * Layout: `chat/index.html`
-  * Modules: `chat/js/*`
-  * Styling: `chat/css/*`
-* **Settings UX:** A full settings page in the main pane (same space as the Dashboard).
-  * General Settings: connectors (IMAP/Gmail) + global worker interval.
-  * Service Settings: per-service worker limits + per-channel UI appearance (emoji + bubble colors).
-* **Settings storage:** `~/Library/Application Support/reply/settings.json` (local, not encrypted).
-* **Email send path:** Composer → `/api/send-email` → Gmail API when connected; otherwise opens a Mail.app compose window (fallback does not auto-send).
+### Native shell
 
-## Design Principles
-1.  **Local-First:** No reliance on external APIs for core functionality. Optional connectors (e.g. Gmail OAuth) are opt-in.
-2.  **Dependency-Minimal:** Use standard libraries where possible.
-3.  **Future-Proof:** Data is stored in open formats (LanceDB, JSON) to ensure portability.
+- path: `app/reply-app`
+- role: operator workspace and runtime control surface
+- stack: SwiftUI / AppKit
+
+### Node hub
+
+- path: `chat/server.js`
+- role: HTTP API, static UI, route coordination, worker supervision
+
+### Product stores
+
+- `~/Library/Application Support/reply/chat.db`
+- `~/Library/Application Support/reply/contacts.db`
+- `~/Library/Application Support/reply/settings.json`
+- LanceDB under the same app-owned data root
+
+### Drafting bridge
+
+- path: `chat/brain-runtime.js`
+- role:
+  - build `ThreadSnapshot`
+  - call `{trinity}` CLI commands
+  - normalize result payloads
+  - record structured outcomes
+  - export traces
+
+## Conversation Model
+
+The product now treats conversations as message-backed first, contact-enriched second.
+
+That means:
+
+- dashboard source cards reflect ingestion totals
+- the sidebar conversation list is built from the unified message corpus
+- contact rows enrich labels, aliases, profile context, and visibility rules
+- missing `contacts.db` rows must not hide valid message-backed threads
+
+This prevents a small contact table from collapsing a much larger real inbox.
+
+## Thread Loading Model
+
+Thread loading is now intentionally bidirectional and UI-safe.
+
+Current behavior:
+
+- initial thread load requests:
+  - the oldest 20 messages
+  - the newest 20 messages
+- if the thread is short, those windows collapse naturally into one thread
+- if the thread is long, the middle remains as a gap that is filled progressively
+- additional history is loaded in the background while preserving scroll position instead of blocking the app
+
+Message rendering rules:
+
+- sent messages render on the right
+- received messages render on the left
+- the thread uses explicit row alignment plus channel-specific bubble styling
+- `is_from_me` is treated as authoritative where present; vector hints are fallback only
+
+## Drafting and Outcome Flow
+
+### Suggest path
+
+1. `{reply}` assembles a `ThreadSnapshot`
+2. `{reply}` calls `{trinity}` `reply-suggest`
+3. `{trinity}` returns a ranked draft set and accepted artifact provenance
+4. `{reply}` renders the selected draft and stores runtime context for later outcome submission
+
+### Outcome path
+
+1. operator sends, edits, ignores, or replaces a draft
+2. `{reply}` builds a bounded `DraftOutcomeEvent`
+3. `{reply}` submits it to `/api/trinity/outcome`
+4. `{trinity}` records outcome state and can export replay/training artifacts
+
+### Generic feedback path
+
+Freeform notes and operator logs stay separate from structured drafting outcomes:
+
+- `/api/trinity/outcome` for structured draft semantics
+- `/api/feedback` and `/api/feedback/log` for generic notes/logging
+
+## Failure Model
+
+Normal UI surfaces should never expose raw substrate internals.
+
+Runtime failures are classified into product-safe categories such as:
+
+- `local_sandbox_unavailable`
+- `trinity_runtime_unavailable`
+- `openclaw_unavailable`
+- `local_model_runtime_unavailable`
+
+Raw socket paths, Docker daemon errors, and Colima-specific substrate text remain log-only diagnostics.
+
+Native protected-route rule:
+
+- sync actions from `reply.app` must send the same approval-bearing protected request shape as the web UI
+- background sync routes should acknowledge `started`, not pretend the sync is already complete
+
+## Native App Direction
+
+Current product direction is stable:
+
+- `reply.app` is the primary operator shell
+- web-served UI remains as a local runtime surface, not the long-term product identity
+- core workflows should stay inside the native shell through app chrome, panels, and dialogs
+
+## Related Docs
+
+- [README.md](/Users/Shared/Projects/reply/README.md)
+- [LOCAL_MACHINE_DEPLOYMENT.md](/Users/Shared/Projects/reply/docs/LOCAL_MACHINE_DEPLOYMENT.md)
+- [TRINITY_INTEGRATION_SPINE.md](/Users/Shared/Projects/reply/docs/TRINITY_INTEGRATION_SPINE.md)
+- [POLICY_LOOP_REPO_BREAKDOWN.md](/Users/Shared/Projects/reply/docs/POLICY_LOOP_REPO_BREAKDOWN.md)

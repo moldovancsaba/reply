@@ -115,14 +115,27 @@ export async function fetchConversations(offset = 0, limit = 20, query = '', sor
  * @param {boolean} [showLoadingUi=true] — Set false when appending older messages (infinite scroll).
  * @returns {Promise<Array>} Array of message objects
  */
-export async function fetchMessages(handle, offset = 0, limit = 30, showLoadingUi = true) {
-    const res = await _request(`${API_BASE}/api/thread?handle=${encodeURIComponent(handle)}&offset=${offset}&limit=${limit}`, {
+export async function fetchMessages(handle, offset = 0, limit = 20, showLoadingUi = true, order = 'newest') {
+    const params = new URLSearchParams({
+        handle: String(handle || ''),
+        offset: String(offset),
+        limit: String(limit),
+        order: String(order || 'newest'),
+    });
+    const res = await _request(`${API_BASE}/api/thread?${params.toString()}`, {
         headers: buildSecurityHeaders(),
         _silent: true,
         _showLoading: false,
     });
     const data = await res.json();
-    return data.messages || [];
+    return {
+        messages: data.messages || [],
+        total: Number(data.total) || 0,
+        hasMore: Boolean(data.hasMore),
+        offset: Number(data.offset) || 0,
+        limit: Number(data.limit) || limit,
+        order: data.order || String(order || 'newest'),
+    };
 }
 
 /**
@@ -199,7 +212,7 @@ export async function fetchBridgeSummary(limit = 200) {
 export async function reportDraftReplacement({ handle, original_text, reason = 'suggest_replace' }) {
     if (!original_text || !String(original_text).trim()) return;
     try {
-        await fetch(`${API_BASE}/api/feedback`, {
+        await fetch(`${API_BASE}/api/feedback/log`, {
             method: 'POST',
             headers: buildSecurityHeaders(),
             body: JSON.stringify({
@@ -217,13 +230,10 @@ export async function reportDraftReplacement({ handle, original_text, reason = '
 
 export async function reportTrinityOutcome(outcome) {
     if (!outcome || !outcome.cycle_id) return { status: 'skipped' };
-    const res = await _request(`${API_BASE}/api/feedback`, {
+    const res = await _request(`${API_BASE}/api/trinity/outcome`, {
         method: 'POST',
         headers: buildSecurityHeaders(),
-        body: JSON.stringify({
-            type: 'trinity_draft_outcome',
-            outcome,
-        }),
+        body: JSON.stringify(outcome),
         _silent: true,
         _showLoading: false,
     });
@@ -388,7 +398,7 @@ export async function triggerSync(source) {
         body: JSON.stringify(withApproval({ source }, `ui-sync-${source}`)),
     });
     const data = await res.json();
-    UI.showToast(`${source.toUpperCase()} sync complete!`, 'success');
+    UI.showToast(`${source.toUpperCase()} sync started in background.`, 'success');
     return data;
 }
 

@@ -23,8 +23,8 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
 
 ### M3. Legacy Retirement
 
-- [ ] Remove direct brain ownership from legacy runtime paths after `{trinity}` cutover succeeds.
-- [ ] Move feedback semantics onto the `{trinity}`-owned contract once feedback memory is available upstream.
+- [x] Remove direct brain ownership from legacy runtime paths after `{trinity}` cutover succeeds.
+- [x] Move feedback semantics onto the `{trinity}`-owned contract once feedback memory is available upstream.
 
 ## Active Issue Queue
 
@@ -42,25 +42,34 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
 - `REPLY-004` Critical dependency audit under local intelligence stack
   `@xenova/transformers` resolved vulnerable ONNX and protobuf transitives. Fixed by updating `imapflow` and adding safe dependency overrides for `onnxruntime-web` and `protobufjs`, followed by a clean audit pass.
 
-### Open
+- `REPLY-POLICY-001` Export contract hardening
+  `{reply}` already emitted the right runtime concepts, but the product-side payload builders did not consistently stamp the canonical contract version or normalize outbound outcome payloads in one place. Fixed by hardening `chat/brain-runtime.js` so `ThreadSnapshot` includes `contract_version`, `DraftOutcomeEvent` payloads are normalized before crossing into `{trinity}`, and reply-side draft context preserves cycle trace and accepted artifact provenance from the ranked draft set.
+
+- `REPLY-POLICY-002` Active policy provenance emission
+  `{reply}` already received accepted artifact provenance from `{trinity}` inside ranked draft sets, but it did not surface that provenance consistently through the product-facing metadata path. Fixed by propagating `accepted_artifact_version` through `chat/brain-runtime.js` context metadata and shadow-comparison records, while preserving it in reply-side draft context for downstream send and feedback flows.
+
+- `REPLY-POLICY-003` Product gate separation
+  Learned behavior artifacts must not be able to smuggle transport, approval, or bridge semantics back through the product shell. Fixed by adding strict draft-context sanitization in `chat/brain-runtime.js`, applying it before channel send handlers in `chat/routes/messaging.js`, and ensuring send outcome reporting uses only bounded runtime facts while outbound gating, transport selection, and human-approval policy remain owned by `{reply}`.
+
+- `REPLY-POLICY-004` Training-bundle handoff shape
+  `{reply}` needed an explicit bounded export surface for operator/runtime facts instead of passing arbitrary draft context back upstream. Fixed by adding a single outcome-fact builder in `chat/brain-runtime.js`, using it from send-finalization paths in `chat/routes/messaging.js`, and covering that only deterministic cycle/thread/candidate/final-text/send-result/timing facts cross into `{trinity}` for later bundle export.
 
 - `REPLY-005` `{trinity}` shadow-mode execution
-  The adapter boundary exists, but `{reply}` still uses the legacy engine as the active implementation. Fixed by dual-running `{trinity}` in `trinity-shadow` mode, recording deterministic comparison artifacts while keeping legacy as the active suggestion.
+  The adapter boundary existed, but the repo still needed a proven developer-only shadow lane that dual-runs `{trinity}` while keeping legacy output active for comparison. Fixed by exercising `trinity-shadow` mode in `chat/brain-runtime.js`, persisting deterministic comparison artifacts, exposing them through the existing shadow-comparison API, and covering the end-to-end shadow execution path in tests.
+
+- `REPLY-007` Legacy brain retirement on live runtime paths
+  `{reply}` still retained `reply-engine.js` as a live fallback brain outside shadow comparison. Fixed by making `{trinity}` the only active drafting runtime in `chat/brain-runtime.js`, keeping legacy generation only for developer shadow comparison, and removing the client-side Trinity outcome flow from the generic feedback route.
+
+- `REPLY-008` Explicit Trinity outcome API surface
+  Trinity draft outcomes were still being tunneled through `/api/feedback` alongside unrelated freeform logs. Fixed by adding `/api/trinity/outcome` in `chat/server.js`, handling it with a dedicated route in `chat/routes/messaging.js`, and updating `chat/js/api.js` so product-side draft outcomes use the explicit contract path while `/api/feedback` remains for generic logs only.
+
+- `REPLY-009` Feedback-semantics migration onto Trinity-owned contracts
+  `{reply}` still mixed structured draft feedback with generic note logging at the endpoint layer. Fixed by keeping Trinity outcomes on `/api/trinity/outcome`, reserving `/api/feedback` and `/api/feedback/log` for unstructured operator notes only, and updating the draft-replacement client path to use the generic note route rather than the structured outcome contract.
+
+### Open
 
 - `REPLY-006` Dev-toolchain major-version upgrade lane
   `chat` is clean on tests, lint, audit, and the native package rebuild after safe dependency updates, but major upgrades remain for the ESLint toolchain. Those should be handled in a dedicated compatibility pass rather than mixed into runtime-boundary work.
-
-- `REPLY-POLICY-001` Export contract hardening
-  Keep `{reply}` as a deterministic exporter of runtime facts only: `ThreadSnapshot`, `DraftOutcomeEvent`, and versioned trace/export payloads.
-
-- `REPLY-POLICY-002` Active policy provenance emission
-  Ensure every exported cycle identifies which accepted `{trinity}` artifact version shaped live drafting behavior.
-
-- `REPLY-POLICY-003` Product gate separation
-  Keep transport, send gating, bridge/native truth, and human-approval policy in `{reply}` even after learned behavior artifacts are introduced upstream.
-
-- `REPLY-POLICY-004` Training-bundle handoff shape
-  Export only the bounded operator/runtime facts that `{train}` needs for offline policy learning, without turning `{reply}` into a schema dumping ground.
 
 - `REPLY-NATIVE-001` Native dashboard source cards
   Completed. The native dashboard now renders source-specific cards for `iMessage`, `WhatsApp`, `Mail`, `Apple Notes`, `Apple Calendar`, `Apple Contacts`, `KYC`, and deferred sources, with visible counts, sync state, and timestamps.
@@ -84,7 +93,10 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
   Surface rollout mode, recent event counts, and last inbound timestamps for bridge-managed channels.
 
 - `REPLY-NATIVE-008` Native conversation loading parity
-  Partially completed. The native thread now loads significantly deeper history, renders conversational ordering/alignment, and preserves attachment/file markers, but explicit on-demand “load older” controls are still outstanding.
+  Partially completed. The thread now loads significantly deeper history, renders conversational left/right alignment, preloads the oldest 20 and newest 20 messages, preserves attachment/file markers, and fills long-history gaps incrementally in the background. Further native-specific thread affordances may still be added later, but the underlying parity gap is much smaller now.
+
+- `REPLY-NATIVE-016` Native sync trigger contract mismatch
+  Fixed in the current working tree. The native shell had been calling protected `/api/sync-*` routes without the approval-bearing request shape used by the web app, causing broad trigger failures across multiple sources. The native client now sends JSON approval payloads plus the human-approval header so the trigger path can start background sync correctly.
 
 - `REPLY-NATIVE-009` Native composer/send parity
   Restore reliable channel-aware send behavior and native draft/composer ergonomics.

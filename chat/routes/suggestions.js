@@ -1,4 +1,8 @@
-const { generateReply, normalizeSuggestionResult } = require('../brain-runtime.js');
+const {
+  classifyRuntimeFailure,
+  generateReply,
+  normalizeSuggestionResult,
+} = require('../brain-runtime.js');
 const { getSnippets, getGoldenExamples, getHistory } = require("../vector-store.js");
 const contactStore = require("../contact-store.js");
 const messageStore = require("../message-store.js");
@@ -134,7 +138,13 @@ async function serveSuggest(req, res) {
     writeJson(res, 200, { suggestion, explanation });
   } catch (e) {
     console.error("Suggest error:", e);
-    writeJson(res, 500, { error: e.message || "Suggest failed" });
+    const failure = classifyRuntimeFailure(e, { fallbackMessage: "Suggest failed" });
+    writeJson(res, failure.status, {
+      error: failure.error,
+      code: failure.code,
+      hint: failure.hint,
+      retriable: failure.retriable,
+    });
   }
 }
 
@@ -152,6 +162,10 @@ async function serveSuggestReply(req, res) {
   const json = await readJsonBody(req);
   const message = json.message ?? json.text ?? "";
   const recipient = json.recipient || null;
+  if (!String(message || "").trim()) {
+    writeJson(res, 400, { error: "Missing message" });
+    return;
+  }
 
   // Retrieve relevant context from the vector store (Hybrid Search).
   const snippets = await getSnippets(message, 3);
@@ -160,30 +174,41 @@ async function serveSuggestReply(req, res) {
   const goldenExamples = await getGoldenExamples(5);
 
   // Generate a suggested reply using the local LLM.
-  const suggestionResult = normalizeSuggestionResult(
-    await generateReply(message, snippets, recipient, goldenExamples)
-  );
-  const suggestion = suggestionResult.suggestion;
+  try {
+    const suggestionResult = normalizeSuggestionResult(
+      await generateReply(message, snippets, recipient, goldenExamples)
+    );
+    const suggestion = suggestionResult.suggestion;
 
-  // Save as pending suggestion
-  const { addDocuments } = require("../vector-store.js");
-  addDocuments([{
-    id: `urn:reply:suggestion:${Date.now()}`,
-    text: suggestion,
-    source: "agent_suggestion",
-    path: `suggestion://${recipient}`,
-    is_annotated: false
-  }]).catch(e => console.error("Failed to save suggestion:", e.message));
+    // Save as pending suggestion
+    const { addDocuments } = require("../vector-store.js");
+    addDocuments([{
+      id: `urn:reply:suggestion:${Date.now()}`,
+      text: suggestion,
+      source: "agent_suggestion",
+      path: `suggestion://${recipient}`,
+      is_annotated: false
+    }]).catch(e => console.error("Failed to save suggestion:", e.message));
 
-  // Identify contact for UI display
-  const contact = contactStore.findContact(recipient);
+    // Identify contact for UI display
+    const contact = contactStore.findContact(recipient);
 
-  writeJson(res, 200, {
-    suggestion,
-    explanation: suggestionResult.explanation,
-    contact: contact ? { displayName: contact.displayName, profession: contact.profession } : null,
-    snippets: snippets.map(snippetShapeForSuggestReply)
-  });
+    writeJson(res, 200, {
+      suggestion,
+      explanation: suggestionResult.explanation,
+      contact: contact ? { displayName: contact.displayName, profession: contact.profession } : null,
+      snippets: snippets.map(snippetShapeForSuggestReply)
+    });
+  } catch (e) {
+    console.error("Suggest reply error:", e);
+    const failure = classifyRuntimeFailure(e, { fallbackMessage: "Suggest failed" });
+    writeJson(res, failure.status, {
+      error: failure.error,
+      code: failure.code,
+      hint: failure.hint,
+      retriable: failure.retriable,
+    });
+  }
 }
 
 module.exports = {

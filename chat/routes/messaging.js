@@ -7,12 +7,15 @@ const fs = require("fs");
 const path = require("path");
 const {
     allowExperimentalBrainModes,
+    buildDraftOutcomeFact,
+    classifyRuntimeFailure,
     exportDraftTrace,
     generateReply,
     normalizeSuggestionResult,
     readShadowComparisons,
     recordDraftOutcome,
     resolveReplyCompanyId,
+    sanitizeDraftContext,
 } = require("../brain-runtime");
 const {
     safeDateMs,
@@ -224,7 +227,7 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
                 const handle = String(row.handle || "").trim();
                 if (!handle) continue;
                 const contact = contactStore.findContact(handle);
-                if (!contactStore.isInboxEligible(contact)) continue;
+                if (!contactStore.isInboxEligible(contact || handle)) continue;
                 const key = contact?.id || handle;
                 const { latestTimestamp, firstTimestamp, previewDate } = resolveConversationTimestamps(row);
                 const path = String(row.path || "");
@@ -263,7 +266,7 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
             for (const [handle, stats] of statsIndex.entries()) {
                 if (!isConversationCandidate({ path: stats?.path, source: stats?.latestSource || stats?.source })) continue;
                 const contact = contactStore.findContact(handle);
-                if (!contactStore.isInboxEligible(contact)) continue;
+                if (!contactStore.isInboxEligible(contact || handle)) continue;
                 const key = contact?.id || handle;
 
                 if (!itemsMap.has(key)) {
@@ -402,8 +405,10 @@ async function serveConversations(req, res, url) {
 
 async function serveThread(req, res, url) {
     const handle = url.searchParams.get("handle");
-    const limit = parseInt(url.searchParams.get("limit")) || 30;
+    const limit = parseInt(url.searchParams.get("limit")) || 20;
     const offset = parseInt(url.searchParams.get("offset")) || 0;
+    const orderParam = String(url.searchParams.get("order") || "newest").trim().toLowerCase();
+    const storeOrder = orderParam === "oldest" ? "asc" : "desc";
 
     if (!handle) {
         writeJson(res, 400, { error: "Missing handle" });
@@ -430,7 +435,7 @@ async function serveThread(req, res, url) {
     try {
         const [historyBatches, storeResult] = await Promise.all([
             Promise.all(prefixes.map((p) => getHistory(p))),
-            messageStore.getMessagesForHandles(allHandles, { limit, offset })
+            messageStore.getMessagesForHandles(allHandles, { limit, offset, order: storeOrder })
         ]);
         const allDocs = historyBatches
             .flat()
@@ -479,13 +484,20 @@ async function serveThread(req, res, url) {
                     source: d.source || null,
                     path: d.path || null,
                 };
-            }).sort((a, b) => (b.date ? new Date(b.date) : 0) - (a.date ? new Date(a.date) : 0));
+            }).sort((a, b) => {
+                const at = a.date ? new Date(a.date).getTime() : 0;
+                const bt = b.date ? new Date(b.date).getTime() : 0;
+                return storeOrder === "asc" ? at - bt : bt - at;
+            });
         }
 
         writeJson(res, 200, {
             messages: allMessages,
             hasMore: Number(storeResult?.total || allMessages.length) > offset + allMessages.length,
-            total: Number(storeResult?.total || allMessages.length)
+            total: Number(storeResult?.total || allMessages.length),
+            order: orderParam === "oldest" ? "oldest" : "newest",
+            offset,
+            limit
         });
     } catch (err) {
         writeJson(res, 500, { error: err.message });
@@ -584,7 +596,14 @@ async function serveSuggest(req, res) {
             rankedDraftSet,
         });
     } catch (e) {
-        writeJson(res, 500, { error: e.message || "Suggest failed" });
+        console.error("[reply] suggest failed:", e);
+        const failure = classifyRuntimeFailure(e, { fallbackMessage: "Suggest failed" });
+        writeJson(res, failure.status, {
+            error: failure.error,
+            code: failure.code,
+            hint: failure.hint,
+            retriable: failure.retriable,
+        });
     }
 }
 
@@ -607,21 +626,25 @@ async function serveRefineReply(req, res) {
 async function serveFeedback(req, res) {
     try {
         const entry = await readJsonBody(req);
-        if (entry?.type === "trinity_draft_outcome" && entry?.outcome) {
-            const result = await recordDraftOutcome(entry.outcome);
-            if (entry?.outcome?.cycle_id) {
-                await exportDraftTrace(entry.outcome.cycle_id).catch(() => null);
-            }
-            writeJson(res, 200, result);
-            return;
-        }
-
         entry.timestamp = new Date().toISOString();
         const logPath = path.join(__dirname, "../../feedback.jsonl");
         fs.appendFileSync(logPath, JSON.stringify(entry) + "\n");
         writeJson(res, 200, { status: "ok" });
     } catch (e) {
         writeJson(res, 400, { error: "Failed to save feedback" });
+    }
+}
+
+async function serveTrinityOutcome(req, res, providedOutcome = null) {
+    try {
+        const outcome = providedOutcome || await readJsonBody(req);
+        const result = await recordDraftOutcome(outcome);
+        if (outcome?.cycle_id) {
+            await exportDraftTrace(outcome.cycle_id).catch(() => null);
+        }
+        writeJson(res, 200, result);
+    } catch (e) {
+        writeJson(res, 400, { error: "Failed to record Trinity outcome" });
     }
 }
 
@@ -651,7 +674,7 @@ async function serveSendMessage(req, res, channel) {
         const json = await readJsonBody(req);
         const handle = json.recipient || json.handle;
         const text = (json.text || "").toString();
-        const draftContext = json.draftContext || null;
+        const draftContext = sanitizeDraftContext(json.draftContext || null, { expectedChannel: channel });
 
         if (!handle || !text) {
             writeJson(res, 400, { error: "Missing handle or text" });
@@ -902,14 +925,19 @@ async function serveSendWhatsApp(req, res) {
 }
 
 async function finalizeDraftSendOutcome(draftContext, finalText, sendResult) {
-    if (!draftContext || !draftContext.cycleId) {
+    const sanitizedDraftContext = sanitizeDraftContext(draftContext || null, {
+        expectedChannel: draftContext?.channel || null,
+    });
+    if (!sanitizedDraftContext || !sanitizedDraftContext.cycleId) {
         return;
     }
-    const selectedCandidateId = String(draftContext.selectedCandidateId || "").trim() || null;
-    const selectedDraftText = String(draftContext.selectedDraftText || draftContext.originalDraftText || "").trim();
-    const cycleId = String(draftContext.cycleId || "").trim();
-    const threadRef = String(draftContext.threadRef || "").trim();
-    const channel = String(draftContext.channel || "").trim().toLowerCase();
+    const selectedCandidateId = String(sanitizedDraftContext.selectedCandidateId || "").trim() || null;
+    const selectedDraftText = String(
+        sanitizedDraftContext.selectedDraftText || sanitizedDraftContext.originalDraftText || ""
+    ).trim();
+    const cycleId = String(sanitizedDraftContext.cycleId || "").trim();
+    const threadRef = String(sanitizedDraftContext.threadRef || "").trim();
+    const channel = String(sanitizedDraftContext.channel || "").trim().toLowerCase();
     if (!cycleId || !threadRef || !channel) {
         return;
     }
@@ -923,21 +951,21 @@ async function finalizeDraftSendOutcome(draftContext, finalText, sendResult) {
         disposition = "EDITED_THEN_SENT";
     }
 
-    await recordDraftOutcome({
-        company_id: draftContext.companyId || resolveReplyCompanyId(),
-        cycle_id: cycleId,
-        thread_ref: threadRef,
-        channel,
+    const outcomeFact = buildDraftOutcomeFact(sanitizedDraftContext, {
+        company_id: sanitizedDraftContext.companyId || resolveReplyCompanyId(),
         candidate_id: selectedCandidateId,
         disposition,
         occurred_at: new Date().toISOString(),
         original_draft_text: selectedDraftText || null,
         final_text: normalizedFinal,
         edit_distance: editDistance,
-        latency_ms: Math.max(0, Date.now() - Number(draftContext.generatedAtMs || Date.now())),
         send_result: sendResult || "ok",
         notes: "reply_send",
-    });
+    }, { expectedChannel: channel });
+    if (!outcomeFact) {
+        return;
+    }
+    await recordDraftOutcome(outcomeFact);
     await exportDraftTrace(cycleId).catch(() => null);
 }
 
@@ -968,6 +996,7 @@ module.exports = {
     serveSuggest,
     serveRefineReply,
     serveFeedback,
+    serveTrinityOutcome,
     serveSendMessage,
     serveSendWhatsApp,
     serveTrinityShadowComparisons,

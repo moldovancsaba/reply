@@ -11,14 +11,14 @@ import { appendLinkedText, createPlatformIcon, resolvePlatformTarget } from './p
 import { formatPleasant } from './message-formatter.js';
 
 // State
-let messageOffset = 0;
-let hasMoreMessages = true;
-const MESSAGE_LIMIT = 30;
+const MESSAGE_LIMIT = 20;
+const THREAD_CACHE_VERSION = 'v5';
 const SEND_CAPABLE_CHANNELS = new Set(['imessage', 'whatsapp', 'email', 'linkedin']);
 const DRAFT_ONLY_CHANNELS = new Set(['telegram', 'discord']);
-const THREAD_CACHE_VERSION = 'v3';
 let activeThreadLoadToken = 0;
 let sendInFlight = false;
+let gapObserver = null;
+let threadWindowState = null;
 
 function threadCacheKey(handle) {
     return `reply.thread.${THREAD_CACHE_VERSION}.${encodeURIComponent(String(handle || ''))}`;
@@ -29,18 +29,19 @@ function readCachedThread(handle) {
         const raw = window.localStorage?.getItem(threadCacheKey(handle));
         if (!raw) return null;
         const parsed = JSON.parse(raw);
-        if (!parsed || !Array.isArray(parsed.messages)) return null;
+        if (!parsed) return null;
+        if (!Array.isArray(parsed.messages) && !Array.isArray(parsed.newestMessages)) return null;
         return parsed;
     } catch {
         return null;
     }
 }
 
-function writeCachedThread(handle, messages) {
+function writeCachedThread(handle, payload) {
     try {
-        if (!window.localStorage || !handle || !Array.isArray(messages)) return;
+        if (!window.localStorage || !handle || !payload || typeof payload !== 'object') return;
         window.localStorage.setItem(threadCacheKey(handle), JSON.stringify({
-            messages,
+            ...payload,
             cachedAt: new Date().toISOString(),
         }));
     } catch {
@@ -48,10 +49,34 @@ function writeCachedThread(handle, messages) {
     }
 }
 
+function compareMessagesAscending(a, b) {
+    const at = a?.date ? new Date(a.date).getTime() : 0;
+    const bt = b?.date ? new Date(b.date).getTime() : 0;
+    return at - bt;
+}
+
+function sortMessagesAscending(messages) {
+    return [...(Array.isArray(messages) ? messages : [])].sort(compareMessagesAscending);
+}
+
+function dedupeMessages(messages) {
+    const out = [];
+    const seen = new Set();
+    for (const msg of Array.isArray(messages) ? messages : []) {
+        const key = String(msg?.id || `${msg?.path || ''}|${msg?.date || ''}|${msg?.text || ''}`);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        out.push(msg);
+    }
+    return out;
+}
+
 function createMessageBubble(msg) {
+    const row = document.createElement('div');
     const bubble = document.createElement('div');
     const isFromMe = !!(msg.is_from_me ?? (msg.role === 'me'));
     const channelKey = normalizeChannelKey(msg.channel || msg.source || '');
+    row.className = `message-row ${isFromMe ? 'me' : 'contact'}`;
     bubble.className = `message-bubble ${isFromMe ? 'me' : 'contact'} channel-${channelKey}`;
 
     const text = document.createElement('div');
@@ -122,45 +147,154 @@ function createMessageBubble(msg) {
         bubble.appendChild(info);
     }
 
-    return bubble;
+    row.appendChild(bubble);
+    return row;
 }
 
-function renderMessagesPage(messagesEl, messages, append = false) {
-    if (!append) {
-        messagesEl.innerHTML = '';
+function loadedMessageCount(state) {
+    return dedupeMessages([...(state?.oldestMessages || []), ...(state?.newestMessages || [])]).length;
+}
+
+function remainingGapCount(state) {
+    return Math.max(0, Number(state?.total || 0) - loadedMessageCount(state));
+}
+
+function ensureGapObserver(messagesEl) {
+    if (gapObserver) gapObserver.disconnect();
+    gapObserver = new IntersectionObserver((entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting) return;
+        if (!threadWindowState?.hasGap || threadWindowState.loadingGap) return;
+        loadThreadGapChunk(messagesEl).catch((error) => {
+            console.error('Failed to load gap chunk:', error);
+        });
+    }, { root: messagesEl, rootMargin: '120px 0px 120px 0px', threshold: 0.1 });
+}
+
+function updateGapIndicator(messagesEl) {
+    const indicator = messagesEl.querySelector('.message-gap-indicator');
+    if (!indicator) return;
+    const remaining = remainingGapCount(threadWindowState);
+    if (remaining <= 0) {
+        indicator.remove();
+        threadWindowState.hasGap = false;
+        return;
+    }
+    indicator.querySelector('.message-gap-count').textContent = `${remaining} older/newer messages remain`;
+}
+
+function renderGapIndicator(messagesEl) {
+    if (!threadWindowState?.hasGap) return;
+    const remaining = remainingGapCount(threadWindowState);
+    if (remaining <= 0) return;
+
+    const gap = document.createElement('div');
+    gap.className = 'message-gap-indicator';
+    gap.innerHTML = `
+      <div class="message-gap-indicator__line"></div>
+      <div class="message-gap-indicator__body">
+        <span class="message-gap-count">${remaining} older/newer messages remain</span>
+        <button type="button" class="btn btn-secondary btn-sm message-gap-button">Load more history</button>
+      </div>
+      <div class="message-gap-indicator__line"></div>
+    `;
+    gap.querySelector('.message-gap-button')?.addEventListener('click', () => {
+        loadThreadGapChunk(messagesEl).catch((error) => {
+            console.error('Failed to load gap chunk:', error);
+        });
+    });
+    messagesEl.appendChild(gap);
+    ensureGapObserver(messagesEl);
+    gapObserver.observe(gap);
+}
+
+function renderThreadWindow(messagesEl, { scrollToBottom = false } = {}) {
+    messagesEl.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    const oldest = sortMessagesAscending(threadWindowState?.oldestMessages || []);
+    const newest = sortMessagesAscending(threadWindowState?.newestMessages || []);
+    const newestIds = new Set(newest.map((msg) => String(msg?.id || '')));
+
+    oldest.forEach((msg) => fragment.appendChild(createMessageBubble(msg)));
+    messagesEl.appendChild(fragment);
+
+    const distinctOldestCount = oldest.filter((msg) => !newestIds.has(String(msg?.id || ''))).length;
+    threadWindowState.oldestLoadedCount = distinctOldestCount;
+    threadWindowState.newestLoadedCount = newest.length;
+    threadWindowState.hasGap = remainingGapCount(threadWindowState) > 0;
+
+    renderGapIndicator(messagesEl);
+
+    const newestFragment = document.createDocumentFragment();
+    newest.forEach((msg) => {
+        const key = String(msg?.id || '');
+        if (key && oldest.some((oldMsg) => String(oldMsg?.id || '') === key)) return;
+        newestFragment.appendChild(createMessageBubble(msg));
+    });
+    messagesEl.appendChild(newestFragment);
+
+    if (scrollToBottom) {
+        requestAnimationFrame(() => {
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        });
+    }
+}
+
+async function loadThreadGapChunk(messagesEl) {
+    if (!threadWindowState?.handle || threadWindowState.loadingGap || !threadWindowState.hasGap) return;
+    const remaining = remainingGapCount(threadWindowState);
+    if (remaining <= 0) {
+        threadWindowState.hasGap = false;
+        updateGapIndicator(messagesEl);
+        return;
     }
 
-    const loadMoreWrap = messagesEl.querySelector('.load-more-messages-wrap');
-    if (loadMoreWrap) loadMoreWrap.remove();
+    threadWindowState.loadingGap = true;
+    try {
+        const gap = messagesEl.querySelector('.message-gap-indicator');
+        const gapTopBefore = gap?.getBoundingClientRect().top ?? 0;
+        const response = await fetchMessages(
+            threadWindowState.handle,
+            threadWindowState.oldestLoadedCount,
+            Math.min(MESSAGE_LIMIT, remaining),
+            false,
+            'oldest'
+        );
+        const chunk = dedupeMessages(sortMessagesAscending(response.messages || []));
+        if (!chunk.length) {
+            threadWindowState.hasGap = false;
+            updateGapIndicator(messagesEl);
+            return;
+        }
 
-    const orderedMessages = Array.isArray(messages) ? [...messages].reverse() : [];
+        const existingIds = new Set(dedupeMessages([
+            ...(threadWindowState.oldestMessages || []),
+            ...(threadWindowState.newestMessages || []),
+        ]).map((msg) => String(msg?.id || '')));
+        const newChunk = chunk.filter((msg) => !existingIds.has(String(msg?.id || '')));
+        threadWindowState.oldestMessages = dedupeMessages([
+            ...(threadWindowState.oldestMessages || []),
+            ...newChunk,
+        ]);
+        threadWindowState.oldestLoadedCount += newChunk.length;
 
-    if (append) {
-        const previousHeight = messagesEl.scrollHeight;
-        const fragment = document.createDocumentFragment();
-        orderedMessages.forEach((msg) => fragment.appendChild(createMessageBubble(msg)));
-        messagesEl.prepend(fragment);
-        const nextHeight = messagesEl.scrollHeight;
-        messagesEl.scrollTop += (nextHeight - previousHeight);
-    } else {
-        orderedMessages.forEach((msg) => messagesEl.appendChild(createMessageBubble(msg)));
-    }
+        if (newChunk.length) {
+            const fragment = document.createDocumentFragment();
+            newChunk.forEach((msg) => fragment.appendChild(createMessageBubble(msg)));
+            const indicator = messagesEl.querySelector('.message-gap-indicator');
+            const previousHeight = messagesEl.scrollHeight;
+            indicator?.before(fragment);
+            const nextHeight = messagesEl.scrollHeight;
+            if (indicator) {
+                const gapTopAfter = indicator.getBoundingClientRect().top;
+                messagesEl.scrollTop += (nextHeight - previousHeight) + (gapTopAfter - gapTopBefore);
+            }
+        }
 
-    hasMoreMessages = messages.length === MESSAGE_LIMIT;
-    if (hasMoreMessages) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn btn-secondary load-more-messages';
-        btn.textContent = 'Load older messages…';
-        btn.onclick = () => {
-            messageOffset += MESSAGE_LIMIT;
-            loadMessages(window.currentHandle, true);
-        };
-
-        const wrap = document.createElement('div');
-        wrap.className = 'load-more-messages-wrap';
-        wrap.appendChild(btn);
-        messagesEl.prepend(wrap);
+        threadWindowState.hasGap = remainingGapCount(threadWindowState) > 0;
+        updateGapIndicator(messagesEl);
+    } finally {
+        threadWindowState.loadingGap = false;
     }
 }
 
@@ -332,27 +466,67 @@ export async function loadMessages(handle, append = false) {
 
     try {
         if (!append) {
-            messageOffset = 0;
+            if (gapObserver) gapObserver.disconnect();
+            threadWindowState = null;
             const cached = readCachedThread(handle);
             if (cached?.messages?.length) {
-                renderMessagesPage(messagesEl, cached.messages, false);
+                threadWindowState = {
+                    handle,
+                    total: cached.total || cached.messages.length,
+                    oldestMessages: cached.oldestMessages || [],
+                    newestMessages: cached.newestMessages || cached.messages || [],
+                    oldestLoadedCount: (cached.oldestMessages || []).length,
+                    newestLoadedCount: (cached.newestMessages || cached.messages || []).length,
+                    hasGap: Boolean(cached.hasGap),
+                    loadingGap: false,
+                };
+                renderThreadWindow(messagesEl, { scrollToBottom: true });
             } else if (!messagesEl.children.length) {
                 messagesEl.innerHTML = '<div style="padding:40px; text-align:center; color:#888;">Loading messages...</div>';
             }
         }
 
-        const messages = await fetchMessages(handle, messageOffset, MESSAGE_LIMIT, false);
+        if (append && threadWindowState) {
+            await loadThreadGapChunk(messagesEl);
+            return;
+        }
+
+        const newestResponse = await fetchMessages(handle, 0, MESSAGE_LIMIT, false, 'newest');
         if (loadToken !== activeThreadLoadToken || window.currentHandle !== handle) return;
+        const total = newestResponse.total || newestResponse.messages.length;
+        let oldestResponse = { messages: [], total, hasMore: false };
+        if (total > MESSAGE_LIMIT) {
+            oldestResponse = await fetchMessages(handle, 0, MESSAGE_LIMIT, false, 'oldest');
+            if (loadToken !== activeThreadLoadToken || window.currentHandle !== handle) return;
+        }
 
-        renderMessagesPage(messagesEl, messages, append);
-        if (!append) writeCachedThread(handle, messages);
+        const oldestMessages = dedupeMessages(sortMessagesAscending(oldestResponse.messages || []));
+        const newestMessages = dedupeMessages(sortMessagesAscending(newestResponse.messages || []));
+        threadWindowState = {
+            handle,
+            total,
+            oldestMessages: total > MESSAGE_LIMIT ? oldestMessages : [],
+            newestMessages,
+            oldestLoadedCount: total > MESSAGE_LIMIT ? oldestMessages.length : 0,
+            newestLoadedCount: newestMessages.length,
+            hasGap: Math.max(0, total - dedupeMessages([...oldestMessages, ...newestMessages]).length) > 0,
+            loadingGap: false,
+        };
 
-        // Keep the view at the newest messages near the composer.
-        if (!append) messagesEl.scrollTop = messagesEl.scrollHeight;
+        renderThreadWindow(messagesEl, { scrollToBottom: true });
+        if (!append) {
+            writeCachedThread(handle, {
+                total,
+                oldestMessages: threadWindowState.oldestMessages,
+                newestMessages: threadWindowState.newestMessages,
+                hasGap: threadWindowState.hasGap,
+                messages: newestMessages,
+            });
+        }
 
         // Default channel: match the most recent incoming message when possible or context
         if (!append) {
-            const inferred = inferDefaultChannelFromMessages(messages);
+            const inferred = inferDefaultChannelFromMessages(newestMessages);
             if (inferred) {
                 window.currentChannel = inferred;
                 applyComposerChannel(inferred);
