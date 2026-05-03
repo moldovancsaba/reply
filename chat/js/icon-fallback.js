@@ -1,5 +1,6 @@
+import { ICON_SPRITE_ID, ICON_SPRITE_SVG } from './icon-sprite.js';
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
-const SPRITE_HREF = '/public/icons/material-sprite.svg';
 
 const ICON_ALIASES = new Map([
   ['check_circle', 'check-circle'],
@@ -44,16 +45,23 @@ function normalizeIconName(raw) {
   return candidate.replace(/_/g, '-').toLowerCase();
 }
 
+function ensureLocalIconSprite(rootDocument = document) {
+  if (!rootDocument || typeof rootDocument.getElementById !== 'function') return;
+  if (rootDocument.getElementById(ICON_SPRITE_ID)) return;
+  rootDocument.body?.insertAdjacentHTML('afterbegin', ICON_SPRITE_SVG);
+}
+
 function createSvgIcon(iconName) {
   const normalized = normalizeIconName(iconName);
   if (!normalized) return null;
+  ensureLocalIconSprite(document);
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('aria-hidden', 'true');
   svg.classList.add('reply-inline-icon');
   const use = document.createElementNS(SVG_NS, 'use');
-  use.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `${SPRITE_HREF}#${normalized}`);
-  use.setAttribute('href', `${SPRITE_HREF}#${normalized}`);
+  use.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#${normalized}`);
+  use.setAttribute('href', `#${normalized}`);
   svg.appendChild(use);
   return svg;
 }
@@ -116,10 +124,11 @@ export function setMaterialIcon(node, iconName, options = {}) {
 }
 
 export function applyIconFallback(root = document) {
+  ensureLocalIconSprite(root?.ownerDocument || document);
   resolveTargetNodes(root).forEach((node) => {
     const iconName = node.dataset.icon || node.dataset.iconName || node.textContent;
     mountIcon(node, iconName);
   });
 }
 
-export { createSvgIcon };
+export { createSvgIcon, ensureLocalIconSprite };
