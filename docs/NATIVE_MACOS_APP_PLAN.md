@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This plan defines how to turn `{reply}` from a browser-based local web app into a professional native macOS application while preserving the current product capabilities and removing the fragile process/watchdog model.
+This plan defines how to turn `{reply}` into a professional native macOS application with a pure SwiftUI/AppKit primary workspace while preserving the current product capabilities and removing the fragile process/watchdog model.
 
 It is based on:
 
@@ -15,10 +15,11 @@ It is based on:
 The important lessons are not the specific product features. They are the delivery patterns:
 
 1. Native macOS distribution should be owned by a Swift/SwiftUI app.
-2. External resources must be treated as first-class managed dependencies with explicit status, recovery, and user guidance.
-3. Mutable user data must live outside the app bundle so updates are safe.
-4. Build, install, signing, and release flow must be explicit and repeatable.
-5. Legacy runtime assumptions must be removed, not wrapped forever.
+2. The primary operator workspace should be pure SwiftUI/AppKit.
+3. External resources must be treated as first-class managed dependencies with explicit status, recovery, and user guidance.
+4. Mutable user data must live outside the app bundle so updates are safe.
+5. Build, install, signing, and release flow must be explicit and repeatable.
+6. Legacy runtime assumptions must be removed, not wrapped forever.
 
 The strongest reusable pattern is:
 
@@ -49,8 +50,8 @@ The correct plan is:
 
 1. build a native app host first
 2. move system integrations and lifecycle ownership into the app
-3. keep the existing {reply} core logic alive during transition
-4. progressively replace brittle web-runtime seams with native modules
+3. keep the existing {reply} core logic alive where still needed behind the native shell
+4. progressively remove brittle rendered seams from user-facing flows
 
 ## Non-Negotiable Architecture Decisions
 
@@ -98,8 +99,8 @@ For MVP delivery, `{reply}` should become a native macOS app before its Node cor
 
 That means:
 
-- the first native app release can host the existing {reply} core
-- the app embeds the web UI in `WKWebView` or incrementally replaces parts with native SwiftUI views
+- the native app owns the main workspace directly in SwiftUI/AppKit
+- local runtimes and service processes can stay behind the native shell where needed
 - Apple-private integrations and lifecycle move into native code first
 
 This is the fastest path to a stable, shippable app.
@@ -112,7 +113,7 @@ For `{reply}` resources:
 - Calendar: native `EventKit`
 - Notifications: native `UserNotifications`
 - Login/background helper: native `ServiceManagement`
-- Web shell: native `WKWebView`
+- Main workspace: native SwiftUI/AppKit
 
 But be honest about the limits:
 

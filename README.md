@@ -137,13 +137,14 @@ npm start
 
 ### Product Shape
 - **Product shell**: native macOS app at `app/reply-app`
-- **Runtime**: local Node hub + managed background worker
+- **Primary workspace UI**: pure SwiftUI/AppKit main interface
+- **Runtime**: local background services and local model/runtime processes
 - **Storage**: SQLite-backed local stores + LanceDB + app-owned data/log paths
-- **Current UI reality**: native product shell with a still-transitional embedded workspace UI while native surfaces continue replacing browser-era ones
 - **Theme contract**: shipped day/night surfaces must derive from semantic Constellation theme adapters rather than screen-local hardcoded chrome values
 
 ### Native App UI Standards
 - `{reply}` is a native app product, not a website.
+- The primary macOS workspace must be pure SwiftUI/AppKit.
 - Core flows must stay inside the app shell through app chrome, panels, and modals rather than page-style detours.
 - Every shipped visual item must be available locally and render offline from app-owned assets.
 - Product iconography must use the local shared icon system only.
