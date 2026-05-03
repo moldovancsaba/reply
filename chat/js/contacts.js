@@ -28,6 +28,12 @@ let contactObserver = null;
 let isLoadingContacts = false;
 const CONVERSATIONS_CACHE_VERSION = 'v4';
 
+function setPanelVisible(element, visible, displayValue = '') {
+    if (!element) return;
+    element.classList.toggle('u-display-none', !visible);
+    element.style.display = visible ? displayValue : 'none';
+}
+
 function conversationsCacheKey(query = conversationsQuery, sort = conversationsSort) {
     return `reply.conversations.${CONVERSATIONS_CACHE_VERSION}.${String(query || '').trim().toLowerCase()}::${normalizeConversationSort(sort)}`;
 }
@@ -395,9 +401,9 @@ export async function selectContact(handle) {
 
         // Show dashboard
         activeNameEl.textContent = APP_DISPLAY_NAME;
-        dashboardEl.style.display = 'grid';
-        messagesEl.style.display = 'none';
-        inputArea.style.display = 'none';
+        setPanelVisible(dashboardEl, true, '');
+        setPanelVisible(messagesEl, false);
+        setPanelVisible(inputArea, false);
         const statusSelect = document.getElementById('status-select');
         if (statusSelect) statusSelect.style.display = 'none';
         const suggestBtn = document.getElementById('btn-suggest');
@@ -427,9 +433,9 @@ export async function selectContact(handle) {
 
     // Show chat view
     window.currentHandle = handle;
-    dashboardEl.style.display = 'none';
-    messagesEl.style.display = 'flex';
-    inputArea.style.display = 'flex';
+    setPanelVisible(dashboardEl, false);
+    setPanelVisible(messagesEl, true, 'flex');
+    setPanelVisible(inputArea, true, 'flex');
     const statusSelect = document.getElementById('status-select');
     if (statusSelect) statusSelect.style.display = 'inline-block';
     const suggestBtn = document.getElementById('btn-suggest');

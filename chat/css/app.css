@@ -162,6 +162,11 @@
       }
 
       .shell-icon-button--strong {
+        color: var(--text-primary);
+      }
+
+      body.mode-dashboard #btn-dash,
+      body.mode-settings #btn-settings {
         color: var(--primary);
       }
 
