@@ -142,6 +142,14 @@ npm start
 - **Current UI reality**: native product shell with a still-transitional embedded workspace UI while native surfaces continue replacing browser-era ones
 - **Theme contract**: shipped day/night surfaces must derive from semantic Constellation theme adapters rather than screen-local hardcoded chrome values
 
+### Native App UI Standards
+- `{reply}` is a native app product, not a website.
+- Core flows must stay inside the app shell through app chrome, panels, and modals rather than page-style detours.
+- Every shipped visual item must be available locally and render offline from app-owned assets.
+- Product iconography must use the local shared icon system only.
+- Icon sizing and icon-button behavior must be consistent across shell chrome, settings, profile actions, dashboard surfaces, and status controls.
+- UI renderers must use explicit visual contracts rather than heuristic string parsing for markup versus asset content.
+
 ## Troubleshooting
 
 - **Hub exits or LaunchAgent loops; log shows `SQLITE_CANTOPEN`**: The hub is designed to stay up even when Apple’s `chat.db` is missing or blocked; see [docs/LOCAL_MACHINE_DEPLOYMENT.md](docs/LOCAL_MACHINE_DEPLOYMENT.md) (sections 4–5) for Full Disk Access, `REPLY_IMESSAGE_DB_PATH`, and what was fixed in `sync-imessage` / the worker.
