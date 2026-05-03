@@ -22,7 +22,18 @@ export const ICON_SPRITE_SVG = String.raw`<svg xmlns="http://www.w3.org/2000/svg
     <path d="m11.3 12-2.8-2.8M11.3 12l-2.8 2.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.8"/>
   </symbol>
   <symbol id="dashboard" viewBox="0 0 24 24">
-    <path d="M4 4.8h7.2V11H4zM12.8 4.8H20V8h-7.2zM12.8 9.8H20v9.4h-7.2zM4 12.8h7.2V20H4z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.8"/>
+    <path d="M4 4.8h7.4V11H4zM12.6 4.8H20v5.1h-7.4zM12.6 11.1H20V20h-7.4zM4 12.2h7.4V20H4z" fill="currentColor"/>
+  </symbol>
+  <symbol id="desktop-windows" viewBox="0 0 24 24">
+    <path d="M4.5 6.2A1.7 1.7 0 0 1 6.2 4.5h11.6a1.7 1.7 0 0 1 1.7 1.7v7.8a1.7 1.7 0 0 1-1.7 1.7H13l1.3 3.8h2" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/>
+    <path d="M9.7 15.7 8.4 19.5h7.2M4.5 12.7h15" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.8"/>
+  </symbol>
+  <symbol id="deployed-code" viewBox="0 0 24 24">
+    <path d="M8.2 8.5 4.8 12l3.4 3.5M15.8 8.5 19.2 12l-3.4 3.5M13.5 6.8 10.5 17.2" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/>
+  </symbol>
+  <symbol id="sync" viewBox="0 0 24 24">
+    <path d="M18.1 9.2V5.7h-3.5M5.9 14.8v3.5h3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/>
+    <path d="M17.6 8.1A7 7 0 0 0 6.7 6.6M6.4 15.9a7 7 0 0 0 10.9 1.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.8"/>
   </symbol>
   <symbol id="settings" viewBox="0 0 24 24">
     <path d="m12 3 1.2 2.6 2.8.4.7 2.7 2.4 1.5-1 2.7 1 2.7-2.4 1.5-.7 2.7-2.8.4L12 21l-1.2-2.6-2.8-.4-.7-2.7-2.4-1.5 1-2.7-1-2.7 2.4-1.5.7-2.7 2.8-.4L12 3Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.6"/>
@@ -41,6 +52,12 @@ export const ICON_SPRITE_SVG = String.raw`<svg xmlns="http://www.w3.org/2000/svg
     <circle cx="12" cy="8.2" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/>
     <path d="M5.5 19c1.4-2.7 3.7-4 6.5-4s5.1 1.3 6.5 4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.8"/>
   </symbol>
+  <symbol id="contacts" viewBox="0 0 24 24">
+    <circle cx="9" cy="9" r="2.7" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <path d="M4.8 17c.9-2 2.6-3 4.8-3 2.1 0 3.9 1 4.8 3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.8"/>
+    <circle cx="16.8" cy="9.8" r="2.1" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <path d="M15 15.6c1.4.2 2.5.9 3.4 2.1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.8"/>
+  </symbol>
   <symbol id="mic" viewBox="0 0 24 24">
     <rect x="9" y="4" width="6" height="10" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/>
     <path d="M6.5 11.8a5.5 5.5 0 1 0 11 0M12 17.3v3.2M9 20.5h6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.8"/>
@@ -54,6 +71,14 @@ export const ICON_SPRITE_SVG = String.raw`<svg xmlns="http://www.w3.org/2000/svg
   </symbol>
   <symbol id="lightbulb" viewBox="0 0 24 24">
     <path d="M9 18h6M9.7 21h4.6M8.4 14.6c-1.2-1-2-2.6-2-4.4a5.6 5.6 0 1 1 11.2 0c0 1.8-.8 3.4-2 4.4-.8.7-1.4 1.6-1.5 2.6h-3.2c-.1-1-.7-1.9-1.5-2.6Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/>
+  </symbol>
+  <symbol id="description" viewBox="0 0 24 24">
+    <path d="M7 4.8h7l3 3v11.4H7z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.8"/>
+    <path d="M14 4.8v3h3M9.5 11h5M9.5 14h5M9.5 17h3.6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.8"/>
+  </symbol>
+  <symbol id="neurology" viewBox="0 0 24 24">
+    <path d="M10.2 5.4c-2.4 0-4.4 2-4.4 4.4 0 1.3.6 2.5 1.5 3.3-.6.6-1 1.4-1 2.4 0 2 1.6 3.6 3.6 3.6h1.2v-3.4M13.8 5.4c2.4 0 4.4 2 4.4 4.4 0 1.3-.6 2.5-1.5 3.3.6.6 1 1.4 1 2.4 0 2-1.6 3.6-3.6 3.6h-1.2v-3.4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/>
+    <path d="M12 4.8v14.4M9.5 9.2H12M12 14.6h2.7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.8"/>
   </symbol>
   <symbol id="collapse-content" viewBox="0 0 24 24">
     <path d="M5 8.5h14M5 15.5h14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.8"/>
