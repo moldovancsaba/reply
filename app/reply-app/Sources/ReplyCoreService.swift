@@ -158,14 +158,7 @@ final class ReplyCoreService: ObservableObject {
         isLoadingMessages = true
         defer { isLoadingMessages = false }
         do {
-            var components = URLComponents(url: baseURL.appending(path: "api/thread"), resolvingAgainstBaseURL: false)
-            components?.queryItems = [
-                URLQueryItem(name: "handle", value: handle),
-                URLQueryItem(name: "offset", value: "0"),
-                URLQueryItem(name: "limit", value: "100"),
-            ]
-            guard let url = components?.url else { return }
-            let payload: ReplyThreadResponse = try await requestJSON(url: url)
+            let payload = try await loadThreadHistory(baseURL: baseURL, handle: handle)
             if selectedConversationHandle == handle {
                 messages = payload.messages
                 inferChannel(for: handle, messages: payload.messages)
@@ -330,6 +323,10 @@ final class ReplyCoreService: ObservableObject {
             runtimeState = .error("Could not find the bundled reply runtime binary.")
             return
         }
+        guard let helperBinary = protectedDataHelperURL() else {
+            runtimeState = .error("Could not find the bundled {reply} helper.")
+            return
+        }
 
         refreshAppleSourceMirrorsIfNeeded(force: true)
         stopLegacyRepoRuntime()
@@ -348,6 +345,7 @@ final class ReplyCoreService: ObservableObject {
         env["REPLY_ALLOW_LEGACY_BRAIN"] = "0"
         env["REPLY_ALLOW_EXPERIMENTAL_BRAIN_MODES"] = "0"
         env["REPLY_NATIVE_CLIENT_TOKEN"] = nativeClientToken
+        env["REPLY_HELPER_PATH"] = helperBinary.path
         env["TRINITY_RUNTIME_ROOT"] = runtimeRoot.appending(path: "trinity-runtime").path
         env["PORT"] = String(preferredPorts.first ?? 45431)
         if let mirrored = mirroredIMessageDbURL(), FileManager.default.fileExists(atPath: mirrored.path) {
@@ -721,6 +719,41 @@ final class ReplyCoreService: ObservableObject {
             throw NSError(domain: "ReplyCoreService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Health endpoint returned a non-200 response."])
         }
         return try JSONDecoder().decode(HealthPayload.self, from: data)
+    }
+
+    private func loadThreadHistory(baseURL: URL, handle: String) async throws -> ReplyThreadResponse {
+        let pageSize = 250
+        let maxMessages = 2000
+        var offset = 0
+        var aggregated: [ReplyMessage] = []
+        var total: Int?
+        var hasMore = false
+
+        while aggregated.count < maxMessages {
+            var components = URLComponents(url: baseURL.appending(path: "api/thread"), resolvingAgainstBaseURL: false)
+            components?.queryItems = [
+                URLQueryItem(name: "handle", value: handle),
+                URLQueryItem(name: "offset", value: "\(offset)"),
+                URLQueryItem(name: "limit", value: "\(pageSize)"),
+            ]
+            guard let url = components?.url else {
+                break
+            }
+            let page: ReplyThreadResponse = try await requestJSON(url: url)
+            if page.messages.isEmpty {
+                hasMore = false
+                break
+            }
+            aggregated.append(contentsOf: page.messages)
+            total = page.total ?? total
+            hasMore = page.hasMore ?? false
+            offset += page.messages.count
+            if page.messages.count < pageSize || !hasMore {
+                break
+            }
+        }
+
+        return ReplyThreadResponse(messages: aggregated, hasMore: hasMore, total: total)
     }
 
     private func requestJSON<T: Decodable>(url: URL, protectedRoute: Bool = false, allowRecovery: Bool = true) async throws -> T {

@@ -5,6 +5,7 @@ const fs = require('fs');
 const { withDefaults, readSettings } = require('./settings-store.js');
 const { resolveIMessageDbPath } = require('./imessage-db-path.js');
 const { ensureDataHome, dataPath } = require('./app-paths.js');
+const { execFile } = require('child_process');
 ensureDataHome();
 
 const DB_PATH = resolveIMessageDbPath();
@@ -115,123 +116,241 @@ function convertDate(value) {
     return new Date((seconds + UNIX_EPOCH_OFFSET) * 1000).toISOString();
 }
 
+function resolveReplyHelperPath() {
+    const explicit = String(process.env.REPLY_HELPER_PATH || "").trim();
+    if (explicit && fs.existsSync(explicit)) {
+        return explicit;
+    }
+    return null;
+}
+
+function execFileAsync(command, args, options = {}) {
+    return new Promise((resolve, reject) => {
+        execFile(command, args, options, (error, stdout, stderr) => {
+            if (error) {
+                error.stdout = stdout;
+                error.stderr = stderr;
+                return reject(error);
+            }
+            resolve({ stdout, stderr });
+        });
+    });
+}
+
+async function loadRowsViaHelper(afterRowId, limit) {
+    const helperPath = resolveReplyHelperPath();
+    if (!helperPath) {
+        return null;
+    }
+    const { stdout } = await execFileAsync(helperPath, [
+        "export-imessage",
+        "--db-path", DB_PATH,
+        "--after-rowid", String(afterRowId),
+        "--limit", String(limit)
+    ], {
+        maxBuffer: 10 * 1024 * 1024
+    });
+    return JSON.parse(stdout || "[]");
+}
+
+function normalizeAttachmentList(attachments) {
+    return (attachments || [])
+        .map((item) => {
+            const name = String(item?.name || item?.filename || "").trim();
+            const id = String(item?.guid || "").trim();
+            const mime = String(item?.mime || item?.mimeType || "").trim();
+            const size = Number(item?.size ?? item?.totalBytes);
+            const out = {};
+            if (name) out.name = name;
+            if (id) out.id = id;
+            if (mime) out.mime = mime;
+            if (Number.isFinite(size) && size >= 0) out.size = size;
+            return Object.keys(out).length ? out : null;
+        })
+        .filter(Boolean);
+}
+
+function summarizeAttachmentName(mime = "") {
+    const lower = String(mime || "").toLowerCase();
+    if (lower.startsWith("image/")) return "Image";
+    if (lower.startsWith("video/")) return "Video";
+    if (lower.startsWith("audio/")) return "Audio";
+    if (lower === "application/pdf") return "PDF";
+    return "File";
+}
+
+function buildMessageBody({ text, subject, attachments }) {
+    const normalizedAttachments = normalizeAttachmentList(attachments);
+    let body = String(text || "").trim();
+    if (!body) {
+        body = String(subject || "").trim();
+    }
+    if (!body && normalizedAttachments.length > 0) {
+        const first = normalizedAttachments[0]?.name || summarizeAttachmentName(normalizedAttachments[0]?.mime);
+        body = normalizedAttachments.length === 1 ? `[Attachment: ${first}]` : `[Attachments: ${normalizedAttachments.length}]`;
+    }
+    if (normalizedAttachments.length > 0) {
+        body += `\n\n[ATTACHMENTS: ${JSON.stringify(normalizedAttachments)}]`;
+    }
+    return body.trim();
+}
+
+function normalizeHelperRows(rows) {
+    return (rows || []).map((row) => ({
+        ROWID: Number(row.rowID || row.ROWID || 0),
+        text: String(row.text || "").trim(),
+        date: Number(row.date || 0),
+        is_from_me: row.isFromMe ? 1 : 0,
+        handle_id: row.handleID || row.handle_id || 'unknown',
+        service: row.service || 'iMessage'
+    })).filter((row) => row.ROWID > 0 && row.text);
+}
+
+function loadRowsViaSqlite(db, afterRowId, limit) {
+    const query = `
+        SELECT 
+            message.ROWID, 
+            message.text, 
+            message.subject,
+            message.date, 
+            message.is_from_me, 
+            message.service,
+            handle.id as handle_id,
+            message.cache_has_attachments
+        FROM message 
+        LEFT JOIN handle ON message.handle_id = handle.ROWID 
+        WHERE message.ROWID > ?
+        AND (
+            (message.text IS NOT NULL AND message.text != '') OR
+            (message.subject IS NOT NULL AND message.subject != '') OR
+            message.cache_has_attachments = 1
+        )
+        ORDER BY message.ROWID ASC
+        LIMIT ?
+    `;
+
+    return new Promise((resolve, reject) => {
+        db.all(query, [afterRowId, limit], (err, rows) => {
+            if (err) {
+                return reject(err);
+            }
+            const normalized = rows.map((row) => ({
+                ROWID: row.ROWID,
+                text: buildMessageBody({
+                    text: row.text,
+                    subject: row.subject,
+                    attachments: row.cache_has_attachments ? [{ mime: "", name: "Attachment" }] : []
+                }),
+                date: row.date,
+                is_from_me: row.is_from_me,
+                handle_id: row.handle_id || 'unknown',
+                service: row.service || 'iMessage'
+            })).filter((row) => row.text);
+            resolve(normalized);
+        });
+    });
+}
+
 /**
  * Sync messages in batches.
  * @returns {Promise<void>}
  */
 async function sync() {
-    const db = getIMessageReadonlyDb();
-    if (!db) {
-        const msg = fs.existsSync(DB_PATH)
-            ? `Cannot open iMessage database. Grant Full Disk Access to the protected-data helper used by {reply} or set REPLY_IMESSAGE_DB_PATH: ${DB_PATH}`
-            : `iMessage database not found: ${DB_PATH}`;
-        updateStatus(markAttempt({ state: "error", message: msg, lastSync: null }));
-        throw new Error(msg);
-    }
-
     updateStatus(markAttempt({ state: "running", message: "Opening message database..." }));
     const state = loadState();
     console.log(`Starting iMessage sync from ROWID > ${state.lastProcessedId}...`);
 
     const settings = withDefaults(readSettings());
     const batchLimit = Math.max(1, Math.min(Number(settings?.worker?.quantities?.imessage) || 1000, 5000));
+    let rows = null;
+    try {
+        const helperRows = await loadRowsViaHelper(state.lastProcessedId, batchLimit);
+        if (helperRows) {
+            rows = normalizeHelperRows(helperRows);
+        }
+    } catch (error) {
+        console.warn("[sync-imessage] helper export failed, falling back to sqlite3:", error.message);
+    }
 
-    const query = `
-        SELECT 
-            message.ROWID, 
-            message.text, 
-            message.date, 
-            message.is_from_me, 
-            handle.id as handle_id 
-        FROM message 
-        LEFT JOIN handle ON message.handle_id = handle.ROWID 
-        WHERE message.ROWID > ?
-        AND message.text IS NOT NULL 
-        AND message.text != ""
-        ORDER BY message.ROWID ASC
-        LIMIT ?
-    `;
+    if (!rows) {
+        const db = getIMessageReadonlyDb();
+        if (!db) {
+            const msg = fs.existsSync(DB_PATH)
+                ? `Cannot open iMessage database. Grant Full Disk Access to the protected-data helper used by {reply} or set REPLY_IMESSAGE_DB_PATH: ${DB_PATH}`
+                : `iMessage database not found: ${DB_PATH}`;
+            updateStatus(markAttempt({ state: "error", message: msg, lastSync: null }));
+            throw new Error(msg);
+        }
+        rows = await loadRowsViaSqlite(db, state.lastProcessedId, batchLimit);
+    }
 
-    return new Promise((resolve, reject) => {
-        db.all(query, [state.lastProcessedId, batchLimit], async (err, rows) => {
-            if (err) {
-                updateStatus({ state: "error", message: err.message });
-                return reject(err);
-            }
-            if (rows.length === 0) {
-                console.log("Everything is already in sync!");
+    if (rows.length === 0) {
+        console.log("Everything is already in sync!");
 
-                updateStatus({
-                    state: "idle",
-                    message: "iMessage is already in sync.",
-                    lastSync: nowIso(),
-                    lastSuccessfulSync: nowIso(),
-                    lastAttemptedSync: nowIso(),
-                    processed: readCurrentProcessed()
-                });
-                return resolve();
-            }
-
-            console.log(`Processing ${rows.length} new messages...`);
-            // Don't update 'processed' during intermediate steps - only at the end
-            updateStatus(markAttempt({ state: "running", progress: 20, message: `Processing ${rows.length} new messages...` }));
-
-            const docs = rows.map(row => ({
-                id: `msg-${row.ROWID}`,
-                text: `[${convertDate(row.date)}] ${row.is_from_me ? 'Me' : row.handle_id}: ${row.text}`,
-                source: 'iMessage',
-                path: `imessage://${row.handle_id || 'unknown'}`
-            }));
-
-            try {
-                updateStatus(markAttempt({ state: "running", progress: 50, message: `Vectorizing ${docs.length} messages...` }));
-
-                // 1. Vectorize for search
-                await addDocuments(docs);
-
-                // 2. Save to unified chat.db
-                const { saveMessages } = require('./message-store.js');
-                const unifiedDocs = rows.map(row => ({
-                    id: `msg-${row.ROWID}`,
-                    text: row.text,
-                    source: 'iMessage',
-                    handle: row.handle_id || 'unknown',
-                    timestamp: convertDate(row.date),
-                    path: `imessage://${row.handle_id || 'unknown'}`,
-                    is_from_me: row.is_from_me === 1
-                }));
-                await saveMessages(unifiedDocs);
-
-                // Update LastContacted and Inbound Verified in the store
-                const contactStore = require('./contact-store.js');
-                for (const row of rows) {
-                    const date = convertDate(row.date);
-                    contactStore.updateLastContacted(row.handle_id, date, { channel: 'imessage' });
-                    if (!row.is_from_me && row.handle_id) {
-                        await contactStore.markChannelInboundVerified(row.handle_id, row.handle_id, date);
-                    }
-                }
-
-                const maxId = rows[rows.length - 1].ROWID;
-                saveState(maxId);
-                console.log(`Sync complete. Last ID: ${maxId}`);
-
-                const nextProcessed = readCurrentProcessed() + docs.length;
-                updateStatus({
-                    state: "idle",
-                    message: `Synced ${docs.length} iMessage records.`,
-                    lastSync: nowIso(),
-                    lastSuccessfulSync: nowIso(),
-                    lastAttemptedSync: nowIso(),
-                    processed: nextProcessed
-                });
-                resolve();
-            } catch (syncErr) {
-                updateStatus(markAttempt({ state: "error", message: syncErr.message, lastSync: null }));
-                reject(syncErr);
-            }
+        updateStatus({
+            state: "idle",
+            message: "iMessage is already in sync.",
+            lastSync: nowIso(),
+            lastSuccessfulSync: nowIso(),
+            lastAttemptedSync: nowIso(),
+            processed: readCurrentProcessed()
         });
-    });
+        return;
+    }
+
+    console.log(`Processing ${rows.length} new messages...`);
+    updateStatus(markAttempt({ state: "running", progress: 20, message: `Processing ${rows.length} new messages...` }));
+
+    const docs = rows.map(row => ({
+        id: `msg-${row.ROWID}`,
+        text: `[${convertDate(row.date)}] ${row.is_from_me ? 'Me' : row.handle_id}: ${row.text}`,
+        source: 'iMessage',
+        path: `imessage://${row.handle_id || 'unknown'}`
+    }));
+
+    try {
+        updateStatus(markAttempt({ state: "running", progress: 50, message: `Vectorizing ${docs.length} messages...` }));
+
+        await addDocuments(docs);
+
+        const { saveMessages } = require('./message-store.js');
+        const unifiedDocs = rows.map(row => ({
+            id: `msg-${row.ROWID}`,
+            text: row.text,
+            source: 'iMessage',
+            handle: row.handle_id || 'unknown',
+            timestamp: convertDate(row.date),
+            path: `imessage://${row.handle_id || 'unknown'}`,
+            is_from_me: row.is_from_me === 1
+        }));
+        await saveMessages(unifiedDocs);
+
+        const contactStore = require('./contact-store.js');
+        for (const row of rows) {
+            const date = convertDate(row.date);
+            contactStore.updateLastContacted(row.handle_id, date, { channel: 'imessage' });
+            if (!row.is_from_me && row.handle_id) {
+                await contactStore.markChannelInboundVerified(row.handle_id, row.handle_id, date);
+            }
+        }
+
+        const maxId = rows[rows.length - 1].ROWID;
+        saveState(maxId);
+        console.log(`Sync complete. Last ID: ${maxId}`);
+
+        const nextProcessed = readCurrentProcessed() + docs.length;
+        updateStatus({
+            state: "idle",
+            message: `Synced ${docs.length} iMessage records.`,
+            lastSync: nowIso(),
+            lastSuccessfulSync: nowIso(),
+            lastAttemptedSync: nowIso(),
+            processed: nextProcessed
+        });
+    } catch (syncErr) {
+        updateStatus(markAttempt({ state: "error", message: syncErr.message, lastSync: null }));
+        throw syncErr;
+    }
 }
 
 if (require.main === module) {

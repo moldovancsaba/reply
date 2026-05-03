@@ -189,6 +189,7 @@ struct ReplyNativeWorkspaceView: View {
                 }
 
                 DashboardMetricGrid(service: service)
+                DashboardSourceSection(service: service)
 
                 if !service.launchErrorMessage.isEmpty {
                     Text(service.launchErrorMessage)
@@ -737,10 +738,27 @@ private struct MessageBubble: View {
             if message.authoredByMe { Spacer(minLength: 60) }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(messageText)
-                    .font(.body)
-                    .foregroundStyle(message.authoredByMe ? ReplyConstellationPalette.chrome : ReplyConstellationPalette.textPrimary)
-                    .textSelection(.enabled)
+                if !messageBody.isEmpty {
+                    Text(messageBody)
+                        .font(.body)
+                        .foregroundStyle(message.authoredByMe ? ReplyConstellationPalette.chrome : ReplyConstellationPalette.textPrimary)
+                        .textSelection(.enabled)
+                }
+                if !attachments.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(attachments.enumerated()), id: \.offset) { _, attachment in
+                            HStack(spacing: 8) {
+                                Image(systemName: attachment.symbol)
+                                    .font(.system(size: 13, weight: .semibold))
+                                Text(attachment.label)
+                                    .font(.subheadline.weight(.medium))
+                                    .lineLimit(2)
+                            }
+                            .foregroundStyle(message.authoredByMe ? ReplyConstellationPalette.chrome : ReplyConstellationPalette.textPrimary)
+                        }
+                    }
+                    .padding(.top, messageBody.isEmpty ? 0 : 2)
+                }
                 HStack(spacing: 8) {
                     Text(message.date ?? "")
                     if let channel = message.channel, !channel.isEmpty {
@@ -767,9 +785,20 @@ private struct MessageBubble: View {
         .frame(maxWidth: .infinity, alignment: message.authoredByMe ? .trailing : .leading)
     }
 
-    private var messageText: String {
-        let trimmed = (message.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "Empty message" : trimmed
+    private var parsedContent: ParsedMessageContent {
+        ParsedMessageContent(text: message.text)
+    }
+
+    private var messageBody: String {
+        let trimmed = parsedContent.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty && attachments.isEmpty {
+            return "Empty message"
+        }
+        return trimmed
+    }
+
+    private var attachments: [ParsedAttachment] {
+        parsedContent.attachments
     }
 }
 
@@ -777,9 +806,9 @@ private struct DashboardMetricGrid: View {
     @ObservedObject var service: ReplyCoreService
 
     private let columns = [
-        GridItem(.flexible(minimum: 200), spacing: 16),
-        GridItem(.flexible(minimum: 200), spacing: 16),
-        GridItem(.flexible(minimum: 200), spacing: 16)
+        GridItem(.flexible(minimum: 180), spacing: 16),
+        GridItem(.flexible(minimum: 180), spacing: 16),
+        GridItem(.flexible(minimum: 180), spacing: 16)
     ]
 
     var body: some View {
@@ -810,10 +839,18 @@ private struct DashboardMetricGrid: View {
                 subtitle: "Resolved threads"
             )
             MetricCard(
-                title: "Runtime host",
-                value: service.health?.httpHost ?? "127.0.0.1",
-                subtitle: service.health?.httpPort.map { "Port \($0)" } ?? "Waiting for runtime"
+                title: "Knowledge Inputs",
+                value: "\(knowledgeInputCount)",
+                subtitle: "Notes, calendar, contacts, KYC"
             )
+        }
+    }
+
+    private var knowledgeInputCount: Int {
+        let keys = ["notes", "calendar", "contacts", "kyc"]
+        return keys.reduce(0) { partial, key in
+            let channel = service.health?.channels?[key]
+            return partial + max(channel?.total ?? 0, channel?.processed ?? 0)
         }
     }
 }
@@ -835,6 +872,225 @@ private struct MetricCard: View {
                 .foregroundStyle(ReplyConstellationPalette.textSecondary)
         }
         .replyConstellationCard()
+    }
+}
+
+private struct DashboardSourceSection: View {
+    @ObservedObject var service: ReplyCoreService
+
+    private let columns = [
+        GridItem(.flexible(minimum: 240), spacing: 16),
+        GridItem(.flexible(minimum: 240), spacing: 16)
+    ]
+
+    private let conversationKeys = ["imessage", "whatsapp", "mail"]
+    private let knowledgeKeys = ["notes", "calendar", "contacts", "kyc"]
+    private let deferredKeys = ["linkedin_messages", "linkedin_posts"]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            sourceGroup("Conversation Sources", keys: conversationKeys)
+            sourceGroup("Knowledge Inputs", keys: knowledgeKeys)
+            sourceGroup("Deferred Connectors", keys: deferredKeys)
+        }
+    }
+
+    @ViewBuilder
+    private func sourceGroup(_ title: String, keys: [String]) -> some View {
+        let cards = keys.compactMap { key -> (String, ChannelHealth)? in
+            guard let health = service.health?.channels?[key] else { return nil }
+            return (key, health)
+        }
+        if !cards.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(title)
+                    .font(.headline)
+                LazyVGrid(columns: columns, spacing: 16) {
+                    ForEach(cards, id: \.0) { pair in
+                        let key = pair.0
+                        let health = pair.1
+                        DashboardSourceCard(
+                            title: sourceTitle(for: key),
+                            subtitle: health.message ?? "No status message yet.",
+                            count: max(health.total ?? 0, health.processed ?? 0),
+                            state: health.state ?? "unknown",
+                            lastSuccessfulSync: health.lastSuccessfulSync ?? health.lastSync,
+                            lastAttemptedSync: health.lastAttemptedSync,
+                            syncTitle: syncTitle(for: key),
+                            syncInFlight: syncInFlight(for: key),
+                            syncAction: syncChannel(for: key).map { channel in
+                                { Task { await service.triggerSync(channel) } }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private func sourceTitle(for key: String) -> String {
+        switch key {
+        case "imessage": return "iMessage"
+        case "whatsapp": return "WhatsApp"
+        case "mail": return "Mail"
+        case "notes": return "Apple Notes"
+        case "calendar": return "Apple Calendar"
+        case "contacts": return "Apple Contacts"
+        case "kyc": return "Contact Intelligence"
+        case "linkedin_messages": return "LinkedIn Messages"
+        case "linkedin_posts": return "LinkedIn Posts"
+        default: return key.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
+    private func syncTitle(for key: String) -> String {
+        switch key {
+        case "kyc": return "Refresh"
+        default: return "Sync now"
+        }
+    }
+
+    private func syncChannel(for key: String) -> SyncChannel? {
+        switch key {
+        case "imessage": return .imessage
+        case "whatsapp": return .whatsapp
+        case "mail": return .mail
+        case "notes": return .notes
+        case "calendar": return .calendar
+        case "contacts": return .contacts
+        case "kyc": return .kyc
+        default: return nil
+        }
+    }
+
+    private func syncInFlight(for key: String) -> Bool {
+        guard let channel = syncChannel(for: key) else { return false }
+        return service.syncInFlight.contains(channel)
+    }
+}
+
+private struct DashboardSourceCard: View {
+    let title: String
+    let subtitle: String
+    let count: Int
+    let state: String
+    let lastSuccessfulSync: String?
+    let lastAttemptedSync: String?
+    let syncTitle: String
+    let syncInFlight: Bool
+    let syncAction: (() -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title.uppercased())
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ReplyConstellationPalette.textSecondary)
+                    Text("\(count)")
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundStyle(ReplyConstellationPalette.textPrimary)
+                }
+                Spacer()
+                NativeStatusPill(text: state, tint: toneColor)
+            }
+
+            Text(subtitle)
+                .foregroundStyle(ReplyConstellationPalette.textSecondary)
+                .lineLimit(3)
+
+            VStack(alignment: .leading, spacing: 4) {
+                if let lastSuccessfulSync, !lastSuccessfulSync.isEmpty {
+                    Text("Last successful sync: \(lastSuccessfulSync)")
+                }
+                if let lastAttemptedSync, !lastAttemptedSync.isEmpty {
+                    Text("Last attempted sync: \(lastAttemptedSync)")
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(ReplyConstellationPalette.textSecondary)
+
+            if let syncAction {
+                Button(syncInFlight ? "Working..." : syncTitle, action: syncAction)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(syncInFlight)
+            }
+        }
+        .replyConstellationCard()
+    }
+
+    private var toneColor: Color {
+        switch state.lowercased() {
+        case "ok", "online", "idle", "running", "healthy":
+            return ReplyConstellationPalette.success
+        case "warning", "warn", "starting", "degraded":
+            return ReplyConstellationPalette.warning
+        case "error", "blocked", "offline", "repair_required":
+            return ReplyConstellationPalette.danger
+        default:
+            return ReplyConstellationPalette.textSecondary
+        }
+    }
+}
+
+private struct ParsedAttachment: Hashable {
+    let label: String
+    let symbol: String
+}
+
+private struct ParsedMessageContent {
+    let body: String
+    let attachments: [ParsedAttachment]
+
+    init(text: String?) {
+        let raw = text ?? ""
+        let pattern = #"\[ATTACHMENTS:\s*(\[.*\])\]"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]),
+              let match = regex.firstMatch(in: raw, range: NSRange(raw.startIndex..., in: raw)),
+              let jsonRange = Range(match.range(at: 1), in: raw)
+        else {
+            body = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            attachments = []
+            return
+        }
+
+        let json = String(raw[jsonRange])
+        let stripped = regex.stringByReplacingMatches(in: raw, range: NSRange(raw.startIndex..., in: raw), withTemplate: "")
+        body = stripped.trimmingCharacters(in: .whitespacesAndNewlines)
+        attachments = Self.parseAttachments(json)
+    }
+
+    private static func parseAttachments(_ json: String) -> [ParsedAttachment] {
+        guard let data = json.data(using: .utf8),
+              let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        else {
+            return []
+        }
+        return array.map { item in
+            let name = (item["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let mime = (item["mime"] as? String)?.lowercased() ?? ""
+            let fallback = attachmentFallbackName(for: mime)
+            return ParsedAttachment(
+                label: (name?.isEmpty == false ? name! : fallback),
+                symbol: attachmentSymbol(for: mime)
+            )
+        }
+    }
+
+    private static func attachmentSymbol(for mime: String) -> String {
+        if mime.hasPrefix("image/") { return "photo" }
+        if mime.hasPrefix("video/") { return "video" }
+        if mime.hasPrefix("audio/") { return "waveform" }
+        if mime == "application/pdf" { return "doc.richtext" }
+        return "paperclip"
+    }
+
+    private static func attachmentFallbackName(for mime: String) -> String {
+        if mime.hasPrefix("image/") { return "Image" }
+        if mime.hasPrefix("video/") { return "Video" }
+        if mime.hasPrefix("audio/") { return "Audio" }
+        if mime == "application/pdf" { return "PDF" }
+        return "Attachment"
     }
 }
 

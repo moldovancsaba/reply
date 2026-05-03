@@ -51,16 +51,16 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
   `chat` is clean on tests, lint, audit, and the native package rebuild after safe dependency updates, but major upgrades remain for the ESLint toolchain. Those should be handled in a dedicated compatibility pass rather than mixed into runtime-boundary work.
 
 - `REPLY-NATIVE-001` Native dashboard source cards
-  Rebuild the lost dashboard cards in the native app for `iMessage`, `WhatsApp`, `Mail`, `Apple Notes`, `Apple Calendar`, `Apple Contacts`, and `KYC`, with visible counts, sync state, and timestamps.
+  Completed. The native dashboard now renders source-specific cards for `iMessage`, `WhatsApp`, `Mail`, `Apple Notes`, `Apple Calendar`, `Apple Contacts`, `KYC`, and deferred sources, with visible counts, sync state, and timestamps.
 
 - `REPLY-NATIVE-002` Native sync action row
-  Restore native per-source sync triggers so the operator can run connector refreshes without leaving the native app.
+  Completed. Native per-source sync actions are restored on the dashboard cards so the operator can refresh supported connectors without leaving the app.
 
 - `REPLY-NATIVE-003` Native source count and timestamp formatting
-  Normalize source counters and timestamps into one reliable native presentation contract.
+  Completed. Native source cards now use one count/timestamp presentation pattern for state, last successful sync, and last attempted sync.
 
 - `REPLY-NATIVE-004` Native source grouping model
-  Group sources in the native dashboard by `Conversations`, `Knowledge Inputs`, and `Deferred / Bridge Channels` so notes and document-like sources stop appearing as conversation equivalents.
+  Completed. The native dashboard now groups sources into `Conversation Sources`, `Knowledge Inputs`, and `Deferred Connectors`.
 
 - `REPLY-NATIVE-005` Remove false conversation semantics from non-conversation sources in the native UI
   Enforce the product rule that `Apple Notes`, `Apple Calendar`, `Apple Contacts`, and `LinkedIn posts` are inputs, not conversations.
@@ -72,7 +72,7 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
   Surface rollout mode, recent event counts, and last inbound timestamps for bridge-managed channels.
 
 - `REPLY-NATIVE-008` Native conversation loading parity
-  Complete the conversation/thread parity pass after the SwiftUI workspace cutover.
+  Partially completed. The native thread now loads significantly deeper history, renders conversational ordering/alignment, and preserves attachment/file markers, but explicit on-demand “load older” controls are still outstanding.
 
 - `REPLY-NATIVE-009` Native composer/send parity
   Restore reliable channel-aware send behavior and native draft/composer ergonomics.
