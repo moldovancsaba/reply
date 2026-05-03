@@ -237,6 +237,17 @@ struct ReplyNativeWorkspaceView: View {
                         .lineLimit(1)
                 }
                 Spacer()
+                Button {
+                    Task { await service.refreshCurrentConversation() }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.clockwise")
+                        Text(service.conversationRefreshInFlight ? "Refreshing..." : "Refresh")
+                    }
+                }
+                .buttonStyle(.borderless)
+                .disabled(service.conversationRefreshInFlight)
+
                 Picker("Channel", selection: $service.selectedChannel) {
                     ForEach(ReplyMessageChannel.allCases) { channel in
                         Text(channel.label).tag(channel)
@@ -310,16 +321,22 @@ struct ReplyNativeWorkspaceView: View {
                         ProgressView()
                             .controlSize(.small)
                     }
+                    Button(service.isSavingProfile ? "Saving..." : "Save") {
+                        Task { await service.saveSelectedProfile() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(service.selectedConversationHandle == nil || service.isSavingProfile)
                 }
 
                 if let profile = service.selectedProfile {
                     VStack(alignment: .leading, spacing: 14) {
-                        profileField("Display name", value: selectedConversationTitle)
-                        profileField("Handle", value: profile.handle)
-                        profileField("Profession", value: profile.profession)
-                        profileField("Company", value: profile.company)
-                        profileField("Relationship", value: profile.relationship)
-                        profileField("LinkedIn URL", value: profile.linkedinUrl)
+                        profileReadOnlyField("Handle", value: profile.handle)
+                        editableProfileField("Display name", text: $service.profileDraft.displayName)
+                        editableProfileField("Profession", text: $service.profileDraft.profession)
+                        editableProfileField("Company", text: $service.profileDraft.company)
+                        editableProfileField("Relationship", text: $service.profileDraft.relationship)
+                        editableProfileField("LinkedIn URL", text: $service.profileDraft.linkedinURL)
+                        editableProfileTextArea("Intro", text: $service.profileDraft.intro)
                     }
                     .replyConstellationCard()
 
@@ -356,10 +373,23 @@ struct ReplyNativeWorkspaceView: View {
                         .replyConstellationCard()
                     }
                 } else {
-                    emptyStatePanel(
-                        title: "No profile selected",
-                        detail: "Pick a conversation to load its contact profile."
-                    )
+                    VStack(alignment: .leading, spacing: 12) {
+                        if !service.profileErrorMessage.isEmpty {
+                            Text(service.profileErrorMessage)
+                                .font(.callout)
+                                .foregroundStyle(ReplyConstellationPalette.danger)
+                        }
+                        emptyStatePanel(
+                            title: "No profile selected",
+                            detail: "Pick a conversation to load its contact profile."
+                        )
+                    }
+                }
+
+                if !service.profileSaveErrorMessage.isEmpty {
+                    Text(service.profileSaveErrorMessage)
+                        .font(.caption)
+                        .foregroundStyle(ReplyConstellationPalette.danger)
                 }
             }
             .padding(20)
@@ -481,7 +511,7 @@ struct ReplyNativeWorkspaceView: View {
         .background(ReplyConstellationPalette.canvas)
     }
 
-    private func profileField(_ title: String, value: String?) -> some View {
+    private func profileReadOnlyField(_ title: String, value: String?) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title.uppercased())
                 .font(.caption.weight(.semibold))
@@ -489,6 +519,35 @@ struct ReplyNativeWorkspaceView: View {
             Text(cleanProfileValue(value))
                 .font(.body)
                 .foregroundStyle(ReplyConstellationPalette.textPrimary)
+        }
+    }
+
+    private func editableProfileField(_ title: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title.uppercased())
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(ReplyConstellationPalette.textSecondary)
+            TextField(title, text: text)
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private func editableProfileTextArea(_ title: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title.uppercased())
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(ReplyConstellationPalette.textSecondary)
+            TextEditor(text: text)
+                .frame(minHeight: 88, maxHeight: 140)
+                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(ReplyConstellationPalette.elevated.opacity(0.7))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(ReplyConstellationPalette.border, lineWidth: 1)
+                )
         }
     }
 

@@ -97,6 +97,13 @@ function hasValidOperatorToken(req, policy) {
   return timingSafeMatch(expected, cookieToken);
 }
 
+function hasValidNativeClientToken(req, env = process.env) {
+  const expected = String(env.REPLY_NATIVE_CLIENT_TOKEN || "").trim();
+  if (!expected) return false;
+  const headerToken = String(req?.headers?.["x-reply-native-token"] || "").trim();
+  return timingSafeMatch(expected, headerToken);
+}
+
 function isHumanApproved(req, payload) {
   const headerValue = String(req?.headers?.["x-reply-human-approval"] || "").trim().toLowerCase();
   if (headerValue === "confirmed" || headerValue === "true" || headerValue === "1") return true;
@@ -127,6 +134,7 @@ module.exports = {
   isLoopbackIp,
   isLocalRequest,
   hasValidOperatorToken,
+  hasValidNativeClientToken,
   isHumanApproved,
   appendSecurityAudit,
 };
