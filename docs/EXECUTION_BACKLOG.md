@@ -50,6 +50,18 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
 - `REPLY-006` Dev-toolchain major-version upgrade lane
   `chat` is clean on tests, lint, audit, and the native package rebuild after safe dependency updates, but major upgrades remain for the ESLint toolchain. Those should be handled in a dedicated compatibility pass rather than mixed into runtime-boundary work.
 
+- `REPLY-POLICY-001` Export contract hardening
+  Keep `{reply}` as a deterministic exporter of runtime facts only: `ThreadSnapshot`, `DraftOutcomeEvent`, and versioned trace/export payloads.
+
+- `REPLY-POLICY-002` Active policy provenance emission
+  Ensure every exported cycle identifies which accepted `{trinity}` artifact version shaped live drafting behavior.
+
+- `REPLY-POLICY-003` Product gate separation
+  Keep transport, send gating, bridge/native truth, and human-approval policy in `{reply}` even after learned behavior artifacts are introduced upstream.
+
+- `REPLY-POLICY-004` Training-bundle handoff shape
+  Export only the bounded operator/runtime facts that `{train}` needs for offline policy learning, without turning `{reply}` into a schema dumping ground.
+
 - `REPLY-NATIVE-001` Native dashboard source cards
   Completed. The native dashboard now renders source-specific cards for `iMessage`, `WhatsApp`, `Mail`, `Apple Notes`, `Apple Calendar`, `Apple Contacts`, `KYC`, and deferred sources, with visible counts, sync state, and timestamps.
 
