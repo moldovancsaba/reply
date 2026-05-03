@@ -672,11 +672,29 @@ private struct ConversationRow: View {
 private struct ReplyMessageTimeline: View {
     let messages: [ReplyMessage]
 
+    private var orderedMessages: [ReplyMessage] {
+        messages.sorted { lhs, rhs in
+            let leftDate = parsedDate(lhs.date)
+            let rightDate = parsedDate(rhs.date)
+            switch (leftDate, rightDate) {
+            case let (l?, r?):
+                if l != r { return l < r }
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            case (nil, nil):
+                break
+            }
+            return lhs.id < rhs.id
+        }
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
-                    ForEach(messages) { message in
+                    ForEach(orderedMessages) { message in
                         MessageBubble(message: message)
                             .id(message.id)
                     }
@@ -693,12 +711,21 @@ private struct ReplyMessageTimeline: View {
     }
 
     private func scrollToBottom(with proxy: ScrollViewProxy) {
-        guard let lastId = messages.last?.id else { return }
+        guard let lastId = orderedMessages.last?.id else { return }
         DispatchQueue.main.async {
             withAnimation(.easeOut(duration: 0.2)) {
                 proxy.scrollTo(lastId, anchor: .bottom)
             }
         }
+    }
+
+    private func parsedDate(_ raw: String?) -> Date? {
+        let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !value.isEmpty else { return nil }
+        if let date = ISO8601DateFormatter().date(from: value) {
+            return date
+        }
+        return nil
     }
 }
 
@@ -733,10 +760,11 @@ private struct MessageBubble: View {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(message.authoredByMe ? ReplyConstellationPalette.accent : ReplyConstellationPalette.border.opacity(0.5), lineWidth: 1)
             )
-            .frame(maxWidth: 620, alignment: .leading)
+            .frame(maxWidth: 620, alignment: message.authoredByMe ? .trailing : .leading)
 
             if !message.authoredByMe { Spacer(minLength: 60) }
         }
+        .frame(maxWidth: .infinity, alignment: message.authoredByMe ? .trailing : .leading)
     }
 
     private var messageText: String {
