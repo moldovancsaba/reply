@@ -387,21 +387,21 @@ function applyLayoutChromeState() {
   if (!body) return;
   const sidebarCollapsed = body.classList.contains('sidebar-collapsed');
   const profileCollapsed = body.classList.contains('profile-collapsed');
-  document.getElementById('btn-show-sidebar')?.classList.toggle('u-display-none', !sidebarCollapsed);
-  document.getElementById('btn-show-profile')?.classList.toggle('u-display-none', !profileCollapsed);
   const sidebarToggle = document.querySelector('#btn-toggle-sidebar .reply-shell-icon');
   if (sidebarToggle) {
     setMaterialIcon(sidebarToggle, sidebarCollapsed ? 'panel-left-open' : 'panel-left-close');
     document.getElementById('btn-toggle-sidebar')?.setAttribute('data-tooltip', sidebarCollapsed ? 'Show contacts' : 'Collapse contacts');
+    document.getElementById('btn-toggle-sidebar')?.setAttribute('aria-label', sidebarCollapsed ? 'Show contacts' : 'Collapse contacts');
   }
-  document.querySelectorAll('#btn-toggle-profile .reply-shell-icon, #btn-toggle-profile-empty .reply-shell-icon').forEach((node) => {
+  document.querySelectorAll('#btn-toggle-profile .reply-shell-icon').forEach((node) => {
     setMaterialIcon(node, profileCollapsed ? 'panel-right-open' : 'panel-right-close');
   });
-  document.querySelectorAll('#btn-toggle-profile .shell-toolbar-button__label, #btn-toggle-profile-empty .shell-toolbar-button__label').forEach((node) => {
+  document.querySelectorAll('#btn-toggle-profile .shell-toolbar-button__label').forEach((node) => {
     node.textContent = profileCollapsed ? 'Expand' : 'Collapse';
   });
-  document.querySelectorAll('#btn-toggle-profile, #btn-toggle-profile-empty').forEach((node) => {
+  document.querySelectorAll('#btn-toggle-profile').forEach((node) => {
     node.setAttribute('data-tooltip', profileCollapsed ? 'Expand profile' : 'Collapse profile');
+    node.setAttribute('aria-label', profileCollapsed ? 'Expand profile' : 'Collapse profile');
   });
 }
 
@@ -654,19 +654,10 @@ function setupEventListeners() {
   if (btnSettings) btnSettings.onclick = () => { window.location.href = 'settings.html'; };
 
   const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
-  if (btnToggleSidebar) btnToggleSidebar.onclick = () => setSidebarCollapsed(true);
-
-  const btnShowSidebar = document.getElementById('btn-show-sidebar');
-  if (btnShowSidebar) btnShowSidebar.onclick = () => setSidebarCollapsed(false);
+  if (btnToggleSidebar) btnToggleSidebar.onclick = () => setSidebarCollapsed(!document.body.classList.contains('sidebar-collapsed'));
 
   const btnToggleProfile = document.getElementById('btn-toggle-profile');
-  if (btnToggleProfile) btnToggleProfile.onclick = () => setProfileCollapsed(true);
-
-  const btnToggleProfileEmpty = document.getElementById('btn-toggle-profile-empty');
-  if (btnToggleProfileEmpty) btnToggleProfileEmpty.onclick = () => setProfileCollapsed(true);
-
-  const btnShowProfile = document.getElementById('btn-show-profile');
-  if (btnShowProfile) btnShowProfile.onclick = () => setProfileCollapsed(false);
+  if (btnToggleProfile) btnToggleProfile.onclick = () => setProfileCollapsed(!document.body.classList.contains('profile-collapsed'));
 
   document.querySelectorAll('.sidebar-nav-btn[data-nav-action]').forEach((btn) => {
     btn.addEventListener('click', () => {
