@@ -1,6 +1,6 @@
-import { getSettings, saveSettings, getGmailAuthUrl, disconnectGmail } from './api.js';
-import { applyIconFallback } from './icon-fallback.js';
-import { UI } from './ui.js';
+import { getSettings, saveSettings, getGmailAuthUrl, disconnectGmail } from './api.js?v=2.6.0';
+import { applyIconFallback } from './icon-fallback.js?v=2.6.0';
+import { UI } from './ui.js?v=2.6.0';
 import {
   loadConversations,
   setConversationsQuery,
@@ -9,7 +9,7 @@ import {
   normalizeConversationSort,
   isValidConversationSortMode,
   CONVERSATION_SORT_STORAGE_KEY,
-} from './contacts.js';
+} from './contacts.js?v=2.6.0';
 
 function el(id) {
   return document.getElementById(id);
