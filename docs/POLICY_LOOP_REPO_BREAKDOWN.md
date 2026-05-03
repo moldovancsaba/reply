@@ -256,171 +256,18 @@ Acceptance:
 
 ## Exact Schema List
 
-## Existing runtime contracts already on the wire
+Canonical schema ownership stays in `{trinity}`.
 
-### `ThreadSnapshot`
+This repo should not duplicate the full field-level catalog for shared wire contracts, because that would create a second documentation source of truth and drift risk.
 
-Current owner:
-- `{trinity}` schema
-- product-populated by `{reply}`
+Canonical reference:
+- `/Users/Shared/Projects/trinity/docs/POLICY_LOOP_REPO_BREAKDOWN.md`
 
-Fields:
-- `company_id: UUID`
-- `thread_ref: str`
-- `channel: str`
-- `contact_handle: str`
-- `latest_inbound_text: str`
-- `requested_at: datetime (timezone-aware UTC)`
-- `messages: tuple[ThreadMessageSnapshot, ...]`
-- `context_snippets: tuple[ThreadContextSnippet, ...]`
-- `golden_examples: tuple[GoldenExample, ...]`
-- `metadata: Mapping[str, str]`
-- `contract_version: str`
-
-### `EvidenceUnit`
-
-Current owner:
-- `{trinity}`
-
-Fields:
-- `company_id: UUID`
-- `evidence_id: UUID`
-- `source_type: EvidenceSourceType`
-- `source_ref: EvidenceSourceRef`
-- `content_raw: str`
-- `content_canonical: str`
-- `content_hash: str`
-- `metadata: Mapping[str, str]`
-- `topic_hints: tuple[str, ...]`
-- `created_at: datetime (timezone-aware UTC)`
-- `updated_at: datetime (timezone-aware UTC)`
-- `freshness_window: EvidenceFreshnessWindow | None`
-- `provenance: EvidenceProvenance | None`
-
-### `RankedDraftSet`
-
-Current owner:
-- `{trinity}`
-
-Fields:
-- `cycle_id: UUID`
-- `thread_ref: str`
-- `channel: str`
-- `generated_at: datetime (timezone-aware UTC)`
-- `drafts: tuple[CandidateDraft, ...]`
-- `accepted_artifact_version: AcceptedArtifactVersion`
-- `trace_ref: str | None`
-- `contract_version: str`
-
-### `DraftOutcomeEvent`
-
-Current owner:
-- product-emitted by `{reply}`
-- runtime-consumed by `{trinity}`
-
-Fields:
-- `company_id: UUID`
-- `cycle_id: UUID`
-- `thread_ref: str`
-- `channel: str`
-- `disposition: DraftOutcomeDisposition`
-- `occurred_at: datetime (timezone-aware UTC)`
-- `candidate_id: UUID | None`
-- `original_draft_text: str | None`
-- `final_text: str | None`
-- `edit_distance: float | None`
-- `latency_ms: int | None`
-- `send_result: str | None`
-- `notes: str | None`
-- `contract_version: str`
-
-## New contracts to add for the policy loop
-
-### `ReplyBehaviorPolicy`
-
-Status:
-- proposed
-- not yet implemented
-
-Recommended fields:
-- `artifact_key: str`
-- `version: str`
-- `scope_kind: str`
-  - allowed initially: `global`, `channel`, `thread_type`
-- `scope_value: str | None`
-- `created_at: datetime (timezone-aware UTC)`
-- `source_project: str`
-- `tone_preferences: ReplyTonePreferences`
-- `brevity_preferences: ReplyBrevityPreferences`
-- `channel_rules: ReplyChannelRules`
-- `notes: str | None`
-- `contract_version: str`
-
-#### `ReplyTonePreferences`
-
-Recommended fields:
-- `target_tone: str`
-- `formality: str`
-- `warmth: str`
-- `directness: str`
-- `forbidden_tones: tuple[str, ...]`
-
-#### `ReplyBrevityPreferences`
-
-Recommended fields:
-- `target_length: str`
-  - examples: `short`, `compact`, `medium`
-- `max_sentences: int | None`
-- `max_chars: int | None`
-- `prefer_single_paragraph: bool`
-
-#### `ReplyChannelRules`
-
-Recommended fields:
-- `opening_style: str`
-- `closing_style: str`
-- `emoji_policy: str`
-- `url_policy: str`
-- `attachment_reference_policy: str`
-- `newline_policy: str`
-
-### `TrainingBundle`
-
-Status:
-- proposed
-- not yet implemented
-
-Recommended fields:
-- `bundle_id: UUID`
-- `bundle_type: str`
-  - initial values: `tone-learning`, `brevity-learning`, `channel-formatting-learning`
-- `exported_at: datetime (timezone-aware UTC)`
-- `thread_snapshot: ThreadSnapshot`
-- `evidence_units: tuple[EvidenceUnit, ...]`
-- `ranked_draft_set: RankedDraftSet`
-- `selected_candidate_id: UUID | None`
-- `draft_outcome_event: DraftOutcomeEvent`
-- `active_policy_version: AcceptedArtifactVersion`
-- `labels: Mapping[str, str]`
-- `contract_version: str`
-
-### `AcceptedPolicyVersion`
-
-Status:
-- proposed policy-specific alias
-
-Important naming note:
-- the current runtime contract already ships `AcceptedArtifactVersion`
-- implementation should prefer keeping `AcceptedArtifactVersion` as the wire name unless there is a deliberate split between general artifacts and behavior-policy artifacts
-
-If separated later, recommended fields:
-- `artifact_key: str`
-- `version: str`
-- `source_project: str`
-- `accepted_at: datetime (timezone-aware UTC)`
-- `scope_kind: str`
-- `scope_value: str | None`
-- `replaces_version: str | None`
+`{reply}`-specific contract responsibilities:
+- populate `ThreadSnapshot` deterministically from product state
+- emit `DraftOutcomeEvent` deterministically from operator actions
+- preserve `contract_version` on every outbound runtime payload
+- preserve the canonical accepted artifact provenance already carried by `{trinity}` runtime outputs
 
 ## Recommended Order
 

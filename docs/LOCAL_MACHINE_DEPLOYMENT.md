@@ -1,83 +1,287 @@
 # Local Machine Deployment
 
-`{reply}` runs locally as a session-owned Node hub plus a managed background worker.
+This is the canonical install and operator runbook for `{reply}` on one macOS machine.
 
-The repository now also includes a native shell MVP at `app/reply-app`. That shell launches as `reply.app`, embeds the existing {reply} web UI, and provides a native system/runtime screen. The current shell is development-distributed from this repo; packaged installation/notarization is a separate track.
+It now covers:
 
-## Requirements
+- the native `reply.app` shell
+- the Node hub
+- the local `{trinity}` drafting runtime
+- local model dependencies
+- OpenClaw transport dependencies
+- current app-owned data and log paths
 
-- macOS
-- Node.js 20+
-- Ollama running locally for drafting and refinement
-- Run the hub in the active user session (`make run`) if you want iMessage sync
-- Mail.app configured locally if you want native Apple Mail sync
-- Calendar automation approval if you want Apple Calendar sync
-- OpenClaw only if you want WhatsApp routing
+## Target Environment
 
-## Start
+Required:
+
+- macOS 15+
+- Xcode / Swift 6 toolchain
+- Node.js `>=20.17.0`
+- Python `>=3.12`
+- `npm`
+
+Optional but commonly required:
+
+- `uv` for `{trinity}` development setup
+- `Ollama`
+- `OpenClaw`
+
+## Repository Layout
+
+Expected local checkout roots:
+
+- `{reply}`: `/Users/Shared/Projects/reply`
+- `{trinity}`: `/Users/Shared/Projects/trinity`
+
+`{reply}` resolves the drafting runtime in this order:
+
+1. `TRINITY_RUNTIME_ROOT`
+2. `TRINITY_REPO_ROOT`
+3. bundled `reply/trinity-runtime`
+4. sibling repo `../trinity`
+
+## Install
+
+### 1. Install Node dependencies
 
 ```bash
+cd /Users/Shared/Projects/reply/chat
+npm install
+```
+
+### 2. Install `{trinity}` runtime dependencies
+
+```bash
+cd /Users/Shared/Projects/trinity
+uv sync --dev
+```
+
+If you are not using `uv`, make sure a Python 3.12+ interpreter exists and that the `{trinity}` core package is importable from its repo root.
+
+### 3. Configure environment
+
+```bash
+cd /Users/Shared/Projects/reply/chat
+cp .env.example .env
+```
+
+Minimum recommended local overrides:
+
+```bash
+PORT=45311
+TRINITY_REPO_ROOT=/Users/Shared/Projects/trinity
+TRINITY_PYTHON_BIN=/opt/homebrew/bin/python3.12
+OLLAMA_HOST=http://127.0.0.1:11434
+```
+
+### 4. Prepare macOS permissions
+
+If you want Apple-private data:
+
+- grant Full Disk Access to the actual host process used by `{reply}`
+- approve Calendar automation if using Apple Calendar sync
+- keep Mail.app configured locally if relying on Apple Mail fallback behavior
+
+### 5. Prepare optional services
+
+Ollama:
+
+```bash
+ollama serve
+```
+
+OpenClaw:
+
+```bash
+openclaw channels login --channel whatsapp
+```
+
+## Run Modes
+
+### Foreground session mode
+
+Recommended for development and any path that needs Apple-private reads:
+
+```bash
+cd /Users/Shared/Projects/reply
 make run
 make status
 ```
 
-Native shell MVP:
+### Native shell
 
 ```bash
+cd /Users/Shared/Projects/reply
 make run-app
 ```
 
-This builds `app/reply-app/dist/reply.app` and launches it. The app can connect to an already-running `{reply}` runtime or start/stop/restart it from the native shell.
+This builds and launches:
 
-When the runtime is launched from `reply.app`, it now uses app-owned paths:
+- `app/reply-app/dist/reply.app`
+
+### Legacy LaunchAgent mode
+
+Still available if you explicitly want it:
+
+```bash
+make install-service
+make uninstall-service
+```
+
+Use `make doctor` if the repo root moved or the plist points at stale paths.
+
+## Runtime Paths
+
+App-owned local paths:
 
 - data: `~/Library/Application Support/reply`
 - logs: `~/Library/Logs/reply`
 
-The first run on the app-owned path performs a best-effort migration from the legacy repo-local `chat/data` directory so existing local state is preserved.
+Current notable files:
 
-The local hub writes logs to:
-
+- `~/Library/Application Support/reply/chat.db`
+- `~/Library/Application Support/reply/contacts.db`
+- `~/Library/Application Support/reply/settings.json`
+- `~/Library/Application Support/reply/shadow/trinity-draft-comparisons.jsonl`
 - `~/Library/Logs/reply/hub.log`
 - `/tmp/reply-hub.log`
 
-Default health endpoint:
+Default HTTP health endpoint:
 
 - `http://127.0.0.1:45311/api/health`
 
-## Apple Integrations
+## Current Runtime Notes
 
-### iMessage
+### Drafting runtime
 
-Reads `~/Library/Messages/chat.db` by default. If the hub reports `SQLITE_CANTOPEN` or preflight shows the DB is not readable:
+- live drafting is `{trinity}` only
+- legacy drafting is not part of the normal live path
+- developer-only `trinity-shadow` mode exists for comparison logging
+- structured draft outcomes are posted to `/api/trinity/outcome`
 
-1. Grant Full Disk Access to the runtime binary used by `{reply}`.
-2. Restart the service with `make run`.
-3. Optionally point `REPLY_IMESSAGE_DB_PATH` at a readable `chat.db`.
+### Conversation assembly
 
-The current packaged app uses the protected-data helper:
+- dashboard message counts come from ingestion totals
+- conversation sidebar now comes from the unified message-backed index
+- a missing contact row no longer hides a valid message-backed conversation
+- thread views preload both the oldest 20 and newest 20 messages on first open
+- long threads fill the middle history gap incrementally in the background
+- sent and received messages render as explicit right/left rows
 
-- `app/reply-app/dist/reply.app/Contents/Helpers/reply-helper`
+### Failure handling
 
-### Apple Mail
+Normal operator UI surfaces now receive normalized product-safe errors such as:
 
-If Gmail OAuth is stale, {reply} now falls back to Mail.app automatically. Keep Mail.app configured with the local account you want to ingest.
+- `local_sandbox_unavailable`
+- `trinity_runtime_unavailable`
+- `openclaw_unavailable`
+- `local_model_runtime_unavailable`
 
-### Apple Calendar
+Raw Docker socket paths, Colima errors, and similar substrate details stay in logs.
 
-Calendar sync uses AppleScript. If it times out, grant Calendar automation access to the host process and retry:
+### Native sync actions
+
+Current behavior:
+
+- sync triggers from the native shell are protected POST routes
+- they now send explicit approval headers and approval payloads
+- a successful trigger means the sync started in the background, not that it already completed
+
+## Validation
+
+Recommended checks:
 
 ```bash
-curl -X POST http://127.0.0.1:45311/api/sync-calendar
+cd /Users/Shared/Projects/reply
+make status
 ```
 
-### Apple Notes
+```bash
+curl http://127.0.0.1:45311/api/health
+curl http://127.0.0.1:45311/api/system/health
+```
 
-Notes sync uses AppleScript and stores note content in LanceDB plus the unified message store.
+```bash
+cd /Users/Shared/Projects/reply/chat
+npm test
+npm run lint
+```
 
 ## Troubleshooting
 
-- If `make status` shows `imessage_source` degraded, macOS privacy is still blocking the runtime process.
-- If `calendar` is stuck or errors, re-run the sync after approving Calendar automation.
-- If `mail` fails through Gmail, {reply} will continue through Mail.app when available.
-- If `openclaw_gateway` is degraded, WhatsApp routing is unavailable but the hub still runs.
+### iMessage reads fail
+
+Symptoms:
+
+- `SQLITE_CANTOPEN`
+- `imessage_source` degraded
+- empty or partial iMessage sync despite local messages existing
+
+Actions:
+
+1. grant Full Disk Access to the runtime host process
+2. restart `{reply}`
+3. optionally set `REPLY_IMESSAGE_DB_PATH`
+
+### `{trinity}` runtime unavailable
+
+Symptoms:
+
+- suggest endpoints return `Reply drafting runtime is unavailable.`
+
+Actions:
+
+1. verify `/Users/Shared/Projects/trinity` exists or `TRINITY_REPO_ROOT` is set
+2. verify Python 3.12+
+3. run `uv sync --dev` in `{trinity}`
+4. check Ollama if model-backed routes are enabled
+
+### Sandbox / Docker / Colima failures
+
+Symptoms:
+
+- suggest endpoints return `Local agent runtime is unavailable.`
+
+Actions:
+
+1. start Docker or Colima
+2. start the required local sandbox runtime
+3. retry the operator action
+
+### WhatsApp unavailable
+
+Symptoms:
+
+- `openclaw_unavailable`
+- WhatsApp source visible but outbound unavailable
+
+Actions:
+
+1. start OpenClaw
+2. verify gateway health
+3. re-run `openclaw channels login --channel whatsapp` if needed
+
+### Sidebar still shows too few conversations
+
+The current build fixed the backend gating bug. If the UI still shows the older tiny list:
+
+1. reload the app or page
+2. let the refreshed `reply.conversations.v5.*` cache replace stale cached pages
+
+### Native sync cards show trigger failures
+
+The current build fixes the native trigger path so it matches the protected-route contract.
+
+If a card still fails:
+
+1. confirm the hub is reachable from `reply.app`
+2. confirm the protected route is not returning operator-token or approval errors
+3. check the specific source’s runtime permissions or connector health after the trigger starts
+
+## Related Docs
+
+- [README.md](/Users/Shared/Projects/reply/README.md)
+- [ARCHITECTURE.md](/Users/Shared/Projects/reply/docs/ARCHITECTURE.md)
+- [DEPENDENCY_MAP.md](/Users/Shared/Projects/reply/docs/DEPENDENCY_MAP.md)
+- [HANDOVER.md](/Users/Shared/Projects/reply/docs/HANDOVER.md)

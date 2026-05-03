@@ -20,12 +20,15 @@ To stop: keep the `make run` terminal open while using the app, and run `make st
 
 ### Dashboard (home)
 *   Shows system health cards (iMessage/WhatsApp/Notes/Email).
-*   Use the **sync** icon on each card to trigger a manual sync.
+*   Use the **sync** icon on each card to trigger a manual sync in the background.
 *   Use the **⚙️** icon on a card to configure that specific service.
 
 ### Feed (chat)
 *   Messages for the selected contact.
-*   **Composer** includes a channel dropdown (`iMessage`, `WhatsApp`, `Email`).
+*   Sent messages render on the right. Received messages render on the left.
+*   The thread preloads the oldest 20 and newest 20 messages when you open a conversation.
+*   Longer histories load progressively in the background so the workspace stays responsive.
+*   **Composer** includes a channel dropdown (`iMessage`, `WhatsApp`, `Email`, plus draft-only bridge channels when available).
 *   The buttons `🎤 Mic`, `✨ Magic`, `💡 Suggest` are visible only in the feed view.
 
 ### Profile (right pane)
@@ -60,20 +63,19 @@ If Gmail is connected, selecting **Email** in the composer sends via the Gmail A
     *   **Inbox + Sent** (default)
     *   **All Mail** (excludes Spam/Trash)
     *   **Custom query** (Gmail search syntax, e.g. `label:finance OR from:foo@bar.com`)
-*   Redirect URIs (if your server runs on a different port):
-    *   `http://localhost:3000/api/gmail/oauth-callback`
-    *   `http://localhost:3001/api/gmail/oauth-callback`
+*   Redirect URI should match the actual local hub port, usually:
+    *   `http://localhost:45311/api/gmail/oauth-callback`
 
 ---
 
-## WhatsApp Send (Automation)
-*   **Prerequisites:** WhatsApp Desktop installed + logged in **and running**, and macOS **Accessibility** permission granted to the process running the server (System Settings → Privacy & Security → Accessibility).
-*   **Optional:** Set `WHATSAPP_APP_NAME` if your app name is not `WhatsApp` (e.g. `WhatsApp Beta`).
-*   **Behavior:** Best-effort UI automation; if sending fails, {reply} will show an error and offer a clipboard fallback.
-*   **Status:** Still flaky on some WhatsApp UI states; treat as “best effort” (track fixes in [`moldovancsaba/reply`](https://github.com/moldovancsaba/reply) issues / [Project #7](https://github.com/users/moldovancsaba/projects/7)).
+## WhatsApp Send
+*   **Primary path:** OpenClaw-backed transport.
+*   **Behavior:** `{reply}` uses the local OpenClaw path when healthy. If the transport is unavailable, `{reply}` surfaces a runtime error rather than pretending the send succeeded.
+*   **Setup:** see [LOCAL_MACHINE_DEPLOYMENT.md](/Users/Shared/Projects/reply/docs/LOCAL_MACHINE_DEPLOYMENT.md) for OpenClaw login and gateway notes.
 
 ---
 
 ## Troubleshooting
 *   **Already running:** The launcher detects this and asks if you want to restart.
 *   **Permission denied:** `chmod +x "Launch Reply.command"`.
+*   **Sync says it failed:** in current builds, a successful trigger only means the background sync started. If the source still degrades, inspect that specific connector’s permissions or health card state.

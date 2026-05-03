@@ -614,6 +614,19 @@
         scrollbar-color: var(--scrollbar-thumb) transparent;
       }
 
+      .message-row {
+        width: 100%;
+        display: flex;
+      }
+
+      .message-row.me {
+        justify-content: flex-end;
+      }
+
+      .message-row.contact {
+        justify-content: flex-start;
+      }
+
       .chat-status-select {
         font-size: 0.8rem;
         border-radius: 12px;
@@ -922,7 +935,6 @@
         background-color: var(--primary);
         /* iMessage Blue */
         color: white;
-        align-self: flex-end;
         border-bottom-right-radius: 18px;
         background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 100%);
         /* Subtle gradient */
@@ -955,9 +967,41 @@
       .message-bubble.contact {
         background-color: var(--contact-bubble);
         color: var(--text-primary);
-        align-self: flex-start;
         border-bottom-left-radius: 18px;
         border: 1px solid var(--contact-bubble-border);
+      }
+
+      .message-bubble {
+        max-width: min(72%, 760px);
+      }
+
+      .message-gap-indicator {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 6px 0;
+      }
+
+      .message-gap-indicator__line {
+        flex: 1 1 auto;
+        height: 1px;
+        background: color-mix(in srgb, var(--divider-strong) 80%, transparent);
+      }
+
+      .message-gap-indicator__body {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid var(--control-border);
+        background: color-mix(in srgb, var(--surface-overlay) 84%, transparent);
+        border-radius: 999px;
+        padding: 8px 12px;
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+      }
+
+      .message-gap-button {
+        white-space: nowrap;
       }
 
       .message-bubble.contact.channel-imessage {

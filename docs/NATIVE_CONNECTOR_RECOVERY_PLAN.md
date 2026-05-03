@@ -33,6 +33,7 @@ These parts are now reimplemented in the native workspace:
 - richer iMessage ingestion through the local helper, including `attributedBody` decoding and attachment summaries
 
 Outstanding thread work remains around explicit “load older” controls and further normalization of profile creation for handles that do not yet have stored contact records.
+The current web/native-backed thread path also now preloads both ends of the thread and fills the middle gap incrementally instead of loading one giant blocking page.
 
 ## Core Product Rule
 
@@ -204,6 +205,14 @@ Every native source card should show:
 - `Open settings` where meaningful
 - `Open repair` only when blocked or degraded
 - no fake actions for platforms that cannot really sync from this machine
+
+### Sync action truth
+
+Native sync actions must:
+
+- hit the protected `/api/sync-*` routes with approval-bearing headers and payloads
+- treat a `200` response as `started in background`
+- never label the action as “complete” until the source health/status actually updates
 
 ## Native Recovery Objective
 
