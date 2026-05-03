@@ -10,6 +10,15 @@ struct HealthPayload: Decodable {
     let services: [String: ServiceHealth]?
     let channels: [String: ChannelHealth]?
     let preflight: PreflightPayload?
+    let stats: ReplyConversationStats?
+}
+
+struct ReplyConversationStats: Decodable {
+    let total: Int?
+    let draft: Int?
+    let active: Int?
+    let resolved: Int?
+    let byChannel: [String: Int]?
 }
 
 struct ServiceHealth: Decodable {
@@ -288,6 +297,151 @@ struct NativeSettingsDraft: Codable {
             ollamaProbeTimeoutMs: payload.health?.ollamaProbeTimeoutMs ?? fallback.health.ollamaProbeTimeoutMs,
             uiHealthPollIntervalMs: payload.health?.uiHealthPollIntervalMs ?? fallback.health.uiHealthPollIntervalMs
         )
+    }
+}
+
+struct ReplyConversationListResponse: Decodable {
+    let contacts: [ReplyConversation]
+    let hasMore: Bool
+    let total: Int
+}
+
+struct ReplyConversation: Decodable, Identifiable, Hashable {
+    let handle: String
+    let latestHandle: String?
+    let path: String?
+    let channel: String?
+    let source: String?
+    let displayName: String?
+    let presentationDisplayName: String?
+    let lastMessage: String?
+    let preview: String?
+    let previewDate: String?
+    let count: Int?
+    let countIn: Int?
+    let countOut: Int?
+
+    var id: String { handle }
+
+    var resolvedTitle: String {
+        let candidate = (presentationDisplayName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? presentationDisplayName
+            : displayName) ?? handle
+        return candidate
+    }
+
+    var resolvedPreview: String {
+        let candidate = (preview?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? preview
+            : lastMessage) ?? ""
+        return candidate
+    }
+
+    var unreadLabel: String {
+        let value = max(count ?? 0, 0)
+        return value > 99 ? "99+" : "\(value)"
+    }
+}
+
+struct ReplyThreadResponse: Decodable {
+    let messages: [ReplyMessage]
+    let hasMore: Bool?
+    let total: Int?
+}
+
+struct ReplyMessage: Decodable, Identifiable, Hashable {
+    let id: String
+    let role: String?
+    let isFromMe: Bool?
+    let text: String?
+    let date: String?
+    let channel: String?
+    let source: String?
+    let path: String?
+    let handle: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case role
+        case isFromMe = "is_from_me"
+        case text
+        case date
+        case channel
+        case source
+        case path
+        case handle
+    }
+
+    var authoredByMe: Bool {
+        if let isFromMe { return isFromMe }
+        return role == "me"
+    }
+}
+
+struct ReplyProfile: Decodable {
+    let handle: String
+    let contactId: String?
+    let visibilityState: String?
+    let displayName: String?
+    let presentationDisplayName: String?
+    let profession: String?
+    let relationship: String?
+    let intro: String?
+    let company: String?
+    let linkedinUrl: String?
+    let draft: String?
+    let notes: [ReplyProfileNote]?
+    let channels: ReplyProfileChannels?
+}
+
+struct ReplyProfileNote: Decodable, Hashable {
+    let text: String?
+}
+
+struct ReplyProfileChannels: Decodable, Hashable {
+    let phone: [String]?
+    let email: [String]?
+    let whatsapp: [String]?
+    let linkedin: [String]?
+    let imessage: [String]?
+}
+
+enum ReplyWorkspaceMode: String, CaseIterable, Identifiable {
+    case conversations
+    case dashboard
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .conversations: "Conversations"
+        case .dashboard: "Dashboard"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .conversations: "message"
+        case .dashboard: "square.grid.2x2"
+        }
+    }
+}
+
+enum ReplyMessageChannel: String, CaseIterable, Identifiable {
+    case imessage
+    case whatsapp
+    case linkedin
+    case email
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .imessage: "iMessage"
+        case .whatsapp: "WhatsApp"
+        case .linkedin: "LinkedIn"
+        case .email: "Email"
+        }
     }
 }
 

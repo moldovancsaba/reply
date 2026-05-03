@@ -17,6 +17,20 @@ final class ReplyCoreService: ObservableObject {
     @Published var isSavingSettings = false
     @Published var syncInFlight: Set<SyncChannel> = []
     @Published var runtimeInfo: NativeRuntimeInfo?
+    @Published var workspaceMode: ReplyWorkspaceMode = .conversations
+    @Published var conversations: [ReplyConversation] = []
+    @Published var selectedConversationHandle: String?
+    @Published var messages: [ReplyMessage] = []
+    @Published var selectedProfile: ReplyProfile?
+    @Published var draftMessage: String = ""
+    @Published var selectedChannel: ReplyMessageChannel = .imessage
+    @Published var conversationSearch: String = ""
+    @Published var isLoadingConversations = false
+    @Published var isLoadingMessages = false
+    @Published var isLoadingProfile = false
+    @Published var sendErrorMessage: String = ""
+    @Published var workspaceErrorMessage: String = ""
+    @Published var sendInFlight = false
 
     private var launchProcess: Process?
     private var refreshTask: Task<Void, Never>?
@@ -59,6 +73,9 @@ final class ReplyCoreService: ObservableObject {
                 if !isLoadingSettings {
                     await loadSettingsIfNeeded()
                 }
+                if conversations.isEmpty && workspaceMode == .conversations {
+                    await loadWorkspaceIfNeeded()
+                }
             } catch {
                 handleHealthMiss(error.localizedDescription)
             }
@@ -66,6 +83,149 @@ final class ReplyCoreService: ObservableObject {
             lastRefreshAt = Date()
         } else {
             handleHealthMiss("{reply} runtime health probe did not respond.")
+        }
+    }
+
+    func loadWorkspaceIfNeeded() async {
+        guard runtimeState == .online || baseURL != nil else { return }
+        if conversations.isEmpty {
+            await loadConversations()
+        } else if let handle = selectedConversationHandle, !messages.isEmpty == false {
+            await loadConversation(handle: handle)
+        }
+    }
+
+    func loadConversations() async {
+        guard let baseURL else { return }
+        isLoadingConversations = true
+        workspaceErrorMessage = ""
+        defer { isLoadingConversations = false }
+        do {
+            var components = URLComponents(url: baseURL.appending(path: "api/conversations"), resolvingAgainstBaseURL: false)
+            components?.queryItems = [
+                URLQueryItem(name: "offset", value: "0"),
+                URLQueryItem(name: "limit", value: "50"),
+                URLQueryItem(name: "sort", value: "newest"),
+            ]
+            if !conversationSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                components?.queryItems?.append(URLQueryItem(name: "q", value: conversationSearch))
+            }
+            guard let url = components?.url else { return }
+            let payload: ReplyConversationListResponse = try await requestJSON(url: url)
+            conversations = payload.contacts
+
+            if workspaceMode == .conversations {
+                let selectedStillExists = selectedConversationHandle.flatMap { current in
+                    conversations.first(where: { $0.handle == current })?.handle
+                }
+                let nextHandle = selectedStillExists ?? conversations.first?.handle
+                if let nextHandle {
+                    await loadConversation(handle: nextHandle)
+                } else {
+                    selectedConversationHandle = nil
+                    messages = []
+                    selectedProfile = nil
+                }
+            }
+        } catch {
+            workspaceErrorMessage = error.localizedDescription
+        }
+    }
+
+    func loadConversation(handle: String) async {
+        guard !handle.isEmpty else { return }
+        workspaceMode = .conversations
+        selectedConversationHandle = handle
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await self.loadMessages(handle: handle) }
+            group.addTask { await self.loadProfile(handle: handle) }
+        }
+    }
+
+    func loadMessages(handle: String) async {
+        guard let baseURL else { return }
+        isLoadingMessages = true
+        defer { isLoadingMessages = false }
+        do {
+            var components = URLComponents(url: baseURL.appending(path: "api/thread"), resolvingAgainstBaseURL: false)
+            components?.queryItems = [
+                URLQueryItem(name: "handle", value: handle),
+                URLQueryItem(name: "offset", value: "0"),
+                URLQueryItem(name: "limit", value: "100"),
+            ]
+            guard let url = components?.url else { return }
+            let payload: ReplyThreadResponse = try await requestJSON(url: url)
+            if selectedConversationHandle == handle {
+                messages = payload.messages
+                inferChannel(for: handle, messages: payload.messages)
+            }
+        } catch {
+            if selectedConversationHandle == handle {
+                workspaceErrorMessage = error.localizedDescription
+                messages = []
+            }
+        }
+    }
+
+    func loadProfile(handle: String) async {
+        guard let baseURL else { return }
+        isLoadingProfile = true
+        defer { isLoadingProfile = false }
+        do {
+            var components = URLComponents(url: baseURL.appending(path: "api/kyc"), resolvingAgainstBaseURL: false)
+            components?.queryItems = [URLQueryItem(name: "handle", value: handle)]
+            guard let url = components?.url else { return }
+            let payload: ReplyProfile = try await requestJSON(url: url)
+            if selectedConversationHandle == handle {
+                selectedProfile = payload
+            }
+        } catch {
+            if selectedConversationHandle == handle {
+                selectedProfile = nil
+            }
+        }
+    }
+
+    func sendCurrentMessage() async {
+        guard let baseURL, let handle = selectedConversationHandle else { return }
+        let text = draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        sendInFlight = true
+        sendErrorMessage = ""
+        defer { sendInFlight = false }
+        do {
+            let endpoint: String
+            switch selectedChannel {
+            case .imessage: endpoint = "api/send-imessage"
+            case .whatsapp: endpoint = "api/send-whatsapp"
+            case .linkedin: endpoint = "api/send-linkedin"
+            case .email: endpoint = "api/send-email"
+            }
+            var request = URLRequest(url: baseURL.appending(path: endpoint))
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: [
+                "recipient": handle,
+                "text": text,
+                "trigger": [
+                    "kind": "human_enter",
+                    "at": ISO8601DateFormatter().string(from: Date())
+                ],
+                "approval": [
+                    "confirmed": true,
+                    "source": "native-send",
+                    "at": ISO8601DateFormatter().string(from: Date())
+                ]
+            ])
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                throw NSError(domain: "ReplyCoreService", code: 5, userInfo: [NSLocalizedDescriptionKey: "Send failed."])
+            }
+            draftMessage = ""
+            await loadConversation(handle: handle)
+            await loadConversations()
+        } catch {
+            sendErrorMessage = error.localizedDescription
         }
     }
 
@@ -470,6 +630,35 @@ final class ReplyCoreService: ObservableObject {
             throw NSError(domain: "ReplyCoreService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Health endpoint returned a non-200 response."])
         }
         return try JSONDecoder().decode(HealthPayload.self, from: data)
+    }
+
+    private func requestJSON<T: Decodable>(url: URL) async throws -> T {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw NSError(domain: "ReplyCoreService", code: 6, userInfo: [NSLocalizedDescriptionKey: "Request failed for \(url.lastPathComponent)."])
+        }
+        let decoder = JSONDecoder()
+        return try decoder.decode(T.self, from: data)
+    }
+
+    private func inferChannel(for handle: String, messages: [ReplyMessage]) {
+        if let channel = messages.first(where: { !($0.authoredByMe) })?.channel?.lowercased() {
+            selectedChannel = ReplyMessageChannel(rawValue: channel) ?? fallbackChannel(for: handle)
+            return
+        }
+        selectedChannel = fallbackChannel(for: handle)
+    }
+
+    private func fallbackChannel(for handle: String) -> ReplyMessageChannel {
+        if handle.contains("@") {
+            return .email
+        }
+        if handle.hasPrefix("+") {
+            return .imessage
+        }
+        return .whatsapp
     }
 
     private func handleHealthMiss(_ message: String) {
