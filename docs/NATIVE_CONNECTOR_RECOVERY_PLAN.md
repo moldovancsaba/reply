@@ -20,6 +20,20 @@ This is a native macOS recovery plan.
 
 The target UI is SwiftUI/AppKit only for the operator workspace. Connectors and background runtimes may remain internal infrastructure, but the operator surface must stay native.
 
+## Current Implementation Status
+
+These parts are now reimplemented in the native workspace:
+
+- source-specific dashboard cards with counts, sync state, and timestamps
+- native per-source sync actions for supported connectors
+- native dashboard grouping into `Conversation Sources`, `Knowledge Inputs`, and `Deferred Connectors`
+- deeper native thread loading
+- conversational left/right message alignment
+- attachment and file markers rendered in the native thread
+- richer iMessage ingestion through the local helper, including `attributedBody` decoding and attachment summaries
+
+Outstanding thread work remains around explicit “load older” controls and further normalization of profile creation for handles that do not yet have stored contact records.
+
 ## Core Product Rule
 
 Do not mix these classes together:
