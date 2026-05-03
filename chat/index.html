@@ -40,9 +40,6 @@
     <aside class="sidebar" id="sidebar-pane">
       <div class="sidebar-header">
         <div class="shell-chrome-group shell-chrome-group--dense">
-          <button id="btn-toggle-sidebar" class="shell-icon-button" type="button" aria-label="Collapse contacts" data-tooltip="Collapse contacts">
-            <span class="reply-shell-icon" data-icon="panel-left-close" aria-hidden="true"></span>
-          </button>
           <button id="btn-dash" class="shell-icon-button shell-icon-button--strong" type="button" aria-label="Open dashboard" data-tooltip="Open dashboard">
             <span class="reply-shell-icon" data-icon="dashboard" aria-hidden="true"></span>
           </button>
@@ -85,8 +82,8 @@
     <main class="chat-area">
       <header class="chat-header">
         <div class="chat-header-group chat-header-group--leading">
-          <button id="btn-show-sidebar" class="shell-icon-button u-display-none" type="button" aria-label="Show contacts" data-tooltip="Show contacts">
-            <span class="reply-shell-icon" data-icon="panel-left-open" aria-hidden="true"></span>
+          <button id="btn-toggle-sidebar" class="shell-icon-button" type="button" aria-label="Collapse contacts" data-tooltip="Collapse contacts">
+            <span class="reply-shell-icon" data-icon="panel-left-close" aria-hidden="true"></span>
           </button>
           <div id="active-contact-name-chat" class="u-chat-active-contact">Select a contact</div>
           <select id="status-select" class="chat-status-select" onchange="updateManualStatus()" style="display:none;">
@@ -96,8 +93,8 @@
           </select>
         </div>
         <div class="chat-header-group chat-header-group--actions">
-          <button id="btn-show-profile" class="shell-icon-button u-display-none" type="button" aria-label="Show profile" data-tooltip="Show profile">
-            <span class="reply-shell-icon" data-icon="panel-right-open" aria-hidden="true"></span>
+          <button id="btn-toggle-profile" class="shell-icon-button" type="button" aria-label="Collapse profile" data-tooltip="Collapse profile">
+            <span class="reply-shell-icon" data-icon="panel-right-close" aria-hidden="true"></span>
           </button>
           <button class="btn btn-secondary shell-action-button shell-action-button--icon-only" id="btn-mic" type="button" aria-label="Dictate into the composer" data-tooltip="Dictate into the composer" style="display:none;">
             <span class="reply-shell-icon shell-action-button__icon" data-icon="mic" aria-hidden="true"></span>
@@ -146,25 +143,14 @@
     <section class="kyc-pane" id="profile-pane">
         <div id="kyc-empty-state" class="kyc-empty">
         <div class="kyc-editor-header">
-          <h3 class="kyc-empty-title">Profile</h3>
-          <div class="kyc-editor-actions">
-            <button id="btn-toggle-profile-empty" class="btn btn-secondary btn-sm shell-toolbar-button shell-toolbar-button--icon-only" type="button" aria-label="Collapse profile" data-tooltip="Collapse profile">
-              <span class="reply-shell-icon shell-toolbar-button__icon" data-icon="panel-right-close" aria-hidden="true"></span>
-              <span class="shell-toolbar-button__label u-sr-only">Collapse</span>
-            </button>
-          </div>
+          <div class="kyc-editor-actions kyc-editor-actions--header-only" aria-label="Profile actions"></div>
         </div>
         <p class="kyc-empty-text">Select a contact from the sidebar to view their profile and history.</p>
       </div>
 
       <div id="kyc-content-editor" class="kyc-editor" style="display:none;">
         <div class="kyc-editor-header">
-          <h3 class="kyc-editor-title">Profile</h3>
-          <div class="kyc-editor-actions">
-            <button id="btn-toggle-profile" class="btn btn-secondary btn-sm shell-toolbar-button shell-toolbar-button--icon-only" type="button" aria-label="Collapse profile" data-tooltip="Collapse profile">
-              <span class="reply-shell-icon shell-toolbar-button__icon" data-icon="panel-right-close" aria-hidden="true"></span>
-              <span class="shell-toolbar-button__label u-sr-only">Collapse</span>
-            </button>
+          <div class="kyc-editor-actions kyc-editor-actions--header-only">
             <button id="btn-deep-analyze" class="btn btn-secondary btn-sm shell-toolbar-button shell-toolbar-button--icon-only" type="button" aria-label="Run profile analysis" data-tooltip="Run profile analysis">
               <span class="reply-shell-icon shell-toolbar-button__icon" data-icon="analytics" aria-hidden="true"></span>
               <span class="shell-toolbar-button__label u-sr-only">Analyze</span>

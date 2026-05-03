@@ -100,13 +100,13 @@
       }
 
       .sidebar-header {
-        padding: 10px 12px;
+        padding: 10px 16px;
         border-bottom: 1px solid var(--divider-strong);
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 8px;
-        min-height: 52px;
+        min-height: 68px;
         flex-shrink: 0;
         background: color-mix(in srgb, var(--surface-shell-strong) 78%, transparent);
       }
@@ -512,11 +512,6 @@
         font-size: 14px;
         font-weight: 600;
         color: var(--text-primary);
-      }
-
-      .chat-header #btn-show-sidebar,
-      .chat-header #btn-show-profile {
-        flex-shrink: 0;
       }
 
       .chat-header-group {
@@ -1157,28 +1152,20 @@
 
       .kyc-editor-header {
         display: flex;
-        justify-content: space-between;
+        justify-content: flex-end;
         align-items: center;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         gap: 12px;
         margin: -1rem -1rem 14px;
         position: sticky;
         top: 0;
         z-index: 18;
-        padding: 14px 16px 12px;
+        min-height: 68px;
+        padding: 10px 16px;
         border-bottom: 1px solid var(--divider-strong);
         background: linear-gradient(180deg, color-mix(in srgb, var(--surface-overlay-strong) 96%, transparent) 0%, color-mix(in srgb, var(--surface-overlay) 94%, transparent) 100%);
         -webkit-backdrop-filter: blur(18px);
         backdrop-filter: blur(18px);
-        box-shadow: var(--shadow-sm);
-      }
-
-      .kyc-editor-title {
-        margin: 0;
-        font-size: 1rem;
-        font-weight: 800;
-        letter-spacing: -0.2px;
-        flex: 0 0 auto;
       }
 
       .kyc-editor-actions {
@@ -1187,20 +1174,20 @@
         align-items: center;
         flex-wrap: nowrap;
         justify-content: flex-end;
-        flex: 1 1 auto;
+        flex: 0 0 auto;
         min-width: 0;
       }
 
-      .kyc-editor-actions .btn {
-        height: 46px;
-        padding: 0 14px;
-        border-radius: 16px;
-        line-height: 46px;
-        white-space: nowrap;
+      .kyc-editor-actions--header-only {
+        width: 100%;
       }
 
-      .kyc-editor-actions .btn-primary {
-        box-shadow: 0 8px 18px color-mix(in srgb, var(--primary) 22%, transparent);
+      .kyc-editor-actions .btn {
+        height: 36px;
+        padding: 0;
+        border-radius: 0;
+        line-height: 1;
+        white-space: nowrap;
       }
 
       .kyc-visibility-strip {
