@@ -16,6 +16,17 @@
     })();
   </script>
   <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      try {
+        if (new URLSearchParams(window.location.search).get('reply_native_shell') === '1') {
+          document.body.classList.add('native-shell');
+        }
+      } catch {
+        // ignore
+      }
+    });
+  </script>
+  <script>
     window.onerror = function (msg, url, line, col, error) {
       console.error('[GLOBAL ERROR]', { msg, url, line, col, error });
       // Only alert once to avoid spamming

@@ -111,6 +111,10 @@
         background: color-mix(in srgb, var(--surface-shell-strong) 78%, transparent);
       }
 
+      body.native-shell .sidebar-header {
+        padding-left: 76px;
+      }
+
       .sidebar-header .u-flex-center-gap {
         align-items: center;
         gap: 4px;
@@ -514,6 +518,11 @@
         position: sticky;
         top: 0;
         z-index: 10;
+      }
+
+      body.native-shell .chat-header {
+        padding-left: 28px;
+        padding-right: 28px;
       }
 
       .chat-header h3 {
