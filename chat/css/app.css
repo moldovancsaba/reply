@@ -1840,40 +1840,24 @@
         box-sizing: border-box;
       }
 
-      .settings-sidebar {
-        width: 260px;
-        flex-shrink: 0;
-        min-height: 100%;
-        box-sizing: border-box;
-        background: var(--bg-sidebar, rgba(22, 22, 24, 0.98));
-        -webkit-backdrop-filter: blur(30px);
-        backdrop-filter: blur(30px);
-        border-right: 1px solid rgba(255, 255, 255, 0.08);
-        display: flex;
-        flex-direction: column;
-        padding: 20px 0 0;
-      }
-
-      .settings-sidebar-header {
-        padding: 0 40px 20px;
-        box-sizing: border-box;
-      }
-
-      .settings-sidebar-header h3 {
-        margin: 0;
-        font-size: 1.2rem;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-      }
-
       .settings-nav {
-        flex: 1;
         display: flex;
-        flex-direction: column;
-        gap: 4px;
-        padding: 0 16px 0 28px;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .settings-nav--top {
+        flex: 1 1 auto;
+        align-items: center;
         min-height: 0;
-        overflow-y: auto;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 4px;
+        scrollbar-width: none;
+      }
+
+      .settings-nav--top::-webkit-scrollbar {
+        display: none;
       }
 
       .settings-nav-item {
@@ -1881,8 +1865,8 @@
         align-items: center;
         gap: 12px;
         padding: 10px 16px;
-        border-radius: 8px;
-        border: none;
+        border-radius: 999px;
+        border: 1px solid var(--control-border);
         background: transparent;
         color: var(--text-secondary);
         font-size: 0.9rem;
@@ -1890,23 +1874,19 @@
         cursor: pointer;
         transition: all 0.2s ease;
         text-align: left;
+        flex: 0 0 auto;
+        white-space: nowrap;
       }
 
       .settings-nav-item:hover {
-        background: rgba(255, 255, 255, 0.05);
+        background: var(--control-hover);
         color: var(--text-primary);
       }
 
       .settings-nav-item.active {
-        background: var(--primary-color-dim, rgba(10, 132, 255, 0.15));
-        color: var(--primary-color, #0a84ff);
-      }
-
-      .settings-sidebar-footer {
-        padding: 16px 24px 24px;
-        flex-shrink: 0;
-        border-top: 1px solid rgba(255, 255, 255, 0.06);
-        margin-top: auto;
+        background: color-mix(in srgb, var(--primary) 16%, transparent);
+        border-color: color-mix(in srgb, var(--primary) 42%, transparent);
+        color: var(--primary);
       }
 
       .settings-content-area {
@@ -1922,31 +1902,60 @@
         isolation: isolate;
       }
 
+      .settings-topbar {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 20px 28px 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: color-mix(in srgb, var(--surface-shell-strong) 74%, transparent);
+        -webkit-backdrop-filter: blur(20px);
+        backdrop-filter: blur(20px);
+      }
+
+      .settings-topbar-heading {
+        flex: 0 0 auto;
+        min-width: 0;
+      }
+
+      .settings-topbar-heading h2 {
+        margin: 0;
+        font-size: 1.18rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+
+      .settings-topbar-save {
+        flex: 0 0 auto;
+      }
+
       .settings-content-header {
         flex-shrink: 0;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 16px;
-        min-height: 64px;
-        padding: 16px 40px;
+        min-height: 56px;
+        padding: 16px 28px 0;
         box-sizing: border-box;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        background: var(--bg-app);
+        border-bottom: 0;
+        background: transparent;
         z-index: 10;
       }
 
-      .settings-content-header h2 {
+      .settings-content-header h3 {
         margin: 0;
-        font-size: 1.35rem;
+        font-size: 1rem;
         font-weight: 600;
         line-height: 1.25;
         min-width: 0;
         flex: 1;
+        color: var(--text-secondary);
       }
 
-      .settings-content-header .btn {
-        flex-shrink: 0;
+      .settings-content-header-spacer {
+        flex: 0 0 auto;
       }
 
       .settings-content-body {
@@ -1955,7 +1964,7 @@
         overflow-y: auto;
         overflow-x: hidden;
         -webkit-overflow-scrolling: touch;
-        padding: 32px 40px 48px;
+        padding: 18px 28px 48px;
         max-width: 920px;
         width: 100%;
         box-sizing: border-box;
@@ -2072,10 +2081,6 @@
       @media (prefers-color-scheme: dark) {
         .settings-content-area {
           background: var(--bg-app);
-        }
-
-        .settings-sidebar {
-          background: rgba(22, 22, 24, 0.7);
         }
       }
 

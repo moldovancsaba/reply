@@ -229,6 +229,8 @@ function switchTab(tabId) {
   };
   const titleEl = el('settings-tab-title');
   if (titleEl) titleEl.textContent = titles[tabId] || 'Settings';
+  const subtitleEl = el('settings-tab-subtitle');
+  if (subtitleEl) subtitleEl.textContent = titles[tabId] || 'Settings';
 
   if (tabId === 'ai-status') {
     refreshAiProviderStatuses().catch((e) => console.warn('[settings] provider check:', e));
@@ -712,11 +714,9 @@ export async function wireDom() {
   applyIconFallback(container);
 
   const page = document.getElementById('settings-page');
-  const closeBtn = document.getElementById('settings-close');
   const saveBtn = document.getElementById('settings-save');
   const navItems = document.querySelectorAll('.settings-nav-item');
 
-  if (closeBtn) closeBtn.onclick = closeSettings;
   if (saveBtn) saveBtn.onclick = onSave;
 
   const connectBtn = el('settings-gmail-connect');
