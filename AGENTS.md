@@ -24,6 +24,7 @@ cd app/reply-app && ./install-bundle.sh
 - `make status` checks the session hub, any legacy LaunchAgent, and `{reply}` health.
 - `app/reply-app/install-bundle.sh` is the only accepted local install/update path for `/Applications/reply.app`. Do not replace the app with ad hoc `cp`/partial bundle copy commands.
 - `app/reply-app/build-icon.sh` must stay deterministic and local-only. Do not rebuild the app icon through Quick Look, browser screenshots, or any external asset pipeline.
+- The primary `{reply}` macOS workspace must be pure SwiftUI/AppKit. Do not reintroduce the main operator interface as HTML/CSS/JavaScript.
 
 ### chat/
 
@@ -57,3 +58,4 @@ npm run channel-bridge:ingest -- --event '{"channel":"telegram","peer":{"handle"
 - `README.md` still references `npm run dev`, but `chat/package.json` currently has no `dev` script. Prefer `npm start` unless/until a real `dev` command is added.
 - Native app updates must verify bundle integrity after install. Minimum required paths: `Contents/Info.plist`, `Contents/MacOS/reply`, `Contents/Resources/reply runtime`, `Contents/Resources/reply.icns`, and `Contents/Resources/reply-core`.
 - Native app updates must also refresh LaunchServices registration and the Dock after install so icon metadata is re-read from the repaired bundle.
+- Local runtimes and background services are allowed, but they are internal infrastructure. User-facing workspace flows must stay native.
