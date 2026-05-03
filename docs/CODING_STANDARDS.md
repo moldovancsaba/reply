@@ -28,6 +28,8 @@
 *   **Consistent Icon Button Pattern:** App action icons must be implemented through the shared icon-button pattern. Do not create inconsistent wrapped shapes, mixed paddings, or per-screen button geometry unless the design system changes for everyone.
 *   **No Emoji as Shipped UI Icons:** Emoji may appear in user content, never as the product’s own shipped iconography.
 *   **Inline and Dashboard Icons Count Too:** Dashboard, settings, profile actions, shell chrome, and state indicators must follow the same icon system as the rest of the app.
+*   **Deterministic Native App Icons:** The native app icon must be generated from local deterministic source code or checked-in local assets. Do not build release icons through Quick Look thumbnails, browser screenshots, or heuristic raster pipelines.
+*   **Bundle/Icon Integrity:** Treat `Contents/Info.plist`, `CFBundleIconFile`, and the bundled `.icns` asset as one release artifact. If one changes, the install verification must re-check all of them together.
 
 ## Rendering & Asset Hygiene
 *   **No Raw Markup Leakage:** Renderer code must never guess whether content is HTML, an asset path, or icon markup using brittle string inspection. Use explicit contracts.
@@ -60,6 +62,7 @@
 *   **Theme Verification:** UI changes must be checked in day, night, and system-follow modes.
 *   **Installed-App Verification:** For user-facing UI work, verify against the installed native app runtime, not only a dev server.
 *   **Visual Regression Checks:** Any change to navigation, settings, dashboards, or icon primitives should include a direct manual or scripted verification that content still renders and no raw HTML / placeholder glyphs leak into the UI.
+*   **Installer Verification:** Native app install/update scripts must verify bundle integrity after copy and refresh LaunchServices/Dock metadata so macOS re-reads the shipped icon from the repaired bundle.
 
 ## Dependency Management
 *   **Checking:** Run `npm audit` before every commit.
