@@ -50,6 +50,51 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
 - `REPLY-006` Dev-toolchain major-version upgrade lane
   `chat` is clean on tests, lint, audit, and the native package rebuild after safe dependency updates, but major upgrades remain for the ESLint toolchain. Those should be handled in a dedicated compatibility pass rather than mixed into runtime-boundary work.
 
+- `REPLY-NATIVE-001` Native dashboard source cards
+  Rebuild the lost dashboard cards in the native app for `iMessage`, `WhatsApp`, `Mail`, `Apple Notes`, `Apple Calendar`, `Apple Contacts`, and `KYC`, with visible counts, sync state, and timestamps.
+
+- `REPLY-NATIVE-002` Native sync action row
+  Restore native per-source sync triggers so the operator can run connector refreshes without leaving the native app.
+
+- `REPLY-NATIVE-003` Native source count and timestamp formatting
+  Normalize source counters and timestamps into one reliable native presentation contract.
+
+- `REPLY-NATIVE-004` Native source grouping model
+  Group sources in the native dashboard by `Conversations`, `Knowledge Inputs`, and `Deferred / Bridge Channels` so notes and document-like sources stop appearing as conversation equivalents.
+
+- `REPLY-NATIVE-005` Remove false conversation semantics from non-conversation sources in the native UI
+  Enforce the product rule that `Apple Notes`, `Apple Calendar`, `Apple Contacts`, and `LinkedIn posts` are inputs, not conversations.
+
+- `REPLY-NATIVE-006` Native bridge summary surface
+  Add native visibility for `Telegram`, `Discord`, `Signal`, `Viber`, and `LinkedIn` bridge status without pretending they are fully native connectors.
+
+- `REPLY-NATIVE-007` Native bridge health and last-event counts
+  Surface rollout mode, recent event counts, and last inbound timestamps for bridge-managed channels.
+
+- `REPLY-NATIVE-008` Native conversation loading parity
+  Complete the conversation/thread parity pass after the SwiftUI workspace cutover.
+
+- `REPLY-NATIVE-009` Native composer/send parity
+  Restore reliable channel-aware send behavior and native draft/composer ergonomics.
+
+- `REPLY-NATIVE-010` Native profile actions parity
+  Reintroduce archive/remove/block/hidden-contact management cleanly in the native profile pane.
+
+- `REPLY-NATIVE-011` Native connector settings parity
+  Expose connector management and repair settings in the native app instead of relying on the older rendered settings behavior.
+
+- `REPLY-NATIVE-012` Native repair guidance for blocked sources
+  Add explicit native recovery flows for blocked `iMessage`, disconnected mail, WhatsApp/OpenClaw failures, and other degraded connectors.
+
+- `REPLY-NATIVE-013` Native platform truth table enforcement
+  Encode the product classification rules directly into the native dashboard and inbox so `Conversations`, `Knowledge Inputs`, and `Deferred / Bridge Channels` cannot visually collapse back into one ambiguous source list.
+
+- `REPLY-NATIVE-014` Native counts contract for connector cards
+  Define exactly which count each card shows (`messages`, `documents`, `contacts`, `events`, or `profiles`) so the operator is not shown misleading cross-source numbers.
+
+- `REPLY-NATIVE-015` Native bridge honesty lane
+  Ensure `Telegram`, `Discord`, `Signal`, `Viber`, and `LinkedIn` are labeled truthfully as bridge-fed or draft-only where applicable, without fake sync/send promises.
+
 ## Dependencies
 
 - Depends on `{trinity}` for canonical runtime vocabulary and future candidate/frontier execution.
