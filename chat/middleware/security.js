@@ -7,6 +7,7 @@ const {
     resolveClientIp,
     appendSecurityAudit,
     hasValidOperatorToken,
+    hasValidNativeClientToken,
     isHumanApproved,
     isLocalRequest
 } = require("../security-policy");
@@ -95,7 +96,10 @@ function authorizeSensitiveRoute(req, res, securityPolicy, options) {
         return false;
     }
 
-    if (securityPolicy.requireOperatorToken && !hasValidOperatorToken(req, securityPolicy)) {
+    const nativeClientAuthorized =
+        isLocalRequest(req) && hasValidNativeClientToken(req, process.env);
+
+    if (securityPolicy.requireOperatorToken && !nativeClientAuthorized && !hasValidOperatorToken(req, securityPolicy)) {
         denySensitiveRoute(req, res, {
             route,
             action,
@@ -157,7 +161,7 @@ function handleSecurity(req, res, boundPort, securityPolicy) {
 
     res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Reply-Operator-Token, X-Reply-Human-Approval");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Reply-Operator-Token, X-Reply-Native-Token, X-Reply-Human-Approval");
     res.setHeader("Access-Control-Max-Age", "86400");
 
     if (req.method === "OPTIONS") {

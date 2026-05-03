@@ -394,6 +394,49 @@ struct ReplyProfile: Decodable {
     let channels: ReplyProfileChannels?
 }
 
+struct ReplyProfileDraft: Equatable {
+    var displayName: String
+    var profession: String
+    var company: String
+    var relationship: String
+    var linkedinURL: String
+    var intro: String
+
+    static let empty = ReplyProfileDraft(
+        displayName: "",
+        profession: "",
+        company: "",
+        relationship: "",
+        linkedinURL: "",
+        intro: ""
+    )
+
+    init(
+        displayName: String,
+        profession: String,
+        company: String,
+        relationship: String,
+        linkedinURL: String,
+        intro: String
+    ) {
+        self.displayName = displayName
+        self.profession = profession
+        self.company = company
+        self.relationship = relationship
+        self.linkedinURL = linkedinURL
+        self.intro = intro
+    }
+
+    init(profile: ReplyProfile) {
+        self.displayName = profile.displayName ?? profile.presentationDisplayName ?? ""
+        self.profession = profile.profession ?? ""
+        self.company = profile.company ?? ""
+        self.relationship = profile.relationship ?? ""
+        self.linkedinURL = profile.linkedinUrl ?? ""
+        self.intro = profile.intro ?? ""
+    }
+}
+
 struct ReplyProfileNote: Decodable, Hashable {
     let text: String?
 }

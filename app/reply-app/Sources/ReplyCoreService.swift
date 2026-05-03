@@ -28,9 +28,14 @@ final class ReplyCoreService: ObservableObject {
     @Published var isLoadingConversations = false
     @Published var isLoadingMessages = false
     @Published var isLoadingProfile = false
+    @Published var isSavingProfile = false
     @Published var sendErrorMessage: String = ""
     @Published var workspaceErrorMessage: String = ""
+    @Published var profileErrorMessage: String = ""
+    @Published var profileSaveErrorMessage: String = ""
     @Published var sendInFlight = false
+    @Published var conversationRefreshInFlight = false
+    @Published var profileDraft: ReplyProfileDraft = .empty
 
     private var launchProcess: Process?
     private var refreshTask: Task<Void, Never>?
@@ -39,6 +44,7 @@ final class ReplyCoreService: ObservableObject {
     private var consecutiveHealthFailures = 0
     private var lastIMessageMirrorAt: Date?
     private var lastOllamaStartAttemptAt: Date?
+    private let nativeClientToken = UUID().uuidString
 
     deinit {
         refreshTask?.cancel()
@@ -125,6 +131,7 @@ final class ReplyCoreService: ObservableObject {
                     selectedConversationHandle = nil
                     messages = []
                     selectedProfile = nil
+                    profileDraft = .empty
                 }
             }
         } catch {
@@ -170,6 +177,7 @@ final class ReplyCoreService: ObservableObject {
     func loadProfile(handle: String) async {
         guard let baseURL else { return }
         isLoadingProfile = true
+        profileErrorMessage = ""
         defer { isLoadingProfile = false }
         do {
             var components = URLComponents(url: baseURL.appending(path: "api/kyc"), resolvingAgainstBaseURL: false)
@@ -178,11 +186,84 @@ final class ReplyCoreService: ObservableObject {
             let payload: ReplyProfile = try await requestJSON(url: url)
             if selectedConversationHandle == handle {
                 selectedProfile = payload
+                profileDraft = ReplyProfileDraft(profile: payload)
             }
         } catch {
             if selectedConversationHandle == handle {
                 selectedProfile = nil
+                profileDraft = .empty
+                profileErrorMessage = error.localizedDescription
             }
+        }
+    }
+
+    func refreshCurrentConversation() async {
+        guard let handle = selectedConversationHandle else { return }
+        if conversationRefreshInFlight { return }
+        conversationRefreshInFlight = true
+        workspaceErrorMessage = ""
+        defer { conversationRefreshInFlight = false }
+
+        if let syncChannel = currentSyncChannel {
+            await triggerSync(syncChannel)
+        }
+        await loadConversation(handle: handle)
+        await loadConversations()
+        await refreshHealth()
+    }
+
+    func saveSelectedProfile() async {
+        guard let baseURL, let handle = selectedConversationHandle else { return }
+        if isSavingProfile { return }
+        isSavingProfile = true
+        profileSaveErrorMessage = ""
+        defer { isSavingProfile = false }
+
+        struct Payload: Encodable {
+            let handle: String
+            let displayName: String
+            let profession: String
+            let company: String
+            let relationship: String
+            let linkedinUrl: String
+            let intro: String
+            let approval: Approval
+        }
+
+        struct Approval: Encodable {
+            let confirmed: Bool
+            let source: String
+            let at: String
+        }
+
+        do {
+            let url = baseURL.appending(path: "api/kyc")
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            applyProtectedHeaders(to: &request, includeHumanApproval: true)
+            request.httpBody = try JSONEncoder().encode(Payload(
+                handle: handle,
+                displayName: profileDraft.displayName,
+                profession: profileDraft.profession,
+                company: profileDraft.company,
+                relationship: profileDraft.relationship,
+                linkedinUrl: profileDraft.linkedinURL,
+                intro: profileDraft.intro,
+                approval: Approval(
+                    confirmed: true,
+                    source: "native-profile-save",
+                    at: ISO8601DateFormatter().string(from: Date())
+                )
+            ))
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                throw NSError(domain: "ReplyCoreService", code: 7, userInfo: [NSLocalizedDescriptionKey: "Saving profile failed."])
+            }
+            await loadProfile(handle: handle)
+            await loadConversations()
+        } catch {
+            profileSaveErrorMessage = error.localizedDescription
         }
     }
 
@@ -204,6 +285,7 @@ final class ReplyCoreService: ObservableObject {
             var request = URLRequest(url: baseURL.appending(path: endpoint))
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            applyProtectedHeaders(to: &request, includeHumanApproval: true)
             request.httpBody = try JSONSerialization.data(withJSONObject: [
                 "recipient": handle,
                 "text": text,
@@ -261,6 +343,7 @@ final class ReplyCoreService: ObservableObject {
         env["USE_TRINITY_DRAFTS"] = "1"
         env["REPLY_ALLOW_LEGACY_BRAIN"] = "0"
         env["REPLY_ALLOW_EXPERIMENTAL_BRAIN_MODES"] = "0"
+        env["REPLY_NATIVE_CLIENT_TOKEN"] = nativeClientToken
         env["TRINITY_RUNTIME_ROOT"] = runtimeRoot.appending(path: "trinity-runtime").path
         env["PORT"] = String(preferredPorts.first ?? 45431)
         if let mirrored = mirroredIMessageDbURL(), FileManager.default.fileExists(atPath: mirrored.path) {
@@ -364,7 +447,9 @@ final class ReplyCoreService: ObservableObject {
         defer { isLoadingSettings = false }
         do {
             let url = baseURL.appending(path: "api/settings")
-            let (data, response) = try await URLSession.shared.data(from: url)
+            var request = URLRequest(url: url)
+            applyProtectedHeaders(to: &request, includeHumanApproval: false)
+            let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 throw NSError(domain: "ReplyCoreService", code: 2, userInfo: [NSLocalizedDescriptionKey: "Settings endpoint returned a non-200 response."])
             }
@@ -397,6 +482,7 @@ final class ReplyCoreService: ObservableObject {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            applyProtectedHeaders(to: &request, includeHumanApproval: true)
             request.httpBody = try JSONEncoder().encode(Payload(
                 ai: settingsDraft.ai,
                 worker: settingsDraft.worker,
@@ -421,6 +507,7 @@ final class ReplyCoreService: ObservableObject {
             let url = baseURL.appending(path: "api/sync-\(channel.rawValue)")
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
+            applyProtectedHeaders(to: &request, includeHumanApproval: false)
             let (_, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 throw NSError(domain: "ReplyCoreService", code: 4, userInfo: [NSLocalizedDescriptionKey: "Sync trigger failed for \(channel.title)."])
@@ -635,6 +722,7 @@ final class ReplyCoreService: ObservableObject {
     private func requestJSON<T: Decodable>(url: URL) async throws -> T {
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
+        applyProtectedHeaders(to: &request, includeHumanApproval: false)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw NSError(domain: "ReplyCoreService", code: 6, userInfo: [NSLocalizedDescriptionKey: "Request failed for \(url.lastPathComponent)."])
@@ -659,6 +747,34 @@ final class ReplyCoreService: ObservableObject {
             return .imessage
         }
         return .whatsapp
+    }
+
+    private var currentSyncChannel: SyncChannel? {
+        switch selectedChannel {
+        case .imessage:
+            return .imessage
+        case .whatsapp:
+            return .whatsapp
+        case .email:
+            return .mail
+        case .linkedin:
+            return nil
+        }
+    }
+
+    private func applyProtectedHeaders(to request: inout URLRequest, includeHumanApproval: Bool) {
+        if let token = operatorToken {
+            request.setValue(token, forHTTPHeaderField: "X-Reply-Operator-Token")
+        }
+        request.setValue(nativeClientToken, forHTTPHeaderField: "X-Reply-Native-Token")
+        if includeHumanApproval {
+            request.setValue("confirmed", forHTTPHeaderField: "X-Reply-Human-Approval")
+        }
+    }
+
+    private var operatorToken: String? {
+        let envValue = String(ProcessInfo.processInfo.environment["REPLY_OPERATOR_TOKEN"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return envValue.isEmpty ? nil : envValue
     }
 
     private func handleHealthMiss(_ message: String) {
