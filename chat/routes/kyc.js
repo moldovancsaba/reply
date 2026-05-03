@@ -52,6 +52,7 @@ async function serveKyc(req, res, url, authorizeSensitiveRoute, onUpdate, bodyDa
     if (!authorizeSensitiveRoute(req, res, {
       route: "/api/kyc",
       action: "read-kyc",
+      requireHumanApproval: false,
     })) {
       return;
     }
