@@ -8,12 +8,14 @@
 5.  **Native-App Standard:** `{reply}` is a native macOS app product. Do not introduce website-style UX metaphors, page-era dead ends, or browser-only assumptions into shipped operator flows.
 
 ## Native App Requirements
-*   **Native-First UX:** Every shipped user flow must behave like a native app flow even when implemented inside the embedded workspace surface. Avoid standalone “website” patterns such as page detours for core actions, “Back to Chat” footers, or orphan subpages that break the product shell.
+*   **Pure Native Main Interface:** The primary `{reply}` macOS workspace must be implemented in SwiftUI/AppKit. Do not build or reintroduce the main operator experience as HTML/CSS/JavaScript.
+*   **Native-First UX:** Every shipped user flow must behave like a native app flow. Avoid standalone “website” patterns such as page detours for core actions, “Back to Chat” footers, or orphan subpages that break the product shell.
 *   **Single Product Shell:** Navigation must stay inside the app shell. Primary transitions should happen through top-level app chrome, in-app panels, or modals.
 *   **No Website Metaphors in Product UI:** Do not label native-product actions or surfaces in a way that implies `{reply}` is a website. The app is local software with local services.
 *   **Offline-Available Visual Assets:** Every visual element used by the shipped app must be available locally and render without remote fetches. This includes icons, logos, SVGs, fonts, theme tokens, and UI primitives.
 *   **No Runtime CDN / Remote UI Dependencies:** Do not depend on remote icon packs, remote fonts, browser-hosted assets, or third-party UI delivery for any shipped operator surface.
-*   **Embedded Asset Preference:** When a visual system can be embedded directly into the app runtime safely, prefer embedded delivery over browser-path asset lookup. Example: the local icon sprite is embedded into the DOM runtime rather than resolved from a web-style asset URL.
+*   **Local Runtime Services Only:** Local services and background runtimes are acceptable, but they must remain internal product infrastructure. The user-facing macOS workspace stays native.
+*   **Embedded Asset Preference:** When a visual system can be embedded directly into the app runtime safely, prefer embedded delivery over asset-path indirection.
 
 ## UI Implementation Rules
 *   **Semantic Theming Only:** Screen chrome, panels, menus, controls, and overlays must derive from semantic theme variables. Hardcoded one-off foreground/background fixes are not allowed.
@@ -21,6 +23,7 @@
 *   **Readable In Day and Night:** Every UI change must remain legible in light mode, dark mode, and system-follow mode.
 *   **Top-Level Action Consistency:** Header controls and shell actions should behave as a coherent native tool strip. Do not mix oversized pills, text-heavy menus, and icon-only controls arbitrarily.
 *   **No Floating Rescue Menus for Core Actions:** Core actions belong in the primary app chrome, not in surprise floating action menus, unless the interaction is explicitly transient and justified.
+*   **Native Main Window Ownership:** The main workspace window owns conversations, dashboard, composer, profile, and settings entry points through native containers. Do not move those flows back into ad hoc rendered surfaces.
 
 ## Icon Standards
 *   **Local Icon System Only:** All icons must come from the local shared icon implementation, not emoji, remote fonts, or ad hoc glyphs.
@@ -63,6 +66,7 @@
 *   **Installed-App Verification:** For user-facing UI work, verify against the installed native app runtime, not only a dev server.
 *   **Visual Regression Checks:** Any change to navigation, settings, dashboards, or icon primitives should include a direct manual or scripted verification that content still renders and no raw HTML / placeholder glyphs leak into the UI.
 *   **Installer Verification:** Native app install/update scripts must verify bundle integrity after copy and refresh LaunchServices/Dock metadata so macOS re-reads the shipped icon from the repaired bundle.
+*   **Native Workflow Verification:** For macOS UI work, verify the actual native window behavior: startup route, sidebar selection, dashboard visibility, conversation rendering, profile rendering, and composer visibility.
 
 ## Dependency Management
 *   **Checking:** Run `npm audit` before every commit.
