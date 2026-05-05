@@ -7,6 +7,8 @@ const { isConversationDataSource } = require('./utils/chat-utils.js');
 
 ensureDataHome();
 const DB_PATH = dataPath('chat.db');
+let conversationIndexReadyPromise = null;
+let storeReadyPromise = null;
 
 function openMessageStoreDb(mode) {
     const db =
@@ -17,6 +19,28 @@ function openMessageStoreDb(mode) {
         console.error('[message-store] SQLite error:', err.message);
     });
     return db;
+}
+
+function closeMessageStoreDb(db, cb) {
+    if (typeof cb === "function") {
+        db.close((err) => cb(err));
+        return;
+    }
+    return new Promise((resolve, reject) => {
+        db.close((err) => {
+            if (err) return reject(err);
+            resolve();
+        });
+    });
+}
+
+function safeJsonStringify(value) {
+    if (value == null) return null;
+    try {
+        return JSON.stringify(value);
+    } catch {
+        return null;
+    }
 }
 
 function isConversationMessageRow(row) {
@@ -41,72 +65,499 @@ const CONVERSATION_SOURCE_SQL = `
     )
 `;
 
-/**
- * Initialize the unified messages table
- */
-function initialize() {
-    const db = openMessageStoreDb();
-    db.serialize(() => {
-        db.run("PRAGMA journal_mode = WAL");
-        db.run("PRAGMA busy_timeout = 5000");
-        db.run(`
-            CREATE TABLE IF NOT EXISTS unified_messages (
-                id TEXT PRIMARY KEY,
-                text TEXT,
-                source TEXT,
-                handle TEXT,
-                timestamp TEXT,
-                path TEXT,
-                is_from_me INTEGER
-            )
-        `);
-        db.run(`CREATE INDEX IF NOT EXISTS idx_unified_messages_handle_timestamp ON unified_messages(handle, timestamp DESC)`);
-        db.run(`CREATE INDEX IF NOT EXISTS idx_unified_messages_timestamp ON unified_messages(timestamp DESC)`);
-        db.all("PRAGMA table_info(unified_messages)", (err, rows) => {
-            if (err) {
-                db.close();
-                return;
-            }
-            const cols = new Set((rows || []).map((r) => String(r.name || "").toLowerCase()));
-            if (!cols.has("is_from_me")) {
-                db.run(`ALTER TABLE unified_messages ADD COLUMN is_from_me INTEGER`, () => db.close());
-                return;
-            }
-            db.close();
+const CONVERSATION_INDEX_SORT_MAP = {
+    newest: { column: "latest_timestamp_ms", direction: "DESC" },
+    oldest: { column: "first_timestamp_ms", direction: "ASC" },
+    freq: { column: "sort_freq", direction: "DESC" },
+    volume_in: { column: "message_count_in", direction: "DESC" },
+    volume_out: { column: "message_count_out", direction: "DESC" },
+    volume_total: { column: "message_count_total", direction: "DESC" },
+    recommendation: { column: "sort_recommendation", direction: "DESC" },
+};
+
+function normalizeConversationSort(sort) {
+    const key = String(sort || "newest").trim().toLowerCase();
+    return CONVERSATION_INDEX_SORT_MAP[key] ? key : "newest";
+}
+
+function runDb(db, sql, params = []) {
+    return new Promise((resolve, reject) => {
+        db.run(sql, params, function onRun(err) {
+            if (err) return reject(err);
+            resolve(this);
         });
     });
 }
 
+function allDb(db, sql, params = []) {
+    return new Promise((resolve, reject) => {
+        db.all(sql, params, (err, rows) => {
+            if (err) return reject(err);
+            resolve(rows || []);
+        });
+    });
+}
+
+function getDb(db, sql, params = []) {
+    return new Promise((resolve, reject) => {
+        db.get(sql, params, (err, row) => {
+            if (err) return reject(err);
+            resolve(row || null);
+        });
+    });
+}
+
+function safeTimestampMs(value) {
+    const ms = Date.parse(String(value || ""));
+    return Number.isFinite(ms) ? ms : 0;
+}
+
+function normalizeConversationHandle(value) {
+    return String(value || "").trim().toLowerCase();
+}
+
+function computeConversationSorts(row) {
+    const latest = Number(row?.latest_timestamp_ms) || 0;
+    const first = Number(row?.first_timestamp_ms) || latest || 0;
+    const total = Number(row?.message_count_total) || 0;
+    const ageDays = Math.max(1, (Date.now() - latest) / 86400000);
+    const spanDays = Math.max(1, (latest - first) / 86400000);
+    const freq = total / spanDays;
+    const recency = 1 / ageDays;
+    const recommendation = (0.45 * recency) + (0.35 * Math.log1p(freq)) + (0.2 * Math.log1p(total));
+    return {
+        sort_freq: freq,
+        sort_recommendation: recommendation
+    };
+}
+
+async function rebuildConversationIndex(handles = null) {
+    const contactStore = require("./contact-store.js");
+    await contactStore.waitUntilReady();
+    await contactStore.refreshIfChanged();
+
+    const db = openMessageStoreDb();
+    try {
+        db.run("PRAGMA busy_timeout = 5000");
+
+        const rawHandles = Array.isArray(handles) ? handles : [];
+        const expandedHandles = [];
+        for (const raw of rawHandles) {
+            const handle = String(raw || "").trim();
+            if (!handle) continue;
+            const aliases = contactStore.getAllHandles(handle);
+            if (Array.isArray(aliases) && aliases.length) {
+                expandedHandles.push(...aliases);
+            } else {
+                expandedHandles.push(handle);
+            }
+        }
+        const uniqueHandles = Array.from(new Set(
+            expandedHandles.map((h) => String(h || "").trim()).filter(Boolean)
+        ));
+        const handleFilterSql = uniqueHandles.length
+            ? ` AND handle IN (${uniqueHandles.map(() => '?').join(', ')})`
+            : "";
+        const aggregateRows = await allDb(db, `
+            SELECT
+                handle,
+                MIN(path) AS path,
+                MIN(source) AS source,
+                MIN(timestamp) AS first_timestamp,
+                MAX(timestamp) AS latest_timestamp,
+                SUM(CASE WHEN is_from_me = 1 THEN 1 ELSE 0 END) AS message_count_out,
+                SUM(CASE WHEN is_from_me = 1 THEN 0 ELSE 1 END) AS message_count_in,
+                COUNT(*) AS message_count_total
+            FROM unified_messages
+            WHERE ${CONVERSATION_SOURCE_SQL}
+            ${handleFilterSql}
+            GROUP BY handle
+        `, uniqueHandles);
+
+        const latestRows = await allDb(db, `
+            WITH ranked AS (
+                SELECT
+                    handle,
+                    text,
+                    source,
+                    path,
+                    timestamp,
+                    ROW_NUMBER() OVER (PARTITION BY handle ORDER BY timestamp DESC, id DESC) AS rn
+                FROM unified_messages
+                WHERE ${CONVERSATION_SOURCE_SQL}
+                ${handleFilterSql}
+            )
+            SELECT handle, text, source, path, timestamp
+            FROM ranked
+            WHERE rn = 1
+        `, uniqueHandles);
+
+        const latestByHandle = new Map(
+            latestRows.map((row) => [String(row.handle || "").trim(), row])
+        );
+
+        const groupedRows = new Map();
+        for (const row of aggregateRows) {
+            const handle = String(row.handle || "").trim();
+            if (!handle) continue;
+            const latestRow = latestByHandle.get(handle) || row;
+            const latestTimestamp = String(latestRow.timestamp || row.latest_timestamp || "");
+            const firstTimestamp = String(row.first_timestamp || latestTimestamp || "");
+            const latestMs = safeTimestampMs(latestTimestamp);
+            const firstMs = safeTimestampMs(firstTimestamp) || latestMs;
+            const preview = String(latestRow.text || "").trim() || "No recent messages";
+            const counts = {
+                message_count_total: Number(row.message_count_total) || 0,
+                message_count_in: Number(row.message_count_in) || 0,
+                message_count_out: Number(row.message_count_out) || 0,
+            };
+            const contact = contactStore.findContact(handle);
+            const canonicalKey = contact?.id
+                ? `contact:${contact.id}`
+                : `handle:${normalizeConversationHandle(handle)}`;
+            const current = groupedRows.get(canonicalKey);
+            if (!current) {
+                groupedRows.set(canonicalKey, {
+                    canonicalKey,
+                    handle,
+                    path: String(latestRow.path || row.path || ""),
+                    source: String(latestRow.source || row.source || ""),
+                    preview,
+                    latestTimestamp,
+                    latestMs,
+                    firstTimestamp,
+                    firstMs,
+                    counts,
+                });
+                continue;
+            }
+
+            current.counts.message_count_total += counts.message_count_total;
+            current.counts.message_count_in += counts.message_count_in;
+            current.counts.message_count_out += counts.message_count_out;
+            if (!current.firstMs || (firstMs && firstMs < current.firstMs)) {
+                current.firstMs = firstMs;
+                current.firstTimestamp = firstTimestamp;
+            }
+            if (!current.latestMs || latestMs > current.latestMs) {
+                current.handle = handle;
+                current.path = String(latestRow.path || row.path || "");
+                current.source = String(latestRow.source || row.source || "");
+                current.preview = preview;
+                current.latestTimestamp = latestTimestamp;
+                current.latestMs = latestMs;
+            }
+        }
+
+        await runDb(db, "BEGIN TRANSACTION");
+        if (uniqueHandles.length) {
+            const keysToDelete = Array.from(new Set(
+                uniqueHandles.map((handle) => {
+                    const contact = contactStore.findContact(handle);
+                    return contact?.id
+                        ? `contact:${contact.id}`
+                        : `handle:${normalizeConversationHandle(handle)}`;
+                }).filter(Boolean)
+            ));
+            const handlePlaceholders = uniqueHandles.map(() => '?').join(', ');
+            const keyPlaceholders = keysToDelete.map(() => '?').join(', ');
+            await runDb(
+                db,
+                `
+                DELETE FROM conversation_index
+                WHERE handle IN (${handlePlaceholders})
+                   OR canonical_key IN (${keyPlaceholders})
+                `,
+                [...uniqueHandles, ...keysToDelete]
+            );
+        } else {
+            await runDb(db, "DELETE FROM conversation_index");
+        }
+
+        const insertStmt = db.prepare(`
+            INSERT OR REPLACE INTO conversation_index (
+                canonical_key,
+                handle,
+                path,
+                source,
+                preview,
+                latest_timestamp,
+                latest_timestamp_ms,
+                first_timestamp,
+                first_timestamp_ms,
+                message_count_total,
+                message_count_in,
+                message_count_out,
+                sort_freq,
+                sort_recommendation
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        await new Promise((resolve, reject) => {
+            for (const row of groupedRows.values()) {
+                const sorts = computeConversationSorts({
+                    latest_timestamp_ms: row.latestMs,
+                    first_timestamp_ms: row.firstMs,
+                    message_count_total: row.counts.message_count_total,
+                });
+                insertStmt.run(
+                    row.canonicalKey,
+                    row.handle,
+                    row.path,
+                    row.source,
+                    row.preview,
+                    row.latestTimestamp || null,
+                    row.latestMs,
+                    row.firstTimestamp || null,
+                    row.firstMs,
+                    row.counts.message_count_total,
+                    row.counts.message_count_in,
+                    row.counts.message_count_out,
+                    sorts.sort_freq,
+                    sorts.sort_recommendation
+                );
+            }
+            insertStmt.finalize((err) => {
+                if (err) return reject(err);
+                resolve();
+            });
+        });
+        await runDb(db, "COMMIT");
+    } catch (err) {
+        try { await runDb(db, "ROLLBACK"); } catch { }
+        throw err;
+    } finally {
+        await closeMessageStoreDb(db);
+    }
+}
+
+async function ensureConversationIndexReady() {
+    if (!conversationIndexReadyPromise) {
+        conversationIndexReadyPromise = (async () => {
+            const db = openMessageStoreDb(sqlite3.OPEN_READONLY);
+            try {
+                db.run("PRAGMA busy_timeout = 5000");
+                const row = await getDb(db, `
+                    SELECT
+                        COUNT(*) AS total_count,
+                        SUM(CASE WHEN canonical_key IS NULL OR TRIM(canonical_key) = '' THEN 1 ELSE 0 END) AS blank_keys,
+                        COUNT(DISTINCT handle) AS distinct_handles
+                    FROM conversation_index
+                `);
+                const totalCount = Number(row?.total_count) || 0;
+                const blankKeys = Number(row?.blank_keys) || 0;
+                const distinctHandles = Number(row?.distinct_handles) || 0;
+                const duplicateHandles = totalCount > distinctHandles;
+                if (totalCount === 0 || blankKeys > 0 || duplicateHandles) {
+                    await rebuildConversationIndex();
+                }
+            } finally {
+                await closeMessageStoreDb(db);
+            }
+        })().catch((err) => {
+            conversationIndexReadyPromise = null;
+            throw err;
+        });
+    }
+    return conversationIndexReadyPromise;
+}
+
+/**
+ * Initialize the unified messages table
+ */
+function initialize() {
+    if (storeReadyPromise) return storeReadyPromise;
+    const db = openMessageStoreDb();
+    storeReadyPromise = new Promise((resolve, reject) => {
+        db.serialize(() => {
+            db.run("PRAGMA busy_timeout = 5000");
+            db.run(`
+                CREATE TABLE IF NOT EXISTS unified_messages (
+                    id TEXT PRIMARY KEY,
+                    text TEXT,
+                    source TEXT,
+                    handle TEXT,
+                    timestamp TEXT,
+                    path TEXT,
+                    is_from_me INTEGER
+                )
+            `);
+            db.run(`
+                CREATE TABLE IF NOT EXISTS unified_message_metadata (
+                    message_id TEXT PRIMARY KEY,
+                    provider_message_key TEXT,
+                    channel TEXT,
+                    external_thread_key TEXT,
+                    external_thread_kind TEXT,
+                    external_thread_title TEXT,
+                    sender_identity TEXT,
+                    participant_identities_json TEXT,
+                    recipient_identities_json TEXT,
+                    metadata_json TEXT
+                )
+            `);
+            db.run(`
+                CREATE TABLE IF NOT EXISTS conversation_index (
+                    canonical_key TEXT PRIMARY KEY,
+                    handle TEXT,
+                    path TEXT,
+                    source TEXT,
+                    preview TEXT,
+                    latest_timestamp TEXT,
+                    latest_timestamp_ms INTEGER,
+                    first_timestamp TEXT,
+                    first_timestamp_ms INTEGER,
+                    message_count_total INTEGER,
+                    message_count_in INTEGER,
+                    message_count_out INTEGER,
+                    sort_freq REAL,
+                    sort_recommendation REAL
+                )
+            `);
+            db.run(`CREATE INDEX IF NOT EXISTS idx_conversation_index_latest ON conversation_index(latest_timestamp_ms DESC)`);
+            db.run(`CREATE INDEX IF NOT EXISTS idx_conversation_index_oldest ON conversation_index(first_timestamp_ms ASC)`);
+            db.run(`CREATE INDEX IF NOT EXISTS idx_unified_messages_handle_timestamp ON unified_messages(handle, timestamp DESC)`);
+            db.run(`CREATE INDEX IF NOT EXISTS idx_unified_messages_timestamp ON unified_messages(timestamp DESC)`);
+            db.run(`CREATE INDEX IF NOT EXISTS idx_unified_message_metadata_thread ON unified_message_metadata(channel, external_thread_key)`);
+            db.all("PRAGMA table_info(conversation_index)", (convErr, convRows) => {
+                if (convErr) {
+                    closeMessageStoreDb(db, () => reject(convErr));
+                    return;
+                }
+                const convCols = new Set((convRows || []).map((r) => String(r.name || "").toLowerCase()));
+                const ensureUnifiedSchema = () => db.all("PRAGMA table_info(unified_messages)", (err, rows) => {
+                    if (err) {
+                        closeMessageStoreDb(db, () => reject(err));
+                        return;
+                    }
+                    const cols = new Set((rows || []).map((r) => String(r.name || "").toLowerCase()));
+                    if (!cols.has("is_from_me")) {
+                        db.run(`ALTER TABLE unified_messages ADD COLUMN is_from_me INTEGER`, (alterErr) => {
+                            closeMessageStoreDb(db, () => {
+                            if (alterErr) return reject(alterErr);
+                            resolve();
+                            });
+                        });
+                        return;
+                    }
+                    closeMessageStoreDb(db, (closeErr) => {
+                        if (closeErr) return reject(closeErr);
+                        resolve();
+                    });
+                });
+
+                if (!convCols.has("canonical_key")) {
+                    db.serialize(() => {
+                        db.run("DROP TABLE IF EXISTS conversation_index");
+                        db.run(`
+                            CREATE TABLE conversation_index (
+                                canonical_key TEXT PRIMARY KEY,
+                                handle TEXT,
+                                path TEXT,
+                                source TEXT,
+                                preview TEXT,
+                                latest_timestamp TEXT,
+                                latest_timestamp_ms INTEGER,
+                                first_timestamp TEXT,
+                                first_timestamp_ms INTEGER,
+                                message_count_total INTEGER,
+                                message_count_in INTEGER,
+                                message_count_out INTEGER,
+                                sort_freq REAL,
+                                sort_recommendation REAL
+                            )
+                        `);
+                        db.run(`CREATE INDEX IF NOT EXISTS idx_conversation_index_latest ON conversation_index(latest_timestamp_ms DESC)`);
+                        db.run(`CREATE INDEX IF NOT EXISTS idx_conversation_index_oldest ON conversation_index(first_timestamp_ms ASC)`);
+                        ensureUnifiedSchema();
+                    });
+                    return;
+                }
+                ensureUnifiedSchema();
+            });
+        });
+    });
+    return storeReadyPromise;
+}
+
 /**
  * Save a batch of messages to the unified store
- * @param {Array} messages - List of {id, text, source, handle, timestamp, path, is_from_me}
+ * @param {Array} messages - List of {id, text, source, handle, timestamp, path, is_from_me, metadata}
  */
 async function saveMessages(messages) {
     if (!messages || messages.length === 0) return;
+    await initialize();
 
     const db = openMessageStoreDb();
-    return new Promise((resolve, reject) => {
+    await new Promise((resolve, reject) => {
         db.serialize(() => {
-            db.run("PRAGMA journal_mode = WAL");
             db.run("PRAGMA busy_timeout = 5000");
 
             const stmt = db.prepare(`
                 INSERT OR REPLACE INTO unified_messages (id, text, source, handle, timestamp, path, is_from_me)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             `);
+            const metadataStmt = db.prepare(`
+                INSERT OR REPLACE INTO unified_message_metadata (
+                    message_id,
+                    provider_message_key,
+                    channel,
+                    external_thread_key,
+                    external_thread_kind,
+                    external_thread_title,
+                    sender_identity,
+                    participant_identities_json,
+                    recipient_identities_json,
+                    metadata_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
 
             db.run("BEGIN TRANSACTION");
             messages.forEach(m => {
                 stmt.run(m.id, m.text, m.source, m.handle, m.timestamp, m.path, m.is_from_me == null ? null : (m.is_from_me ? 1 : 0));
+                if (m.metadata && typeof m.metadata === "object") {
+                    metadataStmt.run(
+                        m.id,
+                        m.metadata.providerMessageKey || null,
+                        m.metadata.channel || null,
+                        m.metadata.externalThreadKey || null,
+                        m.metadata.externalThreadKind || null,
+                        m.metadata.externalThreadTitle || null,
+                        m.metadata.senderIdentity || null,
+                        safeJsonStringify(m.metadata.participantIdentities || []),
+                        safeJsonStringify(m.metadata.recipientIdentities || []),
+                        safeJsonStringify(m.metadata)
+                    );
+                }
             });
             db.run("COMMIT", (err) => {
                 stmt.finalize();
-                db.close();
-                if (err) return reject(err);
-                resolve();
+                metadataStmt.finalize();
+                if (err) {
+                    db.close(() => reject(err));
+                    return;
+                }
+                db.close((closeErr) => {
+                    if (closeErr) return reject(closeErr);
+                    resolve();
+                });
             });
         });
     });
+
+    await rebuildConversationIndex(messages.map((m) => m.handle));
+    try {
+        const conversationFoundationStore = require("./conversation-foundation-store.js");
+        await conversationFoundationStore.rebuildConversationFoundation(messages.map((m) => m.handle));
+    } catch (err) {
+        console.warn("[message-store] failed to rebuild canonical conversation foundation:", err.message);
+    }
+    try {
+        const preparedContextStore = require("./prepared-context-store.js");
+        await preparedContextStore.rebuildDraftContextSnapshots(messages.map((m) => m.handle));
+    } catch (err) {
+        console.warn("[message-store] failed to rebuild draft context snapshots:", err.message);
+    }
 }
 
 /**
@@ -114,6 +565,7 @@ async function saveMessages(messages) {
  * @param {Object} filter - {source, handle, limit, offset}
  */
 async function getMessages(filter = {}) {
+    await initialize();
     const db = openMessageStoreDb(sqlite3.OPEN_READONLY);
     db.run("PRAGMA busy_timeout = 5000");
     let query = "SELECT * FROM unified_messages WHERE 1=1";
@@ -154,6 +606,7 @@ async function getMessages(filter = {}) {
  * @param {Object} filter - {limit, offset, q}
  */
 async function getRecentConversations(filter = {}) {
+    await initialize();
     const db = openMessageStoreDb(sqlite3.OPEN_READONLY);
     db.run("PRAGMA busy_timeout = 5000");
 
@@ -218,54 +671,90 @@ async function getRecentConversations(filter = {}) {
 }
 
 async function getConversationIndexRows(filter = {}) {
+    await initialize();
+    await ensureConversationIndexReady();
+
     const db = openMessageStoreDb(sqlite3.OPEN_READONLY);
     db.run("PRAGMA busy_timeout = 5000");
 
+    const sort = normalizeConversationSort(filter.sort);
+    const sortSpec = CONVERSATION_INDEX_SORT_MAP[sort];
     const params = [];
-    let whereClause = "";
+    const where = [];
     if (filter.q) {
-        whereClause = "WHERE handle LIKE ? OR text LIKE ?";
-        const q = `%${filter.q}%`;
-        params.push(q, q);
+        const q = `%${String(filter.q).trim()}%`;
+        where.push("(handle LIKE ? OR preview LIKE ? OR source LIKE ?)");
+        params.push(q, q, q);
     }
-
     const query = `
-        WITH ranked AS (
-            SELECT
-                handle,
-                text,
-                source,
-                timestamp,
-                path,
-                ROW_NUMBER() OVER (PARTITION BY handle ORDER BY timestamp DESC) AS rn,
-                MIN(timestamp) OVER (PARTITION BY handle) AS first_timestamp,
-                COUNT(*) OVER (PARTITION BY handle) AS total_count
-            FROM unified_messages
-            ${whereClause ? `${whereClause} AND ${CONVERSATION_SOURCE_SQL}` : `WHERE ${CONVERSATION_SOURCE_SQL}`}
-        )
         SELECT
             handle,
-            text,
+            preview AS text,
             source,
-            timestamp,
+            latest_timestamp AS timestamp,
             path,
             first_timestamp,
-            total_count
-        FROM ranked
-        WHERE rn = 1
-        ORDER BY timestamp DESC
+            message_count_total AS total_count,
+            message_count_in,
+            message_count_out,
+            latest_timestamp_ms,
+            first_timestamp_ms,
+            sort_freq,
+            sort_recommendation
+        FROM conversation_index
+        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+        ORDER BY ${sortSpec.column} ${sortSpec.direction}, handle ASC
     `;
 
-    return new Promise((resolve, reject) => {
-        db.all(query, params, (err, rows) => {
-            db.close();
-            if (err) return reject(err);
-            resolve(rows || []);
-        });
-    });
+    return allDb(db, query, params).finally(() => db.close());
+}
+
+async function getConversationIndexStats() {
+    await initialize();
+    await ensureConversationIndexReady();
+
+    const db = openMessageStoreDb(sqlite3.OPEN_READONLY);
+    db.run("PRAGMA busy_timeout = 5000");
+
+    const totalRow = await getDb(
+        db,
+        `SELECT COUNT(*) AS total FROM conversation_index`
+    );
+    const channelRows = await allDb(
+        db,
+        `
+        SELECT
+            CASE
+                WHEN LOWER(COALESCE(path, '')) LIKE 'linkedin://%' THEN 'linkedin'
+                WHEN LOWER(COALESCE(path, '')) LIKE 'mailto:%' OR LOWER(COALESCE(path, '')) LIKE 'email://%' THEN 'email'
+                WHEN LOWER(COALESCE(path, '')) LIKE 'whatsapp://%' THEN 'whatsapp'
+                WHEN LOWER(COALESCE(path, '')) LIKE 'imessage://%' THEN 'imessage'
+                WHEN LOWER(COALESCE(path, '')) LIKE 'telegram://%' THEN 'telegram'
+                WHEN LOWER(COALESCE(path, '')) LIKE 'discord://%' THEN 'discord'
+                WHEN LOWER(COALESCE(path, '')) LIKE 'signal://%' THEN 'signal'
+                WHEN LOWER(COALESCE(path, '')) LIKE 'viber://%' THEN 'viber'
+                ELSE LOWER(COALESCE(source, ''))
+            END AS channel,
+            COUNT(*) AS total
+        FROM conversation_index
+        GROUP BY 1
+        `
+    ).finally(() => db.close());
+
+    const byChannel = {};
+    for (const row of channelRows) {
+        const key = String(row?.channel || "").trim().toLowerCase();
+        if (!key) continue;
+        byChannel[key] = Number(row?.total) || 0;
+    }
+    return {
+        total: Number(totalRow?.total) || 0,
+        byChannel,
+    };
 }
 
 async function getLatestContextForHandles(handles = [], options = {}) {
+    await initialize();
     const uniqueHandles = Array.from(
         new Set(
             (Array.isArray(handles) ? handles : [])
@@ -312,6 +801,7 @@ async function getLatestContextForHandles(handles = [], options = {}) {
 }
 
 async function getMessagesForHandles(handles = [], filter = {}) {
+    await initialize();
     const uniqueHandles = Array.from(
         new Set(
             (Array.isArray(handles) ? handles : [])
@@ -371,8 +861,12 @@ module.exports = {
     getMessages,
     getRecentConversations,
     getConversationIndexRows,
+    getConversationIndexStats,
     getLatestContextForHandles,
-    getMessagesForHandles
+    getMessagesForHandles,
+    rebuildConversationIndex,
+    ensureConversationIndexReady,
+    waitUntilReady: initialize
 };
 
 initialize();

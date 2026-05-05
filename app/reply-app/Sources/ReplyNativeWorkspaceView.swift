@@ -139,7 +139,7 @@ struct ReplyNativeWorkspaceView: View {
                 )
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 10) {
                         ForEach(service.conversations) { conversation in
                             ConversationRow(
                                 conversation: conversation,
@@ -147,8 +147,27 @@ struct ReplyNativeWorkspaceView: View {
                             ) {
                                 Task { await service.loadConversation(handle: conversation.handle) }
                             }
+                            .onAppear {
+                                Task {
+                                    await service.loadMoreConversationsIfNeeded(current: conversation)
+                                }
+                            }
+                        }
+
+                        if service.conversationsHasMore {
+                            HStack {
+                                Spacer()
+                                Button(service.isLoadingMoreConversations ? "Loading..." : "Load more conversations") {
+                                    Task { await service.loadConversations(reset: false) }
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(service.isLoadingMoreConversations)
+                                Spacer()
+                            }
+                            .padding(.vertical, 8)
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                     .padding(14)
                 }
             }
@@ -226,7 +245,9 @@ struct ReplyNativeWorkspaceView: View {
     }
 
     private func conversationPane(handle: String) -> some View {
-        VStack(spacing: 0) {
+        let visibleChannels = service.currentConversationChannels
+        let allowedChannels = service.allowedReplyChannels
+        return VStack(spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(selectedConversationTitle)
@@ -248,24 +269,48 @@ struct ReplyNativeWorkspaceView: View {
                 }
                 .buttonStyle(.borderless)
                 .disabled(service.conversationRefreshInFlight)
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 16)
+            .padding(.bottom, 10)
 
+            HStack(alignment: .center, spacing: 12) {
+                ConversationChannelStrip(
+                    title: "Seen on",
+                    channels: visibleChannels,
+                    emptyText: "No channel inventory"
+                )
+                Spacer(minLength: 12)
+                ConversationChannelStrip(
+                    title: "Reply on",
+                    channels: allowedChannels,
+                    emptyText: "No allowed channel"
+                )
                 Picker("Channel", selection: $service.selectedChannel) {
-                    ForEach(ReplyMessageChannel.allCases) { channel in
+                    ForEach(allowedChannels.isEmpty ? visibleChannels : allowedChannels) { channel in
                         Text(channel.label).tag(channel)
                     }
                 }
                 .pickerStyle(.menu)
-                .frame(width: 160)
+                .frame(width: 170)
+                .disabled((allowedChannels.isEmpty ? visibleChannels : allowedChannels).isEmpty)
             }
             .padding(.horizontal, 22)
-            .padding(.vertical, 16)
+            .padding(.bottom, 16)
 
             Divider()
 
             if service.isLoadingMessages && service.messages.isEmpty {
                 loadingPanel("Loading messages...")
             } else {
-                ReplyMessageTimeline(messages: service.messages)
+                ReplyMessageTimeline(
+                    messages: service.messages,
+                    gapRemaining: service.threadGapRemaining,
+                    isLoadingGap: service.isLoadingMoreThreadGap,
+                    loadMore: {
+                        Task { await service.loadMoreThreadGap() }
+                    }
+                )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
@@ -292,8 +337,20 @@ struct ReplyNativeWorkspaceView: View {
                     )
 
                 HStack {
-                    Text(service.selectedChannel.label)
-                        .foregroundStyle(ReplyConstellationPalette.textSecondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(service.allowedReplyChannels.contains(service.selectedChannel) ? "Sending on \(service.selectedChannel.label)" : "No allowed channel")
+                            .foregroundStyle(ReplyConstellationPalette.textSecondary)
+                        if let conversationId = service.currentConversationId, !conversationId.isEmpty {
+                            HStack(spacing: 8) {
+                                Text(service.currentConversationKind == "group" ? "group" : "direct")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(ReplyConstellationPalette.textSecondary.opacity(0.8))
+                                Text(conversationId)
+                                    .font(.caption2.monospaced())
+                                    .foregroundStyle(ReplyConstellationPalette.textSecondary.opacity(0.7))
+                            }
+                        }
+                    }
                     Spacer()
                     Button(service.sendInFlight ? "Sending..." : "Send") {
                         Task { await service.sendCurrentMessage() }
@@ -302,7 +359,9 @@ struct ReplyNativeWorkspaceView: View {
                     .disabled(
                         service.sendInFlight ||
                         service.selectedConversationHandle != handle ||
-                        service.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        service.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                        service.allowedReplyChannels.isEmpty ||
+                        !service.allowedReplyChannels.contains(service.selectedChannel)
                     )
                 }
             }
@@ -399,21 +458,28 @@ struct ReplyNativeWorkspaceView: View {
     }
 
     private var offlinePane: some View {
-        VStack(spacing: 18) {
+        let isStarting: Bool = {
+            if case .starting = service.runtimeState { return true }
+            return false
+        }()
+        return VStack(spacing: 18) {
             Image(systemName: "desktopcomputer.trianglebadge.exclamationmark")
                 .font(.system(size: 48, weight: .semibold))
                 .foregroundStyle(ReplyConstellationPalette.warning)
-            Text("{reply} runtime is not connected")
+            Text(isStarting ? "{reply} runtime is starting" : "{reply} runtime is not connected")
                 .font(.title.weight(.bold))
-            Text("Launch the local runtime and the native workspace will populate automatically.")
+            Text(isStarting
+                 ? "Bootstrapping the local runtime. The native workspace will populate as soon as the hub reports ready."
+                 : "Launch the local runtime and the native workspace will populate automatically.")
                 .foregroundStyle(ReplyConstellationPalette.textSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
             HStack(spacing: 14) {
-                Button("Launch runtime") {
+                Button(isStarting ? "Starting..." : "Launch runtime") {
                     service.launchReply()
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(isStarting)
 
                 Button("Refresh") {
                     Task { await service.refreshHealth() }
@@ -444,6 +510,10 @@ struct ReplyNativeWorkspaceView: View {
     }
 
     private var selectedConversationTitle: String {
+        let canonical = service.currentConversationTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !canonical.isEmpty {
+            return canonical
+        }
         if let current = service.conversations.first(where: { $0.handle == service.selectedConversationHandle }) {
             return current.resolvedTitle
         }
@@ -454,6 +524,9 @@ struct ReplyNativeWorkspaceView: View {
     }
 
     private var selectedConversationSubtitle: String {
+        if service.currentConversationKind == "group" {
+            return "Group conversation"
+        }
         if let current = service.conversations.first(where: { $0.handle == service.selectedConversationHandle }) {
             return current.resolvedPreview
         }
@@ -461,9 +534,25 @@ struct ReplyNativeWorkspaceView: View {
     }
 
     private var channelGlyph: some View {
-        Image(systemName: service.workspaceMode == .dashboard ? "square.grid.2x2" : "message")
-            .font(.system(size: 22, weight: .semibold))
-            .foregroundStyle(ReplyConstellationPalette.textPrimary)
+        Group {
+            if service.workspaceMode == .dashboard {
+                Image(systemName: "square.grid.2x2")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(ReplyConstellationPalette.textPrimary)
+            } else if !service.currentConversationChannels.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(service.currentConversationChannels, id: \.self) { channel in
+                        Image(systemName: channelSymbol(for: channel.rawValue))
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(channelColor(for: channel.rawValue))
+                    }
+                }
+            } else {
+                Image(systemName: "message")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(ReplyConstellationPalette.textPrimary)
+            }
+        }
     }
 
     private var runtimeIndicator: some View {
@@ -607,6 +696,65 @@ private struct WorkspaceIconButton: View {
     }
 }
 
+private func channelSymbol(for value: String?) -> String {
+    switch value?.lowercased() {
+    case "whatsapp": "message.circle.fill"
+    case "email": "envelope.fill"
+    case "linkedin": "person.2.square.stack.fill"
+    default: "message.fill"
+    }
+}
+
+private func channelLabel(_ value: String?) -> String {
+    switch value?.lowercased() {
+    case "whatsapp": "WhatsApp"
+    case "email": "Email"
+    case "linkedin": "LinkedIn"
+    case "imessage": "iMessage"
+    default: "Message"
+    }
+}
+
+private func channelColor(for value: String?) -> Color {
+    switch value?.lowercased() {
+    case "whatsapp": ReplyConstellationPalette.success
+    case "email": ReplyConstellationPalette.accent
+    case "linkedin": ReplyConstellationPalette.warning
+    default: ReplyConstellationPalette.accent
+    }
+}
+
+private func formattedConversationPreviewDate(_ value: String?) -> String {
+    guard let date = parseIsoDate(value) else { return "No timestamp" }
+    let formatter = DateFormatter()
+    formatter.locale = .autoupdatingCurrent
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .short
+    return formatter.string(from: date)
+}
+
+private func formattedMessageTimestamp(_ value: String?) -> String {
+    guard let date = parseIsoDate(value) else { return "Unknown time" }
+    let formatter = DateFormatter()
+    formatter.locale = .autoupdatingCurrent
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .medium
+    return formatter.string(from: date)
+}
+
+private func parseIsoDate(_ value: String?) -> Date? {
+    let raw = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    guard !raw.isEmpty else { return nil }
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    if let precise = formatter.date(from: raw) {
+        return precise
+    }
+    let fallback = ISO8601DateFormatter()
+    fallback.formatOptions = [.withInternetDateTime]
+    return fallback.date(from: raw)
+}
+
 private struct ConversationRow: View {
     let conversation: ReplyConversation
     let isSelected: Bool
@@ -632,12 +780,29 @@ private struct ConversationRow: View {
                             .foregroundStyle(ReplyConstellationPalette.textSecondary)
                             .lineLimit(2)
                     }
+
+                    HStack(spacing: 8) {
+                        Text(formattedConversationPreviewDate(conversation.previewDate))
+                            .font(.caption)
+                            .foregroundStyle(ReplyConstellationPalette.textSecondary)
+                        if !conversation.normalizedAllowedChannels.isEmpty {
+                            Text("reply: \(conversation.normalizedAllowedChannels.map { $0.label }.joined(separator: ", "))")
+                                .font(.caption)
+                                .foregroundStyle(ReplyConstellationPalette.textSecondary)
+                                .lineLimit(1)
+                        }
+                    }
                 }
 
-                Image(systemName: channelSymbol(for: conversation.channel))
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(channelColor(for: conversation.channel))
+                HStack(spacing: 6) {
+                    ForEach(conversation.normalizedChannels.isEmpty ? [ReplyMessageChannel(rawValue: conversation.channel?.lowercased() ?? "")].compactMap { $0 } : conversation.normalizedChannels, id: \.self) { channel in
+                        Image(systemName: channelSymbol(for: channel.rawValue))
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(channelColor(for: channel.rawValue))
+                    }
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -649,29 +814,15 @@ private struct ConversationRow: View {
             )
         }
         .buttonStyle(.plain)
-    }
-
-    private func channelSymbol(for value: String?) -> String {
-        switch value?.lowercased() {
-        case "whatsapp": "message.circle.fill"
-        case "email": "envelope.fill"
-        case "linkedin": "person.2.square.stack.fill"
-        default: "message.fill"
-        }
-    }
-
-    private func channelColor(for value: String?) -> Color {
-        switch value?.lowercased() {
-        case "whatsapp": ReplyConstellationPalette.success
-        case "email": ReplyConstellationPalette.accent
-        case "linkedin": ReplyConstellationPalette.warning
-        default: ReplyConstellationPalette.accent
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 private struct ReplyMessageTimeline: View {
     let messages: [ReplyMessage]
+    let gapRemaining: Int
+    let isLoadingGap: Bool
+    let loadMore: () -> Void
 
     private var orderedMessages: [ReplyMessage] {
         messages.sorted { lhs, rhs in
@@ -695,7 +846,25 @@ private struct ReplyMessageTimeline: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
-                    ForEach(orderedMessages) { message in
+                    let splitIndex = gapRemaining > 0 ? min(20, orderedMessages.count) : orderedMessages.count
+                    let head = Array(orderedMessages.prefix(splitIndex))
+                    let tail = Array(orderedMessages.dropFirst(splitIndex))
+
+                    ForEach(head) { message in
+                        MessageBubble(message: message)
+                            .id(message.id)
+                    }
+
+                    if gapRemaining > 0 {
+                        ThreadGapCard(
+                            remaining: gapRemaining,
+                            isLoading: isLoadingGap,
+                            action: loadMore
+                        )
+                        .id("thread-gap-card")
+                    }
+
+                    ForEach(tail) { message in
                         MessageBubble(message: message)
                             .id(message.id)
                     }
@@ -705,7 +874,8 @@ private struct ReplyMessageTimeline: View {
             .onAppear {
                 scrollToBottom(with: proxy)
             }
-            .onChange(of: messages.count) { _, _ in
+            .onChange(of: orderedMessages.last?.id) { _, newValue in
+                guard newValue != nil else { return }
                 scrollToBottom(with: proxy)
             }
         }
@@ -730,6 +900,42 @@ private struct ReplyMessageTimeline: View {
     }
 }
 
+private struct ThreadGapCard: View {
+    let remaining: Int
+    let isLoading: Bool
+    let action: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Rectangle()
+                .fill(ReplyConstellationPalette.border.opacity(0.4))
+                .frame(height: 1)
+            VStack(spacing: 8) {
+                Text("\(remaining) older/newer messages remain")
+                    .font(.caption)
+                    .foregroundStyle(ReplyConstellationPalette.textSecondary)
+                Button(isLoading ? "Loading…" : "Load more history", action: action)
+                    .buttonStyle(.bordered)
+                    .disabled(isLoading)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(ReplyConstellationPalette.panel.opacity(0.88))
+            )
+            Rectangle()
+                .fill(ReplyConstellationPalette.border.opacity(0.4))
+                .frame(height: 1)
+        }
+        .task {
+            if !isLoading {
+                action()
+            }
+        }
+    }
+}
+
 private struct MessageBubble: View {
     let message: ReplyMessage
 
@@ -738,6 +944,16 @@ private struct MessageBubble: View {
             if message.authoredByMe { Spacer(minLength: 60) }
 
             VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    ChannelBadge(channel: message.channel)
+                    Text(messageSenderTitle)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(message.authoredByMe ? ReplyConstellationPalette.chrome.opacity(0.85) : ReplyConstellationPalette.textSecondary)
+                    Spacer(minLength: 4)
+                    Text(formattedMessageTimestamp(message.date))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(message.authoredByMe ? ReplyConstellationPalette.chrome.opacity(0.85) : ReplyConstellationPalette.textSecondary)
+                }
                 if !messageBody.isEmpty {
                     Text(messageBody)
                         .font(.body)
@@ -759,14 +975,6 @@ private struct MessageBubble: View {
                     }
                     .padding(.top, messageBody.isEmpty ? 0 : 2)
                 }
-                HStack(spacing: 8) {
-                    Text(message.date ?? "")
-                    if let channel = message.channel, !channel.isEmpty {
-                        Text(channel.capitalized)
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(message.authoredByMe ? ReplyConstellationPalette.chrome.opacity(0.8) : ReplyConstellationPalette.textSecondary)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -800,6 +1008,66 @@ private struct MessageBubble: View {
     private var attachments: [ParsedAttachment] {
         parsedContent.attachments
     }
+
+    private var messageSenderTitle: String {
+        if message.authoredByMe {
+            return "Sent"
+        }
+        let sender = message.senderDisplay?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !sender.isEmpty {
+            return sender
+        }
+        return "Received"
+    }
+}
+
+private struct ConversationChannelStrip: View {
+    let title: String
+    let channels: [ReplyMessageChannel]
+    let emptyText: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title.uppercased())
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(ReplyConstellationPalette.textSecondary)
+            if channels.isEmpty {
+                Text(emptyText)
+                    .font(.caption)
+                    .foregroundStyle(ReplyConstellationPalette.textSecondary)
+            } else {
+                HStack(spacing: 8) {
+                    ForEach(channels, id: \.self) { channel in
+                        ChannelBadge(channel: channel.rawValue)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct ChannelBadge: View {
+    let channel: String?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: channelSymbol(for: channel))
+                .font(.system(size: 11, weight: .semibold))
+            Text(channelLabel(channel))
+                .font(.caption.weight(.semibold))
+        }
+        .foregroundStyle(channelColor(for: channel))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            Capsule(style: .continuous)
+                .fill(channelColor(for: channel).opacity(0.14))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(channelColor(for: channel).opacity(0.28), lineWidth: 1)
+        )
+    }
 }
 
 private struct DashboardMetricGrid: View {
@@ -820,7 +1088,7 @@ private struct DashboardMetricGrid: View {
             )
             MetricCard(
                 title: "Conversations",
-                value: "\(service.health?.stats?.total ?? service.conversations.count)",
+                value: "\(max(service.conversationTotalCount, service.health?.stats?.total ?? 0, service.conversations.count))",
                 subtitle: "Visible conversation threads"
             )
             MetricCard(

@@ -3,6 +3,7 @@ const { simpleParser } = require('mailparser');
 const { ImapFlow } = require('imapflow');
 const { addDocuments } = require('./vector-store.js');
 const { enqueueSuggestionDraftsFromDocBatch } = require('./suggestion-draft-queue.js');
+const { saveMessages } = require('./message-store.js');
 const contactStore = require('./contact-store.js');
 const statusManager = require('./status-manager.js');
 const { cleanMessageText } = require('./message-cleaner.js');
@@ -150,6 +151,7 @@ async function syncMailbox(client, mailboxName, opts) {
     const uidsToFetch = lastUid > 0 ? uids.slice(0, limit) : uids.slice(-limit);
 
     const docs = [];
+    const unifiedDocs = [];
     let maxUidSeen = lastUid;
 
     for await (const msg of client.fetch(uidsToFetch, {
@@ -184,11 +186,16 @@ async function syncMailbox(client, mailboxName, opts) {
       const isFromMe = fromAddr ? selfEmails.has(fromAddr) : false;
       const counterparty = pickCounterparty({ from, to, isFromMe, selfEmails });
       if (!counterparty) continue;
+      const cc = (parsed?.cc?.value || []).map((v) => v.address).filter(Boolean);
+      const allRecipients = [...to, ...cc].map((value) => normalizeEmailAddress(value)).filter(Boolean);
+      const participantIdentities = Array.from(new Set([
+        fromAddr,
+        ...allRecipients
+      ].filter((value) => value && !selfEmails.has(value))));
 
       const text = (parsed?.text || '').toString().trim()
         || cleanMessageText(parsed?.html || '')
         || '';
-      if (!text) continue;
 
       // Detect attachments
       const attachments = (parsed?.attachments || []).map(att => ({
@@ -201,6 +208,10 @@ async function syncMailbox(client, mailboxName, opts) {
       if (attachments.length > 0) {
         finalText += `\n\n[ATTACHMENTS: ${JSON.stringify(attachments)}]`;
       }
+      if (!finalText.trim()) {
+        finalText = subject || (attachments.length > 0 ? "[Attachment]" : "");
+      }
+      if (!finalText.trim()) continue;
 
       // Update contact store last contacted.
       try {
@@ -216,11 +227,36 @@ async function syncMailbox(client, mailboxName, opts) {
         source: 'IMAP',
         path: `mailto:${counterparty}`,
       });
+
+      unifiedDocs.push({
+        id: `imap-${accountKey}-${key}-${uid}`,
+        text: finalText.length > 4000 ? `${finalText.slice(0, 4000)}…` : finalText,
+        source: 'IMAP',
+        handle: counterparty,
+        timestamp: date,
+        path: `mailto:${counterparty}`,
+        is_from_me: isFromMe,
+        metadata: {
+          providerMessageKey: String(parsed?.messageId || `${accountKey}:${key}:${uid}`),
+          channel: 'email',
+          externalThreadKey: buildImapThreadKey(parsed, accountKey, mailboxName, counterparty),
+          externalThreadKind: participantIdentities.length > 1 ? 'group' : 'direct',
+          externalThreadTitle: subject,
+          senderIdentity: fromAddr || null,
+          participantIdentities,
+          recipientIdentities: allRecipients.filter((value) => !selfEmails.has(value)),
+        }
+      });
     }
 
     if (docs.length > 0) {
-      await addDocuments(docs);
-      enqueueSuggestionDraftsFromDocBatch(docs);
+      await saveMessages(unifiedDocs);
+      try {
+        await addDocuments(docs);
+        enqueueSuggestionDraftsFromDocBatch(docs);
+      } catch (vectorErr) {
+        console.warn(`[IMAP] Vector indexing failed for "${mailboxName}":`, vectorErr.message);
+      }
     }
 
     return { fetched: docs.length, maxUid: maxUidSeen };
@@ -236,6 +272,22 @@ function selfEmailsFromOptions(user, selfEmailsCsv) {
     .filter(Boolean);
   const imapUser = normalizeEmail(user);
   return new Set([...fromCsv, ...(imapUser ? [imapUser] : [])]);
+}
+
+function normalizeEmailAddress(value) {
+  return normalizeEmail(String(value || '').trim());
+}
+
+function buildImapThreadKey(parsed, accountKey, mailboxName, counterparty) {
+  const references = []
+    .concat(parsed?.references || [])
+    .concat(parsed?.inReplyTo ? [parsed.inReplyTo] : [])
+    .map((value) => String(value || '').trim().toLowerCase())
+    .filter(Boolean);
+  const seed = references[0]
+    || String(parsed?.messageId || '').trim().toLowerCase()
+    || `${mailboxName}:${counterparty}`;
+  return `imap:${accountKey}:${seed}`;
 }
 
 /**

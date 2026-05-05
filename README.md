@@ -15,8 +15,32 @@
   <a href="#quick-start">Quick Start</a> •
   <a href="#dependencies">Dependencies</a> •
   <a href="#installation">Installation</a> •
-  <a href="#current-runtime-shape">Current Runtime Shape</a>
+  <a href="#versions">Versions</a> •
+  <a href="#current-runtime-shape">Current Runtime Shape</a> •
+  <a href="#contributing">Contributing</a>
 </p>
+
+## Open Source Status
+
+This repository is intended to be understandable and operable without private tribal knowledge.
+
+That means:
+
+- the shipped runtime shape must be documented
+- install and run steps must be reproducible from the repo
+- architecture boundaries with `{trinity}` and `{train}` must be explicit
+- operator-visible behavior changes must update docs in the same change
+
+There is also one rigid runtime rule for shipped UX:
+
+- passive UI must read precomputed local state
+- heavy computation belongs in local background workers and local AI/runtime services
+- online synchronization is downstream of local readiness, never a prerequisite for a fast workspace
+
+There is also one rigid identity rule:
+
+- contact merge and unmerge are explicit user actions only
+- `{reply}` must not auto-merge identities through phone, email, or channel heuristics
 
 ## Product Overview
 
@@ -40,6 +64,8 @@ Canonical docs:
 - [REPLY_OVERVIEW.md](/Users/Shared/Projects/reply/REPLY_OVERVIEW.md)
 - [docs/TRINITY_INTEGRATION_SPINE.md](/Users/Shared/Projects/reply/docs/TRINITY_INTEGRATION_SPINE.md)
 - [docs/POLICY_LOOP_REPO_BREAKDOWN.md](/Users/Shared/Projects/reply/docs/POLICY_LOOP_REPO_BREAKDOWN.md)
+- [docs/THIN_UI_LOCAL_PRECOMPUTE_AUDIT.md](/Users/Shared/Projects/reply/docs/THIN_UI_LOCAL_PRECOMPUTE_AUDIT.md)
+- [CONTRIBUTING.md](/Users/Shared/Projects/reply/CONTRIBUTING.md)
 
 ## What Changed Recently
 
@@ -49,11 +75,29 @@ This README now reflects the current product state, including:
 - legacy drafting is no longer a live fallback and survives only as developer-only shadow comparison behavior
 - structured draft outcomes now go to `/api/trinity/outcome` instead of piggybacking on generic feedback logs
 - runtime failures are operator-safe and no longer expose Docker, Colima, socket, or raw substrate errors in normal UI surfaces
-- the conversation sidebar is driven by the unified message store rather than being hard-gated by `contacts.db`
+- the conversation sidebar is driven by a local materialized conversation index in `chat.db` rather than by request-time reconstruction or hard gating from `contacts.db`
 - thread loading now preloads the first 20 and last 20 messages, then fills the history gap incrementally in the background
 - message threads now render explicit left/right sent-versus-received rows instead of one undifferentiated feed
+- suggest and drafting routes now consume prepared local snapshot artifacts rather than assembling snippets, history, or fallback inbound context in the request path
 - native sync triggers now send the same protected approval payload/header shape as the web app, so per-source sync actions can start background work from the native shell
 - native shell expectations are now first-class: `reply.app` is the operator shell, the hub/runtime sit behind it
+- thin-read architecture is now explicit: passive UI routes are expected to consume local materialized read models instead of request-time reconstruction
+- native launch is now readiness-gated: the app and `script/build_and_run.sh --verify` wait for a healthy local hub instead of treating a bare process spawn as success
+- Apple source mirror refresh is no longer part of the startup critical path; it runs in the background while the hub comes online
+- conversation foundation work is now explicit in the repo and docs:
+  - canonical conversation tables exist in `chat.db`
+  - immutable participant-membership snapshots are the target model
+  - merge authority remains manual-only and user-owned
+
+## Versions
+
+Current documented runtime versions:
+
+- `{reply}` package version: `0.5.14`
+- native shell target: `macOS 15+`
+- Node.js: `>=20.17.0`
+- Python for `{trinity}`: `>=3.12`
+- Swift toolchain: `Swift 6`
 
 ## Quick Start
 
@@ -77,6 +121,8 @@ Open:
 
 - product UI or embedded hub: `http://127.0.0.1:45311/`
 - health: `http://127.0.0.1:45311/api/health`
+
+When you launch the native shell, the bundled hub prefers ports `45431` through `45446` and the app now waits for `/api/health` readiness instead of only checking whether a `reply` process exists.
 
 ## Dependencies
 
@@ -118,6 +164,7 @@ Optional external tools:
 - `Ollama` for local drafting/ranking model routes
 - `OpenClaw` for WhatsApp transport and gateway control
 - Mail.app configured locally for Apple Mail fallback paths
+- a valid Gmail OAuth connection if you want Gmail sync instead of Apple Mail fallback
 
 ## Installation
 
@@ -181,6 +228,13 @@ Native shell:
 make run-app
 ```
 
+Install the built native bundle into `/Applications`:
+
+```bash
+cd app/reply-app
+./install-bundle.sh
+```
+
 ## Current Runtime Shape
 
 ### Product shell
@@ -199,8 +253,18 @@ make run-app
 ### Conversation model
 
 - dashboard source cards report raw ingestion counts
-- sidebar conversations come from the unified message store and conversation index
+- sidebar conversations come from the local materialized `conversation_index` in `chat.db`
+- canonical message rows live in `unified_messages`
+- canonical conversation-foundation tables also live in `chat.db`:
+  - `external_threads`
+  - `conversation_snapshots`
+  - `conversation_participants`
+  - `conversation_messages`
+  - `message_recipients`
+  - `conversation_channel_capabilities`
+- mail conversations can be sourced from Apple Mail fallback ingestion when Gmail is unavailable
 - contact rows enrich conversations when available, but valid message-backed handles are no longer hidden when `contacts.db` lacks a profile row
+- contact merges are explicit user-owned state only; the product does not auto-merge identities
 - thread views now preload both ends of the conversation window:
   - first 20 messages by oldest order
   - last 20 messages by newest order
@@ -241,6 +305,12 @@ curl http://127.0.0.1:45311/api/health
 curl http://127.0.0.1:45311/api/system/health
 ```
 
+Mail-specific checks:
+
+```bash
+cat ~/Library/Application\\ Support/reply/mail_sync_status.json
+```
+
 ## Architecture Notes
 
 Current high-level split:
@@ -252,9 +322,22 @@ Current high-level split:
 Additional docs:
 
 - [docs/ARCHITECTURE.md](/Users/Shared/Projects/reply/docs/ARCHITECTURE.md)
+- [docs/CONVERSATION_FOUNDATION_AUDIT.md](/Users/Shared/Projects/reply/docs/CONVERSATION_FOUNDATION_AUDIT.md)
 - [docs/DEPENDENCY_MAP.md](/Users/Shared/Projects/reply/docs/DEPENDENCY_MAP.md)
 - [docs/LOCAL_MACHINE_DEPLOYMENT.md](/Users/Shared/Projects/reply/docs/LOCAL_MACHINE_DEPLOYMENT.md)
 - [docs/HANDOVER.md](/Users/Shared/Projects/reply/docs/HANDOVER.md)
+- [docs/CODING_STANDARDS.md](/Users/Shared/Projects/reply/docs/CODING_STANDARDS.md)
+- [CONTRIBUTING.md](/Users/Shared/Projects/reply/CONTRIBUTING.md)
+
+## Contributing
+
+Open-source contributions should start with:
+
+1. [CONTRIBUTING.md](/Users/Shared/Projects/reply/CONTRIBUTING.md)
+2. [docs/CODING_STANDARDS.md](/Users/Shared/Projects/reply/docs/CODING_STANDARDS.md)
+3. [docs/ARCHITECTURE.md](/Users/Shared/Projects/reply/docs/ARCHITECTURE.md)
+
+Every code change must update the relevant docs when behavior, runtime ownership, setup steps, or verification expectations change.
 
 ## Troubleshooting
 

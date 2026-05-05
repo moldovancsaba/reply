@@ -5,12 +5,21 @@ struct HealthPayload: Decodable {
     let version: String?
     let status: String?
     let statusMessage: String?
+    let launch: LaunchHealth?
     let httpPort: Int?
     let httpHost: String?
     let services: [String: ServiceHealth]?
     let channels: [String: ChannelHealth]?
     let preflight: PreflightPayload?
     let stats: ReplyConversationStats?
+}
+
+struct LaunchHealth: Decodable {
+    let stage: String?
+    let ready: Bool?
+    let startedAt: String?
+    let readyAt: String?
+    let message: String?
 }
 
 struct ReplyConversationStats: Decodable {
@@ -307,10 +316,13 @@ struct ReplyConversationListResponse: Decodable {
 }
 
 struct ReplyConversation: Decodable, Identifiable, Hashable {
+    let conversationId: String?
     let handle: String
     let latestHandle: String?
     let path: String?
     let channel: String?
+    let channels: [String]?
+    let allowedChannels: [String]?
     let source: String?
     let displayName: String?
     let presentationDisplayName: String?
@@ -322,6 +334,15 @@ struct ReplyConversation: Decodable, Identifiable, Hashable {
     let countOut: Int?
 
     var id: String { handle }
+
+    var normalizedChannels: [ReplyMessageChannel] {
+        let values = (channels?.isEmpty == false ? channels : (channel != nil ? [channel!] : [])) ?? []
+        return values.compactMap { ReplyMessageChannel(rawValue: $0.lowercased()) }
+    }
+
+    var normalizedAllowedChannels: [ReplyMessageChannel] {
+        (allowedChannels ?? []).compactMap { ReplyMessageChannel(rawValue: $0.lowercased()) }
+    }
 
     var resolvedTitle: String {
         let candidate = (presentationDisplayName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
@@ -347,6 +368,15 @@ struct ReplyThreadResponse: Decodable {
     let messages: [ReplyMessage]
     let hasMore: Bool?
     let total: Int?
+    let order: String?
+    let offset: Int?
+    let limit: Int?
+    let conversationId: String?
+    let channels: [String]?
+    let allowedChannels: [String]?
+    let defaultChannel: String?
+    let conversationKind: String?
+    let conversationTitle: String?
 }
 
 struct ReplyMessage: Decodable, Identifiable, Hashable {
@@ -359,6 +389,7 @@ struct ReplyMessage: Decodable, Identifiable, Hashable {
     let source: String?
     let path: String?
     let handle: String?
+    let senderDisplay: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -370,6 +401,7 @@ struct ReplyMessage: Decodable, Identifiable, Hashable {
         case source
         case path
         case handle
+        case senderDisplay
     }
 
     var authoredByMe: Bool {

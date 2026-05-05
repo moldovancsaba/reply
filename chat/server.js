@@ -55,18 +55,47 @@ const { serveKyc, serveAnalyzeContact } = require("./routes/kyc.js");
 const serviceManager = require("./service-manager.js");
 const hubRuntime = require("./hub-runtime.js");
 const { ensureWorkerCanStartFromHub } = require("./ensure-hub-worker.js");
+const conversationFoundationStore = require("./conversation-foundation-store.js");
+
+hubRuntime.resetBootstrap("initializing", "Initializing hub...");
+let httpListening = false;
+let managedServicesStarted = false;
+
+function refreshBootstrapReadyState() {
+  if (httpListening && managedServicesStarted) {
+    hubRuntime.markBootstrapReady("Local runtime is ready.");
+    return;
+  }
+  if (httpListening) {
+    hubRuntime.setBootstrapStage("listening", "HTTP interface is ready. Starting background services...");
+    return;
+  }
+  if (managedServicesStarted) {
+    hubRuntime.setBootstrapStage("services_started", "Background services launched. Waiting for HTTP interface...");
+    return;
+  }
+  hubRuntime.setBootstrapStage("initializing", "Initializing hub...");
+}
 
 // Start managed services for the local product runtime.
 async function startManagedServices() {
   try {
+    hubRuntime.setBootstrapStage("schema_initializing", "Initializing local conversation foundation...");
+    await conversationFoundationStore.waitUntilReady();
+    hubRuntime.setBootstrapStage("conversation_rebuild", "Rebuilding canonical conversation projections...");
+    await conversationFoundationStore.rebuildConversationFoundation();
+    hubRuntime.setBootstrapStage("services_starting", "Launching background services...");
     serviceManager.setStatus("worker", "loading in queue");
     statusManager.update("system", { progress: 40, message: "Launching background worker..." });
     ensureWorkerCanStartFromHub(__dirname);
     serviceManager.start("worker", path.join(__dirname, "background-worker.js"));
+    managedServicesStarted = true;
     statusManager.update("system", { status: "online", progress: 100, message: "All systems ready" });
+    refreshBootstrapReadyState();
   } catch (e) {
     console.error("[Startup Error]", e);
     statusManager.update("system", { status: "error", message: e.message });
+    hubRuntime.markBootstrapError(e.message);
   }
 }
 
@@ -208,6 +237,8 @@ function tryListen(port) {
   server.once("listening", () => {
     boundPort = server.address().port;
     hubRuntime.setListenInfo(boundPort, "127.0.0.1");
+    httpListening = true;
+    refreshBootstrapReadyState();
     console.log(`{reply} hub running at http://localhost:${boundPort}`);
     setImmediate(() => {
       systemRoutes
@@ -253,6 +284,7 @@ let shuttingDown = false;
 async function gracefulShutdown(trigger) {
   if (shuttingDown) return;
   shuttingDown = true;
+  hubRuntime.setBootstrapStage("stopping", "Stopping local runtime...");
   replyHubDebugLog(`[Hub] ${trigger} received; closing HTTP server and stopping managed services...`);
   if (autoSyncIntervalId) {
     clearInterval(autoSyncIntervalId);

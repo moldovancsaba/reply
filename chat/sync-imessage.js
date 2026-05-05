@@ -10,6 +10,7 @@ ensureDataHome();
 
 const DB_PATH = resolveIMessageDbPath();
 const STATE_FILE = dataPath('sync_state.json');
+const MIRROR_STATE_FILE = dataPath('imessage_mirror_backfill_state.json');
 const statusManager = require('./status-manager.js');
 
 /** @type {import('sqlite3').Database|null|false} false = open failed permanently this process */
@@ -108,12 +109,54 @@ function saveState(lastId) {
     fs.writeFileSync(STATE_FILE, JSON.stringify({ lastProcessedId: lastId, lastSync: new Date().toISOString() }, null, 2));
 }
 
+function loadMirrorState() {
+    if (fs.existsSync(MIRROR_STATE_FILE)) {
+        try {
+            const parsed = JSON.parse(fs.readFileSync(MIRROR_STATE_FILE, 'utf8'));
+            return {
+                lastProcessedId: Math.max(0, Number(parsed?.lastProcessedId) || 0),
+                sourceMaxRowId: Math.max(0, Number(parsed?.sourceMaxRowId) || 0),
+                complete: Boolean(parsed?.complete),
+                updatedAt: parsed?.updatedAt || null
+            };
+        } catch {
+            // Fall through to default state.
+        }
+    }
+    return {
+        lastProcessedId: 0,
+        sourceMaxRowId: 0,
+        complete: false,
+        updatedAt: null
+    };
+}
+
+function saveMirrorState(next) {
+    const state = {
+        lastProcessedId: Math.max(0, Number(next?.lastProcessedId) || 0),
+        sourceMaxRowId: Math.max(0, Number(next?.sourceMaxRowId) || 0),
+        complete: Boolean(next?.complete),
+        updatedAt: new Date().toISOString()
+    };
+    fs.writeFileSync(MIRROR_STATE_FILE, JSON.stringify(state, null, 2));
+    return state;
+}
+
 function convertDate(value) {
     if (!value) return null;
     let seconds = value;
     if (value > 100000000000000) seconds = value / 1000000000;
     const UNIX_EPOCH_OFFSET = 978307200;
     return new Date((seconds + UNIX_EPOCH_OFFSET) * 1000).toISOString();
+}
+
+async function getSourceMaxRowId(db) {
+    return new Promise((resolve, reject) => {
+        db.get("SELECT MAX(ROWID) AS maxRowId FROM message", (err, row) => {
+            if (err) return reject(err);
+            resolve(Math.max(0, Number(row?.maxRowId) || 0));
+        });
+    });
 }
 
 function resolveReplyHelperPath() {
@@ -206,6 +249,61 @@ function normalizeHelperRows(rows) {
     })).filter((row) => row.ROWID > 0 && row.text);
 }
 
+function normalizeIMessageParticipant(raw) {
+    return String(raw || '').trim();
+}
+
+function loadChatMetadataForRows(db, rowIds = []) {
+    const ids = Array.from(new Set((rowIds || []).map((value) => Number(value) || 0).filter(Boolean)));
+    if (!ids.length) return Promise.resolve(new Map());
+    const placeholders = ids.map(() => '?').join(', ');
+    const query = `
+        SELECT
+            m.ROWID AS rowid,
+            c.guid AS chat_guid,
+            c.chat_identifier AS chat_identifier,
+            c.display_name AS chat_display_name,
+            c.group_id AS group_id,
+            c.service_name AS chat_service_name,
+            GROUP_CONCAT(DISTINCT chh.id) AS participant_handles
+        FROM message m
+        LEFT JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
+        LEFT JOIN chat c ON c.ROWID = cmj.chat_id
+        LEFT JOIN chat_handle_join chj ON chj.chat_id = c.ROWID
+        LEFT JOIN handle chh ON chh.ROWID = chj.handle_id
+        WHERE m.ROWID IN (${placeholders})
+        GROUP BY m.ROWID, c.guid, c.chat_identifier, c.display_name, c.group_id, c.service_name
+    `;
+    return new Promise((resolve, reject) => {
+        db.all(query, ids, (err, rows) => {
+            if (err) return reject(err);
+            const out = new Map();
+            for (const row of rows || []) {
+                out.set(Number(row.rowid), {
+                    chatGuid: String(row.chat_guid || '').trim() || null,
+                    chatIdentifier: String(row.chat_identifier || '').trim() || null,
+                    chatDisplayName: String(row.chat_display_name || '').trim() || null,
+                    groupId: String(row.group_id || '').trim() || null,
+                    serviceName: String(row.chat_service_name || '').trim() || null,
+                    participantHandles: String(row.participant_handles || '')
+                        .split(',')
+                        .map((value) => normalizeIMessageParticipant(value))
+                        .filter(Boolean)
+                });
+            }
+            resolve(out);
+        });
+    });
+}
+
+async function hydrateRowsWithChatMetadata(db, rows = []) {
+    const metadataByRowId = await loadChatMetadataForRows(db, rows.map((row) => row.ROWID));
+    return rows.map((row) => ({
+        ...row,
+        ...(metadataByRowId.get(Number(row.ROWID)) || {})
+    }));
+}
+
 function loadRowsViaSqlite(db, afterRowId, limit) {
     const query = `
         SELECT 
@@ -216,15 +314,39 @@ function loadRowsViaSqlite(db, afterRowId, limit) {
             message.is_from_me, 
             message.service,
             handle.id as handle_id,
-            message.cache_has_attachments
+            message.cache_has_attachments,
+            chat.guid AS chat_guid,
+            chat.chat_identifier AS chat_identifier,
+            chat.display_name AS chat_display_name,
+            chat.group_id AS group_id,
+            chat.service_name AS chat_service_name,
+            GROUP_CONCAT(DISTINCT chat_handle.id) AS participant_handles
         FROM message 
         LEFT JOIN handle ON message.handle_id = handle.ROWID 
+        LEFT JOIN chat_message_join ON chat_message_join.message_id = message.ROWID
+        LEFT JOIN chat ON chat.ROWID = chat_message_join.chat_id
+        LEFT JOIN chat_handle_join ON chat_handle_join.chat_id = chat.ROWID
+        LEFT JOIN handle AS chat_handle ON chat_handle.ROWID = chat_handle_join.handle_id
         WHERE message.ROWID > ?
         AND (
             (message.text IS NOT NULL AND message.text != '') OR
             (message.subject IS NOT NULL AND message.subject != '') OR
             message.cache_has_attachments = 1
         )
+        GROUP BY
+            message.ROWID,
+            message.text,
+            message.subject,
+            message.date,
+            message.is_from_me,
+            message.service,
+            handle.id,
+            message.cache_has_attachments,
+            chat.guid,
+            chat.chat_identifier,
+            chat.display_name,
+            chat.group_id,
+            chat.service_name
         ORDER BY message.ROWID ASC
         LIMIT ?
     `;
@@ -244,11 +366,118 @@ function loadRowsViaSqlite(db, afterRowId, limit) {
                 date: row.date,
                 is_from_me: row.is_from_me,
                 handle_id: row.handle_id || 'unknown',
-                service: row.service || 'iMessage'
+                service: row.service || 'iMessage',
+                chatGuid: row.chat_guid || null,
+                chatIdentifier: row.chat_identifier || null,
+                chatDisplayName: row.chat_display_name || null,
+                groupId: row.group_id || null,
+                serviceName: row.chat_service_name || null,
+                participantHandles: String(row.participant_handles || '').split(',').map((value) => normalizeIMessageParticipant(value)).filter(Boolean),
             })).filter((row) => row.text);
             resolve(normalized);
         });
     });
+}
+
+async function updateContactActivityFromRows(rows = []) {
+    const contactStore = require('./contact-store.js');
+    for (const row of rows) {
+        const date = convertDate(row.date);
+        contactStore.updateLastContacted(row.handle_id, date, { channel: 'imessage' });
+        if (!row.is_from_me && row.handle_id) {
+            await contactStore.markChannelInboundVerified(row.handle_id, row.handle_id, date);
+        }
+    }
+}
+
+async function backfillUnifiedStore(options = {}) {
+    const db = getIMessageReadonlyDb();
+    if (!db) {
+        const msg = fs.existsSync(DB_PATH)
+            ? `Cannot open iMessage database. Grant Full Disk Access to the protected-data helper used by {reply} or set REPLY_IMESSAGE_DB_PATH: ${DB_PATH}`
+            : `iMessage database not found: ${DB_PATH}`;
+        throw new Error(msg);
+    }
+
+    const batchLimit = Math.max(100, Math.min(Number(options.batchLimit) || 5000, 25000));
+    const maxBatches = Math.max(1, Math.min(Number(options.maxBatches) || 1, 200));
+    const sourceMaxRowId = await getSourceMaxRowId(db);
+    let state = loadMirrorState();
+    let cursor = options.restart === true
+        ? 0
+        : Math.max(0, Number(state.lastProcessedId) || 0);
+
+    const { saveMessages } = require('./message-store.js');
+    let saved = 0;
+    let batches = 0;
+
+    while (batches < maxBatches && cursor < sourceMaxRowId) {
+        let rows = null;
+        try {
+            const helperRows = await loadRowsViaHelper(cursor, batchLimit);
+            if (helperRows) {
+                rows = await hydrateRowsWithChatMetadata(db, normalizeHelperRows(helperRows));
+            }
+        } catch (error) {
+            console.warn("[sync-imessage] helper store backfill failed, falling back to sqlite3:", error.message);
+        }
+        if (!rows) {
+            rows = await loadRowsViaSqlite(db, cursor, batchLimit);
+        }
+        if (!rows.length) {
+            cursor = sourceMaxRowId;
+            break;
+        }
+
+        const unifiedDocs = rows.map((row) => ({
+            id: `msg-${row.ROWID}`,
+            text: row.text,
+            source: 'iMessage',
+            handle: row.handle_id || 'unknown',
+            timestamp: convertDate(row.date),
+            path: `imessage://${row.handle_id || 'unknown'}`,
+            is_from_me: row.is_from_me === 1,
+            metadata: {
+                providerMessageKey: String(row.ROWID || ''),
+                channel: 'imessage',
+                externalThreadKey: row.chatGuid || row.chatIdentifier || row.groupId || row.handle_id || null,
+                externalThreadKind: Array.isArray(row.participantHandles) && row.participantHandles.length > 1 ? 'group' : 'direct',
+                externalThreadTitle: row.chatDisplayName || null,
+                senderIdentity: row.handle_id || null,
+                participantIdentities: Array.isArray(row.participantHandles) && row.participantHandles.length
+                    ? row.participantHandles
+                    : (row.handle_id ? [row.handle_id] : []),
+                recipientIdentities: row.handle_id ? [row.handle_id] : [],
+            }
+        }));
+        await saveMessages(unifiedDocs);
+        await updateContactActivityFromRows(rows);
+
+        cursor = rows[rows.length - 1].ROWID;
+        saved += unifiedDocs.length;
+        batches += 1;
+        state = saveMirrorState({
+            lastProcessedId: cursor,
+            sourceMaxRowId,
+            complete: cursor >= sourceMaxRowId
+        });
+    }
+
+    if (cursor >= sourceMaxRowId) {
+        state = saveMirrorState({
+            lastProcessedId: sourceMaxRowId,
+            sourceMaxRowId,
+            complete: true
+        });
+    }
+
+    return {
+        saved,
+        batches,
+        cursor: state.lastProcessedId,
+        sourceMaxRowId,
+        complete: Boolean(state.complete)
+    };
 }
 
 /**
@@ -266,7 +495,8 @@ async function sync() {
     try {
         const helperRows = await loadRowsViaHelper(state.lastProcessedId, batchLimit);
         if (helperRows) {
-            rows = normalizeHelperRows(helperRows);
+            const db = getIMessageReadonlyDb();
+            rows = db ? await hydrateRowsWithChatMetadata(db, normalizeHelperRows(helperRows)) : normalizeHelperRows(helperRows);
         }
     } catch (error) {
         console.warn("[sync-imessage] helper export failed, falling back to sqlite3:", error.message);
@@ -321,18 +551,23 @@ async function sync() {
             handle: row.handle_id || 'unknown',
             timestamp: convertDate(row.date),
             path: `imessage://${row.handle_id || 'unknown'}`,
-            is_from_me: row.is_from_me === 1
+            is_from_me: row.is_from_me === 1,
+            metadata: {
+                providerMessageKey: String(row.ROWID || ''),
+                channel: 'imessage',
+                externalThreadKey: row.chatGuid || row.chatIdentifier || row.groupId || row.handle_id || null,
+                externalThreadKind: Array.isArray(row.participantHandles) && row.participantHandles.length > 1 ? 'group' : 'direct',
+                externalThreadTitle: row.chatDisplayName || null,
+                senderIdentity: row.handle_id || null,
+                participantIdentities: Array.isArray(row.participantHandles) && row.participantHandles.length
+                    ? row.participantHandles
+                    : (row.handle_id ? [row.handle_id] : []),
+                recipientIdentities: row.handle_id ? [row.handle_id] : [],
+            }
         }));
         await saveMessages(unifiedDocs);
 
-        const contactStore = require('./contact-store.js');
-        for (const row of rows) {
-            const date = convertDate(row.date);
-            contactStore.updateLastContacted(row.handle_id, date, { channel: 'imessage' });
-            if (!row.is_from_me && row.handle_id) {
-                await contactStore.markChannelInboundVerified(row.handle_id, row.handle_id, date);
-            }
-        }
+        await updateContactActivityFromRows(rows);
 
         const maxId = rows[rows.length - 1].ROWID;
         saveState(maxId);
@@ -367,4 +602,10 @@ if (require.main === module) {
         });
 }
 
-module.exports = { sync, getIMessageReadonlyDb, getIMessageAccessError };
+module.exports = {
+    sync,
+    getIMessageReadonlyDb,
+    getIMessageAccessError,
+    convertDate,
+    backfillUnifiedStore
+};

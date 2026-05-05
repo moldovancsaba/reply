@@ -21,7 +21,6 @@ const {
     safeDateMs,
     pathPrefixesForHandle,
     extractDateFromText,
-    stripMessagePrefix,
     channelFromDoc,
     inferChannelFromHandle,
     inferSourceFromChannel,
@@ -141,7 +140,28 @@ function sanitizeConversationItemForApi(it, sort) {
     delete o.sortTime;
     delete o.firstTimestamp;
     if (sort !== "recommendation") delete o._rankTrace;
+    if (!Array.isArray(o.channels)) o.channels = [];
+    if (!Array.isArray(o.allowedChannels)) o.allowedChannels = [];
     return o;
+}
+
+function normalizeThreadStoreRows(rows = []) {
+    return (Array.isArray(rows) ? rows : []).map((row) => {
+        const isFromMe = row.is_from_me == null ? false : Boolean(row.is_from_me);
+        const rawDate = row.timestamp || row.date || null;
+        return {
+            id: row.id || null,
+            role: isFromMe ? "me" : "contact",
+            is_from_me: isFromMe,
+            text: String(row.text || ""),
+            date: rawDate ? new Date(rawDate).toISOString() : null,
+            channel: row.channel || channelFromDoc({ path: row.path, source: row.source }),
+            source: row.source || null,
+            path: row.path || null,
+            handle: row.handle || null,
+            senderDisplay: row.sender_display || null,
+        };
+    });
 }
 
 function resolveConversationTimestamps(row) {
@@ -167,7 +187,6 @@ const {
     sendWhatsAppViaDesktopAutomation
 } = require("../utils/whatsapp-utils");
 const contactStore = require("../contact-store");
-const whatsAppIdResolver = require("../utils/whatsapp-resolver");
 const { autoAnnotateSentMessage } = require("../utils/annotation-utils");
 const { getSnippets } = require("../knowledge");
 const { refineReply } = require("../gemini-client");
@@ -175,6 +194,7 @@ const { addDocuments } = require("../vector-store");
 const { execFile, spawn } = require("child_process");
 const { readSettings } = require("../settings-store");
 const messageStore = require("../message-store");
+const conversationFoundationStore = require("../conversation-foundation-store.js");
 const { checkOutboundAllowed, appendOutboundDenial } = require("../utils/outbound-policy.js");
 const { maybeBlockOutboundOnPreflight } = require("./system.js");
 
@@ -197,173 +217,124 @@ function isConversationCandidate(row) {
 }
 
 async function getConversationsIndexFresh(q = "", sortMode = "newest") {
-    const nowMs = Date.now();
     const sort = normalizeConversationSort(sortMode);
-    const { getUnifiedIndex } = require("../vector-store");
-
-    let items;
-
-    const canUseSqlHotPath =
-        !q &&
-        (sort === "newest" || sort === "oldest");
-
+    const nowMs = Date.now();
     const cacheOk =
         !q &&
+        sort === "newest" &&
         conversationsIndexCache.rawItems &&
         nowMs - conversationsIndexCache.builtAtMs < conversationsIndexCache.ttlMs;
 
+    let rows;
     if (cacheOk) {
-        items = conversationsIndexCache.rawItems.map((row) => ({ ...row }));
+        rows = conversationsIndexCache.rawItems.map((row) => ({ ...row }));
     } else {
-        const contacts = (await contactStore.refreshIfChanged()).filter((contact) =>
-            contactStore.isInboxEligible(contact)
-        );
-        const itemsMap = new Map();
-
-        if (canUseSqlHotPath) {
-            const rows = await messageStore.getConversationIndexRows();
-            for (const row of rows) {
-                if (!isConversationCandidate(row)) continue;
-                const handle = String(row.handle || "").trim();
-                if (!handle) continue;
-                const contact = contactStore.findContact(handle);
-                if (!contactStore.isInboxEligible(contact || handle)) continue;
-                const key = contact?.id || handle;
-                const { latestTimestamp, firstTimestamp, previewDate } = resolveConversationTimestamps(row);
-                const path = String(row.path || "");
-                const latestChannel =
-                    path.startsWith("imessage://") ? "imessage" :
-                    path.startsWith("whatsapp://") ? "whatsapp" :
-                    path.startsWith("mailto:") ? "email" :
-                    path.startsWith("linkedin://") ? "linkedin" :
-                    inferChannelFromHandle(handle);
-
-                if (!itemsMap.has(key)) {
-                    itemsMap.set(key, {
-                        key,
-                        handle,
-                        latestHandle: handle,
-                        path,
-                        sortTime: latestTimestamp,
-                        channel: latestChannel,
-                        source: row.source || inferSourceFromChannel(latestChannel),
-                        contact: contact || null,
-                        displayName: contact?.displayName || "",
-                        presentationDisplayName: presentContactLabel(contact || {}, { handle, channel: latestChannel }),
-                        lastMessage: row.text || "No recent messages",
-                        preview: row.text || "No recent messages",
-                        previewDate,
-                        count: Number(row.total_count) || 0,
-                        countIn: Number(row.total_count) || 0,
-                        countOut: 0,
-                        firstTimestamp: firstTimestamp || null
-                    });
-                }
-            }
-        } else {
-            const statsIndex = await getUnifiedIndex();
-
-            for (const [handle, stats] of statsIndex.entries()) {
-                if (!isConversationCandidate({ path: stats?.path, source: stats?.latestSource || stats?.source })) continue;
-                const contact = contactStore.findContact(handle);
-                if (!contactStore.isInboxEligible(contact || handle)) continue;
-                const key = contact?.id || handle;
-
-                if (!itemsMap.has(key)) {
-                    itemsMap.set(key, {
-                        key,
-                        handle,
-                        latestHandle: stats.latestHandle || handle,
-                        path: stats.path || null,
-                        sortTime: stats.latestTimestamp,
-                        channel: stats.latestChannel,
-                        source: stats.latestSource,
-                        contact: contact || null,
-                        displayName: contact?.displayName || "",
-                        presentationDisplayName: presentContactLabel(contact || {}, { handle, channel: stats.latestChannel }),
-                        lastMessage: stats.latestMessage,
-                        preview: stats.latestMessage,
-                        previewDate: stats.latestTimestamp
-                            ? new Date(stats.latestTimestamp).toISOString()
-                            : null,
-                        count: stats.count,
-                        countIn: stats.countIn || 0,
-                        countOut: stats.countOut || 0,
-                        firstTimestamp: stats.firstTimestamp != null ? stats.firstTimestamp : null
-                    });
-                } else {
-                    const item = itemsMap.get(key);
-                    item.count += stats.count;
-                    item.countIn = (item.countIn || 0) + (stats.countIn || 0);
-                    item.countOut = (item.countOut || 0) + (stats.countOut || 0);
-                    const fts = stats.firstTimestamp;
-                    if (
-                        fts != null &&
-                        fts > 0 &&
-                        (item.firstTimestamp == null || fts < item.firstTimestamp)
-                    ) {
-                        item.firstTimestamp = fts;
-                    }
-                    if (stats.latestTimestamp > item.sortTime) {
-                        item.sortTime = stats.latestTimestamp;
-                        item.latestHandle = stats.latestHandle || handle;
-                        item.channel = stats.latestChannel;
-                        item.source = stats.latestSource;
-                        item.lastMessage = stats.latestMessage;
-                        item.preview = stats.latestMessage;
-                        item.previewDate = stats.latestTimestamp
-                            ? new Date(stats.latestTimestamp).toISOString()
-                            : null;
-                    }
-                }
-            }
-        }
-
-        contacts.forEach((c) => {
-            if (!itemsMap.has(c.id)) {
-                itemsMap.set(c.id, {
-                    key: c.id,
-                    handle: c.handle,
-                    latestHandle: c.handle,
-                    path: pathPrefixesForHandle(c.handle)[0] || "",
-                    sortTime: safeDateMs(c.lastContacted),
-                    channel: c.lastChannel || inferChannelFromHandle(c.handle),
-                    source: inferSourceFromChannel(
-                        c.lastChannel || inferChannelFromHandle(c.handle)
-                    ),
-                    contact: c,
-                    displayName: c.displayName || "",
-                    presentationDisplayName: presentContactLabel(c, { handle: c.handle }),
-                    lastMessage: "No recent messages",
-                    preview: "No recent messages",
-                    previewDate: c.lastContacted,
-                    count: 0,
-                    countIn: 0,
-                    countOut: 0,
-                    firstTimestamp: null
-                });
-            }
-        });
-
-        items = Array.from(itemsMap.values()).filter((item) => {
-            if (!contactStore.isInboxEligible(item.contact || item.handle)) return false;
-            return isConversationCandidate({
-                path: item.path || pathPrefixesForHandle(item.latestHandle || item.handle || "")[0],
-                source: item.source
-            });
-        });
-
-        if (!q) {
-            conversationsIndexCache.rawItems = items.map((row) => ({ ...row }));
+        rows = await messageStore.getConversationIndexRows({ sort });
+        if (!q && sort === "newest") {
+            conversationsIndexCache.rawItems = rows.map((row) => ({ ...row }));
             conversationsIndexCache.builtAtMs = nowMs;
         }
     }
+
+    const contacts = await contactStore.refreshIfChanged();
+    let items = rows.map((row) => {
+        const handle = String(row.handle || "").trim();
+        const contact = contactStore.findContact(handle);
+        const path = String(row.path || "");
+        const latestChannel =
+            path.startsWith("imessage://") ? "imessage" :
+            path.startsWith("whatsapp://") ? "whatsapp" :
+            path.startsWith("mailto:") ? "email" :
+            path.startsWith("linkedin://") ? "linkedin" :
+            inferChannelFromHandle(handle);
+        const previewDate = row.timestamp ? new Date(row.timestamp).toISOString() : null;
+        return {
+            key: contact?.id || handle,
+            handle,
+            latestHandle: handle,
+            path,
+            sortTime: Number(row.latest_timestamp_ms) || safeDateMs(row.timestamp),
+            channel: latestChannel,
+            source: row.source || inferSourceFromChannel(latestChannel),
+            contact: contact || null,
+            displayName: contact?.displayName || "",
+            presentationDisplayName: presentContactLabel(contact || {}, { handle, channel: latestChannel }),
+            lastMessage: row.text || "No recent messages",
+            preview: row.text || "No recent messages",
+            previewDate,
+            count: Number(row.total_count) || 0,
+            countIn: Number(row.message_count_in) || 0,
+            countOut: Number(row.message_count_out) || 0,
+            firstTimestamp: Number(row.first_timestamp_ms) || safeDateMs(row.first_timestamp) || null,
+        };
+    }).filter((item) => {
+        if (!contactStore.isInboxEligible(item.contact || item.handle)) return false;
+        return isConversationCandidate({
+            path: item.path || pathPrefixesForHandle(item.latestHandle || item.handle || "")[0],
+            source: item.source
+        });
+    });
 
     if (q) {
         items = items.filter((item) => matchesQuery(conversationSearchHaystack(item), q));
     }
 
-    applyConversationSort(items, sort, nowMs);
+    const summaryMap = await conversationFoundationStore.getConversationSummariesByHandles(
+        items.map((item) => item.handle)
+    );
+    items = items.map((item) => {
+        const summary = summaryMap.get(item.handle);
+        if (!summary) {
+            return {
+                ...item,
+                channels: item.channel ? [item.channel] : [],
+                allowedChannels: [],
+                conversationId: null,
+            };
+        }
+        return {
+            ...item,
+            conversationId: summary.conversationId,
+            channels: Array.isArray(summary.channels) && summary.channels.length ? summary.channels : (item.channel ? [item.channel] : []),
+            allowedChannels: summary.allowedChannels || [],
+            channel: summary.defaultChannel || item.channel,
+        };
+    });
+
+    const seenKeys = new Set(items.map((item) => item.key));
+    for (const c of contacts) {
+        if (!contactStore.isInboxEligible(c)) continue;
+        if (seenKeys.has(c.id)) continue;
+        if (q && !matchesQuery(conversationSearchHaystack({
+            contact: c,
+            channel: c.lastChannel || inferChannelFromHandle(c.handle),
+            source: inferSourceFromChannel(c.lastChannel || inferChannelFromHandle(c.handle)),
+            latestHandle: c.handle,
+            lastMessage: ""
+        }), q)) continue;
+        items.push({
+            key: c.id,
+            handle: c.handle,
+            latestHandle: c.handle,
+            path: pathPrefixesForHandle(c.handle)[0] || "",
+            sortTime: safeDateMs(c.lastContacted),
+            channel: c.lastChannel || inferChannelFromHandle(c.handle),
+            source: inferSourceFromChannel(c.lastChannel || inferChannelFromHandle(c.handle)),
+            contact: c,
+            displayName: c.displayName || "",
+            presentationDisplayName: presentContactLabel(c, { handle: c.handle }),
+            lastMessage: "No recent messages",
+            preview: "No recent messages",
+            previewDate: c.lastContacted,
+            count: 0,
+            countIn: 0,
+            countOut: 0,
+            firstTimestamp: null,
+            conversationId: null,
+            channels: c.lastChannel ? [c.lastChannel] : [],
+            allowedChannels: []
+        });
+    }
 
     return { items, sort };
 }
@@ -420,84 +391,37 @@ async function serveThread(req, res, url) {
     }
 
     const handles = contactStore.getAllHandles(handle);
-    const { getHistory } = require("../vector-store");
-
-    const phoneDigits = handles
-        .filter((h) => typeof h === "string" && !h.includes("@"))
-        .map((h) => h.replace(/\D/g, ""))
-        .filter(Boolean);
-
-    const lidByPhone = await whatsAppIdResolver.lidsForPhones(phoneDigits);
-    const lidHandles = Array.from(new Set(Array.from(lidByPhone.values()).filter(Boolean)));
-    const allHandles = Array.from(new Set([...handles, ...lidHandles]));
-    const prefixes = Array.from(new Set(allHandles.flatMap((h) => pathPrefixesForHandle(h))));
+    const allHandles = Array.from(new Set(handles));
 
     try {
-        const [historyBatches, storeResult] = await Promise.all([
-            Promise.all(prefixes.map((p) => getHistory(p))),
-            messageStore.getMessagesForHandles(allHandles, { limit, offset, order: storeOrder })
-        ]);
-        const allDocs = historyBatches
-            .flat()
-            .filter((doc) => isConversationDataSource(doc));
+        let foundationResult = await conversationFoundationStore.getConversationMessagesByHandle(handle, { limit, offset, order: storeOrder });
+        let allMessages = normalizeThreadStoreRows(foundationResult?.rows || []);
 
-        const vectorDirectionHints = new Map();
-        for (const d of allDocs) {
-            const raw = String(d.text || '');
-            const dateObj = extractDateFromText(raw);
-            const key = `${String(d.path || '')}|${dateObj ? dateObj.toISOString() : ''}|${stripMessagePrefix(raw)}`;
-            vectorDirectionHints.set(key, raw.includes('] Me:'));
-        }
-
-        let allMessages = [];
-        if (Array.isArray(storeResult?.rows) && storeResult.rows.length > 0) {
-            allMessages = storeResult.rows.map((row) => {
-                const pathValue = String(row.path || '');
-                const textValue = String(row.text || '');
-                const dateIso = row.timestamp ? new Date(row.timestamp).toISOString() : null;
-                const hintKey = `${pathValue}|${dateIso || ''}|${textValue}`;
-                const isFromMe = row.is_from_me == null
-                    ? Boolean(vectorDirectionHints.get(hintKey))
-                    : Boolean(row.is_from_me);
-                return {
-                    id: row.id || null,
-                    role: isFromMe ? "me" : "contact",
-                    is_from_me: isFromMe,
-                    text: textValue,
-                    date: dateIso,
-                    channel: channelFromDoc({ path: row.path, source: row.source }),
-                    source: row.source || null,
-                    path: row.path || null,
-                    handle: row.handle || null,
-                };
-            });
-        } else {
-            allMessages = allDocs.map(d => {
-                const isFromMe = (d.text || "").includes("] Me:");
-                const dateObj = extractDateFromText(d.text || "");
-                return {
-                    role: isFromMe ? "me" : "contact",
-                    is_from_me: isFromMe,
-                    text: stripMessagePrefix(d.text || ""),
-                    date: dateObj ? dateObj.toISOString() : null,
-                    channel: channelFromDoc(d),
-                    source: d.source || null,
-                    path: d.path || null,
-                };
-            }).sort((a, b) => {
-                const at = a.date ? new Date(a.date).getTime() : 0;
-                const bt = b.date ? new Date(b.date).getTime() : 0;
-                return storeOrder === "asc" ? at - bt : bt - at;
-            });
+        if (!allMessages.length && offset === 0) {
+            const storeResult = await messageStore.getMessagesForHandles(allHandles, { limit, offset, order: storeOrder });
+            allMessages = normalizeThreadStoreRows(storeResult?.rows || []);
+            foundationResult = {
+                conversationId: null,
+                total: Number(storeResult?.total || allMessages.length),
+                channels: Array.from(new Set(allMessages.map((msg) => String(msg.channel || "").trim().toLowerCase()).filter(Boolean))),
+                allowedChannels: [],
+                defaultChannel: allMessages.find((msg) => !msg.is_from_me)?.channel || null,
+            };
         }
 
         writeJson(res, 200, {
             messages: allMessages,
-            hasMore: Number(storeResult?.total || allMessages.length) > offset + allMessages.length,
-            total: Number(storeResult?.total || allMessages.length),
+            hasMore: Number(foundationResult?.total || allMessages.length) > offset + allMessages.length,
+            total: Number(foundationResult?.total || allMessages.length),
             order: orderParam === "oldest" ? "oldest" : "newest",
             offset,
-            limit
+            limit,
+            conversationId: foundationResult?.conversationId || null,
+            channels: foundationResult?.channels || [],
+            allowedChannels: foundationResult?.allowedChannels || [],
+            defaultChannel: foundationResult?.defaultChannel || null,
+            conversationKind: foundationResult?.conversationKind || "direct",
+            conversationTitle: foundationResult?.conversationTitle || null,
         });
     } catch (err) {
         writeJson(res, 500, { error: err.message });
@@ -1006,6 +930,7 @@ module.exports = {
     getConversationsIndexFresh,
     applyConversationSort,
     sanitizeConversationItemForApi,
+    normalizeThreadStoreRows,
     resolveConversationTimestamps,
     invalidateConversationsCache: () => {
         conversationsIndexCache.builtAtMs = 0;

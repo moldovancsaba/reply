@@ -26,15 +26,21 @@ if (fs.existsSync(LOG_FILE)) {
 // const access = fs.createWriteStream(LOG_FILE, { flags: 'a' });
 // process.stdout.write = process.stderr.write = access.write.bind(access);
 const { addDocuments } = require('./vector-store.js');
+const preparedContextStore = require('./prepared-context-store.js');
 const contactStore = require('./contact-store.js');
+const { saveMessages } = require('./message-store.js');
 const { generateReply } = require('./brain-runtime.js');
-const { getSnippets } = require('./knowledge.js');
 const {
     enqueueSuggestionDraft,
     processOneSuggestionDraft,
     getSuggestionDraftIntervalMs
 } = require('./suggestion-draft-queue.js');
-const { sync: syncIMessage, getIMessageReadonlyDb } = require('./sync-imessage.js');
+const {
+    sync: syncIMessage,
+    getIMessageReadonlyDb,
+    backfillUnifiedStore,
+    convertDate: convertIMessageDate
+} = require('./sync-imessage.js');
 const { syncWhatsApp } = require('./sync-whatsapp.js');
 const { syncMail, isImapConfigured, isGmailConfigured } = require('./sync-mail.js');
 const triageEngine = require('./triage-engine.js');
@@ -307,14 +313,24 @@ async function poll() {
         isProcessing = false;
         return;
     }
+    try {
+        const repair = await backfillUnifiedStore({ batchLimit: 8000, maxBatches: 1 });
+        if (repair.saved > 0) {
+            console.log(`[Worker] iMessage mirror repaired with ${repair.saved} rows (${repair.cursor}/${repair.sourceMaxRowId}).`);
+        }
+    } catch (error) {
+        console.warn("[Worker] iMessage mirror repair skipped:", error.message);
+    }
     console.log(`[Worker] Polling chat.db at: ${resolveIMessageDbPath()}`);
 
     const query = `
         SELECT 
+            m.ROWID as rowid,
             m.guid, 
             m.text, 
             h.id as handle, 
             m.is_from_me, 
+            m.date as raw_date,
             datetime(m.date / 1000000000 + 978307200, 'unixepoch', 'localtime') as formatted_date
         FROM message m
         LEFT JOIN handle h ON m.handle_id = h.rowid
@@ -333,9 +349,10 @@ async function poll() {
             }
 
             let ingestedLiveDocs = false;
+            const liveUnifiedDocs = [];
             try {
                 for (const row of rows) {
-                    const { guid: id, text, handle, is_from_me, formatted_date: date } = row;
+                    const { guid: id, rowid, text, handle, is_from_me, raw_date, formatted_date: date } = row;
                     const fromMe = is_from_me === 1;
 
                     if (seenIds.has(id)) continue;
@@ -357,6 +374,15 @@ async function poll() {
                         path: `imessage://${handle}`
                     }]);
                     ingestedLiveDocs = true;
+                    liveUnifiedDocs.push({
+                        id: `msg-${rowid}`,
+                        text,
+                        source: 'iMessage',
+                        handle: handle || 'unknown',
+                        timestamp: convertIMessageDate(raw_date),
+                        path: `imessage://${handle || 'unknown'}`,
+                        is_from_me: fromMe
+                    });
                     try {
                         const cur = statusManager.get('imessage') || {};
                         const processed = Number(cur.processed);
@@ -377,6 +403,13 @@ async function poll() {
             } catch (e) {
                 console.error("Worker Core Error:", e);
             } finally {
+                if (liveUnifiedDocs.length) {
+                    try {
+                        await saveMessages(liveUnifiedDocs);
+                    } catch (error) {
+                        console.error("[Worker] Failed to persist live iMessage rows:", error.message);
+                    }
+                }
                 if (ingestedLiveDocs) {
                     try {
                         const { invalidateUnifiedIndexCache } = require("./vector-store.js");
@@ -425,8 +458,18 @@ async function runIntelligencePipeline(handle, text) {
         // Set REPLY_INLINE_DRAFT_GENERATE=1 to also run generateReply on every inbound (heavy).
         enqueueSuggestionDraft(handle);
         if (String(process.env.REPLY_INLINE_DRAFT_GENERATE || '').trim() === '1') {
-            const snippets = await getSnippets(text, 3);
-            const draftResult = await generateReply(text, snippets, handle);
+            const prepared = await preparedContextStore.getDraftContextSnapshots(contactStore.getAllHandles(handle));
+            const bestSnapshot = prepared
+                .filter((row) => row.latestInboundText)
+                .sort((a, b) => Date.parse(String(b.latestInboundTimestamp || 0)) - Date.parse(String(a.latestInboundTimestamp || 0)))[0] || null;
+            const preparedMessage = String(bestSnapshot?.latestInboundText || '').trim();
+            const snippets = Array.isArray(bestSnapshot?.snippetCandidates) ? bestSnapshot.snippetCandidates.slice(0, 3) : [];
+            const goldenExamples = preparedContextStore.readPreparedGoldenExamples();
+            if (!preparedMessage) {
+                console.log('[Worker] Inline draft skipped: prepared snapshot unavailable.');
+                return;
+            }
+            const draftResult = await generateReply(preparedMessage, snippets, handle, goldenExamples);
             const draftText = typeof draftResult === 'string' ? draftResult : (draftResult.suggestion || '');
             if (String(draftText || '').trim()) {
                 await contactStore.setDraft(handle, draftText);
@@ -467,7 +510,6 @@ async function runSuggestionDraftSweepOnce() {
         const res = await processOneSuggestionDraft({
             contactStore,
             generateReply,
-            getSnippets,
             isBusy: () => isProcessing
         });
         if (res.skipped) {
@@ -493,6 +535,38 @@ async function runSuggestionDraftSweepOnce() {
     console.log(`[Worker] Background suggestion drafts every ${Math.round(everyMs / 1000)}s (newest queued first).`);
     setInterval(runSuggestionDraftSweepOnce, everyMs);
     setTimeout(runSuggestionDraftSweepOnce, 45 * 1000);
+})();
+
+function getPreparedContextRefreshIntervalMs() {
+    const raw = process.env.REPLY_PREPARED_CONTEXT_REFRESH_INTERVAL_MS;
+    if (raw != null && String(raw).trim() !== "") {
+        const n = Number(raw);
+        if (Number.isFinite(n) && n > 0) return Math.min(n, 24 * 60 * 60 * 1000);
+        if (Number.isFinite(n) && n === 0) return 0;
+    }
+    return 15 * 60 * 1000;
+}
+
+async function refreshPreparedContextArtifacts() {
+    try {
+        await preparedContextStore.rebuildDraftContextSnapshots();
+        await preparedContextStore.rebuildPreparedGoldenExamples(5);
+    } catch (e) {
+        console.error("[Worker] Prepared context refresh failed:", e.message || e);
+    }
+}
+
+(() => {
+    const everyMs = getPreparedContextRefreshIntervalMs();
+    if (!everyMs) {
+        console.log("[Worker] Prepared context refresh disabled.");
+        return;
+    }
+    const minutes = Math.round(everyMs / 60000);
+    console.log(`[Worker] Prepared context refresh every ~${minutes}m.`);
+    void refreshPreparedContextArtifacts();
+    setTimeout(() => void refreshPreparedContextArtifacts(), 30 * 1000);
+    setInterval(() => void refreshPreparedContextArtifacts(), everyMs);
 })();
 
 /**

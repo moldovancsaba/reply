@@ -16,7 +16,7 @@ function inferNoteKindFromText(text) {
     return "note";
 }
 
-/** Resolve UI merge endpoint id or handle to a concrete SQLite row (reply#19). */
+/** Resolve explicit user merge/unmerge endpoint id or handle to a concrete SQLite row (reply#19). */
 function resolveMergeParticipant(key) {
     if (key == null || key === "") return null;
     const k = String(key).trim();
