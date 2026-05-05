@@ -286,14 +286,20 @@ struct ReplyNativeWorkspaceView: View {
                     channels: allowedChannels,
                     emptyText: "No allowed channel"
                 )
-                Picker("Channel", selection: $service.selectedChannel) {
-                    ForEach(allowedChannels.isEmpty ? visibleChannels : allowedChannels) { channel in
-                        Text(channel.label).tag(channel)
+                if allowedChannels.isEmpty {
+                    Text("No allowed channel")
+                        .font(.footnote)
+                        .foregroundStyle(ReplyConstellationPalette.textSecondary)
+                        .frame(width: 170, alignment: .leading)
+                } else {
+                    Picker("Channel", selection: $service.selectedChannel) {
+                        ForEach(allowedChannels) { channel in
+                            Text(channel.label).tag(channel)
+                        }
                     }
+                    .pickerStyle(.menu)
+                    .frame(width: 170)
                 }
-                .pickerStyle(.menu)
-                .frame(width: 170)
-                .disabled((allowedChannels.isEmpty ? visibleChannels : allowedChannels).isEmpty)
             }
             .padding(.horizontal, 22)
             .padding(.bottom, 16)
