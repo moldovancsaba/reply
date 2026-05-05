@@ -375,7 +375,7 @@ final class ReplyCoreService: ObservableObject {
         guard let baseURL, let handle = selectedConversationHandle else { return }
         let text = draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        if !allowedReplyChannels.isEmpty && !allowedReplyChannels.contains(selectedChannel) {
+        guard allowedReplyChannels.contains(selectedChannel) else {
             sendErrorMessage = "This conversation is not allowed to send on \(selectedChannel.label)."
             return
         }
@@ -407,6 +407,11 @@ final class ReplyCoreService: ObservableObject {
                     "at": ISO8601DateFormatter().string(from: Date())
                 ]
             ])
+            if let conversationId = currentConversationId, !conversationId.isEmpty,
+               var json = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any] {
+                json["conversationId"] = conversationId
+                request.httpBody = try JSONSerialization.data(withJSONObject: json)
+            }
             let (_, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 throw NSError(domain: "ReplyCoreService", code: 5, userInfo: [NSLocalizedDescriptionKey: "Send failed."])
@@ -934,10 +939,10 @@ final class ReplyCoreService: ObservableObject {
         if let firstAllowed = allowed.first {
             return firstAllowed
         }
-        if let firstVisible = visibleChannels.first {
-            return firstVisible
+        if let visibleDefault = visibleChannels.first, allowed.contains(visibleDefault) {
+            return visibleDefault
         }
-        return fallbackChannel(for: handle)
+        return selectedChannel
     }
 
     private func dedupeMessages(_ input: [ReplyMessage]) -> [ReplyMessage] {
