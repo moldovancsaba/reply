@@ -3,11 +3,14 @@
 ## Current State
 
 - canonical repo root is `/Users/Shared/Projects/reply`
+- documented package version is `0.5.14`
 - live drafting runtime is `{trinity}`
 - legacy drafting is no longer part of the normal live path
 - structured draft outcomes use `/api/trinity/outcome`
 - generic operator notes remain on `/api/feedback` and `/api/feedback/log`
 - the sidebar conversation list now comes from the unified message-backed index instead of requiring a preexisting contact row
+- canonical conversation-foundation tables now exist in `chat.db`
+- contact merge and unmerge are manual-only, user-owned actions
 - thread rendering now uses explicit left/right sent-versus-received rows
 - initial thread load now preloads the oldest 20 and newest 20 messages and loads the middle gap progressively
 - native sync triggers now send approval-bearing protected requests correctly
@@ -76,3 +79,31 @@ Validated during this sync:
 2. treat conversation visibility as message-backed first and contact-enriched second in future indexing work
 3. keep raw substrate errors out of normal operator UI surfaces
 4. keep `{reply}` policy and transport authority separate from `{trinity}` learned behavior
+
+## 2026-05-05 Native App Doc Handoff
+
+- added a dedicated native app handoff document at `/Users/Shared/Projects/reply/docs/NATIVE_APP_BUILD_HANDOFF.md`
+- the document is meant to be the first path shared with another agent when they need the exact build and install contract for `reply.app`
+- it records:
+  - canonical source files
+  - bundle assembly behavior
+  - install verification rules
+  - launch verification behavior
+  - reuse constraints for another project
+
+### Validation
+
+- `cd /Users/Shared/Projects/reply/app/reply-app && swift package dump-package >/dev/null`
+- `cd /Users/Shared/Projects/reply/app/reply-app && bash -n ./build-bundle.sh`
+- `cd /Users/Shared/Projects/reply/app/reply-app && bash -n ./install-bundle.sh`
+- `cd /Users/Shared/Projects/reply/app/reply-app && plutil -lint ./Info.plist`
+- `cd /Users/Shared/Projects/reply && bash -n ./script/build_and_run.sh`
+
+## 2026-05-05 Foundation And Documentation Sync
+
+- README, install docs, architecture docs, dependency map, contribution guide, and build handoff are now aligned on:
+  - version `0.5.14`
+  - manual-only merge authority
+  - current conversation foundation schema presence
+  - native shell install/build contract
+- live `contacts.db` audit confirmed `0` active merged contacts after an idempotent purge check

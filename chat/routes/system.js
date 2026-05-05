@@ -6,6 +6,7 @@ const { writeJson } = require("../utils/server-utils");
 const { readSettings, isGmailConfigured, isImapConfigured } = require("../settings-store");
 const { readChannelSyncState } = require("../channel-bridge");
 const contactStore = require("../contact-store");
+const messageStore = require("../message-store");
 const fs = require("fs");
 const path = require("path");
 const hubRuntime = require("../hub-runtime");
@@ -71,6 +72,20 @@ async function countIngested(source) {
         console.error(`Error counting ${source}:`, e);
         return 0;
     }
+}
+
+function countFromStatus(status, keys = ["processed", "total"]) {
+    return keys.reduce((max, key) => {
+        const parsed = Number(status?.[key]);
+        return Number.isFinite(parsed) ? Math.max(max, parsed) : max;
+    }, 0);
+}
+
+async function withTimeout(taskFactory, timeoutMs, fallbackValue) {
+    return await Promise.race([
+        Promise.resolve().then(taskFactory),
+        new Promise((resolve) => setTimeout(() => resolve(fallbackValue), timeoutMs))
+    ]);
 }
 
 function getNotesCount() {
@@ -172,6 +187,14 @@ function normalizeChannelStatus(baseStatus, ingestedTotal, extras = {}) {
     };
 }
 
+function resolveMailProvider({ mailStatus = {}, gmailOk = false, imapOk = false } = {}) {
+    const connector = String(mailStatus?.connector || "").trim().toLowerCase();
+    if (connector) return connector;
+    if (gmailOk) return "gmail";
+    if (imapOk) return "imap";
+    return "";
+}
+
 const serviceManager = require("../service-manager");
 const { buildPreflightReport, collectPathContext, API_CONTRACT_HUB, PREFLIGHT_SCHEMA_VERSION } = require("../preflight.js");
 
@@ -190,10 +213,11 @@ async function buildSystemHealthPayloadCore() {
         1000,
         Math.min(parseInt(healthCfg.ollamaProbeTimeoutMs, 10) || 3000, 30000)
     );
+    const startupProbeBudgetMs = Math.max(250, Math.min(Number(healthCfg.startupProbeBudgetMs) || 800, 2000));
     const mailStatus = readStatus("mail_sync_status.json");
     const gmailOk = isGmailConfigured(settings);
     const imapOk = isImapConfigured(settings);
-    const mailProvider = gmailOk ? "gmail" : (imapOk ? "imap" : (mailStatus.connector || ""));
+    const mailProvider = resolveMailProvider({ mailStatus, gmailOk, imapOk });
     const mailAccount =
         (gmailOk ? (settings?.gmail?.email || "") : "") ||
         (imapOk ? (settings?.imap?.user || "") : "") ||
@@ -204,54 +228,30 @@ async function buildSystemHealthPayloadCore() {
     const notesStatus = readStatus("notes_sync_status.json");
     const calendarStatus = readStatus("calendar_sync_status.json");
     const kycStatus = readStatus("kyc_sync_status.json");
+    const linkedinMessagesStatus = readStatus("linkedin_sync_status.json");
+    const linkedinPostsStatus = readStatus("linkedin_posts_sync_status.json");
 
     // ── Check Ollama directly (OLLAMA_HOST / port from env or Settings) ─
     // Check Ollama's own API directly instead of inferring availability from another service.
     let ollamaStatus = "offline";
-    try {
-        const oRes = await fetch(`${resolveOllamaHttpBase()}/api/tags`, {
-            signal: AbortSignal.timeout(ollamaProbeMs)
-        });
-        if (oRes.ok) ollamaStatus = "online";
-    } catch (e) {
-        ollamaStatus = "offline";
-    }
+    await withTimeout(async () => {
+        try {
+            const oRes = await fetch(`${resolveOllamaHttpBase()}/api/tags`, {
+                signal: AbortSignal.timeout(Math.min(ollamaProbeMs, startupProbeBudgetMs))
+            });
+            if (oRes.ok) ollamaStatus = "online";
+        } catch (e) {
+            ollamaStatus = "offline";
+        }
+    }, startupProbeBudgetMs, null);
 
     const [imessageCount, whatsappCount, mailCount, linkedinMessagesCount, linkedinPostsCount, notesCountIngested, calendarCount] = await Promise.all([
         countIngested("iMessage"),
         countIngested("WhatsApp"),
-        (async () => {
-            try {
-                const { connect } = require("../vector-store.js");
-                const db = await connect();
-                const table = await db.openTable("documents");
-                return await table.countRows("source IN ('Gmail','IMAP','Mail','mbox')");
-            } catch { return 0; }
-        })(),
-        (async () => {
-            try {
-                const { connect } = require("../vector-store.js");
-                const db = await connect();
-                const table = await db.openTable("documents");
-                return await table.countRows("source IN ('LinkedIn')");
-            } catch { return 0; }
-        })(),
-        (async () => {
-            try {
-                const { connect } = require("../vector-store.js");
-                const db = await connect();
-                const table = await db.openTable("documents");
-                return await table.countRows("source IN ('linkedin-posts')");
-            } catch { return 0; }
-        })(),
-        (async () => {
-            try {
-                const { connect } = require("../vector-store.js");
-                const db = await connect();
-                const table = await db.openTable("documents");
-                return await table.countRows("source IN ('apple-notes')");
-            } catch { return 0; }
-        })(),
+        Promise.resolve(countFromStatus(mailStatus)),
+        Promise.resolve(countFromStatus(linkedinMessagesStatus)),
+        Promise.resolve(countFromStatus(linkedinPostsStatus)),
+        Promise.resolve(Math.max(countFromStatus(notesStatus, ["updated", "processed", "total"]), Number(getNotesCount()) || 0)),
         countIngested("apple-calendar"),
     ]);
 
@@ -290,25 +290,27 @@ async function buildSystemHealthPayloadCore() {
     // ~/.openclaw token and can falsely report "offline" / token mismatch while Docker is live.
     const openclawWsConfigured = /^wss?:\/\//i.test(String(process.env.REPLY_OPENCLAW_GATEWAY_URL || "").trim());
     if (!services.openclaw?.pid || openclawWsConfigured) {
-        try {
-            const { resolveOpenClawBinary } = require("../utils/whatsapp-utils");
-            const { probeOpenClawGatewayHealth, openclawGatewayResponseOk } = require("../openclaw-gateway-env.js");
-            const data = await probeOpenClawGatewayHealth(resolveOpenClawBinary(), { timeoutMs: 4000 });
-            const ocOk = openclawGatewayResponseOk(data);
-            services.openclaw = {
-                ...services.openclaw,
-                name: "openclaw",
-                status: ocOk ? "online" : "offline",
-                detail: ocOk ? "gateway health ok" : "gateway health not ok"
-            };
-        } catch (e) {
-            services.openclaw = {
-                ...services.openclaw,
-                name: "openclaw",
-                status: "offline",
-                lastError: e.message
-            };
-        }
+        await withTimeout(async () => {
+            try {
+                const { resolveOpenClawBinary } = require("../utils/whatsapp-utils");
+                const { probeOpenClawGatewayHealth, openclawGatewayResponseOk } = require("../openclaw-gateway-env.js");
+                const data = await probeOpenClawGatewayHealth(resolveOpenClawBinary(), { timeoutMs: startupProbeBudgetMs });
+                const ocOk = openclawGatewayResponseOk(data);
+                services.openclaw = {
+                    ...services.openclaw,
+                    name: "openclaw",
+                    status: ocOk ? "online" : "offline",
+                    detail: ocOk ? "gateway health ok" : "gateway health not ok"
+                };
+            } catch (e) {
+                services.openclaw = {
+                    ...services.openclaw,
+                    name: "openclaw",
+                    status: "offline",
+                    lastError: e.message
+                };
+            }
+        }, startupProbeBudgetMs + 100, null);
     }
 
     let replyVersion = "unknown";
@@ -319,6 +321,16 @@ async function buildSystemHealthPayloadCore() {
 
     // Bound listen address (reply#31): see `hub-runtime.js`; null until server.listen() runs.
     const { httpPort, httpHost } = hubRuntime.getListenInfo();
+
+    const contactStats = await contactStore.getStats();
+    const conversationIndexStats = await messageStore.getConversationIndexStats();
+    const visibleByChannel = {
+        linkedin: Number(conversationIndexStats.byChannel.linkedin) || 0,
+        email: Number(conversationIndexStats.byChannel.email) || 0,
+        whatsapp: Number(conversationIndexStats.byChannel.whatsapp) || 0,
+        imessage: Number(conversationIndexStats.byChannel.imessage) || 0,
+        apple_contacts: contactStats.byChannel?.apple_contacts || 0
+    };
 
     const health = {
         ok: true,
@@ -353,13 +365,13 @@ async function buildSystemHealthPayloadCore() {
                 status: (mailStatus.state === 'error') ? "repair_required" : (mailStatus.state || "ok")
             },
             linkedin_messages: {
-                ...readStatus("linkedin_sync_status.json"),
+                ...linkedinMessagesStatus,
                 processed: linkedinMessagesCount,
                 total: linkedinMessagesCount,
                 lastAt: readChannelSyncState().linkedin || null
             },
             linkedin_posts: {
-                ...readStatus("linkedin_posts_sync_status.json"),
+                ...linkedinPostsStatus,
                 processed: linkedinPostsCount,
                 total: linkedinPostsCount,
                 lastAt: readChannelSyncState().linkedin_posts || null
@@ -367,8 +379,16 @@ async function buildSystemHealthPayloadCore() {
             contacts: readStatus("contacts_sync_status.json"),
             kyc: kycStatus
         },
-        stats: await contactStore.getStats(),
+        stats: {
+            ...contactStats,
+            total: conversationIndexStats.total,
+            byChannel: {
+                ...contactStats.byChannel,
+                ...visibleByChannel
+            }
+        },
         lastCheck: new Date().toISOString(),
+        launch: hubRuntime.getBootstrapState(),
         httpPort,
         httpHost
     };
@@ -562,6 +582,7 @@ module.exports = {
     servePreflight,
     buildSystemHealthPayload,
     buildSystemHealthPayloadCore,
+    resolveMailProvider,
     attachPreflightToHealth,
     maybeBlockOutboundOnPreflight,
     serveServiceControl,

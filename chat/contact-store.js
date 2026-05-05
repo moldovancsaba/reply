@@ -373,6 +373,7 @@ class ContactStore {
 
     /**
      * Contacts linked to this canonical profile (`primary_contact_id` pointer).
+     * This relationship is explicit user-owned merge state, not automatic identity inference.
      * @param {string} canonicalId - Primary row `id`
      */
     listAliasesForCanonical(canonicalId) {
@@ -382,6 +383,7 @@ class ContactStore {
 
     /**
      * Clears `primary_contact_id` on one merged row (rollback link, not channel move) — reply#19.
+     * Unmerge remains explicit user action; workers/routes must not call this as heuristic cleanup.
      * @param {string} aliasContactId - SQLite row id of the alias profile
      */
     async unlinkAlias(aliasContactId) {
@@ -739,8 +741,9 @@ class ContactStore {
     }
 
     /**
-     * Alias-based merge (reply#19): moves child data onto the canonical row and sets
-     * `primary_contact_id` on the source so lookups resolve to the primary without deleting history keys.
+     * Alias-based merge (reply#19): explicit user-owned merge only.
+     * Moves child data onto the canonical row and sets `primary_contact_id` on the source
+     * so lookups resolve to the primary without deleting history keys.
      */
     async mergeContacts(targetId, sourceId) {
         if (!targetId || !sourceId || targetId === sourceId) return;

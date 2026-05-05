@@ -27,6 +27,16 @@ Optional but commonly required:
 - `Ollama`
 - `OpenClaw`
 
+## Version Contract
+
+Current documented versions for this deployment guide:
+
+- `{reply}` package: `0.5.14`
+- native shell platform target: `macOS 15+`
+- Node.js: `>=20.17.0`
+- Python for `{trinity}`: `>=3.12`
+- Swift toolchain: `Swift 6`
+
 ## Repository Layout
 
 Expected local checkout roots:
@@ -120,6 +130,12 @@ This builds and launches:
 
 - `app/reply-app/dist/reply.app`
 
+Launch hardening notes:
+
+- the bundled native shell starts the hub on preferred local ports `45431` through `45446`
+- `script/build_and_run.sh --verify` now waits for `/api/health` readiness, not just a visible process
+- the native UI stays in a startup state until the hub reports launch readiness
+
 ### Legacy LaunchAgent mode
 
 Still available if you explicitly want it:
@@ -144,12 +160,19 @@ Current notable files:
 - `~/Library/Application Support/reply/contacts.db`
 - `~/Library/Application Support/reply/settings.json`
 - `~/Library/Application Support/reply/shadow/trinity-draft-comparisons.jsonl`
+- `~/Library/Application Support/reply/mail_sync_status.json`
 - `~/Library/Logs/reply/hub.log`
 - `/tmp/reply-hub.log`
 
 Default HTTP health endpoint:
 
 - `http://127.0.0.1:45311/api/health`
+
+Bundled native-shell preferred health endpoints:
+
+- `http://127.0.0.1:45431/api/health`
+- through
+- `http://127.0.0.1:45446/api/health`
 
 ## Current Runtime Notes
 
@@ -164,10 +187,26 @@ Default HTTP health endpoint:
 
 - dashboard message counts come from ingestion totals
 - conversation sidebar now comes from the unified message-backed index
+- conversation sidebar can also merge vector-backed conversation stats for channels that are not mirrored into `unified_messages`
 - a missing contact row no longer hides a valid message-backed conversation
+- contact merge and unmerge remain manual user actions only; the runtime does not auto-merge identities
 - thread views preload both the oldest 20 and newest 20 messages on first open
 - long threads fill the middle history gap incrementally in the background
 - sent and received messages render as explicit right/left rows
+
+### Mail ingestion
+
+Current mail ingestion order:
+
+1. Gmail OAuth connector
+2. IMAP accounts
+3. Apple Mail fallback
+
+Important operator notes:
+
+- if Gmail returns `invalid_grant`, reconnect Gmail in settings or rely on Apple Mail fallback
+- Apple Mail fallback now normalizes sender/recipient addresses into `mailto:` conversation handles
+- Apple Mail fallback only works if Mail.app is configured locally and can be automated
 
 ### Failure handling
 
@@ -236,6 +275,20 @@ Actions:
 2. verify Python 3.12+
 3. run `uv sync --dev` in `{trinity}`
 4. check Ollama if model-backed routes are enabled
+
+### Mail conversations missing
+
+Symptoms:
+
+- dashboard shows mail activity but the sidebar has no email threads
+- `mail_sync_status.json` reports idle or stale progress
+
+Actions:
+
+1. inspect `~/Library/Application Support/reply/mail_sync_status.json`
+2. reconnect Gmail if the connector reports `invalid_grant`
+3. if Gmail is unavailable, make sure Mail.app is configured and allowed for AppleScript automation
+4. restart `{reply}` after a mail sync path change so the conversation index refreshes from the live runtime
 
 ### Sandbox / Docker / Colima failures
 

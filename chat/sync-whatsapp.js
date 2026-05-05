@@ -34,19 +34,48 @@ function readCurrentProcessed() {
 
 function loadState() {
     if (fs.existsSync(STATE_FILE)) {
-        return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+        const parsed = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+        return {
+            lastDate: Number(parsed?.lastDate) || 0,
+            lastPk: Number(parsed?.lastPk) || 0
+        };
     }
-    return { lastDate: 0 };
+    return { lastDate: 0, lastPk: 0 };
 }
 
-function saveState(lastDate) {
-    fs.writeFileSync(STATE_FILE, JSON.stringify({ lastDate, lastSync: new Date().toISOString() }, null, 2));
+function saveState(next) {
+    const state = {
+        lastDate: Number(next?.lastDate) || 0,
+        lastPk: Number(next?.lastPk) || 0,
+        lastSync: new Date().toISOString()
+    };
+    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+    return state;
 }
 
 function convertWADate(waTime) {
     // WhatsApp on Mac uses Core Data timestamp (seconds since 2001-01-01 00:00:00 UTC)
     const CORE_DATA_EPOCH_OFFSET = 978307200;
     return new Date((waTime + CORE_DATA_EPOCH_OFFSET) * 1000).toISOString();
+}
+
+function buildWhatsAppBody(row) {
+    const text = String(row?.ZTEXT || '').trim();
+    if (text) {
+        return text;
+    }
+    if (row?.ZMEDIAITEM != null) {
+        return "[Media attachment]";
+    }
+    return "";
+}
+
+function normalizeWhatsAppIdentity(value) {
+    return String(value || "")
+        .replace('@s.whatsapp.net', '')
+        .replace('@g.us', '')
+        .split('@')[0]
+        .trim();
 }
 
 async function syncWhatsApp() {
@@ -62,15 +91,11 @@ async function syncWhatsApp() {
     db.run("PRAGMA synchronous = NORMAL");
     const state = loadState();
 
-    console.log(`Starting WhatsApp sync from date > ${state.lastDate}...`);
+    console.log(`Starting WhatsApp sync from PK > ${state.lastPk || 0}...`);
     updateStatus({ state: "running", message: "Reading WhatsApp database..." });
 
     const settings = withDefaults(readSettings());
     const batchLimit = Math.max(1, Math.min(Number(settings?.worker?.quantities?.whatsapp) || 5000, 10000));
-
-    // Query to get messages joined with session info could be complex.
-    // simpler to just query ZWAMESSAGE for now and structure JIDs.
-    // ZMESSAGEDATE is the sort key.
 
     const query = `
         SELECT 
@@ -87,14 +112,17 @@ async function syncWhatsApp() {
             s.ZCONTACTIDENTIFIER AS ZSESSIONCONTACTIDENTIFIER
         FROM ZWAMESSAGE m
         LEFT JOIN ZWACHATSESSION s ON s.Z_PK = m.ZCHATSESSION
-        WHERE m.ZMESSAGEDATE > ?
-        AND m.ZTEXT IS NOT NULL 
-        ORDER BY m.ZMESSAGEDATE ASC
+        WHERE m.Z_PK > ?
+        AND (
+            (m.ZTEXT IS NOT NULL AND TRIM(m.ZTEXT) != '') OR
+            m.ZMEDIAITEM IS NOT NULL
+        )
+        ORDER BY m.Z_PK ASC
         LIMIT ?
     `;
 
     return new Promise((resolve, reject) => {
-        db.all(query, [state.lastDate, batchLimit], async (err, rows) => {
+        db.all(query, [state.lastPk || 0, batchLimit], async (err, rows) => {
             if (err) {
                 console.error("WhatsApp Sync Error:", err);
                 updateStatus({ state: "error", message: err.message });
@@ -143,16 +171,22 @@ async function syncWhatsApp() {
 
                 const formattedDate = convertWADate(row.ZMESSAGEDATE);
                 const pushName = (row.ZPUSHNAME || row.ZSESSIONPARTNERNAME || '').trim();
+                const body = buildWhatsAppBody(row);
+                const sessionIdentity = normalizeWhatsAppIdentity(row.ZSESSIONCONTACTJID || row.ZSESSIONCONTACTIDENTIFIER || jid || handle);
+                const isGroup = String(jid || row.ZSESSIONCONTACTJID || '').includes('@g.us');
 
                 return {
                     id: `wa-${row.Z_PK}`,
-                    text: `[${formattedDate}] ${row.ZISFROMME ? 'Me' : (pushName || handle)}: ${row.ZTEXT}`,
+                    text: `[${formattedDate}] ${row.ZISFROMME ? 'Me' : (pushName || handle)}: ${body}`,
                     source: 'WhatsApp',
                     path: `whatsapp://${handle}`,
                     _meta: {
                         formattedDate,
                         handle,
                         pushName,
+                        body,
+                        sessionIdentity,
+                        isGroup,
                     }
                 };
             });
@@ -169,12 +203,22 @@ async function syncWhatsApp() {
                 const { saveMessages } = require('./message-store.js');
                 const unifiedDocs = docs.map(d => ({
                     id: d.id,
-                    text: d.text.split(': ').slice(1).join(': '), // Strip the [Date] Name: prefix if possible or just store text
+                    text: d._meta?.body || d.text.split(': ').slice(1).join(': '),
                     source: 'WhatsApp',
                     handle: d._meta?.handle || d.path.replace('whatsapp://', ''),
                     timestamp: d._meta?.formattedDate,
                     path: d.path,
                     is_from_me: String(d.text || '').includes('] Me:') ? 1 : 0,
+                    metadata: {
+                        providerMessageKey: d.id,
+                        channel: 'whatsapp',
+                        externalThreadKey: d._meta?.sessionIdentity || d._meta?.handle || null,
+                        externalThreadKind: d._meta?.isGroup ? 'group' : 'direct',
+                        externalThreadTitle: d._meta?.pushName || null,
+                        senderIdentity: d._meta?.handle || null,
+                        participantIdentities: d._meta?.handle ? [d._meta.handle] : [],
+                        recipientIdentities: d._meta?.handle ? [d._meta.handle] : [],
+                    }
                 }));
                 await saveMessages(unifiedDocs);
 
@@ -224,10 +268,12 @@ async function syncWhatsApp() {
                 }
 
                 const lastRow = rows[rows.length - 1];
-                const maxDate = lastRow.ZMESSAGEDATE;
-                saveState(maxDate);
+                saveState({
+                    lastDate: lastRow.ZMESSAGEDATE,
+                    lastPk: lastRow.Z_PK
+                });
 
-                console.log(`WhatsApp Sync complete. Last Date: ${maxDate}`);
+                console.log(`WhatsApp Sync complete. Last PK: ${lastRow.Z_PK}`);
 
                 const nextProcessed = readCurrentProcessed() + docs.length;
                 updateStatus({

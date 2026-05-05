@@ -5,6 +5,7 @@ const statusManager = require("./status-manager.js");
 const contactStore = require("./contact-store.js");
 const { addDocuments } = require("./vector-store.js");
 const { enqueueSuggestionDraftsFromDocBatch } = require("./suggestion-draft-queue.js");
+const { saveMessages } = require("./message-store.js");
 const { readSettings, writeSettings } = require("./settings-store.js");
 const { dataPath, ensureDataHome } = require("./app-paths.js");
 
@@ -79,6 +80,13 @@ function extractEmailAddress(headerVal) {
   const m = s.match(/<([^>]+)>/);
   const email = (m ? m[1] : s).trim().toLowerCase();
   return email.includes("@") ? email : null;
+}
+
+function extractEmailAddresses(headerVal) {
+  return String(headerVal || "")
+    .split(",")
+    .map((value) => extractEmailAddress(value))
+    .filter(Boolean);
 }
 
 function pickCounterparty({ fromHeader, toHeader, meEmail }) {
@@ -413,6 +421,7 @@ async function syncGmail({ maxMessages = 500 } = {}) {
   updateMailStatus({ state: "running", message: `Fetching ${messageIds.length} Gmail messages…`, connector: "gmail", progress: 40 });
 
   const docs = [];
+  const unifiedDocs = [];
   for (let i = 0; i < messageIds.length; i++) {
     const id = messageIds[i];
     try {
@@ -426,6 +435,7 @@ async function syncGmail({ maxMessages = 500 } = {}) {
       const subject = headerValue(headers, "Subject");
       const fromHeader = headerValue(headers, "From");
       const toHeader = headerValue(headers, "To");
+      const ccHeader = headerValue(headers, "Cc");
       const dateHeader = headerValue(headers, "Date");
       const dateObj = dateHeader ? new Date(dateHeader) : null;
       const date = dateObj && !Number.isNaN(dateObj.getTime()) ? dateObj.toISOString() : new Date(Number(msg.internalDate) || Date.now()).toISOString();
@@ -438,6 +448,11 @@ async function syncGmail({ maxMessages = 500 } = {}) {
 
       const fromEmail = extractEmailAddress(fromHeader);
       const isFromMe = !!(fromEmail && meEmail && fromEmail === meEmail);
+      const recipientEmails = [...extractEmailAddresses(toHeader), ...extractEmailAddresses(ccHeader)];
+      const participantIdentities = Array.from(new Set([
+        fromEmail,
+        ...recipientEmails
+      ].filter((value) => value && value !== meEmail)));
 
       const body = extractTextFromPayload(msg.payload);
       if (!body) {
@@ -456,6 +471,26 @@ async function syncGmail({ maxMessages = 500 } = {}) {
         source: "Gmail",
         path: `mailto:${counterparty}`,
       });
+
+      unifiedDocs.push({
+        id: `gmail-${id}`,
+        text: body.length > 4000 ? `${body.slice(0, 4000)}…` : body,
+        source: "Gmail",
+        handle: counterparty,
+        timestamp: date,
+        path: `mailto:${counterparty}`,
+        is_from_me: isFromMe,
+        metadata: {
+          providerMessageKey: id,
+          channel: "email",
+          externalThreadKey: msg?.threadId ? `gmail:${msg.threadId}` : null,
+          externalThreadKind: participantIdentities.length > 1 ? "group" : "direct",
+          externalThreadTitle: subject,
+          senderIdentity: fromEmail || null,
+          participantIdentities,
+          recipientIdentities: recipientEmails.filter((value) => value !== meEmail),
+        }
+      });
     } catch (e) {
       console.warn("[Gmail] Failed to fetch message:", id, e.message);
     }
@@ -464,9 +499,15 @@ async function syncGmail({ maxMessages = 500 } = {}) {
   console.log(`[Gmail Sync] Processed ${messageIds.length} messages. Collected ${docs.length} new documents.`);
 
   if (docs.length > 0) {
+    updateMailStatus({ state: "running", message: `Saving ${docs.length} Gmail messages…`, connector: "gmail", progress: 65 });
+    await saveMessages(unifiedDocs);
     updateMailStatus({ state: "running", message: `Vectorizing ${docs.length} Gmail messages…`, connector: "gmail", progress: 80 });
-    await addDocuments(docs);
-    enqueueSuggestionDraftsFromDocBatch(docs);
+    try {
+      await addDocuments(docs);
+      enqueueSuggestionDraftsFromDocBatch(docs);
+    } catch (vectorErr) {
+      console.warn("[Gmail] Vector indexing failed after Gmail save:", vectorErr.message);
+    }
   }
 
   state.lastSync = new Date().toISOString();

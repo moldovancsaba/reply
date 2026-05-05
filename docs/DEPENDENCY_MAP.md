@@ -1,7 +1,7 @@
 # {reply} Dependency Map
 
-**Doc freshness:** 2026-05-03  
-**Purpose:** current runtime and install dependency map for `{reply}` after the Trinity runtime cutover and native-shell rollout.
+**Doc freshness:** 2026-05-05  
+**Purpose:** current runtime and install dependency map for `{reply}` after the Trinity runtime cutover, native-shell rollout, thin-read work, and conversation-foundation insertion.
 
 This document is no longer a historical issue graph. It is the current dependency map for:
 
@@ -71,6 +71,7 @@ Provides:
 
 - unified message corpus
 - message-backed conversation index
+- canonical conversation-foundation tables
 - contact enrichment
 - local settings
 - semantic retrieval
@@ -181,6 +182,15 @@ Current product rule:
 
 This is now enforced in the conversation index path.
 
+### Merge authority
+
+Current product rule:
+
+- contact merge and unmerge is explicit user-owned state
+- no background worker, route, or projection layer may auto-merge two identities through phone normalization, email similarity, or channel overlap
+
+This is a trust and GDPR boundary, not a convenience feature.
+
 ### Drafting runtime health
 
 If `{trinity}` is unavailable:
@@ -218,4 +228,5 @@ Update this document whenever one of these changes:
 - local install prerequisites
 - required external tools
 - message/conversation assembly rules
+- merge/unmerge authority rules
 - operator-visible failure classification

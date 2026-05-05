@@ -21,9 +21,19 @@ final class ReplyCoreService: ObservableObject {
     @Published var conversations: [ReplyConversation] = []
     @Published var selectedConversationHandle: String?
     @Published var messages: [ReplyMessage] = []
+    @Published var currentConversationId: String?
+    @Published var currentConversationKind: String = "direct"
+    @Published var currentConversationTitle: String = ""
+    @Published var conversationTotalCount: Int = 0
+    @Published var conversationsHasMore = false
+    @Published var isLoadingMoreConversations = false
+    @Published var threadGapRemaining: Int = 0
+    @Published var isLoadingMoreThreadGap = false
     @Published var selectedProfile: ReplyProfile?
     @Published var draftMessage: String = ""
     @Published var selectedChannel: ReplyMessageChannel = .imessage
+    @Published var currentConversationChannels: [ReplyMessageChannel] = []
+    @Published var allowedReplyChannels: [ReplyMessageChannel] = []
     @Published var conversationSearch: String = ""
     @Published var isLoadingConversations = false
     @Published var isLoadingMessages = false
@@ -39,12 +49,19 @@ final class ReplyCoreService: ObservableObject {
 
     private var launchProcess: Process?
     private var refreshTask: Task<Void, Never>?
+    private var launchWatchTask: Task<Void, Never>?
+    private var mirrorRefreshTask: Task<Void, Never>?
     private let preferredPorts = Array(45431...45446)
     private var hasAttemptedAutoLaunch = false
     private var consecutiveHealthFailures = 0
     private var lastIMessageMirrorAt: Date?
     private var lastOllamaStartAttemptAt: Date?
+    private var launchDeadline: Date?
     private let nativeClientToken: String
+    private let conversationPageSize = 50
+    private let threadWindowSize = 20
+    private var oldestThreadMessages: [ReplyMessage] = []
+    private var newestThreadMessages: [ReplyMessage] = []
 
     init() {
         self.nativeClientToken = Self.loadOrCreateNativeClientToken()
@@ -52,6 +69,8 @@ final class ReplyCoreService: ObservableObject {
 
     deinit {
         refreshTask?.cancel()
+        launchWatchTask?.cancel()
+        mirrorRefreshTask?.cancel()
     }
 
     func startMonitoring() {
@@ -65,16 +84,16 @@ final class ReplyCoreService: ObservableObject {
     }
 
     func refreshHealth() async {
-        refreshAppleSourceMirrorsIfNeeded()
-        if let detected = await detectHealthyBaseURL() {
-            do {
-                let payload = try await fetchHealth(from: detected)
-                health = payload
-                baseURL = detected
+        scheduleAppleSourceMirrorRefreshIfNeeded()
+        if let (detected, payload) = await detectReachableHealth() {
+            health = payload
+            baseURL = detected
+            lastRefreshAt = Date()
+            hasAttemptedAutoLaunch = true
+            consecutiveHealthFailures = 0
+            if isLaunchReady(payload) {
                 runtimeState = .online
-                lastRefreshAt = Date()
-                hasAttemptedAutoLaunch = true
-                consecutiveHealthFailures = 0
+                launchDeadline = nil
                 if payload.status == "online" || payload.ok == true {
                     launchErrorMessage = ""
                 }
@@ -86,18 +105,23 @@ final class ReplyCoreService: ObservableObject {
                 if conversations.isEmpty && workspaceMode == .conversations {
                     await loadWorkspaceIfNeeded()
                 }
-            } catch {
-                handleHealthMiss(error.localizedDescription)
+            } else {
+                runtimeState = .starting
+                launchErrorMessage = launchProgressMessage(from: payload)
             }
-        } else if case .starting = runtimeState {
+        } else if shouldPreserveStartingState() {
+            runtimeState = .starting
             lastRefreshAt = Date()
+            if launchErrorMessage.isEmpty {
+                launchErrorMessage = "Starting local runtime..."
+            }
         } else {
             handleHealthMiss("{reply} runtime health probe did not respond.")
         }
     }
 
     func loadWorkspaceIfNeeded() async {
-        guard runtimeState == .online || baseURL != nil else { return }
+        guard runtimeState == .online, baseURL != nil else { return }
         if conversations.isEmpty {
             await loadConversations()
         } else if let handle = selectedConversationHandle, !messages.isEmpty == false {
@@ -105,16 +129,28 @@ final class ReplyCoreService: ObservableObject {
         }
     }
 
-    func loadConversations() async {
+    func loadConversations(reset: Bool = true) async {
         guard let baseURL else { return }
-        isLoadingConversations = true
+        if reset {
+            isLoadingConversations = true
+        } else {
+            if isLoadingMoreConversations || !conversationsHasMore { return }
+            isLoadingMoreConversations = true
+        }
         workspaceErrorMessage = ""
-        defer { isLoadingConversations = false }
+        defer {
+            if reset {
+                isLoadingConversations = false
+            } else {
+                isLoadingMoreConversations = false
+            }
+        }
         do {
             var components = URLComponents(url: baseURL.appending(path: "api/conversations"), resolvingAgainstBaseURL: false)
+            let offset = reset ? 0 : conversations.count
             components?.queryItems = [
-                URLQueryItem(name: "offset", value: "0"),
-                URLQueryItem(name: "limit", value: "50"),
+                URLQueryItem(name: "offset", value: "\(offset)"),
+                URLQueryItem(name: "limit", value: "\(conversationPageSize)"),
                 URLQueryItem(name: "sort", value: "newest"),
             ]
             if !conversationSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -122,7 +158,14 @@ final class ReplyCoreService: ObservableObject {
             }
             guard let url = components?.url else { return }
             let payload: ReplyConversationListResponse = try await requestJSON(url: url)
-            conversations = payload.contacts
+            conversationTotalCount = payload.total
+            conversationsHasMore = payload.hasMore
+            if reset {
+                conversations = payload.contacts
+            } else {
+                let existing = Set(conversations.map(\.id))
+                conversations.append(contentsOf: payload.contacts.filter { !existing.contains($0.id) })
+            }
 
             if workspaceMode == .conversations {
                 let selectedStillExists = selectedConversationHandle.flatMap { current in
@@ -134,6 +177,9 @@ final class ReplyCoreService: ObservableObject {
                 } else {
                     selectedConversationHandle = nil
                     messages = []
+                    currentConversationId = nil
+                    currentConversationKind = "direct"
+                    currentConversationTitle = ""
                     selectedProfile = nil
                     profileDraft = .empty
                 }
@@ -141,6 +187,12 @@ final class ReplyCoreService: ObservableObject {
         } catch {
             workspaceErrorMessage = error.localizedDescription
         }
+    }
+
+    func loadMoreConversationsIfNeeded(current conversation: ReplyConversation) async {
+        guard conversationsHasMore else { return }
+        guard conversation.id == conversations.last?.id else { return }
+        await loadConversations(reset: false)
     }
 
     func loadConversation(handle: String) async {
@@ -156,18 +208,73 @@ final class ReplyCoreService: ObservableObject {
     func loadMessages(handle: String) async {
         guard let baseURL else { return }
         isLoadingMessages = true
+        threadGapRemaining = 0
         defer { isLoadingMessages = false }
         do {
-            let payload = try await loadThreadHistory(baseURL: baseURL, handle: handle)
+            async let newestTask = loadThreadPage(baseURL: baseURL, handle: handle, offset: 0, limit: threadWindowSize, order: "newest")
+            async let oldestTask = loadThreadPage(baseURL: baseURL, handle: handle, offset: 0, limit: threadWindowSize, order: "oldest")
+            let newestPayload = try await newestTask
+            let oldestPayload = try await oldestTask
             if selectedConversationHandle == handle {
-                messages = payload.messages
-                inferChannel(for: handle, messages: payload.messages)
+                newestThreadMessages = newestPayload.messages
+                oldestThreadMessages = oldestPayload.messages
+                let merged = dedupeMessages(oldestThreadMessages + newestThreadMessages)
+                messages = merged.sorted(by: messageAscending)
+                currentConversationId = newestPayload.conversationId ?? oldestPayload.conversationId
+                currentConversationKind = newestPayload.conversationKind ?? oldestPayload.conversationKind ?? "direct"
+                currentConversationTitle = newestPayload.conversationTitle ?? oldestPayload.conversationTitle ?? ""
+                let total = newestPayload.total ?? oldestPayload.total ?? merged.count
+                threadGapRemaining = max(0, total - merged.count)
+                currentConversationChannels = normalizedChannels(newestPayload.channels ?? oldestPayload.channels)
+                allowedReplyChannels = normalizedChannels(newestPayload.allowedChannels ?? oldestPayload.allowedChannels)
+                selectedChannel = resolveSelectedChannel(
+                    handle: handle,
+                    defaultChannelRaw: newestPayload.defaultChannel ?? oldestPayload.defaultChannel,
+                    messages: messages,
+                    allowedChannels: allowedReplyChannels,
+                    visibleChannels: currentConversationChannels
+                )
             }
         } catch {
             if selectedConversationHandle == handle {
                 workspaceErrorMessage = error.localizedDescription
                 messages = []
+                currentConversationId = nil
+                currentConversationKind = "direct"
+                currentConversationTitle = ""
+                oldestThreadMessages = []
+                newestThreadMessages = []
+                threadGapRemaining = 0
+                currentConversationChannels = []
+                allowedReplyChannels = []
             }
+        }
+    }
+
+    func loadMoreThreadGap() async {
+        guard let baseURL, let handle = selectedConversationHandle else { return }
+        guard !isLoadingMoreThreadGap else { return }
+        guard threadGapRemaining > 0 else { return }
+        isLoadingMoreThreadGap = true
+        defer { isLoadingMoreThreadGap = false }
+
+        do {
+            let payload = try await loadThreadPage(
+                baseURL: baseURL,
+                handle: handle,
+                offset: newestThreadMessages.count,
+                limit: min(threadWindowSize, threadGapRemaining),
+                order: "newest"
+            )
+            let newChunk = payload.messages.filter { candidate in
+                !messages.contains(where: { $0.id == candidate.id })
+            }
+            newestThreadMessages.append(contentsOf: newChunk)
+            messages = dedupeMessages(oldestThreadMessages + newestThreadMessages).sorted(by: messageAscending)
+            let total = payload.total ?? messages.count
+            threadGapRemaining = max(0, total - messages.count)
+        } catch {
+            workspaceErrorMessage = error.localizedDescription
         }
     }
 
@@ -268,6 +375,10 @@ final class ReplyCoreService: ObservableObject {
         guard let baseURL, let handle = selectedConversationHandle else { return }
         let text = draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+        if !allowedReplyChannels.isEmpty && !allowedReplyChannels.contains(selectedChannel) {
+            sendErrorMessage = "This conversation is not allowed to send on \(selectedChannel.label)."
+            return
+        }
         sendInFlight = true
         sendErrorMessage = ""
         defer { sendInFlight = false }
@@ -312,8 +423,14 @@ final class ReplyCoreService: ObservableObject {
         guard launchProcess == nil || launchProcess?.isRunning == false else {
             return
         }
+        launchWatchTask?.cancel()
         runtimeState = .starting
-        launchErrorMessage = ""
+        launchErrorMessage = "Starting local runtime..."
+        health = nil
+        baseURL = nil
+        consecutiveHealthFailures = 0
+        hasAttemptedAutoLaunch = true
+        launchDeadline = Date().addingTimeInterval(45)
 
         guard let runtimeRoot = resolveRuntimeRoot() else {
             runtimeState = .error("Could not resolve the bundled {reply} runtime root.")
@@ -328,7 +445,7 @@ final class ReplyCoreService: ObservableObject {
             return
         }
 
-        refreshAppleSourceMirrorsIfNeeded(force: true)
+        scheduleAppleSourceMirrorRefreshIfNeeded(force: true)
         stopLegacyRepoRuntime()
 
         let process = Process()
@@ -369,7 +486,9 @@ final class ReplyCoreService: ObservableObject {
             Task { @MainActor in
                 self?.launchProcess = nil
                 if proc.terminationStatus != 0 {
+                    self?.launchDeadline = nil
                     self?.runtimeState = .error("{reply} runtime exited with code \(proc.terminationStatus).")
+                    self?.launchErrorMessage = "{reply} runtime exited with code \(proc.terminationStatus)."
                 }
             }
         }
@@ -377,10 +496,7 @@ final class ReplyCoreService: ObservableObject {
         do {
             try process.run()
             launchProcess = process
-            Task {
-                try? await Task.sleep(for: .seconds(2))
-                await refreshHealth()
-            }
+            beginLaunchWatch()
         } catch {
             runtimeState = .error(error.localizedDescription)
             launchErrorMessage = error.localizedDescription
@@ -395,6 +511,9 @@ final class ReplyCoreService: ObservableObject {
     }
 
     func stopReply() {
+        launchWatchTask?.cancel()
+        launchWatchTask = nil
+        launchDeadline = nil
         if let launchProcess, launchProcess.isRunning {
             launchProcess.terminate()
             self.launchProcess = nil
@@ -616,9 +735,12 @@ final class ReplyCoreService: ObservableObject {
         return FileManager.default.fileExists(atPath: server.path) ? root : nil
     }
 
-    private func refreshAppleSourceMirrorsIfNeeded(force: Bool = false) {
+    private func scheduleAppleSourceMirrorRefreshIfNeeded(force: Bool = false) {
         let now = Date()
         if !force, let last = lastIMessageMirrorAt, now.timeIntervalSince(last) < 8 {
+            return
+        }
+        if mirrorRefreshTask != nil {
             return
         }
         lastIMessageMirrorAt = now
@@ -629,24 +751,33 @@ final class ReplyCoreService: ObservableObject {
 
         let targetRoot = appleMirrorHome.appending(path: "imessage")
         let logFile = replyLogHome.appending(path: "imessage-mirror.log")
-        do {
-            try FileManager.default.createDirectory(at: targetRoot, withIntermediateDirectories: true)
-            let process = Process()
-            process.executableURL = helper
-            process.arguments = [
-                "mirror-imessage",
-                "--target-root", targetRoot.path,
-                "--log-file", logFile.path
-            ]
-            process.standardOutput = Pipe()
-            process.standardError = Pipe()
-            try process.run()
-            process.waitUntilExit()
-            if process.terminationStatus != 0 {
-                appendMirrorLog("mirror failed: helper exit \(process.terminationStatus)")
+        mirrorRefreshTask = Task.detached(priority: .utility) { [helper, targetRoot, logFile] in
+            do {
+                try FileManager.default.createDirectory(at: targetRoot, withIntermediateDirectories: true)
+                let process = Process()
+                process.executableURL = helper
+                process.arguments = [
+                    "mirror-imessage",
+                    "--target-root", targetRoot.path,
+                    "--log-file", logFile.path
+                ]
+                process.standardOutput = Pipe()
+                process.standardError = Pipe()
+                try process.run()
+                process.waitUntilExit()
+                if process.terminationStatus != 0 {
+                    await MainActor.run {
+                        self.appendMirrorLog("mirror failed: helper exit \(process.terminationStatus)")
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.appendMirrorLog("mirror failed: \(error.localizedDescription)")
+                }
             }
-        } catch {
-            appendMirrorLog("mirror failed: \(error.localizedDescription)")
+            await MainActor.run {
+                self.mirrorRefreshTask = nil
+            }
         }
     }
 
@@ -693,13 +824,11 @@ final class ReplyCoreService: ObservableObject {
         try? process.run()
     }
 
-    private func detectHealthyBaseURL() async -> URL? {
+    private func detectReachableHealth() async -> (URL, HealthPayload)? {
         if let current = baseURL {
             do {
                 let payload = try await fetchHealth(from: current)
-                if payload.ok == true || payload.status == "online" {
-                    return current
-                }
+                return (current, payload)
             } catch {
                 // Fall through to port scan. We preserve the current workspace separately.
             }
@@ -709,9 +838,7 @@ final class ReplyCoreService: ObservableObject {
             let candidate = URL(string: "http://127.0.0.1:\(port)")!
             do {
                 let payload = try await fetchHealth(from: candidate)
-                if payload.ok == true || payload.status == "online" {
-                    return candidate
-                }
+                return (candidate, payload)
             } catch {
                 continue
             }
@@ -730,39 +857,24 @@ final class ReplyCoreService: ObservableObject {
         return try JSONDecoder().decode(HealthPayload.self, from: data)
     }
 
-    private func loadThreadHistory(baseURL: URL, handle: String) async throws -> ReplyThreadResponse {
-        let pageSize = 250
-        let maxMessages = 2000
-        var offset = 0
-        var aggregated: [ReplyMessage] = []
-        var total: Int?
-        var hasMore = false
-
-        while aggregated.count < maxMessages {
-            var components = URLComponents(url: baseURL.appending(path: "api/thread"), resolvingAgainstBaseURL: false)
-            components?.queryItems = [
-                URLQueryItem(name: "handle", value: handle),
-                URLQueryItem(name: "offset", value: "\(offset)"),
-                URLQueryItem(name: "limit", value: "\(pageSize)"),
-            ]
-            guard let url = components?.url else {
-                break
-            }
-            let page: ReplyThreadResponse = try await requestJSON(url: url)
-            if page.messages.isEmpty {
-                hasMore = false
-                break
-            }
-            aggregated.append(contentsOf: page.messages)
-            total = page.total ?? total
-            hasMore = page.hasMore ?? false
-            offset += page.messages.count
-            if page.messages.count < pageSize || !hasMore {
-                break
-            }
+    private func loadThreadPage(
+        baseURL: URL,
+        handle: String,
+        offset: Int,
+        limit: Int,
+        order: String
+    ) async throws -> ReplyThreadResponse {
+        var components = URLComponents(url: baseURL.appending(path: "api/thread"), resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "handle", value: handle),
+            URLQueryItem(name: "offset", value: "\(offset)"),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+            URLQueryItem(name: "order", value: order),
+        ]
+        guard let url = components?.url else {
+            return ReplyThreadResponse(messages: [], hasMore: false, total: 0, order: order, offset: offset, limit: limit, conversationId: nil, channels: [], allowedChannels: [], defaultChannel: nil, conversationKind: "direct", conversationTitle: nil)
         }
-
-        return ReplyThreadResponse(messages: aggregated, hasMore: hasMore, total: total)
+        return try await requestJSON(url: url)
     }
 
     private func requestJSON<T: Decodable>(url: URL, protectedRoute: Bool = false, allowRecovery: Bool = true) async throws -> T {
@@ -793,6 +905,79 @@ final class ReplyCoreService: ObservableObject {
             return
         }
         selectedChannel = fallbackChannel(for: handle)
+    }
+
+    private func normalizedChannels(_ values: [String]?) -> [ReplyMessageChannel] {
+        let mapped = (values ?? []).compactMap { ReplyMessageChannel(rawValue: $0.lowercased()) }
+        var seen = Set<ReplyMessageChannel>()
+        return mapped.filter { seen.insert($0).inserted }
+    }
+
+    private func resolveSelectedChannel(
+        handle: String,
+        defaultChannelRaw: String?,
+        messages: [ReplyMessage],
+        allowedChannels: [ReplyMessageChannel],
+        visibleChannels: [ReplyMessageChannel]
+    ) -> ReplyMessageChannel {
+        let allowed = Array(Set(allowedChannels))
+        if let raw = defaultChannelRaw?.lowercased(),
+           let channel = ReplyMessageChannel(rawValue: raw),
+           allowed.contains(channel) {
+            return channel
+        }
+        if let channel = messages.first(where: { !($0.authoredByMe) })?.channel?.lowercased(),
+           let resolved = ReplyMessageChannel(rawValue: channel),
+           allowed.contains(resolved) {
+            return resolved
+        }
+        if let firstAllowed = allowed.first {
+            return firstAllowed
+        }
+        if let firstVisible = visibleChannels.first {
+            return firstVisible
+        }
+        return fallbackChannel(for: handle)
+    }
+
+    private func dedupeMessages(_ input: [ReplyMessage]) -> [ReplyMessage] {
+        var seen = Set<String>()
+        var output: [ReplyMessage] = []
+        for message in input {
+            if seen.insert(message.id).inserted {
+                output.append(message)
+            }
+        }
+        return output
+    }
+
+    private func messageAscending(_ lhs: ReplyMessage, _ rhs: ReplyMessage) -> Bool {
+        let leftDate = parsedDate(lhs.date)
+        let rightDate = parsedDate(rhs.date)
+        switch (leftDate, rightDate) {
+        case let (l?, r?):
+            if l != r { return l < r }
+        case (_?, nil):
+            return true
+        case (nil, _?):
+            return false
+        case (nil, nil):
+            break
+        }
+        return lhs.id < rhs.id
+    }
+
+    private func parsedDate(_ raw: String?) -> Date? {
+        let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !value.isEmpty else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let precise = formatter.date(from: value) {
+            return precise
+        }
+        let fallback = ISO8601DateFormatter()
+        fallback.formatOptions = [.withInternetDateTime]
+        return fallback.date(from: value)
     }
 
     private func fallbackChannel(for handle: String) -> ReplyMessageChannel {
@@ -865,6 +1050,13 @@ final class ReplyCoreService: ObservableObject {
     }
 
     private func handleHealthMiss(_ message: String) {
+        if shouldPreserveStartingState() {
+            runtimeState = .starting
+            lastRefreshAt = Date()
+            launchErrorMessage = launchErrorMessage.isEmpty ? "Starting local runtime..." : launchErrorMessage
+            return
+        }
+
         consecutiveHealthFailures += 1
         lastRefreshAt = Date()
 
@@ -884,6 +1076,51 @@ final class ReplyCoreService: ObservableObject {
             hasAttemptedAutoLaunch = true
             launchReply()
         }
+    }
+
+    private func shouldPreserveStartingState() -> Bool {
+        guard case .starting = runtimeState else { return false }
+        guard let launchDeadline else { return false }
+        return Date() < launchDeadline
+    }
+
+    private func beginLaunchWatch() {
+        launchWatchTask?.cancel()
+        launchWatchTask = Task { @MainActor in
+            while !Task.isCancelled {
+                await refreshHealth()
+                if runtimeState == .online {
+                    launchWatchTask = nil
+                    return
+                }
+                if !shouldPreserveStartingState() {
+                    launchWatchTask = nil
+                    if runtimeState != .online {
+                        handleHealthMiss("{reply} runtime did not become ready before the startup timeout.")
+                    }
+                    return
+                }
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    private func isLaunchReady(_ payload: HealthPayload) -> Bool {
+        if let ready = payload.launch?.ready {
+            return ready
+        }
+        return payload.ok == true || payload.status == "online"
+    }
+
+    private func launchProgressMessage(from payload: HealthPayload) -> String {
+        let message = payload.launch?.message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !message.isEmpty {
+            return message
+        }
+        if let stage = payload.launch?.stage, !stage.isEmpty {
+            return "Runtime startup stage: \(stage)."
+        }
+        return "Starting local runtime..."
     }
 
     private func resolveRuntimeRoot() -> URL? {

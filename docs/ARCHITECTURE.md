@@ -14,6 +14,17 @@ The important architectural rule is:
 - `{trinity}` does not own send semantics
 - `{train}` does not mutate live behavior directly
 
+The important delivery rule is:
+
+- passive UI surfaces must read precomputed local state
+- heavy joins, vector scans, ranking, and context assembly belong in local background workers
+- online push/export happens after local state is already usable
+
+The important identity rule is:
+
+- contact merge and unmerge are explicit user actions
+- the system must not auto-merge identities through heuristics
+
 ## High-Level Diagram
 
 ```mermaid
@@ -79,6 +90,20 @@ graph TD
 - `~/Library/Application Support/reply/settings.json`
 - LanceDB under the same app-owned data root
 
+Conversation data is currently split across two local stores:
+
+- `unified_messages` in `chat.db` as canonical message truth
+- `conversation_index` in `chat.db` as the materialized sidebar browse model
+- LanceDB `documents` for search, annotation, and remaining compatibility history paths
+
+This is still transitional debt, but the browse path is now stricter than before.
+
+Target state:
+
+- `chat.db` owns the canonical conversation read models for passive browsing
+- LanceDB supports search, annotation, and explicit drafting preparation
+- passive workspace loading must not depend on LanceDB fallback or request-time reconstruction
+
 ### Drafting bridge
 
 - path: `chat/brain-runtime.js`
@@ -96,11 +121,38 @@ The product now treats conversations as message-backed first, contact-enriched s
 That means:
 
 - dashboard source cards reflect ingestion totals
-- the sidebar conversation list is built from the unified message corpus
+- the sidebar conversation list is now read from the materialized `conversation_index` table in `chat.db`
+- the conversation index is maintained locally from canonical message writes instead of being rebuilt in the request path
 - contact rows enrich labels, aliases, profile context, and visibility rules
 - missing `contacts.db` rows must not hide valid message-backed threads
+- contact merge state is manual-only and user-owned; conversation expansion may use explicit aliases, never silent heuristic merges
 
 This prevents a small contact table from collapsing a much larger real inbox.
+
+It also keeps fallback mail conversations visible when Gmail is unavailable and Apple Mail is the active local source.
+
+Thread loading still has some transitional compatibility logic, but the intended architecture is stricter:
+
+- ingestion writes canonical message rows
+- workers and canonical message writes maintain `conversation_index`, prepared draft context snapshots, and prepared golden-example artifacts
+- UI routes page those local read models directly
+
+This remains transitional and is no longer the target long-range foundation.
+
+Target foundation direction:
+
+- `external_threads` represent provider-native thread lineage
+- `conversation_snapshots` represent immutable `{reply}` conversation blocks with frozen participant membership
+- `conversation_participants` freeze membership for a snapshot
+- `conversation_messages` and `message_recipients` store canonical ordered timeline truth
+- `conversation_channel_capabilities` determine whether `{reply}` may reply or start on a channel
+
+Membership rule:
+
+- if membership changes, `{reply}` opens a new conversation snapshot even if the provider-native thread id stays the same
+- participant change and contact merge are separate concepts; membership changes do not authorize automatic identity collapse
+
+See [CONVERSATION_FOUNDATION_AUDIT.md](/Users/Shared/Projects/reply/docs/CONVERSATION_FOUNDATION_AUDIT.md).
 
 ## Thread Loading Model
 
@@ -121,6 +173,12 @@ Message rendering rules:
 - received messages render on the left
 - the thread uses explicit row alignment plus channel-specific bubble styling
 - `is_from_me` is treated as authoritative where present; vector hints are fallback only
+
+Current browse-path boundary:
+
+- `/api/thread` now reads canonical message rows from SQLite only
+- request-time LanceDB history recovery is removed from the passive thread route
+- request-time WhatsApp LID expansion is removed from the passive thread route
 
 ## Drafting and Outcome Flow
 
@@ -158,10 +216,21 @@ Runtime failures are classified into product-safe categories such as:
 
 Raw socket paths, Docker daemon errors, and Colima-specific substrate text remain log-only diagnostics.
 
+Startup rule:
+
+- route modules must not create circular startup dependencies that break hub boot or `/api/health`
+- if health or dashboard logic needs messaging/index functions, resolve those dependencies lazily inside the request path instead of at module load time
+
 Native protected-route rule:
 
 - sync actions from `reply.app` must send the same approval-bearing protected request shape as the web UI
 - background sync routes should acknowledge `started`, not pretend the sync is already complete
+
+Thin-read rule:
+
+- `/api/conversations`, `/api/thread`, dashboard summaries, and other passive browse surfaces must become thin reads from local materialized state
+- suggest and drafting routes may call the local AI runtime, but they must consume prepared local context artifacts rather than assemble snippets/history at request time
+- request-time LanceDB merges, vector history recovery, and sort-key recomputation are transitional debt and should be removed
 
 ## Native App Direction
 
@@ -177,3 +246,4 @@ Current product direction is stable:
 - [LOCAL_MACHINE_DEPLOYMENT.md](/Users/Shared/Projects/reply/docs/LOCAL_MACHINE_DEPLOYMENT.md)
 - [TRINITY_INTEGRATION_SPINE.md](/Users/Shared/Projects/reply/docs/TRINITY_INTEGRATION_SPINE.md)
 - [POLICY_LOOP_REPO_BREAKDOWN.md](/Users/Shared/Projects/reply/docs/POLICY_LOOP_REPO_BREAKDOWN.md)
+- [THIN_UI_LOCAL_PRECOMPUTE_AUDIT.md](/Users/Shared/Projects/reply/docs/THIN_UI_LOCAL_PRECOMPUTE_AUDIT.md)
