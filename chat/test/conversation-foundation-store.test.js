@@ -48,7 +48,7 @@ test("conversation foundation schema tables are initialized in chat.db", { concu
   });
 });
 
-test("conversation foundation builds multi-channel summaries and allowed channels from current local truth", { concurrency: false }, async (t) => {
+test("conversation foundation keeps channel capabilities snapshot-local even when the contact has other verified identities", { concurrency: false }, async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "reply-foundation-"));
   fs.writeFileSync(path.join(tempDir, "chat.db"), "");
   const foundationStore = freshFoundationStore(tempDir);
@@ -58,52 +58,52 @@ test("conversation foundation builds multi-channel summaries and allowed channel
   await messageStore.waitUntilReady();
   await contactStore.waitUntilReady();
 
-  await contactStore.updateContact("alice@example.com", {
-    id: "contact-alice",
-    handle: "alice@example.com",
-    displayName: "Alice",
+  await contactStore.updateContact("+15550001111", {
+    id: "contact-whatsapp-only",
+    handle: "+15550001111",
+    displayName: "WhatsApp Only",
     channels: {
       email: ["alice@example.com"],
-      phone: ["+36701234567"]
+      phone: ["+15550001111"]
     },
     verifiedChannels: {
       "alice@example.com": "2026-05-01T10:00:00.000Z",
-      "+36701234567": "2026-05-03T11:00:00.000Z"
+      "+15550001111": "2026-05-03T11:00:00.000Z"
     }
   });
 
   await messageStore.saveMessages([
     {
       id: "m1",
-      text: "mail inbound",
-      source: "Mail",
-      handle: "alice@example.com",
+      text: "whatsapp inbound",
+      source: "WhatsApp",
+      handle: "+15550001111",
       timestamp: "2026-05-01T10:00:00.000Z",
-      path: "mailto:alice@example.com",
+      path: "whatsapp://+15550001111",
       is_from_me: false,
     },
     {
       id: "m2",
-      text: "imessage inbound",
-      source: "iMessage",
-      handle: "+36701234567",
+      text: "whatsapp outbound",
+      source: "WhatsApp",
+      handle: "+15550001111",
       timestamp: "2026-05-03T11:00:00.000Z",
-      path: "imessage://+36701234567",
-      is_from_me: false,
+      path: "whatsapp://+15550001111",
+      is_from_me: true,
     },
   ]);
 
-  const summary = await foundationStore.getConversationSummaryByHandle("alice@example.com");
+  const summary = await foundationStore.getConversationSummaryByHandle("+15550001111");
   assert.ok(summary?.conversationId);
-  assert.deepEqual(summary.channels, ["email", "imessage"]);
-  assert.deepEqual(summary.allowedChannels, ["email", "imessage"]);
+  assert.deepEqual(summary.channels, ["whatsapp"]);
+  assert.deepEqual(summary.allowedChannels, ["whatsapp"]);
 
-  const thread = await foundationStore.getConversationMessagesByHandle("alice@example.com", { limit: 10, offset: 0, order: "asc" });
+  const thread = await foundationStore.getConversationMessagesByHandle("+15550001111", { limit: 10, offset: 0, order: "asc" });
   assert.equal(thread.total, 2);
-  assert.deepEqual(thread.channels, ["email", "imessage"]);
-  assert.deepEqual(thread.allowedChannels, ["email", "imessage"]);
-  assert.equal(thread.rows[0].channel, "email");
-  assert.equal(thread.rows[1].channel, "imessage");
+  assert.deepEqual(thread.channels, ["whatsapp"]);
+  assert.deepEqual(thread.allowedChannels, ["whatsapp"]);
+  assert.equal(thread.rows[0].channel, "whatsapp");
+  assert.equal(thread.rows[1].channel, "whatsapp");
 
   t.after(() => {
     delete process.env.REPLY_DATA_HOME;
