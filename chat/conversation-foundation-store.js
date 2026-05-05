@@ -367,53 +367,18 @@ function chooseSnapshotChannel(channels, latestChannel) {
 function resolveChannelCapabilitiesForConversation(contact, rows) {
     const channelsUsed = new Set();
     const inboundByChannel = new Map();
-    const verifiedByChannel = new Map();
-    const observedChannelsByIdentity = new Map();
 
     for (const row of rows) {
         const channel = channelFromDoc({ path: row.path, source: row.source }) || inferChannelFromHandle(row.handle, "other");
-        const normalizedIdentity = normalizeIdentityForChannel(channel, row.handle);
         channelsUsed.add(channel);
-        if (normalizedIdentity) {
-            if (!observedChannelsByIdentity.has(normalizedIdentity)) observedChannelsByIdentity.set(normalizedIdentity, new Set());
-            observedChannelsByIdentity.get(normalizedIdentity).add(channel);
-        }
         if (!row.is_from_me) {
             inboundByChannel.set(channel, row.timestamp || inboundByChannel.get(channel) || null);
         }
     }
 
-    const verified = contact?.verifiedChannels || {};
-    for (const [raw, ts] of Object.entries(verified)) {
-        if (!ts) continue;
-        const fallbackChannel = inferChannelFromHandle(raw, raw.includes("@") ? "email" : "imessage");
-        const normalizedIdentity = normalizeIdentityForChannel(fallbackChannel, raw);
-        const observedChannels = Array.from(observedChannelsByIdentity.get(normalizedIdentity) || []);
-        const channelsForIdentity = observedChannels.length ? observedChannels : [fallbackChannel];
-        for (const channel of channelsForIdentity) {
-            if (!verifiedByChannel.has(channel) || String(ts) > String(verifiedByChannel.get(channel))) {
-                verifiedByChannel.set(channel, ts);
-            }
-            channelsUsed.add(channel);
-        }
-    }
-
-    const knownIdentityChannels = contact?.channels || {};
-    for (const [kind, values] of Object.entries(knownIdentityChannels)) {
-        if (!Array.isArray(values) || !values.length) continue;
-        const channel =
-            kind === "email" ? "email" :
-            kind === "whatsapp" ? "whatsapp" :
-            kind === "linkedin" ? "linkedin" :
-            kind === "imessage" ? "imessage" :
-            kind === "phone" ? "imessage" :
-            null;
-        if (channel) channelsUsed.add(channel);
-    }
-
     const channels = Array.from(channelsUsed).sort();
     const capabilities = channels.map((channel) => {
-        const inboundAt = inboundByChannel.get(channel) || verifiedByChannel.get(channel) || null;
+        const inboundAt = inboundByChannel.get(channel) || null;
         const hasInboundProof = Boolean(inboundAt);
         const lastOutbound = rows
             .filter((row) => row.is_from_me && (channelFromDoc({ path: row.path, source: row.source }) || inferChannelFromHandle(row.handle, "other")) === channel)
