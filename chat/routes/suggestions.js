@@ -3,10 +3,8 @@ const {
   generateReply,
   normalizeSuggestionResult,
 } = require('../brain-runtime.js');
-const { getSnippets, getGoldenExamples, getHistory } = require("../vector-store.js");
 const contactStore = require("../contact-store.js");
-const messageStore = require("../message-store.js");
-const { pathPrefixesForHandle, pickLatestInboundFromVectorDocs, inferChannelFromHandle } = require("../utils/chat-utils.js");
+const preparedContextStore = require("../prepared-context-store.js");
 
 
 // Helper functions from server.js
@@ -35,9 +33,9 @@ async function readJsonBody(req) {
 }
 
 /**
- * Maps a LanceDB document to the JSON shape returned on `/api/suggest-reply` under `snippets`.
+ * Maps a prepared snippet artifact to the JSON shape returned on `/api/suggest-reply` under `snippets`.
  * When `is_annotated` is true, includes summary/tags/facts for UI or clients (reply#37).
- * @param {object} doc - Row from vector store (may include annotation_* fields).
+ * @param {object} doc - Prepared local snippet payload.
  * @returns {{ source: string, path: string, text: string, is_annotated: boolean, annotation_summary?: string, annotation_tags?: string[], annotation_facts?: string[] }}
  */
 function snippetShapeForSuggestReply(doc) {
@@ -91,33 +89,29 @@ async function serveSuggest(req, res) {
     }
 
     let message = providedMessage;
+    let preparedSnippets = [];
+    let goldenExamples = preparedContextStore.readPreparedGoldenExamples();
 
     if (!message) {
       const handles = contactStore.getAllHandles(handle);
-      const prefixes = handles.flatMap((h) => pathPrefixesForHandle(h));
-      const historyBatches = await Promise.all(prefixes.map((p) => getHistory(p)));
-      const docs = historyBatches.flat();
-      const picked = pickLatestInboundFromVectorDocs(docs);
-      message = picked?.text?.trim() || "";
-
-      if (!message) {
-        const dbRow = await messageStore.getLatestContextForHandles(handles, { limit: 120 });
-        message = String(dbRow?.text || '').trim();
-        inferChannelFromHandle(dbRow?.handle || handle);
-      }
+      const snapshots = await preparedContextStore.getDraftContextSnapshots(handles);
+      const bestSnapshot = snapshots
+        .filter((row) => row.latestInboundText)
+        .sort((a, b) => Date.parse(String(b.latestInboundTimestamp || 0)) - Date.parse(String(a.latestInboundTimestamp || 0)))[0] || null;
+      message = String(bestSnapshot?.latestInboundText || "").trim();
+      preparedSnippets = Array.isArray(bestSnapshot?.snippetCandidates) ? bestSnapshot.snippetCandidates : [];
     }
 
     if (!message) {
       writeJson(res, 422, {
-        error: "No inbound contact message found in index for this handle — cannot generate a reply.",
+        error: "No prepared inbound context is available for this handle yet.",
         code: "no_inbound_context",
         suggestion: ""
       });
       return;
     }
 
-    const snippets = await getSnippets(message, 3);
-    const goldenExamples = await getGoldenExamples(5);
+    const snippets = preparedSnippets.slice(0, 3);
 
     const suggestionResult = normalizeSuggestionResult(
       await generateReply(message, snippets, handle, goldenExamples)
@@ -167,11 +161,16 @@ async function serveSuggestReply(req, res) {
     return;
   }
 
-  // Retrieve relevant context from the vector store (Hybrid Search).
-  const snippets = await getSnippets(message, 3);
-
-  // Retrieve golden examples
-  const goldenExamples = await getGoldenExamples(5);
+  let snippets = [];
+  if (recipient) {
+    const handles = contactStore.getAllHandles(recipient);
+    const snapshots = await preparedContextStore.getDraftContextSnapshots(handles);
+    const bestSnapshot = snapshots
+      .filter((row) => Array.isArray(row.snippetCandidates) && row.snippetCandidates.length > 0)
+      .sort((a, b) => Date.parse(String(b.latestInboundTimestamp || 0)) - Date.parse(String(a.latestInboundTimestamp || 0)))[0] || null;
+    snippets = Array.isArray(bestSnapshot?.snippetCandidates) ? bestSnapshot.snippetCandidates.slice(0, 3) : [];
+  }
+  const goldenExamples = preparedContextStore.readPreparedGoldenExamples();
 
   // Generate a suggested reply using the local LLM.
   try {

@@ -3,9 +3,9 @@ const fs = require("fs");
 const path = require("path");
 const { spawn, spawnSync } = require("child_process");
 
-const { assembleReplyContext } = require("./context-engine.js");
 const contactStore = require("./contact-store.js");
 const messageStore = require("./message-store.js");
+const preparedContextStore = require("./prepared-context-store.js");
 const { ensureDataHome, dataPath } = require("./app-paths.js");
 const { pathPrefixesForHandle, inferChannelFromHandle, extractDateFromText, stripMessagePrefix } = require("./utils/chat-utils.js");
 
@@ -243,18 +243,31 @@ async function buildTrinityDraftCandidate(
   recipient = null,
   goldenExamples = [],
 ) {
-  const context = await assembleReplyContext(message, recipient);
+  const handles = recipient ? contactStore.getAllHandles(recipient) : [];
+  const snapshots = await preparedContextStore.getDraftContextSnapshots(handles);
+  const bestSnapshot = snapshots
+    .filter((row) => Array.isArray(row.recentThread) && row.recentThread.length > 0)
+    .sort((a, b) => Date.parse(String(b.latestInboundTimestamp || 0)) - Date.parse(String(a.latestInboundTimestamp || 0)))[0] || null;
+  const history = Array.isArray(bestSnapshot?.recentThread)
+    ? bestSnapshot.recentThread
+      .map((row) => `[${row.timestamp || "unknown"}] ${row.role === "me" ? "Me" : (recipient || "Contact")}: ${String(row.text || "").trim()}`)
+      .join("\n")
+    : "";
+  const identity = recipient ? contactStore.getProfileContext(recipient) : "";
   return {
     contractVersion: REPLY_TRINITY_CONTRACT_VERSION,
     sourceProduct: "reply",
     recipient: recipient || null,
     message,
     context: {
-      identity: context.identity || "",
-      tone: context.tone || "",
-      history: context.history || "",
-      facts: context.facts || "",
-      meta: context.meta || null,
+      identity: identity || "",
+      tone: "",
+      history: history || "",
+      facts: "",
+      meta: {
+        preparedSnapshotAt: bestSnapshot?.preparedAt || null,
+        latestInboundTimestamp: bestSnapshot?.latestInboundTimestamp || null,
+      },
     },
     snippets: (contextSnippets || []).map((snippet) => ({
       source: snippet?.source || "",

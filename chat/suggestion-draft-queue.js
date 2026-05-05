@@ -4,8 +4,7 @@
  */
 
 const fs = require("fs");
-const { getHistory } = require("./vector-store.js");
-const { pathPrefixesForHandle, pickLatestInboundFromVectorDocs } = require("./utils/chat-utils.js");
+const preparedContextStore = require("./prepared-context-store.js");
 const { dataPath, ensureDataHome } = require("./app-paths.js");
 
 const QUEUE_PATH = dataPath("pending-suggestion-draft-queue.json");
@@ -128,30 +127,33 @@ function seedQueueFromUndraftedContacts(contactStore) {
 }
 
 /**
- * Latest inbound message body for suggest-style drafting.
+ * Prepared local draft context for suggest-style drafting.
  * @param {string} handle
  * @param {{ contactStore?: { getAllHandles?: (h: string) => string[] } }} [opts]
  */
-async function getLatestInboundMessageText(handle, opts = {}) {
+async function getPreparedDraftContext(handle, opts = {}) {
   const { contactStore } = opts;
   const handles =
     contactStore && typeof contactStore.getAllHandles === "function"
       ? contactStore.getAllHandles(handle)
       : [handle];
-  const prefixes = handles.flatMap((h) => pathPrefixesForHandle(h));
-  const batches = await Promise.all(prefixes.map((p) => getHistory(p).catch(() => [])));
-  const docs = batches.flat();
-  const picked = pickLatestInboundFromVectorDocs(docs);
-  return (picked?.text || "").trim();
+  const snapshots = await preparedContextStore.getDraftContextSnapshots(handles);
+  const bestSnapshot = snapshots
+    .filter((row) => row.latestInboundText)
+    .sort((a, b) => Date.parse(String(b.latestInboundTimestamp || 0)) - Date.parse(String(a.latestInboundTimestamp || 0)))[0] || null;
+  return {
+    message: String(bestSnapshot?.latestInboundText || "").trim(),
+    snippets: Array.isArray(bestSnapshot?.snippetCandidates) ? bestSnapshot.snippetCandidates.slice(0, 3) : [],
+  };
 }
 
 /**
  * Process at most one queued suggestion draft.
- * @param {{ contactStore: object, generateReply: Function, getSnippets: Function, isBusy?: () => boolean }} opts
+ * @param {{ contactStore: object, generateReply: Function, isBusy?: () => boolean }} opts
  * @returns {Promise<{ ok: boolean, handle?: string, reason?: string, skipped?: boolean }>}
  */
 async function processOneSuggestionDraft(opts) {
-  const { contactStore, generateReply, getSnippets, isBusy } = opts;
+  const { contactStore, generateReply, isBusy } = opts;
   if (typeof isBusy === "function" && isBusy()) {
     return { ok: false, skipped: true, reason: "worker_busy" };
   }
@@ -184,11 +186,14 @@ async function processOneSuggestionDraft(opts) {
   }
 
   let message = "";
+  let snippets = [];
   try {
-    message = await getLatestInboundMessageText(handle, { contactStore });
+    const prepared = await getPreparedDraftContext(handle, { contactStore });
+    message = prepared.message;
+    snippets = prepared.snippets;
   } catch (e) {
     enqueueSuggestionDraft(handle);
-    return { ok: false, handle, reason: `history_error:${e.message}` };
+    return { ok: false, handle, reason: `prepared_context_error:${e.message}` };
   }
 
   if (!message) {
@@ -196,7 +201,6 @@ async function processOneSuggestionDraft(opts) {
   }
 
   try {
-    const snippets = await getSnippets(message, 3);
     const draftResult = await generateReply(message, snippets, handle);
     const draftText = typeof draftResult === "string" ? draftResult : draftResult?.suggestion || "";
     if (String(draftText || "").trim()) {
@@ -233,7 +237,7 @@ module.exports = {
   getSuggestionDraftIntervalMs,
   readQueue,
   writeQueue,
-  getLatestInboundMessageText,
+  getPreparedDraftContext,
   extractHandleFromVectorPath,
   vectorDocLooksInboundFromContact,
   QUEUE_PATH,

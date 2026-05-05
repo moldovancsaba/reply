@@ -68,8 +68,44 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
 
 ### Open
 
+- `REPLY-THIN-001` Passive route audit and classification
+  Completed. The thin-read audit is now captured in `docs/THIN_UI_LOCAL_PRECOMPUTE_AUDIT.md`, with passive browse paths and drafting surfaces classified against the local-precompute rule and tracked through the follow-on implementation items below.
+
+- `REPLY-THIN-002` Materialized conversation index
+  Completed. `/api/conversations` now reads a SQLite-backed `conversation_index` maintained from canonical message writes in `unified_messages`, with precomputed previews, counts, and sort keys for passive browse modes instead of request-time LanceDB reconstruction.
+
+- `REPLY-THIN-003` Canonical thread read path
+  Completed for the passive browse path. `/api/thread` now reads canonical message rows from SQLite only and no longer performs request-time LanceDB history fallback, vector direction reconciliation, or WhatsApp LID expansion in the request path.
+
+- `REPLY-THIN-004` Prepared draft context snapshots
+  Completed. Suggest/drafting routes now consume prepared local snapshot artifacts from `draft_context_snapshots` plus prepared golden-example state, instead of assembling inbound context, snippet candidates, or fallback latest-message state in the request path.
+
+- `REPLY-THIN-005` Worker-owned aggregate maintenance
+  Completed for the current browse, dashboard, and drafting lanes. Canonical message writes now maintain `conversation_index` and `draft_context_snapshots`, the dashboard reads local materialized counts, and the local worker refreshes prepared drafting artifacts on a defined cadence. Online export/push remains downstream of local readiness instead of blocking local operator reads.
+
 - `REPLY-006` Dev-toolchain major-version upgrade lane
   `chat` is clean on tests, lint, audit, and the native package rebuild after safe dependency updates, but major upgrades remain for the ESLint toolchain. Those should be handled in a dedicated compatibility pass rather than mixed into runtime-boundary work.
+
+- `REPLY-CONV-001` Conversation foundation audit
+  Completed. The current handle-centric, partially materialized conversation model has been audited in `docs/CONVERSATION_FOUNDATION_AUDIT.md`, including live integrity mismatches, channel-capability flaws, timeline-authority gaps, and the target external-thread plus immutable-conversation-snapshot model.
+
+- `REPLY-CONV-002` Canonical conversation foundation schema insertion
+  Completed. `chat.db` now initializes the first canonical conversation foundation tables: `external_threads`, `conversation_snapshots`, `conversation_participants`, `conversation_messages`, `message_recipients`, and `conversation_channel_capabilities`. This does not cut over runtime behavior yet; it establishes the durable schema contract for the migration.
+
+- `REPLY-CONV-003` Capability-safe compose contract
+  Pending. Replace the generic channel picker and handle heuristics with conversation capability state derived from canonical conversation snapshots and inbound-verified identities.
+
+- `REPLY-CONV-004` Canonical conversation builder
+  Pending. Build background snapshot materialization from current canonical messages and contact graph, including membership fingerprinting, external-thread lineage, and snapshot supersession when membership changes.
+
+- `REPLY-CONV-005` Canonical timeline cutover
+  Pending. Move `/api/thread` to `conversation_messages` and `message_recipients` so backend timeline order is final and the native client no longer re-authors the message sequence.
+
+- `REPLY-CONV-006` Multi-channel conversation projection
+  Pending. Replace the single-channel conversation-row model with a projection that exposes all channels present in a conversation snapshot, last-active channel, and channel-safe send affordances.
+
+- `REPLY-CONV-007` Manual-only merge enforcement lane
+  Pending. Keep merge and unmerge authority fully explicit and user-owned across routes, native UI, projections, and docs. No automatic identity merging is allowed in browse, drafting, or ingestion paths.
 
 - `REPLY-NATIVE-001` Native dashboard source cards
   Completed. The native dashboard now renders source-specific cards for `iMessage`, `WhatsApp`, `Mail`, `Apple Notes`, `Apple Calendar`, `Apple Contacts`, `KYC`, and deferred sources, with visible counts, sync state, and timestamps.

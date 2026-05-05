@@ -6,6 +6,14 @@
 3.  **Production-Grade:** 0 vulnerabilities (`npm audit`), strict error handling.
 4.  **Security First:** NEVER commit secrets/API keys. Use `.env`.
 5.  **Native-App Standard:** `{reply}` is a native macOS app product. Do not introduce website-style UX metaphors, page-era dead ends, or browser-only assumptions into shipped operator flows.
+6.  **Thin UI Rule:** Passive UI surfaces must read precomputed local state only. No request-time vector scans, live context assembly, or expensive reconstruction in browse paths.
+7.  **Manual Merge Authority Only:** Contact merge and unmerge is explicit user-owned state. Do not auto-merge identities through phone normalization, email similarity, channel overlap, or any other heuristic.
+
+## Open Source Documentation Requirements
+*   **Public Entry Points Must Be Accurate:** `README.md`, `CONTRIBUTING.md`, install docs, and architecture docs must match the shipped runtime.
+*   **Behavior Changes Require Doc Changes:** If startup, sync, data flow, UI navigation, or runtime ownership changes, update the relevant docs in the same change.
+*   **No Private Tribal Knowledge:** Setup steps, required sibling repos, environment variables, and verification commands must be written down.
+*   **Document Current Limitations Honestly:** If Gmail reauth, Apple-private permissions, or fallback ingest paths are required, say so explicitly.
 
 ## Native App Requirements
 *   **Pure Native Main Interface:** The primary `{reply}` macOS workspace must be implemented in SwiftUI/AppKit. Do not build or reintroduce the main operator experience as HTML/CSS/JavaScript.
@@ -16,6 +24,7 @@
 *   **No Runtime CDN / Remote UI Dependencies:** Do not depend on remote icon packs, remote fonts, browser-hosted assets, or third-party UI delivery for any shipped operator surface.
 *   **Local Runtime Services Only:** Local services and background runtimes are acceptable, but they must remain internal product infrastructure. The user-facing macOS workspace stays native.
 *   **Embedded Asset Preference:** When a visual system can be embedded directly into the app runtime safely, prefer embedded delivery over asset-path indirection.
+*   **Prepared Local State First:** The operator UI must not wait on live assembly of conversation indexes, thread context, ranking, or summarization during passive browsing. Those belong in background-maintained local read models.
 
 ## UI Implementation Rules
 *   **Semantic Theming Only:** Screen chrome, panels, menus, controls, and overlays must derive from semantic theme variables. Hardcoded one-off foreground/background fixes are not allowed.
@@ -49,9 +58,17 @@
 *   **Syntax:** Modern ES6+ (Async/Await, Destructuring).
 *   **Imports:** `require` for Node.js backend (CommonJS).
 *   **Comments:** Plain, unambiguous English. Explain *why*, not just *what*.
+*   **Comment Freshness:** Remove or update comments as soon as runtime behavior changes. Stale comments are defects.
+*   **Boundary Terminology:** Use the current architecture terms consistently: `{reply}` product shell, `{trinity}` drafting runtime, `{train}` offline learner.
 *   **Formatting:** Consistent indentation (2 spaces, strictly applied).
 *   **Documentation:** All exported functions must have JSDoc comments explaining parameters and return values.
 *   **Safety:** Avoid duplicate global or module-level declarations.
+*   **No Request-Time Reconstruction on Browse Paths:** UI-facing browse routes must not call LanceDB/vector search, rebuild aggregate indexes, or compute recommendation/frequency sort keys on demand. Materialize them locally first.
+
+## Code Style (Swift / Native Shell)
+*   **Native Workflow First:** SwiftUI/AppKit code should describe native window, sidebar, thread, and inspector behavior directly.
+*   **No Silent Background Assumptions:** Startup, port probing, and local service ownership must be explicit in names and comments.
+*   **UI Comments Stay Behavioral:** Prefer comments that explain state ownership, paging direction, runtime gating, or preload strategy over visual trivia.
 
 ## Git & Project Management
 *   **Single Source of Truth (SSOT) for `{reply}`:** The [`{reply}` GitHub Project (#7)](https://github.com/users/moldovancsaba/projects/7) and **`moldovancsaba/reply`** issues are where `{reply}` tasks are tracked. Portfolio-wide work may still use `mvp-factory-control` / Project #1 for *other* products.
@@ -67,6 +84,8 @@
 *   **Visual Regression Checks:** Any change to navigation, settings, dashboards, or icon primitives should include a direct manual or scripted verification that content still renders and no raw HTML / placeholder glyphs leak into the UI.
 *   **Installer Verification:** Native app install/update scripts must verify bundle integrity after copy and refresh LaunchServices/Dock metadata so macOS re-reads the shipped icon from the repaired bundle.
 *   **Native Workflow Verification:** For macOS UI work, verify the actual native window behavior: startup route, sidebar selection, dashboard visibility, conversation rendering, profile rendering, and composer visibility.
+*   **Conversation Verification:** If a change touches sync or indexing, verify that the live conversation API and the native sidebar agree.
+*   **Mail Verification:** If a change touches mail ingestion, verify both the sync status file and the visible `mailto:` conversation rows.
 
 ## Dependency Management
 *   **Checking:** Run `npm audit` before every commit.
@@ -75,3 +94,4 @@
 ## Reliability & Long-Running Processes
 *   **Memory Management:** Use bounded caches (e.g., LRU or fixed-size Set/Map) for any robust long-running process (like background workers). Unbounded growth is forbidden.
 *   **Error Recovery:** Background workers must catch errors, log them, and continue polling (no silence crashes).
+*   **Worker-Owned Aggregates:** Conversation summaries, sort keys, alias reconciliation, and prepared drafting context are worker-owned local artifacts. The UI consumes them; it does not rebuild them.
