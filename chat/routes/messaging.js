@@ -64,6 +64,61 @@ function normalizeConversationSort(raw) {
 /** Stable list for clients (reply#15); lexicographic order so snapshots stay deterministic. */
 const AVAILABLE_CONVERSATION_SORT_MODES = [...CONVERSATION_SORT_MODES].sort();
 
+function normalizeChannelList(values = []) {
+    return Array.from(new Set(
+        (Array.isArray(values) ? values : [])
+            .map((value) => String(value || "").trim().toLowerCase())
+            .filter(Boolean)
+    )).sort();
+}
+
+function checkConversationCapabilityGate(summary, { channel, conversationId } = {}) {
+    const requestedChannel = String(channel || "").trim().toLowerCase();
+    if (!requestedChannel) {
+        return {
+            allowed: false,
+            code: "channel_required",
+            reason: "Missing outbound channel.",
+        };
+    }
+    if (!summary?.conversationId) {
+        return {
+            allowed: false,
+            code: "conversation_capability_missing",
+            reason: "This conversation does not have a canonical capability record yet.",
+        };
+    }
+    const activeConversationIds = Array.isArray(summary.conversationIds)
+        ? summary.conversationIds.map((value) => String(value || "").trim()).filter(Boolean)
+        : [];
+    const requestedConversationId = String(conversationId || "").trim();
+    if (requestedConversationId && activeConversationIds.length && !activeConversationIds.includes(requestedConversationId)) {
+        return {
+            allowed: false,
+            code: "conversation_context_stale",
+            reason: "The selected conversation is stale. Refresh the thread before sending.",
+        };
+    }
+    const allowedChannels = normalizeChannelList(summary.allowedChannels);
+    if (!allowedChannels.includes(requestedChannel)) {
+        return {
+            allowed: false,
+            code: "conversation_channel_not_allowed",
+            reason: `This conversation is not allowed to send on ${requestedChannel}.`,
+        };
+    }
+    return {
+        allowed: true,
+        allowedChannels,
+        conversationId: summary.conversationId,
+    };
+}
+
+async function ensureConversationCapabilityGate(handle, channel, conversationId) {
+    const summary = await conversationFoundationStore.getConversationSummaryByHandle(handle);
+    return checkConversationCapabilityGate(summary, { channel, conversationId });
+}
+
 function applyConversationSort(items, mode, nowMs) {
     const tie = (a, b) =>
         String(a.displayName || a.handle || "").localeCompare(String(b.displayName || b.handle || ""));
@@ -405,7 +460,7 @@ async function serveThread(req, res, url) {
                 total: Number(storeResult?.total || allMessages.length),
                 channels: Array.from(new Set(allMessages.map((msg) => String(msg.channel || "").trim().toLowerCase()).filter(Boolean))),
                 allowedChannels: [],
-                defaultChannel: allMessages.find((msg) => !msg.is_from_me)?.channel || null,
+                defaultChannel: null,
             };
         }
 
@@ -598,6 +653,7 @@ async function serveSendMessage(req, res, channel) {
         const json = await readJsonBody(req);
         const handle = json.recipient || json.handle;
         const text = (json.text || "").toString();
+        const conversationId = json.conversationId || null;
         const draftContext = sanitizeDraftContext(json.draftContext || null, { expectedChannel: channel });
 
         if (!handle || !text) {
@@ -608,6 +664,16 @@ async function serveSendMessage(req, res, channel) {
         const preBlock = await maybeBlockOutboundOnPreflight();
         if (preBlock) {
             writeJson(res, 503, preBlock);
+            return;
+        }
+
+        const capabilityGate = await ensureConversationCapabilityGate(handle, channel, conversationId);
+        if (!capabilityGate.allowed) {
+            writeJson(res, 403, {
+                error: capabilityGate.reason,
+                code: capabilityGate.code,
+                policy: "conversation_channel_capability_required"
+            });
             return;
         }
 
@@ -769,6 +835,7 @@ async function serveSendWhatsApp(req, res) {
         const payload = await readJsonBody(req);
         const recipientRaw = (payload?.recipient || "").toString().trim();
         const textRaw = (payload?.text || "").toString();
+        const conversationId = payload?.conversationId || null;
         const dryRun = Boolean(payload?.dryRun);
         const draftContext = payload?.draftContext || null;
 
@@ -780,6 +847,16 @@ async function serveSendWhatsApp(req, res) {
         const preBlock = await maybeBlockOutboundOnPreflight();
         if (preBlock) {
             writeJson(res, 503, preBlock);
+            return;
+        }
+
+        const capabilityGate = await ensureConversationCapabilityGate(recipientRaw, "whatsapp", conversationId);
+        if (!capabilityGate.allowed) {
+            writeJson(res, 403, {
+                error: capabilityGate.reason,
+                code: capabilityGate.code,
+                policy: "conversation_channel_capability_required"
+            });
             return;
         }
 
@@ -932,6 +1009,7 @@ module.exports = {
     sanitizeConversationItemForApi,
     normalizeThreadStoreRows,
     resolveConversationTimestamps,
+    checkConversationCapabilityGate,
     invalidateConversationsCache: () => {
         conversationsIndexCache.builtAtMs = 0;
         conversationsIndexCache.rawItems = null;

@@ -135,6 +135,10 @@ export async function fetchMessages(handle, offset = 0, limit = 20, showLoadingU
         offset: Number(data.offset) || 0,
         limit: Number(data.limit) || limit,
         order: data.order || String(order || 'newest'),
+        conversationId: data.conversationId || null,
+        channels: Array.isArray(data.channels) ? data.channels : [],
+        allowedChannels: Array.isArray(data.allowedChannels) ? data.allowedChannels : [],
+        defaultChannel: data.defaultChannel || null,
     };
 }
 
@@ -276,8 +280,11 @@ export async function fetchHiddenContacts() {
  * @param {string} channel - Channel to use (only imessage/email/whatsapp are send-enabled)
  * @returns {Promise<Object>} Send result
  */
-export async function sendMessage(handle, text, channel = 'imessage', draftContext = null) {
-    const ch = (channel || 'imessage').toString().toLowerCase();
+export async function sendMessage(handle, text, channel, draftContext = null, conversationId = null) {
+    const ch = String(channel || '').toLowerCase().trim();
+    if (!ch) {
+        throw new Error('No allowed channel is selected for this conversation.');
+    }
     const endpointByChannel = {
         imessage: '/api/send-imessage',
         whatsapp: '/api/send-whatsapp',
@@ -294,6 +301,9 @@ export async function sendMessage(handle, text, channel = 'imessage', draftConte
         at: new Date().toISOString(),
     };
     const sendPayload = { recipient: handle, text, trigger: sendTrigger };
+    if (conversationId) {
+        sendPayload.conversationId = conversationId;
+    }
     if (draftContext) {
         sendPayload.draftContext = draftContext;
     }

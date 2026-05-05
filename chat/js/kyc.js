@@ -745,6 +745,9 @@ function renderSuggestions(handle, pendingSuggestions) {
 }
 
 function updateChannelOptionsFromKyc(handle, data) {
+  if (window.currentHandle && String(window.currentHandle) === String(handle)) {
+    return;
+  }
   const sel = document.getElementById('channel-select');
   if (!sel) return;
 

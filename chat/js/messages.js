@@ -319,7 +319,7 @@ function normalizeChannelKey(channel) {
 
 function getSelectedChannel() {
     const sel = document.getElementById('channel-select');
-    return (sel?.value || 'imessage').toLowerCase();
+    return (sel?.value || '').toLowerCase();
 }
 
 function setSelectedChannel(channel) {
@@ -341,11 +341,65 @@ function channelLabel(channel) {
     return 'iMessage';
 }
 
+function normalizeChannelList(values) {
+    return Array.from(new Set(
+        (Array.isArray(values) ? values : [])
+            .map((value) => String(value || '').trim().toLowerCase())
+            .filter(Boolean)
+    ));
+}
+
+function resolveComposerChannel(allowedChannels, defaultChannel) {
+    const allowed = normalizeChannelList(allowedChannels);
+    const requested = String(defaultChannel || '').trim().toLowerCase();
+    if (requested && allowed.includes(requested)) return requested;
+    return allowed[0] || '';
+}
+
+function applyThreadComposerCapabilities({ handle, conversationId, channels, allowedChannels, defaultChannel }) {
+    const sel = document.getElementById('channel-select');
+    const allowed = normalizeChannelList(allowedChannels);
+    const visible = normalizeChannelList(channels);
+    const selected = resolveComposerChannel(allowed, defaultChannel);
+
+    window.replyThreadComposerState = {
+        handle: String(handle || ''),
+        conversationId: conversationId || null,
+        channels: visible,
+        allowedChannels: allowed,
+        defaultChannel: selected || null,
+    };
+
+    if (sel) {
+        Array.from(sel.options).forEach((option) => {
+            const optionValue = String(option.value || '').trim().toLowerCase();
+            const enabled = allowed.includes(optionValue);
+            option.disabled = !enabled;
+            option.hidden = !enabled;
+        });
+        if (selected) {
+            setSelectedChannel(selected);
+        } else {
+            sel.selectedIndex = -1;
+        }
+    }
+
+    window.currentChannel = selected || '';
+    setSendButtonForChannel(selected);
+    setChannelPolicyHint(selected);
+}
+
 function setChannelPolicyHint(channel) {
     const hint = document.getElementById('channel-policy-hint');
     if (!hint) return;
 
     const v = String(channel || '').toLowerCase();
+    const allowed = normalizeChannelList(window.replyThreadComposerState?.allowedChannels);
+    if (!allowed.length) {
+        hint.style.display = 'block';
+        hint.innerHTML = `<strong>Send disabled:</strong> no allowed reply channel is available for this conversation.`;
+        return;
+    }
     if (DRAFT_ONLY_CHANNELS.has(v)) {
         hint.style.display = 'block';
         hint.innerHTML = `<strong>Draft-only:</strong> ${channelLabel(v)} sending is disabled in ${APP_DISPLAY_NAME}. Copy/paste and send manually in the channel app.`;
@@ -360,7 +414,13 @@ function setSendButtonForChannel(channel) {
     const btn = document.getElementById('btn-send');
     if (!btn) return;
 
-    const v = String(channel || 'imessage').toLowerCase();
+    const v = String(channel || '').toLowerCase();
+    const allowed = normalizeChannelList(window.replyThreadComposerState?.allowedChannels);
+    if (!allowed.length || !v) {
+        btn.textContent = 'Send';
+        btn.disabled = true;
+        return;
+    }
     if (v === 'email') {
         btn.textContent = 'Send Email';
         btn.disabled = sendInFlight;
@@ -398,36 +458,10 @@ function setSendPending(channel, pending) {
 }
 
 function applyComposerChannel(channel) {
-    const v = String(channel || 'imessage').toLowerCase();
+    const v = String(channel || '').toLowerCase();
     setSelectedChannel(v);
     setSendButtonForChannel(v);
     setChannelPolicyHint(v);
-}
-
-function inferDefaultChannelFromMessages(messages) {
-    if (Array.isArray(messages) && messages.length > 0) {
-        const lastIncoming = messages.find(m => !(m.is_from_me ?? (m.role === 'me')));
-        if (lastIncoming?.channel) {
-            return (lastIncoming.channel).toString().toLowerCase();
-        }
-    }
-
-    // Fallback: check window.conversations if we know the current handle
-    if (window.currentHandle && window.conversations) {
-        const c = window.conversations.find(c => c.handle === window.currentHandle);
-        if (c && c.channels) {
-            if (c.channels.whatsapp && c.channels.whatsapp.length > 0) return 'whatsapp';
-            if (c.channels.email && c.channels.email.length > 0) return 'email';
-            if (c.channels.linkedin && c.channels.linkedin.length > 0) return 'linkedin';
-        }
-
-        // Base64 regex heuristic (WhatsApp IDs look like CNeag...)
-        if (/^[a-zA-Z0-9+/]+={0,2}$/.test(window.currentHandle) && window.currentHandle.length >= 20) {
-            return 'whatsapp';
-        }
-    }
-
-    return null;
 }
 
 async function copyToClipboard(text) {
@@ -468,6 +502,13 @@ export async function loadMessages(handle, append = false) {
         if (!append) {
             if (gapObserver) gapObserver.disconnect();
             threadWindowState = null;
+            applyThreadComposerCapabilities({
+                handle,
+                conversationId: null,
+                channels: [],
+                allowedChannels: [],
+                defaultChannel: null,
+            });
             const cached = readCachedThread(handle);
             if (cached?.messages?.length) {
                 threadWindowState = {
@@ -511,6 +552,10 @@ export async function loadMessages(handle, append = false) {
             newestLoadedCount: newestMessages.length,
             hasGap: Math.max(0, total - dedupeMessages([...oldestMessages, ...newestMessages]).length) > 0,
             loadingGap: false,
+            conversationId: newestResponse.conversationId || oldestResponse.conversationId || null,
+            channels: normalizeChannelList(newestResponse.channels.length ? newestResponse.channels : oldestResponse.channels),
+            allowedChannels: normalizeChannelList(newestResponse.allowedChannels.length ? newestResponse.allowedChannels : oldestResponse.allowedChannels),
+            defaultChannel: newestResponse.defaultChannel || oldestResponse.defaultChannel || null,
         };
 
         renderThreadWindow(messagesEl, { scrollToBottom: true });
@@ -524,22 +569,26 @@ export async function loadMessages(handle, append = false) {
             });
         }
 
-        // Default channel: match the most recent incoming message when possible or context
         if (!append) {
-            const inferred = inferDefaultChannelFromMessages(newestMessages);
-            if (inferred) {
-                window.currentChannel = inferred;
-                applyComposerChannel(inferred);
-            } else {
-                // Global fallback
-                window.currentChannel = 'imessage';
-                applyComposerChannel('imessage');
-            }
+            applyThreadComposerCapabilities({
+                handle,
+                conversationId: threadWindowState.conversationId,
+                channels: threadWindowState.channels,
+                allowedChannels: threadWindowState.allowedChannels,
+                defaultChannel: threadWindowState.defaultChannel,
+            });
         }
 
     } catch (error) {
         if (loadToken !== activeThreadLoadToken || window.currentHandle !== handle) return;
         console.error('Failed to load messages:', error);
+        applyThreadComposerCapabilities({
+            handle,
+            conversationId: null,
+            channels: [],
+            allowedChannels: [],
+            defaultChannel: null,
+        });
         UI.showToast(error?.message || 'Failed to load messages', 'error');
         if (!messagesEl.children.length) {
             messagesEl.innerHTML = '';
@@ -579,6 +628,10 @@ export async function handleSendMessage() {
 
     try {
         const channel = getSelectedChannel();
+        if (!channel) {
+            UI.showToast('No allowed channel is available for this conversation.', 'error');
+            return;
+        }
         window.currentChannel = channel;
         applyComposerChannel(channel);
 
@@ -628,7 +681,13 @@ export async function handleSendMessage() {
             typeof window.getCurrentDraftContext === 'function'
                 ? window.getCurrentDraftContext(currentHandle)
                 : null;
-        const result = await sendMessage(targetHandle, text, channel, draftContext);
+        const result = await sendMessage(
+            targetHandle,
+            text,
+            channel,
+            draftContext,
+            threadWindowState?.conversationId || window.replyThreadComposerState?.conversationId || null
+        );
         console.log(`[SendMessage] Result status: ${result?.status}`);
 
         if (result?.status !== 'ok') {
