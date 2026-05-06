@@ -10,6 +10,7 @@ const { ensureDataHome, dataPath } = require("./app-paths.js");
 const { pathPrefixesForHandle, inferChannelFromHandle, extractDateFromText, stripMessagePrefix } = require("./utils/chat-utils.js");
 
 const REPLY_TRINITY_CONTRACT_VERSION = "trinity.reply.v1alpha1";
+const REPLY_TRINITY_ADAPTER = "reply";
 const TRUE_VALUES = new Set(["1", "true", "yes"]);
 const brainRuntimeTestHooks = {
   legacyGenerateReply: null,
@@ -364,7 +365,7 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
         recipient,
         goldenExamples,
       );
-      const rankedDraftSet = await callTrinityRuntime("reply-suggest", threadSnapshot);
+      const rankedDraftSet = await callTrinityRuntime("suggest", threadSnapshot);
       const top = Array.isArray(rankedDraftSet?.drafts) ? rankedDraftSet.drafts[0] : null;
       const shadowComparison = buildShadowComparisonSummary({
         legacySuggestion: normalizedLegacy.suggestion,
@@ -425,7 +426,7 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
         recipient,
         goldenExamples,
       );
-      const rankedDraftSet = await callTrinityRuntime("reply-suggest", threadSnapshot);
+      const rankedDraftSet = await callTrinityRuntime("suggest", threadSnapshot);
       const top = Array.isArray(rankedDraftSet?.drafts) ? rankedDraftSet.drafts[0] : null;
       if (top?.draft_text) {
         return {
@@ -459,14 +460,14 @@ async function recordDraftOutcome(outcome) {
   if (!outcome || !outcome.cycle_id) {
     return { status: "skipped", reason: "missing_cycle_id" };
   }
-  return callTrinityRuntime("reply-record-outcome", buildDraftOutcomeEvent(outcome));
+  return callTrinityRuntime("record-outcome", buildDraftOutcomeEvent(outcome));
 }
 
 async function exportDraftTrace(cycleId) {
   if (!cycleId) {
     return { status: "skipped", reason: "missing_cycle_id" };
   }
-  return callTrinityRuntime("reply-export-trace", null, { cycleId });
+  return callTrinityRuntime("export-trace", null, { cycleId });
 }
 
 function getTrinityRuntimeStatusSync() {
@@ -478,7 +479,7 @@ function getTrinityRuntimeStatusSync() {
   };
   const result = spawnSync(
     pythonBin,
-    ["-m", "trinity_core.cli", "reply-runtime-status"],
+    ["-m", "trinity_core.cli", "runtime-status", "--adapter", REPLY_TRINITY_ADAPTER],
     {
       cwd: trinityRepoRoot,
       env,
@@ -506,7 +507,7 @@ async function callTrinityRuntime(command, payload = null, options = {}) {
     ...process.env,
     PYTHONPATH: buildPythonPath(trinityRepoRoot),
   };
-  const args = ["-m", "trinity_core.cli", command];
+  const args = ["-m", "trinity_core.cli", command, "--adapter", REPLY_TRINITY_ADAPTER];
   if (options.cycleId) {
     args.push("--cycle-id", String(options.cycleId));
   }

@@ -97,10 +97,10 @@ Depends on:
 
 Provides:
 
-- `reply-suggest`
-- `reply-record-outcome`
-- `reply-export-trace`
-- `reply-export-training-bundle`
+- `suggest --adapter reply`
+- `record-outcome --adapter reply`
+- `export-trace --adapter reply`
+- `export-training-bundle --adapter reply`
 - policy acceptance, promotion, rollback, and shadow fixture tooling
 
 ### 5. Offline learning loop

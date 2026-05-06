@@ -192,7 +192,7 @@ Current compose-path boundary:
 ### Suggest path
 
 1. `{reply}` assembles a `ThreadSnapshot`
-2. `{reply}` calls `{trinity}` `reply-suggest`
+2. `{reply}` calls `{trinity}` `suggest --adapter reply`
 3. `{trinity}` returns a ranked draft set and accepted artifact provenance
 4. `{reply}` renders the selected draft and stores runtime context for later outcome submission
 
