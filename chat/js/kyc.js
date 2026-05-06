@@ -791,8 +791,7 @@ function updateChannelOptionsFromKyc(handle, data) {
     }
   });
 
-  // If current selection is no longer available, pick a sensible default.
-  // We no longer force a fallback just because the preferred channel isn't verified.
+  // For non-active contacts in the profile editor, keep the selector on a locally available address type.
   if (!available.has(sel.value)) {
     const preferred = (window.currentChannel || '').toString().toLowerCase();
     const pick = (available.has(preferred))

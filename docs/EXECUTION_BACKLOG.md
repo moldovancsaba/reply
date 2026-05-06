@@ -75,7 +75,7 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
   Completed. `/api/conversations` now reads a SQLite-backed `conversation_index` maintained from canonical message writes in `unified_messages`, with precomputed previews, counts, and sort keys for passive browse modes instead of request-time LanceDB reconstruction.
 
 - `REPLY-THIN-003` Canonical thread read path
-  Completed for the passive browse path. `/api/thread` now reads canonical message rows from SQLite only and no longer performs request-time LanceDB history fallback, vector direction reconciliation, or WhatsApp LID expansion in the request path.
+  Completed for the passive browse path with one documented compatibility gap. `/api/thread` now reads canonical conversation rows first, no longer performs request-time LanceDB history fallback, vector direction reconciliation, or WhatsApp LID expansion in the request path, and retries canonical rebuilds before falling back to legacy `unified_messages`.
 
 - `REPLY-THIN-004` Prepared draft context snapshots
   Completed. Suggest/drafting routes now consume prepared local snapshot artifacts from `draft_context_snapshots` plus prepared golden-example state, instead of assembling inbound context, snippet candidates, or fallback latest-message state in the request path.

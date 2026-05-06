@@ -82,12 +82,14 @@ This README now reflects the current product state, including:
 - native sync triggers now send the same protected approval payload/header shape as the web app, so per-source sync actions can start background work from the native shell
 - native shell expectations are now first-class: `reply.app` is the operator shell, the hub/runtime sit behind it
 - thin-read architecture is now explicit: passive UI routes are expected to consume local materialized read models instead of request-time reconstruction
+- web and native compose are now capability-safe: the composer only offers channels returned by `conversation_channel_capabilities`, and send routes reject stale or unauthorized conversation/channel combinations
 - native launch is now readiness-gated: the app and `script/build_and_run.sh --verify` wait for a healthy local hub instead of treating a bare process spawn as success
 - Apple source mirror refresh is no longer part of the startup critical path; it runs in the background while the hub comes online
 - conversation foundation work is now explicit in the repo and docs:
   - canonical conversation tables exist in `chat.db`
   - immutable participant-membership snapshots are the target model
   - merge authority remains manual-only and user-owned
+- conversation integrity tooling is now checked into the repo via `npm run audit:conversations`
 
 ## Versions
 
@@ -265,10 +267,14 @@ cd app/reply-app
 - mail conversations can be sourced from Apple Mail fallback ingestion when Gmail is unavailable
 - contact rows enrich conversations when available, but valid message-backed handles are no longer hidden when `contacts.db` lacks a profile row
 - contact merges are explicit user-owned state only; the product does not auto-merge identities
+- active composer channels come from `conversation_channel_capabilities`, not from handle heuristics or the last visible message alone
 - thread views now preload both ends of the conversation window:
   - first 20 messages by oldest order
   - last 20 messages by newest order
 - if there is a history gap between those windows, the app fills it incrementally without blocking the UI
+- `/api/thread` is canonical-first:
+  - it reads `conversation_messages`/`conversation_channel_capabilities` when present
+  - it retries a local conversation-foundation rebuild before using the legacy `unified_messages` compatibility path
 
 ### Feedback and outcomes
 
@@ -295,6 +301,7 @@ Node checks:
 cd chat
 npm test
 npm run lint
+npm run audit:conversations
 ```
 
 Useful runtime checks:

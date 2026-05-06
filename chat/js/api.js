@@ -113,7 +113,7 @@ export async function fetchConversations(offset = 0, limit = 20, query = '', sor
  * @param {number} offset - Starting index for pagination
  * @param {number} limit - Number of messages to fetch
  * @param {boolean} [showLoadingUi=true] — Set false when appending older messages (infinite scroll).
- * @returns {Promise<Array>} Array of message objects
+ * @returns {Promise<Object>} Thread page payload including messages, conversationId, visible channels, and allowedChannels
  */
 export async function fetchMessages(handle, offset = 0, limit = 20, showLoadingUi = true, order = 'newest') {
     const params = new URLSearchParams({
@@ -277,7 +277,7 @@ export async function fetchHiddenContacts() {
  * Send a message to a contact
  * @param {string} handle - Contact handle
  * @param {string} text - Message text
- * @param {string} channel - Channel to use (only imessage/email/whatsapp are send-enabled)
+ * @param {string} channel - Channel to use from the active conversation's allowed channel set
  * @returns {Promise<Object>} Send result
  */
 export async function sendMessage(handle, text, channel, draftContext = null, conversationId = null) {

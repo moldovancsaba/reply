@@ -94,11 +94,12 @@ Current state:
 
 - passive thread loading no longer depends on LanceDB history recovery
 - passive thread loading no longer depends on request-time WhatsApp LID expansion
-- canonical SQLite message rows are now the browse-time source of truth
+- canonical conversation rows are now the browse-time source of truth when present
+- the route retries local conversation-foundation rebuild before using the temporary legacy compatibility fallback
 
 Required end state:
 
-- thread rendering reads only canonical thread rows from SQLite
+- thread rendering reads only canonical conversation rows from SQLite
 - all sources must populate canonical message rows during ingestion
 - direction, handle aliasing, and channel normalization must be resolved before a route reads them
 - contact/profile alias semantics should stay upstream of the route and not force cross-store reconstruction
@@ -281,9 +282,9 @@ Deliver:
 
 Acceptance:
 
-- `/api/thread` reads SQLite only
-- no request-time vector reconciliation
+- `/api/thread` reads canonical SQLite conversation rows without request-time vector reconciliation
 - no request-time LID reconstruction
+- no legacy `unified_messages` fallback remains after canonical rebuild retry
 
 ### Phase 4: Prepared Draft Context
 
@@ -324,7 +325,7 @@ Acceptance:
 
 1. prepared draft context snapshots
 2. dashboard summaries from materialized tables only
-3. remove compatibility fallbacks after read models are trusted
+3. remove compatibility fallbacks after canonical rebuild retry is no longer needed
 
 ## Non-Negotiable Acceptance Criteria
 
