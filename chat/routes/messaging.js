@@ -453,6 +453,16 @@ async function serveThread(req, res, url) {
         let allMessages = normalizeThreadStoreRows(foundationResult?.rows || []);
 
         if (!allMessages.length && offset === 0) {
+            try {
+                await conversationFoundationStore.rebuildConversationFoundation(allHandles);
+                foundationResult = await conversationFoundationStore.getConversationMessagesByHandle(handle, { limit, offset, order: storeOrder });
+                allMessages = normalizeThreadStoreRows(foundationResult?.rows || []);
+            } catch (rebuildErr) {
+                console.warn("[thread] canonical rebuild retry failed:", rebuildErr.message);
+            }
+        }
+
+        if (!allMessages.length && offset === 0) {
             const storeResult = await messageStore.getMessagesForHandles(allHandles, { limit, offset, order: storeOrder });
             allMessages = normalizeThreadStoreRows(storeResult?.rows || []);
             foundationResult = {

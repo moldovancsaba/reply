@@ -93,7 +93,7 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
   Completed. `chat.db` now initializes the first canonical conversation foundation tables: `external_threads`, `conversation_snapshots`, `conversation_participants`, `conversation_messages`, `message_recipients`, and `conversation_channel_capabilities`. This does not cut over runtime behavior yet; it establishes the durable schema contract for the migration.
 
 - `REPLY-CONV-003` Capability-safe compose contract
-  Pending. Replace the generic channel picker and handle heuristics with conversation capability state derived from canonical conversation snapshots and inbound-verified identities.
+  Completed. Web and native compose now derive send-enabled channels from `conversation_channel_capabilities`, propagate `conversationId` on sends, and reject stale or unauthorized channel sends at the route boundary instead of falling back to handle heuristics.
 
 - `REPLY-CONV-004` Canonical conversation builder
   Pending. Build background snapshot materialization from current canonical messages and contact graph, including membership fingerprinting, external-thread lineage, and snapshot supersession when membership changes.
@@ -106,6 +106,9 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
 
 - `REPLY-CONV-007` Manual-only merge enforcement lane
   Pending. Keep merge and unmerge authority fully explicit and user-owned across routes, native UI, projections, and docs. No automatic identity merging is allowed in browse, drafting, or ingestion paths.
+
+- `REPLY-CONV-008` Integrity audit command
+  Completed. `npm run audit:conversations` now checks capability/message channel mismatches, duplicate `conversation_index` handles, stale same-membership duplicate snapshots, and snapshot rows with no canonical messages.
 
 - `REPLY-NATIVE-001` Native dashboard source cards
   Completed. The native dashboard now renders source-specific cards for `iMessage`, `WhatsApp`, `Mail`, `Apple Notes`, `Apple Calendar`, `Apple Contacts`, `KYC`, and deferred sources, with visible counts, sync state, and timestamps.
