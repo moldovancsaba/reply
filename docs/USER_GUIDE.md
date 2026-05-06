@@ -28,7 +28,8 @@ To stop: keep the `make run` terminal open while using the app, and run `make st
 *   Sent messages render on the right. Received messages render on the left.
 *   The thread preloads the oldest 20 and newest 20 messages when you open a conversation.
 *   Longer histories load progressively in the background so the workspace stays responsive.
-*   **Composer** includes a channel dropdown (`iMessage`, `WhatsApp`, `Email`, plus draft-only bridge channels when available).
+*   **Composer** only shows reply/send channels that are allowed for the active conversation.
+*   If no channel is allowed for that conversation snapshot, send stays disabled and the UI says so explicitly.
 *   The buttons `🎤 Mic`, `✨ Magic`, `💡 Suggest` are visible only in the feed view.
 
 ### Profile (right pane)
@@ -56,7 +57,7 @@ Service settings include:
 ---
 
 ## Email (Gmail OAuth)
-If Gmail is connected, selecting **Email** in the composer sends via the Gmail API automatically.
+If **Email** is an allowed channel for the current conversation and Gmail is connected, selecting **Email** sends via the Gmail API automatically.
 
 *   Connect in Settings → Gmail (OAuth).
 *   Set **Sync scope**:
@@ -71,6 +72,7 @@ If Gmail is connected, selecting **Email** in the composer sends via the Gmail A
 ## WhatsApp Send
 *   **Primary path:** OpenClaw-backed transport.
 *   **Behavior:** `{reply}` uses the local OpenClaw path when healthy. If the transport is unavailable, `{reply}` surfaces a runtime error rather than pretending the send succeeded.
+*   **Channel safety:** WhatsApp only appears in the composer when the active conversation snapshot is allowed to reply on WhatsApp.
 *   **Setup:** see [LOCAL_MACHINE_DEPLOYMENT.md](/Users/Shared/Projects/reply/docs/LOCAL_MACHINE_DEPLOYMENT.md) for OpenClaw login and gateway notes.
 
 ---

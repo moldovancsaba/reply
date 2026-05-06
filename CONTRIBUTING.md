@@ -66,6 +66,7 @@ Run the checks that match your change:
 cd /Users/Shared/Projects/reply/chat
 npm test
 npm run lint
+npm run audit:conversations
 ```
 
 For native shell changes:
@@ -82,6 +83,7 @@ Manual verification is required for:
 - conversation sidebar behavior
 - thread rendering
 - conversation/channel capability truth
+- capability-safe compose behavior and stale conversation rejection
 - native runtime startup
 - sync entry points
 - profile loading and saving
@@ -117,5 +119,7 @@ Every PR should include:
 - Gmail may require reconnect if the saved refresh token is invalid.
 - Apple Mail fallback is supported and can populate `mailto:` conversations when Gmail is unavailable.
 - Conversation threads are message-backed first and contact-enriched second.
+- Thread reads are canonical-first: the route retries conversation-foundation rebuilds before falling back to legacy `unified_messages`.
+- Web and native compose only expose channels allowed by `conversation_channel_capabilities`.
 - Contact merge state is manual-only and must not be inferred automatically by heuristics.
 - The dashboard can report ingestion totals that are larger than the currently preloaded sidebar page.

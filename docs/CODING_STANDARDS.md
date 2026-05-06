@@ -25,6 +25,7 @@
 *   **Local Runtime Services Only:** Local services and background runtimes are acceptable, but they must remain internal product infrastructure. The user-facing macOS workspace stays native.
 *   **Embedded Asset Preference:** When a visual system can be embedded directly into the app runtime safely, prefer embedded delivery over asset-path indirection.
 *   **Prepared Local State First:** The operator UI must not wait on live assembly of conversation indexes, thread context, ranking, or summarization during passive browsing. Those belong in background-maintained local read models.
+*   **Capability-Safe Compose:** Channel selectors must be populated from `conversation_channel_capabilities` or an equivalent canonical capability payload. Do not reintroduce handle-based or last-message heuristics as send authority.
 
 ## UI Implementation Rules
 *   **Semantic Theming Only:** Screen chrome, panels, menus, controls, and overlays must derive from semantic theme variables. Hardcoded one-off foreground/background fixes are not allowed.
@@ -64,6 +65,7 @@
 *   **Documentation:** All exported functions must have JSDoc comments explaining parameters and return values.
 *   **Safety:** Avoid duplicate global or module-level declarations.
 *   **No Request-Time Reconstruction on Browse Paths:** UI-facing browse routes must not call LanceDB/vector search, rebuild aggregate indexes, or compute recommendation/frequency sort keys on demand. Materialize them locally first.
+*   **Canonical-First Thread Reads:** `/api/thread` should read `conversation_messages` and `message_recipients` first. Any temporary compatibility fallback must be explicit, documented, and treated as migration debt.
 
 ## Code Style (Swift / Native Shell)
 *   **Native Workflow First:** SwiftUI/AppKit code should describe native window, sidebar, thread, and inspector behavior directly.
@@ -85,6 +87,7 @@
 *   **Installer Verification:** Native app install/update scripts must verify bundle integrity after copy and refresh LaunchServices/Dock metadata so macOS re-reads the shipped icon from the repaired bundle.
 *   **Native Workflow Verification:** For macOS UI work, verify the actual native window behavior: startup route, sidebar selection, dashboard visibility, conversation rendering, profile rendering, and composer visibility.
 *   **Conversation Verification:** If a change touches sync or indexing, verify that the live conversation API and the native sidebar agree.
+*   **Capability Verification:** If a change touches sending, threads, or channel visibility, verify that `allowedChannels` from `/api/thread` matches the visible composer options and the send route behavior.
 *   **Mail Verification:** If a change touches mail ingestion, verify both the sync status file and the visible `mailto:` conversation rows.
 
 ## Dependency Management

@@ -4,6 +4,12 @@
 
 This document outlines a phased approach to refactoring the UI of the {reply} application to establish a consistent design system. The current codebase has significant technical debt with **176+ inline styles** in [`index.html`](chat/index.html:1) and **hardcoded color values** throughout the JavaScript files, which bypass the existing CSS variable design system defined in [`global.css`](chat/css/global.css:1).
 
+Current product guardrail:
+
+- the design system must respect capability-safe compose behavior
+- channel selectors must only render channels allowed by the active conversation snapshot
+- the visual system must not surface unavailable send channels as if they were actionable
+
 ---
 
 ## Current State Analysis
