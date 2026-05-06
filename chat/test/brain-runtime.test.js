@@ -307,7 +307,7 @@ test("generateReply dual-runs Trinity in shadow mode while keeping legacy active
   setBrainRuntimeTestHooks({
     legacyGenerateReply: async () => "Legacy draft reply",
     trinityRuntimeCall: async (command) => {
-      assert.equal(command, "reply-suggest");
+      assert.equal(command, "suggest");
       return {
         cycle_id: "cycle-shadow-1",
         trace_ref: "/tmp/trinity-shadow-trace.json",
