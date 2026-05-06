@@ -11,6 +11,7 @@
     "security:fix": "node security-audit.js --fix",
     "annotate": "node annotation-agent.js",
     "fingerprint": "node unified-brain-report.js",
+    "audit:conversations": "node scripts/audit-conversation-integrity.js",
     "channel-bridge:ingest": "node channel-bridge-sidecar.js",
     "verify:openclaw": "node verify_openclaw.js",
     "linkedin:sync": "node linkedin-sidecar.js",
