@@ -565,8 +565,7 @@ class ContactStore {
 
         if (!contact.verifiedChannels) contact.verifiedChannels = {};
 
-        // Keep the earliest or latest timestamp depending on requirement, usually latest inbound is best proof or perhaps oldest to show trust duration.
-        // We'll just update it or set it if missing.
+        // Capability/send policy uses the freshest observed inbound proof for an address.
         if (!contact.verifiedChannels[value] || new Date(contact.verifiedChannels[value]) < new Date(timestamp)) {
             contact.verifiedChannels[value] = timestamp;
             await this.saveContact(contact);

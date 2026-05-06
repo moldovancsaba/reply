@@ -190,9 +190,11 @@ Bundled native-shell preferred health endpoints:
 - conversation sidebar can also merge vector-backed conversation stats for channels that are not mirrored into `unified_messages`
 - a missing contact row no longer hides a valid message-backed conversation
 - contact merge and unmerge remain manual user actions only; the runtime does not auto-merge identities
+- composer channels now come from `conversation_channel_capabilities`, not from handle heuristics
 - thread views preload both the oldest 20 and newest 20 messages on first open
 - long threads fill the middle history gap incrementally in the background
 - sent and received messages render as explicit right/left rows
+- `/api/thread` now retries canonical conversation rebuild before using the legacy `unified_messages` compatibility path
 
 ### Mail ingestion
 
@@ -245,6 +247,7 @@ curl http://127.0.0.1:45311/api/system/health
 cd /Users/Shared/Projects/reply/chat
 npm test
 npm run lint
+npm run audit:conversations
 ```
 
 ## Troubleshooting

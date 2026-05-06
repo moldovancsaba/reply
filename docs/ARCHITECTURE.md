@@ -176,9 +176,16 @@ Message rendering rules:
 
 Current browse-path boundary:
 
-- `/api/thread` now reads canonical message rows from SQLite only
+- `/api/thread` reads canonical conversation rows from `conversation_messages` first
+- if canonical rows are unexpectedly absent for a handle, the route retries `rebuildConversationFoundation(...)` before using the legacy `unified_messages` compatibility path
 - request-time LanceDB history recovery is removed from the passive thread route
 - request-time WhatsApp LID expansion is removed from the passive thread route
+
+Current compose-path boundary:
+
+- web and native composers only expose channels from `conversation_channel_capabilities`
+- send requests now carry `conversationId`
+- send routes reject stale `conversationId` values and channels not allowed for the active conversation snapshot
 
 ## Drafting and Outcome Flow
 
@@ -231,6 +238,7 @@ Thin-read rule:
 - `/api/conversations`, `/api/thread`, dashboard summaries, and other passive browse surfaces must become thin reads from local materialized state
 - suggest and drafting routes may call the local AI runtime, but they must consume prepared local context artifacts rather than assemble snippets/history at request time
 - request-time LanceDB merges, vector history recovery, and sort-key recomputation are transitional debt and should be removed
+- the remaining legacy `/api/thread` fallback exists only as compatibility debt after canonical rebuild retry; the end state is canonical-only thread truth
 
 ## Native App Direction
 

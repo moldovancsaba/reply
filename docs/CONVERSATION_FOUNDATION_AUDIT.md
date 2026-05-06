@@ -117,26 +117,31 @@ That fails for:
 - channel identity changes
 - participant changes over time
 
-### F3. UI can offer invalid channels
+### F3. Historical invalid-channel risk
 
-The native app exposes a generic channel picker for every loaded conversation.
+This flaw was present during the audit pass and is now fixed in the shipped runtime.
 
-Current behavior is not grounded in conversation capability state. It uses:
+Current shipped behavior:
 
-- first inbound message channel when available
-- otherwise a handle heuristic
+- web and native composers only offer channels from `conversation_channel_capabilities`
+- send requests carry `conversationId`
+- routes reject stale conversation ids and channels not allowed for the active conversation snapshot
 
-That is not a safe foundation.
+The remaining work is not UI gating. It is full canonical thread ownership and removal of the legacy compatibility fallback in `/api/thread`.
 
-### F4. Channel-start rule is not first-class product truth
+### F4. Channel-start rule is now first-class product truth
 
-There is an outbound gate in [chat/utils/outbound-policy.js](/Users/Shared/Projects/reply/chat/utils/outbound-policy.js), but it is environment-gated and not represented as immutable conversation capability state.
+This is no longer only an environment-gated runtime check.
 
-The product rule must be:
+Current shipped behavior:
 
-- if a contact never used channel X inbound, `{reply}` cannot start on channel X
+- `conversation_channel_capabilities` is stored in `chat.db`
+- `/api/thread` exposes `allowedChannels`
+- send routes enforce conversation capability state before transport-specific outbound policy checks
 
-That rule must exist in the database and API contracts, not only as an optional runtime check.
+The product rule remains:
+
+- if a conversation never used channel X inbound, `{reply}` cannot start or reply on channel X through that conversation snapshot
 
 ### F5. Multi-channel conversations are under-modeled
 
@@ -407,6 +412,11 @@ Deliver:
 - audit command
 - orphan detection
 - snapshot lineage inspection
+
+Status:
+
+- rebuild path exists through `rebuildConversationFoundation(...)`
+- audit command exists as `npm run audit:conversations`
 
 Acceptance:
 
