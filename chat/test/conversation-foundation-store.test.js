@@ -17,17 +17,21 @@ function freshFoundationStore(tempDir) {
   delete require.cache[foundationStorePath];
   delete require.cache[messageStorePath];
   delete require.cache[contactStorePath];
-  return require("../conversation-foundation-store.js");
+  return {
+    foundationStore: require("../conversation-foundation-store.js"),
+    messageStore: require("../message-store.js"),
+    contactStore: require("../contact-store.js"),
+  };
 }
 
 test("conversation foundation schema tables are initialized in chat.db", { concurrency: false }, async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "reply-foundation-"));
   fs.writeFileSync(path.join(tempDir, "chat.db"), "");
 
-  const store = freshFoundationStore(tempDir);
-  await store.waitUntilReady();
+  const { foundationStore, contactStore } = freshFoundationStore(tempDir);
+  await foundationStore.waitUntilReady();
 
-  const tables = await store.getSchemaSummary();
+  const tables = await foundationStore.getSchemaSummary();
   assert.deepEqual(tables, [
     "conversation_channel_capabilities",
     "conversation_messages",
@@ -37,23 +41,17 @@ test("conversation foundation schema tables are initialized in chat.db", { concu
     "message_recipients",
   ]);
 
-  t.after(() => {
+  t.after(async () => {
+    await contactStore.close?.().catch(() => null);
     delete process.env.REPLY_DATA_HOME;
     delete process.env.REPLY_CONTACTS_DB_PATH;
-    try {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    } catch {
-      // ignore
-    }
   });
 });
 
 test("conversation foundation keeps channel capabilities snapshot-local even when the contact has other verified identities", { concurrency: false }, async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "reply-foundation-"));
   fs.writeFileSync(path.join(tempDir, "chat.db"), "");
-  const foundationStore = freshFoundationStore(tempDir);
-  const messageStore = require("../message-store.js");
-  const contactStore = require("../contact-store.js");
+  const { foundationStore, messageStore, contactStore } = freshFoundationStore(tempDir);
   await foundationStore.waitUntilReady();
   await messageStore.waitUntilReady();
   await contactStore.waitUntilReady();
@@ -105,23 +103,17 @@ test("conversation foundation keeps channel capabilities snapshot-local even whe
   assert.equal(thread.rows[0].channel, "whatsapp");
   assert.equal(thread.rows[1].channel, "whatsapp");
 
-  t.after(() => {
+  t.after(async () => {
+    await contactStore.close?.().catch(() => null);
     delete process.env.REPLY_DATA_HOME;
     delete process.env.REPLY_CONTACTS_DB_PATH;
-    try {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    } catch {
-      // ignore
-    }
   });
 });
 
 test("conversation foundation creates new snapshots when email participant membership changes", { concurrency: false }, async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "reply-foundation-"));
   fs.writeFileSync(path.join(tempDir, "chat.db"), "");
-  const foundationStore = freshFoundationStore(tempDir);
-  const messageStore = require("../message-store.js");
-  const contactStore = require("../contact-store.js");
+  const { foundationStore, messageStore, contactStore } = freshFoundationStore(tempDir);
   await foundationStore.waitUntilReady();
   await messageStore.waitUntilReady();
   await contactStore.waitUntilReady();
@@ -195,23 +187,17 @@ test("conversation foundation creates new snapshots when email participant membe
   assert.equal(thread.total, 1);
   assert.equal(thread.rows[0].text, "expanded recipients");
 
-  t.after(() => {
+  t.after(async () => {
+    await contactStore.close?.().catch(() => null);
     delete process.env.REPLY_DATA_HOME;
     delete process.env.REPLY_CONTACTS_DB_PATH;
-    try {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    } catch {
-      // ignore
-    }
   });
 });
 
 test("conversation foundation merges stale duplicate same-membership snapshots for thread reads", { concurrency: false }, async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "reply-foundation-"));
   fs.writeFileSync(path.join(tempDir, "chat.db"), "");
-  const foundationStore = freshFoundationStore(tempDir);
-  const messageStore = require("../message-store.js");
-  const contactStore = require("../contact-store.js");
+  const { foundationStore, messageStore, contactStore } = freshFoundationStore(tempDir);
   await foundationStore.waitUntilReady();
   await messageStore.waitUntilReady();
   await contactStore.waitUntilReady();
@@ -322,13 +308,9 @@ test("conversation foundation merges stale duplicate same-membership snapshots f
     "latest outbound",
   ]);
 
-  t.after(() => {
+  t.after(async () => {
+    await contactStore.close?.().catch(() => null);
     delete process.env.REPLY_DATA_HOME;
     delete process.env.REPLY_CONTACTS_DB_PATH;
-    try {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    } catch {
-      // ignore
-    }
   });
 });

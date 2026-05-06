@@ -117,6 +117,18 @@ class ContactStore {
         return this._readyPromise;
     }
 
+    async close() {
+        await this.waitUntilReady().catch(() => null);
+        if (!this._db) return;
+        const db = this._db;
+        this._db = null;
+        try {
+            db.close(() => { /* best-effort teardown for tests */ });
+        } catch {
+            // Ignore teardown failures during test/module shutdown.
+        }
+    }
+
     get contacts() {
         return this._contacts;
     }
