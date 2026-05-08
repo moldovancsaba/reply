@@ -182,6 +182,17 @@ Current product rule:
 
 This is now enforced in the conversation index path.
 
+### Normalization timing
+
+Current product rule:
+
+- channel-specific message shapes should be normalized near ingestion
+- downstream thread assembly, drafting snapshots, and outcome recording should consume the normalized form
+
+Reason:
+
+- late normalization increases drift across browse, send, and learning paths
+
 ### Merge authority
 
 Current product rule:
@@ -191,12 +202,30 @@ Current product rule:
 
 This is a trust and GDPR boundary, not a convenience feature.
 
+### Identity vs projection authority
+
+Current product rule:
+
+- contact identity is not the same thing as conversation membership
+- conversation projection may link contacts, notes, and draft context, but it must not silently redefine identity
+
+Reason:
+
+- the workspace needs durable thread truth without turning every related artifact into an implicit merged person
+
 ### Drafting runtime health
 
 If `{trinity}` is unavailable:
 
 - suggest endpoints degrade with operator-safe `503` responses
 - sends and conversation browsing remain product-owned in `{reply}`
+
+### Review and provenance health
+
+If provenance or outcome semantics drift:
+
+- the learning loop becomes untrustworthy before the UI becomes obviously broken
+- `cycle_id`, `trace_ref`, `accepted_artifact_version`, and deterministic outcomes must be treated as critical runtime data, not optional metadata
 
 ### Local substrate health
 

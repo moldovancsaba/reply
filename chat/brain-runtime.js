@@ -12,6 +12,11 @@ const { pathPrefixesForHandle, inferChannelFromHandle, extractDateFromText, stri
 const REPLY_TRINITY_CONTRACT_VERSION = "trinity.reply.v1alpha1";
 const REPLY_TRINITY_ADAPTER = "reply";
 const TRUE_VALUES = new Set(["1", "true", "yes"]);
+const REPLY_TRAIN_BUNDLE_TYPE_BY_LEARNER = {
+  tone: "tone-learning",
+  brevity: "brevity-learning",
+  "channel-formatting": "channel-formatting-learning",
+};
 const brainRuntimeTestHooks = {
   legacyGenerateReply: null,
   trinityRuntimeCall: null,
@@ -81,6 +86,35 @@ function normalizeSuggestionResult(result) {
   };
 }
 
+function normalizeReplyCompanyId(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized || resolveReplyCompanyId();
+}
+
+function normalizeAcceptedArtifactVersion(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const artifactKey = String(raw.artifact_key || raw.artifactKey || "").trim();
+  const version = String(raw.version || "").trim();
+  const sourceProject = String(raw.source_project || raw.sourceProject || "").trim();
+  const acceptedAt = String(raw.accepted_at || raw.acceptedAt || "").trim();
+  if (!artifactKey || !version || !sourceProject) return null;
+  return {
+    artifact_key: artifactKey,
+    version,
+    source_project: sourceProject,
+    accepted_at: acceptedAt || null,
+  };
+}
+
+function buildRuntimeProvenance(payload = {}) {
+  return {
+    traceRef: String(payload.trace_ref || payload.traceRef || "").trim() || null,
+    acceptedArtifactVersion: normalizeAcceptedArtifactVersion(
+      payload.accepted_artifact_version || payload.acceptedArtifactVersion || null,
+    ),
+  };
+}
+
 function buildDraftOutcomeEvent(outcome = {}) {
   const payload = outcome && typeof outcome === "object" ? outcome : {};
   const normalizedChannel = String(payload.channel || "").trim().toLowerCase();
@@ -93,9 +127,8 @@ function buildDraftOutcomeEvent(outcome = {}) {
   const finalText = payload.final_text == null ? null : String(payload.final_text);
   const editDistance = payload.edit_distance == null ? null : Number(payload.edit_distance);
   const latencyMs = payload.latency_ms == null ? null : Number(payload.latency_ms);
-
-  return {
-    company_id: String(payload.company_id || resolveReplyCompanyId()).trim(),
+  const event = {
+    company_id: normalizeReplyCompanyId(payload.company_id),
     cycle_id: String(payload.cycle_id || "").trim(),
     thread_ref: String(payload.thread_ref || "").trim(),
     channel: normalizedChannel,
@@ -110,6 +143,14 @@ function buildDraftOutcomeEvent(outcome = {}) {
     notes: normalizedNotes,
     contract_version: String(payload.contract_version || REPLY_TRINITY_CONTRACT_VERSION).trim(),
   };
+  const requiredFields = ["company_id", "cycle_id", "thread_ref", "channel", "disposition", "occurred_at"];
+  for (const field of requiredFields) {
+    if (!String(event[field] || "").trim()) {
+      throw new Error(`DraftOutcomeEvent missing required field: ${field}`);
+    }
+  }
+
+  return event;
 }
 
 function classifyRuntimeFailure(error, options = {}) {
@@ -187,21 +228,22 @@ function classifyRuntimeFailure(error, options = {}) {
 function sanitizeDraftContext(draftContext = {}, options = {}) {
   const payload = draftContext && typeof draftContext === "object" ? draftContext : {};
   const expectedChannel = String(options.expectedChannel || payload.channel || "").trim().toLowerCase();
-  const normalizedCompanyId = String(payload.companyId || payload.company_id || "").trim();
+  const normalizedCompanyId = normalizeReplyCompanyId(payload.companyId || payload.company_id);
   const normalizedCycleId = String(payload.cycleId || payload.cycle_id || "").trim();
   const normalizedThreadRef = String(payload.threadRef || payload.thread_ref || "").trim();
   const normalizedCandidateId = String(
     payload.selectedCandidateId || payload.selected_candidate_id || "",
   ).trim();
   const generatedAtMs = Number(payload.generatedAtMs ?? payload.generated_at_ms);
+  const provenance = buildRuntimeProvenance(payload);
 
   return {
-    companyId: normalizedCompanyId || resolveReplyCompanyId(),
+    companyId: normalizedCompanyId,
     cycleId: normalizedCycleId || "",
     threadRef: normalizedThreadRef || "",
     channel: expectedChannel || "",
-    acceptedArtifactVersion: payload.acceptedArtifactVersion || payload.accepted_artifact_version || null,
-    traceRef: String(payload.traceRef || payload.trace_ref || "").trim() || null,
+    acceptedArtifactVersion: provenance.acceptedArtifactVersion,
+    traceRef: provenance.traceRef,
     selectedCandidateId: normalizedCandidateId || null,
     selectedDraftText: String(payload.selectedDraftText || payload.selected_draft_text || "").trim(),
     originalDraftText: String(payload.originalDraftText || payload.original_draft_text || "").trim(),
@@ -221,7 +263,7 @@ function buildDraftOutcomeFact(draftContext = {}, outcome = {}, options = {}) {
     ? outcome.latency_ms
     : Math.max(0, Date.now() - Number(sanitized.generatedAtMs || Date.now()));
   return buildDraftOutcomeEvent({
-    company_id: outcome.company_id || sanitized.companyId,
+    company_id: normalizeReplyCompanyId(outcome.company_id || sanitized.companyId),
     cycle_id: sanitized.cycleId,
     thread_ref: sanitized.threadRef,
     channel: sanitized.channel,
@@ -317,7 +359,7 @@ async function buildThreadSnapshot(
   }
 
   return {
-    company_id: resolveReplyCompanyId(),
+    company_id: normalizeReplyCompanyId(),
     thread_ref: buildThreadRef(handle, channel),
     channel,
     contact_handle: handle || "unknown",
@@ -367,6 +409,7 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
       );
       const rankedDraftSet = await callTrinityRuntime("suggest", threadSnapshot);
       const top = Array.isArray(rankedDraftSet?.drafts) ? rankedDraftSet.drafts[0] : null;
+      const provenance = buildRuntimeProvenance(rankedDraftSet || {});
       const shadowComparison = buildShadowComparisonSummary({
         legacySuggestion: normalizedLegacy.suggestion,
         trinitySuggestion: String(top?.draft_text || "").trim(),
@@ -381,8 +424,7 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
         trinitySuggestion: String(top?.draft_text || "").trim(),
         trinityRationale: String(top?.rationale || "").trim(),
         cycleId: rankedDraftSet?.cycle_id || null,
-        traceRef: rankedDraftSet?.trace_ref || null,
-        acceptedArtifactVersion: rankedDraftSet?.accepted_artifact_version || null,
+        ...provenance,
         comparison: shadowComparison,
       });
       return {
@@ -392,8 +434,9 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
           runtime: "trinity-shadow",
           shadowComparison,
           trinityCycleId: rankedDraftSet?.cycle_id || null,
-          trinityTraceRef: rankedDraftSet?.trace_ref || null,
-          acceptedArtifactVersion: rankedDraftSet?.accepted_artifact_version || null,
+          trinityTraceRef: provenance.traceRef,
+          acceptedArtifactVersion: provenance.acceptedArtifactVersion,
+          companyId: threadSnapshot.company_id,
         },
         runtimeMode: "trinity-shadow",
         rankedDraftSet: null,
@@ -429,14 +472,16 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
       const rankedDraftSet = await callTrinityRuntime("suggest", threadSnapshot);
       const top = Array.isArray(rankedDraftSet?.drafts) ? rankedDraftSet.drafts[0] : null;
       if (top?.draft_text) {
+        const provenance = buildRuntimeProvenance(rankedDraftSet || {});
         return {
           suggestion: String(top.draft_text || "").trim(),
           explanation: String(top.rationale || "").trim(),
           contextMeta: {
             runtime: "trinity",
             cycleId: rankedDraftSet.cycle_id || null,
-            traceRef: rankedDraftSet.trace_ref || null,
-            acceptedArtifactVersion: rankedDraftSet.accepted_artifact_version || null,
+            traceRef: provenance.traceRef,
+            acceptedArtifactVersion: provenance.acceptedArtifactVersion,
+            companyId: threadSnapshot.company_id,
           },
           runtimeMode: "trinity",
           rankedDraftSet,
@@ -468,6 +513,37 @@ async function exportDraftTrace(cycleId) {
     return { status: "skipped", reason: "missing_cycle_id" };
   }
   return callTrinityRuntime("export-trace", null, { cycleId });
+}
+
+async function proposeTrainingPolicy(options = {}) {
+  const learnerKind = String(options.learnerKind || "").trim().toLowerCase();
+  const cycleId = String(options.cycleId || "").trim();
+  const bundleType = String(
+    options.bundleType || REPLY_TRAIN_BUNDLE_TYPE_BY_LEARNER[learnerKind] || "",
+  ).trim();
+  if (!learnerKind || !REPLY_TRAIN_BUNDLE_TYPE_BY_LEARNER[learnerKind]) {
+    throw new Error("Unsupported learner kind. Use tone, brevity, or channel-formatting.");
+  }
+  if (!cycleId) {
+    throw new Error("cycleId is required for bounded train proposals.");
+  }
+  if (!bundleType) {
+    throw new Error("bundleType is required for train proposals.");
+  }
+  const args = [
+    "--learner-kind",
+    learnerKind,
+    "--cycle-id",
+    cycleId,
+    "--bundle-type",
+    bundleType,
+    "--transport",
+    String(options.transport || "cli").trim() || "cli",
+  ];
+  if (options.accept === true) {
+    args.push("--accept");
+  }
+  return callTrinityRuntime("train-propose-policy", null, { args });
 }
 
 function getTrinityRuntimeStatusSync() {
@@ -510,6 +586,9 @@ async function callTrinityRuntime(command, payload = null, options = {}) {
   const args = ["-m", "trinity_core.cli", command, "--adapter", REPLY_TRINITY_ADAPTER];
   if (options.cycleId) {
     args.push("--cycle-id", String(options.cycleId));
+  }
+  if (Array.isArray(options.args) && options.args.length) {
+    args.push(...options.args.map((value) => String(value)));
   }
 
   return new Promise((resolve, reject) => {
@@ -755,6 +834,7 @@ module.exports = {
   allowLegacyBrain,
   buildDraftOutcomeFact,
   buildDraftOutcomeEvent,
+  buildRuntimeProvenance,
   buildShadowComparisonSummary,
   buildThreadSnapshot,
   buildTrinityDraftCandidate,
@@ -764,9 +844,11 @@ module.exports = {
   generateReply,
   getBrainRuntimeMode,
   normalizeSuggestionResult,
+  normalizeReplyCompanyId,
   normalizedEditDistance,
   persistShadowComparison,
   pythonVersionSatisfies,
+  proposeTrainingPolicy,
   readShadowComparisons,
   recordDraftOutcome,
   releaseRuntimeEnforced,

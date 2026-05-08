@@ -7,6 +7,16 @@
 * **CLI gotcha:** `gh project item-list` defaults to 30 items; use `-L 500` when verifying whether an issue is on the board.
 * **Naming:** The system name is **`{reply}`**. Do not rename it (no “Hub”, no prefixes).
 
+## Architecture Lessons
+* **Normalize channel events early:** iMessage, WhatsApp, email, and bridge traffic should be adapted into one stable internal vocabulary as close to ingestion as possible. Late normalization creates avoidable thread, send, and outcome edge cases.
+* **Treat the local store as the product:** Passive UI reads must prefer prepared local state and materialized read models over request-time reconstruction or remote dependency.
+* **Separate identity from projection:** Contacts, conversations, notes, calendar items, and draft-context artifacts may be linked, but they must not collapse into one implicit object through heuristics.
+* **Human review is a system state, not a UI afterthought:** Selection, rejection, rework, ignore, edit, and manual replacement must remain first-class lifecycle events with deterministic recorded outcomes.
+* **Decision is not transport:** Draft selection and wording may come from `{trinity}`, but send authority, channel gating, and local transport execution remain owned by `{reply}`.
+* **Provenance is product value:** `cycle_id`, `trace_ref`, `accepted_artifact_version`, and operator outcomes are not debugging extras; they are the audit trail that makes the learning loop trustworthy.
+* **Boundary erosion is the main architectural risk:** `{reply}` must not quietly grow back into the drafting brain, `{trinity}` must not absorb product transport semantics, and `{train}` must never mutate live behavior silently.
+* **Connector optimism is dangerous:** A connector can be technically impressive and still be wrong for the product. Evaluate connectors by local truth, identity stability, operator supportability, and honest source classification. See [CONNECTOR_DECISION_MEMO.md](/Users/Shared/Projects/reply/docs/CONNECTOR_DECISION_MEMO.md).
+
 ## Settings & Privacy
 * Settings are stored locally in `~/Library/Application Support/reply/settings.json` (or `REPLY_DATA_HOME/settings.json`) and are not encrypted.
 * Gmail OAuth stores a refresh token locally for best UX (local-first).

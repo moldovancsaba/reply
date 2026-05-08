@@ -25,6 +25,14 @@ The important identity rule is:
 - contact merge and unmerge are explicit user actions
 - the system must not auto-merge identities through heuristics
 
+The important modeling rules are:
+
+- normalize multi-channel message events into one stable internal vocabulary early
+- keep local materialized read models authoritative for passive UI
+- separate identity records from conversation and context projections
+- treat operator review outcomes as first-class runtime state transitions
+- keep draft decisioning separate from transport execution
+
 ## High-Level Diagram
 
 ```mermaid
@@ -52,6 +60,7 @@ graph TD
 - outbound execution
 - human approval and transport safety rules
 - structured outcome submission back to `{trinity}`
+- company, cycle, and provenance preservation across operator flows
 
 ### `{trinity}` responsibilities
 
@@ -62,6 +71,7 @@ graph TD
 - behavior policy application
 - cycle trace persistence
 - training-bundle export
+- accepted artifact provenance
 
 ### `{train}` responsibilities
 
@@ -202,6 +212,14 @@ Current compose-path boundary:
 2. `{reply}` builds a bounded `DraftOutcomeEvent`
 3. `{reply}` submits it to `/api/trinity/outcome`
 4. `{trinity}` records outcome state and can export replay/training artifacts
+
+### Architectural lessons now enforced
+
+- early normalization matters more than late adapter cleanup
+- the local database is the workspace truth; sync and AI are downstream
+- identity merge authority is separate from conversation projection authority
+- every draft lifecycle transition must be attributable through provenance and outcome state
+- accepted behavior policies may shape drafting, but they must not override send-policy or transport authority
 
 ### Generic feedback path
 
