@@ -244,6 +244,22 @@ export async function reportTrinityOutcome(outcome) {
     return res.json();
 }
 
+export async function proposeReplyPolicy({ learnerKind, cycleId, bundleType = null, accept = false, transport = 'cli' }) {
+    const res = await _request(`${API_BASE}/api/trinity/train-propose-policy`, {
+        method: 'POST',
+        headers: buildSecurityHeaders(),
+        body: JSON.stringify({
+            learnerKind,
+            cycleId,
+            bundleType,
+            accept: accept === true,
+            transport: String(transport || 'cli'),
+        }),
+        _showLoading: false,
+    });
+    return res.json();
+}
+
 export async function updateContactVisibility(handle, state) {
     const res = await _request(`${API_BASE}/api/contacts/visibility`, {
         method: 'POST',
