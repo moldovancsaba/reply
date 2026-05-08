@@ -17,6 +17,99 @@
 
 ## Latest Documentation Sync
 
+### 2026-05-07 Trinity Integration Follow-Through
+
+Product/runtime seam tightened in the current working tree for the remaining `{reply}` side of the `{reply} <-> {trinity} <-> {train}` integration checklist.
+
+Implemented changes:
+
+- `company_id` is now normalized as a mandatory stable runtime identity everywhere `{reply}` constructs Trinity payloads.
+- structured `DraftOutcomeEvent` emission now fails closed on missing required identity fields instead of sending partially formed payloads upstream.
+- reply-side draft context now preserves bounded Trinity provenance cleanly:
+  - `cycle_id`
+  - `trace_ref`
+  - `accepted_artifact_version`
+- WhatsApp send paths now sanitize and preserve the same bounded Trinity draft context contract as the other channel send routes.
+- the web draft-candidate surface now shows accepted artifact provenance plus trace reference in operator-visible runtime metadata.
+- `{reply}` now exposes one bounded product-side Train proposal trigger on `/api/trinity/train-propose-policy`, which shells into `{trinity}` `train-propose-policy --adapter reply ...` without auto-accepting proposals by default.
+- the shown-draft operator surface now exposes bounded Train proposal actions for:
+  - `tone`
+  - `brevity`
+  - `channel-formatting`
+
+Validation completed for this tranche:
+
+- `node --test /Users/Shared/Projects/reply/chat/test/brain-runtime.test.js`
+- `node --test /Users/Shared/Projects/reply/chat/test/conversation-foundation-store.test.js`
+- `node --check /Users/Shared/Projects/reply/chat/brain-runtime.js`
+- `node --check /Users/Shared/Projects/reply/chat/routes/messaging.js`
+- `node --check /Users/Shared/Projects/reply/chat/js/api.js`
+- `node --check /Users/Shared/Projects/reply/chat/js/app.js`
+- `node --check /Users/Shared/Projects/reply/chat/server.js`
+
+End-to-end product proof completed locally:
+
+- started the local hub with `make run`
+- fetched a real live conversation through `/api/conversations`
+- generated a real Trinity draft cycle from `{reply}` product code for a live WhatsApp thread
+- recorded a structured `SENT_AS_IS` outcome through `/api/trinity/outcome`
+- triggered a bounded Train proposal through `/api/trinity/train-propose-policy` with:
+  - `learnerKind=tone`
+  - `cycleId=15c1f36c-f577-4976-bafa-d0d725a105fb`
+  - `accept=false`
+- verified the returned proposal and eval paths under the Trinity runtime root
+- ran Trinity shadow fixtures with `PYTHONPATH=core uv run python -m trinity_core.cli run-shadow-fixtures --adapter reply`
+
+Open note:
+
+- the broad `npm test` suite showed a non-deterministic conversation-foundation failure once during a long run, but the affected suite passed on isolated rerun and the Trinity-integration-focused runtime tests passed after the current changes.
+
+### 2026-05-07 Architecture-Lessons Codification
+
+The repo docs now explicitly record the reusable lessons behind the current `{reply}` shape, not just the implementation details.
+
+Added to repo docs:
+
+- early normalization over late cleanup
+- local materialized state as the passive UI source of truth
+- identity separated from projection
+- human review modeled as first-class lifecycle state
+- decision separated from transport
+- provenance treated as critical product data
+- boundary erosion documented as the main long-term architecture risk
+
+Primary docs updated:
+
+- `/Users/Shared/Projects/reply/docs/LEARNINGS.md`
+- `/Users/Shared/Projects/reply/docs/ARCHITECTURE.md`
+- `/Users/Shared/Projects/reply/docs/DEPENDENCY_MAP.md`
+
+### 2026-05-07 Connector Decision Memo
+
+A dedicated connector decision memo now exists at:
+
+- `/Users/Shared/Projects/reply/docs/CONNECTOR_DECISION_MEMO.md`
+
+Use it before proposing new bridge or connector dependencies.
+
+It captures:
+
+- the difference between ingestion quality and send quality
+- connector acceptance categories:
+  - `product-acceptable`
+  - `prototype-acceptable`
+  - `research-only`
+  - `do not use`
+- current `{reply}` judgments on:
+  - Barcelona
+  - `mautrix-imessage`
+  - `mautrix-whatsapp`
+  - LinkedIn browser bridge patterns
+  - MBSync-style local mirroring
+  - vendor-unified inbox products such as Unipile
+
+The practical intent is to stop connector work from drifting into “powerful demo dependency” decisions that would damage local truth or operator supportability.
+
 ### 2026-05-03
 
 This documentation pass brings the repo docs up to date with the current runtime and product state.

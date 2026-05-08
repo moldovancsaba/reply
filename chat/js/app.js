@@ -14,7 +14,7 @@ import {
   CONVERSATION_SORT_STORAGE_KEY,
 } from './contacts.js?v=2.6.0';
 import { handleSendMessage } from './messages.js?v=2.6.0';
-import { getSettings, buildSecurityHeaders, reportDraftReplacement, reportTrinityOutcome } from './api.js?v=2.6.0';
+import { getSettings, buildSecurityHeaders, proposeReplyPolicy, reportDraftReplacement, reportTrinityOutcome } from './api.js?v=2.6.0';
 import './dashboard.js?v=2.6.0';
 import './kyc.js?v=2.6.0';
 import { applyReplyUiSettings } from './settings.js?v=2.6.0';
@@ -164,6 +164,54 @@ function resolveReplyCompanyIdFallback() {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
+function formatAcceptedArtifactVersion(raw) {
+  if (!raw || typeof raw !== 'object') return '';
+  const artifactKey = String(raw.artifact_key || raw.artifactKey || '').trim();
+  const version = String(raw.version || '').trim();
+  const sourceProject = String(raw.source_project || raw.sourceProject || '').trim();
+  const traceRef = String(raw.trace_ref || raw.traceRef || '').trim();
+  const parts = [];
+  if (artifactKey && version) {
+    parts.push(`${artifactKey}@${version}`);
+  } else if (version) {
+    parts.push(version);
+  }
+  if (sourceProject) {
+    parts.push(sourceProject);
+  }
+  if (traceRef) {
+    parts.push(traceRef);
+  }
+  return parts.join(' • ');
+}
+
+async function triggerSuggestionPolicyProposal(learnerKind) {
+  const handle = String(window.currentHandle || '').trim();
+  const draftContext = currentDraftContext(handle);
+  if (!draftContext?.cycleId) {
+    UI.showToast('No Trinity cycle is available for this conversation yet.', 'error');
+    return;
+  }
+  try {
+    const result = await proposeReplyPolicy({
+      learnerKind,
+      cycleId: draftContext.cycleId,
+    });
+    const proposalPath = String(result?.train_result?.proposal_path || '').trim();
+    const evalPath = String(result?.train_result?.eval_path || '').trim();
+    const suffix = [proposalPath, evalPath].filter(Boolean).join(' • ');
+    UI.showToast(
+      suffix
+        ? `Policy proposal created: ${suffix}`
+        : `Policy proposal created for ${learnerKind}.`,
+      'success',
+      4200,
+    );
+  } catch (error) {
+    UI.showToast(error?.message || 'Failed to propose a Trinity policy.', 'error');
+  }
+}
+
 function renderSuggestionCandidates(payload) {
   const root = document.getElementById('suggestion-candidates');
   if (!root) return;
@@ -261,6 +309,39 @@ function renderSuggestionCandidates(payload) {
     clearCachedSuggestion(window.currentHandle);
   };
   footer.appendChild(dismissBtn);
+
+  const acceptedArtifactVersion = payload?.rankedDraftSet?.accepted_artifact_version || null;
+  const traceRef = payload?.rankedDraftSet?.trace_ref || '';
+  const provenanceText = formatAcceptedArtifactVersion({
+    ...(acceptedArtifactVersion || {}),
+    trace_ref: traceRef,
+  });
+  if (provenanceText) {
+    const provenance = document.createElement('div');
+    provenance.className = 'suggestion-runtime-meta';
+    provenance.textContent = `Runtime: ${provenanceText}`;
+    footer.appendChild(provenance);
+  }
+
+  const cycleId = String(payload?.rankedDraftSet?.cycle_id || '').trim();
+  if (cycleId) {
+    const trainActions = document.createElement('div');
+    trainActions.className = 'suggestion-train-actions';
+    [
+      ['tone', 'Propose tone'],
+      ['brevity', 'Propose brevity'],
+      ['channel-formatting', 'Propose channel'],
+    ].forEach(([learnerKind, label]) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn btn-secondary btn-sm';
+      button.textContent = label;
+      button.onclick = () => triggerSuggestionPolicyProposal(learnerKind);
+      trainActions.appendChild(button);
+    });
+    footer.appendChild(trainActions);
+  }
+
   root.appendChild(footer);
 }
 

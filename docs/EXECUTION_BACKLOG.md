@@ -54,6 +54,21 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
 - `REPLY-POLICY-004` Training-bundle handoff shape
   `{reply}` needed an explicit bounded export surface for operator/runtime facts instead of passing arbitrary draft context back upstream. Fixed by adding a single outcome-fact builder in `chat/brain-runtime.js`, using it from send-finalization paths in `chat/routes/messaging.js`, and covering that only deterministic cycle/thread/candidate/final-text/send-result/timing facts cross into `{trinity}` for later bundle export.
 
+- `REPLY-POLICY-005` Company identity discipline
+  `{trinity}` now enforces company-aware runtime isolation, so `{reply}` could no longer treat `company_id` as an optional convenience field. Fixed by normalizing one stable reply runtime company identity in `chat/brain-runtime.js`, stamping it through thread snapshots and outcome builders, and keeping suggest/send/outcome flows on the same company identity unless the payload already carries that exact normalized value.
+
+- `REPLY-POLICY-006` Cycle and provenance preservation
+  `{reply}` already received `cycle_id`, `trace_ref`, and accepted artifact provenance from `{trinity}`, but product-side flows still risked dropping or under-surfacing them. Fixed by normalizing bounded provenance in `chat/brain-runtime.js`, preserving it in sanitized draft context across channel send flows, surfacing it in the draft-candidate UI metadata, and keeping the same context contract in the WhatsApp send path.
+
+- `REPLY-POLICY-007` Bounded Train trigger ownership
+  `{trinity}` can now hand off bounded policy proposals into `{train}`, but `{reply}` still needed one explicit product-side trigger instead of manual CLI hand-carrying. Fixed by adding `proposeTrainingPolicy()` in `chat/brain-runtime.js`, exposing `/api/trinity/train-propose-policy` from the hub, and wiring a protected product API surface in `chat/js/api.js` that invokes `{trinity}` `train-propose-policy --adapter reply ...` without enabling auto-accept by default.
+
+- `REPLY-POLICY-008` Operator-visible Train proposal controls
+  The product-side trigger existed at the API boundary, but operators still had no bounded way to use it from the shown-draft workflow. Fixed by exposing per-cycle Train proposal actions for `tone`, `brevity`, and `channel-formatting` in the suggestion footer, alongside accepted artifact provenance and trace visibility.
+
+- `REPLY-POLICY-009` End-to-end policy-loop proof
+  The seam was implemented but not yet proven on live Reply traffic. Fixed by validating one real product cycle end to end: live conversation selection, Trinity draft generation, structured outcome recording on `/api/trinity/outcome`, bounded Train proposal triggering on `/api/trinity/train-propose-policy`, and shadow-fixture comparison execution before broad policy trust.
+
 - `REPLY-005` `{trinity}` shadow-mode execution
   The adapter boundary existed, but the repo still needed a proven developer-only shadow lane that dual-runs `{trinity}` while keeping legacy output active for comparison. Fixed by exercising `trinity-shadow` mode in `chat/brain-runtime.js`, persisting deterministic comparison artifacts, exposing them through the existing shadow-comparison API, and covering the end-to-end shadow execution path in tests.
 

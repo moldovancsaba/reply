@@ -6,14 +6,17 @@ const {
   allowLegacyBrain,
   buildDraftOutcomeFact,
   buildDraftOutcomeEvent,
+  buildRuntimeProvenance,
   buildShadowComparisonSummary,
   buildThreadSnapshot,
   clearBrainRuntimeTestHooks,
   getBrainRuntimeMode,
   classifyRuntimeFailure,
   normalizeSuggestionResult,
+  normalizeReplyCompanyId,
   normalizedEditDistance,
   pythonVersionSatisfies,
+  proposeTrainingPolicy,
   releaseRuntimeEnforced,
   resolveTrinityPythonBin,
   resolveTrinityRuntimeRoot,
@@ -77,6 +80,44 @@ test("buildDraftOutcomeEvent applies deterministic contract defaults", () => {
   assert.equal(event.contract_version, "trinity.reply.v1alpha1");
 });
 
+test("buildDraftOutcomeEvent rejects missing required identity fields", () => {
+  assert.throws(
+    () => buildDraftOutcomeEvent({
+      disposition: "SHOWN",
+      thread_ref: "reply:email:alice@example.com",
+      channel: "email",
+    }),
+    /missing required field: cycle_id/i,
+  );
+});
+
+test("normalizeReplyCompanyId falls back to stable reply runtime company", () => {
+  const companyId = normalizeReplyCompanyId("");
+  assert.match(companyId, /^[0-9a-f-]{36}$/);
+});
+
+test("buildRuntimeProvenance normalizes accepted artifact metadata", () => {
+  const provenance = buildRuntimeProvenance({
+    trace_ref: " /tmp/trace.json ",
+    accepted_artifact_version: {
+      artifact_key: "reply_ranker_policy",
+      version: "v2",
+      source_project: "trinity",
+      accepted_at: "2026-05-07T10:00:00Z",
+    },
+  });
+
+  assert.deepEqual(provenance, {
+    traceRef: "/tmp/trace.json",
+    acceptedArtifactVersion: {
+      artifact_key: "reply_ranker_policy",
+      version: "v2",
+      source_project: "trinity",
+      accepted_at: "2026-05-07T10:00:00Z",
+    },
+  });
+});
+
 test("sanitizeDraftContext keeps only bounded runtime fact fields", () => {
   const sanitized = sanitizeDraftContext({
     companyId: "company-1",
@@ -88,7 +129,11 @@ test("sanitizeDraftContext keeps only bounded runtime fact fields", () => {
     originalDraftText: "Draft reply",
     generatedAtMs: 1234,
     traceRef: "/tmp/trace.json",
-    acceptedArtifactVersion: { version: "email.v2" },
+    acceptedArtifactVersion: {
+      artifact_key: "reply_ranker_policy",
+      version: "email.v2",
+      source_project: "trinity",
+    },
     transport: "desktop_automation",
     humanApprovalBypass: true,
     bridgeMode: "native",
@@ -99,7 +144,12 @@ test("sanitizeDraftContext keeps only bounded runtime fact fields", () => {
     cycleId: "cycle-1",
     threadRef: "reply:email:alice@example.com",
     channel: "email",
-    acceptedArtifactVersion: { version: "email.v2" },
+    acceptedArtifactVersion: {
+      artifact_key: "reply_ranker_policy",
+      version: "email.v2",
+      source_project: "trinity",
+      accepted_at: null,
+    },
     traceRef: "/tmp/trace.json",
     selectedCandidateId: "candidate-1",
     selectedDraftText: "Draft reply",
@@ -139,6 +189,36 @@ test("buildDraftOutcomeFact emits bounded operator outcome facts", () => {
   assert.equal(event.send_result, "ok");
   assert.equal(event.notes, "reply_send");
   assert.equal("transport" in event, false);
+});
+
+test("proposeTrainingPolicy shells into bounded Trinity train proposals", async () => {
+  const calls = [];
+  setBrainRuntimeTestHooks({
+    trinityRuntimeCall: async (command, payload, options) => {
+      calls.push({ command, payload, options });
+      return { status: "ok" };
+    },
+  });
+
+  await proposeTrainingPolicy({
+    learnerKind: "tone",
+    cycleId: "cycle-1",
+  });
+
+  clearBrainRuntimeTestHooks();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, "train-propose-policy");
+  assert.equal(calls[0].payload, null);
+  assert.deepEqual(calls[0].options.args, [
+    "--learner-kind",
+    "tone",
+    "--cycle-id",
+    "cycle-1",
+    "--bundle-type",
+    "tone-learning",
+    "--transport",
+    "cli",
+  ]);
 });
 
 test("buildThreadSnapshot includes canonical contract version", async () => {
@@ -314,6 +394,7 @@ test("generateReply dual-runs Trinity in shadow mode while keeping legacy active
         accepted_artifact_version: {
           artifact_key: "reply_ranker_policy",
           version: "reply_ranker_policy.v0",
+          source_project: "trinity",
         },
         drafts: [
           {

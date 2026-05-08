@@ -8,12 +8,14 @@ const path = require("path");
 const {
     allowExperimentalBrainModes,
     buildDraftOutcomeFact,
+    buildDraftOutcomeEvent,
     classifyRuntimeFailure,
     exportDraftTrace,
     generateReply,
     normalizeSuggestionResult,
     readShadowComparisons,
     recordDraftOutcome,
+    proposeTrainingPolicy,
     resolveReplyCompanyId,
     sanitizeDraftContext,
 } = require("../brain-runtime");
@@ -557,10 +559,15 @@ async function serveSuggest(req, res) {
 
         if (rankedDraftSet && Array.isArray(rankedDraftSet.drafts)) {
             const shownAt = new Date().toISOString();
+            const runtimeCompanyId = String(
+                contextMeta?.companyId
+                || rankedDraftSet?.drafts?.[0]?.company_id
+                || resolveReplyCompanyId()
+            ).trim();
             await Promise.all(
                 rankedDraftSet.drafts.map((draft) =>
                     recordDraftOutcome({
-                        company_id: draft.company_id,
+                        company_id: draft.company_id || runtimeCompanyId,
                         cycle_id: rankedDraftSet.cycle_id,
                         thread_ref: rankedDraftSet.thread_ref,
                         channel: rankedDraftSet.channel,
@@ -626,14 +633,37 @@ async function serveFeedback(req, res) {
 
 async function serveTrinityOutcome(req, res, providedOutcome = null) {
     try {
-        const outcome = providedOutcome || await readJsonBody(req);
+        const outcome = buildDraftOutcomeEvent(providedOutcome || await readJsonBody(req));
         const result = await recordDraftOutcome(outcome);
-        if (outcome?.cycle_id) {
+        if (outcome.cycle_id) {
             await exportDraftTrace(outcome.cycle_id).catch(() => null);
         }
         writeJson(res, 200, result);
     } catch (e) {
         writeJson(res, 400, { error: "Failed to record Trinity outcome" });
+    }
+}
+
+async function serveTrinityTrainProposePolicy(req, res) {
+    try {
+        const json = await readJsonBody(req);
+        const learnerKind = String(json?.learnerKind || json?.learner_kind || "").trim().toLowerCase();
+        const cycleId = String(json?.cycleId || json?.cycle_id || "").trim();
+        const accept = json?.accept === true;
+        if (!learnerKind || !cycleId) {
+            writeJson(res, 400, { error: "Missing learnerKind or cycleId" });
+            return;
+        }
+        const result = await proposeTrainingPolicy({
+            learnerKind,
+            cycleId,
+            bundleType: json?.bundleType || json?.bundle_type || null,
+            transport: json?.transport || "cli",
+            accept,
+        });
+        writeJson(res, 200, result);
+    } catch (e) {
+        writeJson(res, 400, { error: e.message || "Failed to trigger Trinity train proposal" });
     }
 }
 
@@ -847,7 +877,7 @@ async function serveSendWhatsApp(req, res) {
         const textRaw = (payload?.text || "").toString();
         const conversationId = payload?.conversationId || null;
         const dryRun = Boolean(payload?.dryRun);
-        const draftContext = payload?.draftContext || null;
+        const draftContext = sanitizeDraftContext(payload?.draftContext || null, { expectedChannel: "whatsapp" });
 
         if (!recipientRaw || !textRaw) {
             writeJson(res, 400, { error: "Missing recipient or text" });
@@ -1008,6 +1038,7 @@ module.exports = {
     serveRefineReply,
     serveFeedback,
     serveTrinityOutcome,
+    serveTrinityTrainProposePolicy,
     serveSendMessage,
     serveSendWhatsApp,
     serveTrinityShadowComparisons,
