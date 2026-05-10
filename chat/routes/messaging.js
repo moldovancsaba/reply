@@ -5,6 +5,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const draftLearningStore = require("../draft-learning-store.js");
 const {
     allowExperimentalBrainModes,
     buildThreadSnapshot,
@@ -833,6 +834,23 @@ async function serveTrinityRegisterDocument(req, res) {
 async function serveTrinityMemoryEvent(req, res) {
     try {
         const payload = await readJsonBody(req);
+        if (String(payload?.event_kind || "").trim().toLowerCase() === "draft_edited") {
+            await draftLearningStore.appendLearningEvent({
+                event_kind: "draft_revision",
+                source_ref: String(payload.source_ref || `draft-edited:${Date.now()}`).trim(),
+                cycle_id: String(payload.cycle_id || payload?.metadata?.cycle_id || "").trim() || null,
+                candidate_id: String(payload.candidate_id || payload?.metadata?.candidate_id || "").trim() || null,
+                thread_ref: payload.thread_ref || null,
+                channel: payload.channel || null,
+                contact_handle: payload.contact_handle || null,
+                runtime_mode: "local",
+                suggestion_text: payload?.metadata?.original_draft_text || null,
+                final_text: payload.content_text || null,
+                reason: "draft_edited",
+                metadata: payload.metadata || {},
+                created_at: payload.occurred_at || new Date().toISOString(),
+            }).catch(() => null);
+        }
         const result = await queueMemoryEvent(payload);
         writeJson(res, 200, result);
     } catch (e) {
@@ -862,6 +880,40 @@ async function serveFeedback(req, res) {
         entry.timestamp = new Date().toISOString();
         const logPath = path.join(__dirname, "../../feedback.jsonl");
         fs.appendFileSync(logPath, JSON.stringify(entry) + "\n");
+        const type = String(entry.type || "feedback").trim().toLowerCase();
+        const normalizedReason = String(entry.reason || "").trim() || null;
+        if (type === "draft_replaced") {
+            await draftLearningStore.appendLearningEvent({
+                event_kind: "draft_revision",
+                source_ref: `draft-replaced:${String(entry.handle || "").trim()}:${entry.timestamp}`,
+                contact_handle: String(entry.handle || "").trim() || null,
+                runtime_mode: "local",
+                suggestion_text: entry.original_text || null,
+                final_text: null,
+                reason: normalizedReason,
+                metadata: {
+                    source_product: "reply",
+                    raw_entry: entry,
+                },
+                created_at: entry.timestamp,
+            }).catch(() => null);
+        } else {
+            await draftLearningStore.appendLearningEvent({
+                event_kind: "draft_feedback",
+                source_ref: `draft-feedback:${type}:${entry.timestamp}:${String(entry.handle || "").trim() || "anon"}`,
+                contact_handle: String(entry.handle || "").trim() || null,
+                runtime_mode: "local",
+                suggestion_text: entry.suggestion || entry.original_text || null,
+                rating: entry.rating == null ? null : Number(entry.rating),
+                reason: normalizedReason,
+                metadata: {
+                    source_product: "reply",
+                    feedback_type: type,
+                    raw_entry: entry,
+                },
+                created_at: entry.timestamp,
+            }).catch(() => null);
+        }
         writeJson(res, 200, { status: "ok" });
     } catch (e) {
         writeJson(res, 400, { error: "Failed to save feedback" });

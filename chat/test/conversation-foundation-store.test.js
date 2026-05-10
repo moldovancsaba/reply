@@ -9,14 +9,23 @@ const path = require("path");
 function freshFoundationStore(tempDir) {
   process.env.REPLY_DATA_HOME = tempDir;
   process.env.REPLY_CONTACTS_DB_PATH = path.join(tempDir, "contacts.db");
+  process.env.REPLY_DISABLE_TRINITY_OUTBOX_DRAIN = "1";
   const appPathsPath = require.resolve("../app-paths.js");
   const foundationStorePath = require.resolve("../conversation-foundation-store.js");
   const messageStorePath = require.resolve("../message-store.js");
   const contactStorePath = require.resolve("../contact-store.js");
+  const preparedContextStorePath = require.resolve("../prepared-context-store.js");
+  const brainRuntimePath = require.resolve("../brain-runtime.js");
+  const draftLearningStorePath = require.resolve("../draft-learning-store.js");
+  const outboxPath = require.resolve("../trinity-event-outbox.js");
   delete require.cache[appPathsPath];
   delete require.cache[foundationStorePath];
   delete require.cache[messageStorePath];
   delete require.cache[contactStorePath];
+  delete require.cache[preparedContextStorePath];
+  delete require.cache[brainRuntimePath];
+  delete require.cache[draftLearningStorePath];
+  delete require.cache[outboxPath];
   return {
     foundationStore: require("../conversation-foundation-store.js"),
     messageStore: require("../message-store.js"),
@@ -45,6 +54,7 @@ test("conversation foundation schema tables are initialized in chat.db", { concu
     await contactStore.close?.().catch(() => null);
     delete process.env.REPLY_DATA_HOME;
     delete process.env.REPLY_CONTACTS_DB_PATH;
+    delete process.env.REPLY_DISABLE_TRINITY_OUTBOX_DRAIN;
   });
 });
 
@@ -107,6 +117,7 @@ test("conversation foundation keeps channel capabilities snapshot-local even whe
     await contactStore.close?.().catch(() => null);
     delete process.env.REPLY_DATA_HOME;
     delete process.env.REPLY_CONTACTS_DB_PATH;
+    delete process.env.REPLY_DISABLE_TRINITY_OUTBOX_DRAIN;
   });
 });
 
@@ -191,6 +202,7 @@ test("conversation foundation creates new snapshots when email participant membe
     await contactStore.close?.().catch(() => null);
     delete process.env.REPLY_DATA_HOME;
     delete process.env.REPLY_CONTACTS_DB_PATH;
+    delete process.env.REPLY_DISABLE_TRINITY_OUTBOX_DRAIN;
   });
 });
 
@@ -312,5 +324,6 @@ test("conversation foundation merges stale duplicate same-membership snapshots f
     await contactStore.close?.().catch(() => null);
     delete process.env.REPLY_DATA_HOME;
     delete process.env.REPLY_CONTACTS_DB_PATH;
+    delete process.env.REPLY_DISABLE_TRINITY_OUTBOX_DRAIN;
   });
 });
