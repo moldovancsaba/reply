@@ -9,7 +9,7 @@
 *   **Storage:** Local LanceDB instance at `~/Library/Application Support/reply/lancedb` (or configured via `REPLY_LANCEDB_URI` / `REPLY_KNOWLEDGE_DB_PATH`).
 *   **Schema:** `{ id, source, path, text, vector }`.
 *   **Search:** **Hybrid Search** (Vector Similarity + Full-Text Keyword Search) for maximum accuracy.
-*   **Annotation (Ollama, local):** After text lands in LanceDB, `chat/annotation-agent.js` can attach **`tags`**, a one-line **`summary`**, and **`facts`** (JSON) to each row (`is_annotated`, `annotation_*` columns). **`assembleReplyContext`** (`context-engine.js`) injects that metadata into the LLM “facts” block; **`/api/suggest-reply`** also returns each snippet with optional `annotation_summary`, `annotation_tags`, and `annotation_facts` when the row is annotated (reply#37).
+*   **Annotation (Ollama, local):** After text lands in LanceDB, `chat/annotation-agent.js` can attach **`tags`**, a one-line **`summary`**, and **`facts`** (JSON) to each row (`is_annotated`, `annotation_*` columns). **`assembleReplyContext`** (`context-engine.js`) injects that metadata into the LLM “facts” block; **`/api/suggest`** returns snippet payloads that can include `annotation_summary`, `annotation_tags`, and `annotation_facts` when the row is annotated.
 
 ---
 

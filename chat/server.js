@@ -132,10 +132,19 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/api/conversations") return messagingRoutes.serveConversations(req, res, url);
   if (pathname === "/api/thread") return messagingRoutes.serveThread(req, res, url);
   if (pathname === "/api/suggest") return messagingRoutes.serveSuggest(req, res);
+  if (pathname === "/api/trinity/prepared-draft") return messagingRoutes.serveTrinityPreparedDraft(req, res, url);
   if (pathname === "/api/refine-reply" || pathname === "/api/refine") return messagingRoutes.serveRefineReply(req, res);
   if (pathname === "/api/feedback") return messagingRoutes.serveFeedback(req, res);
   if (pathname === "/api/feedback/log") return messagingRoutes.serveFeedback(req, res);
   if (pathname === "/api/trinity/outcome") return messagingRoutes.serveTrinityOutcome(req, res);
+  if (pathname === "/api/trinity/register-document") {
+    return auth({ route: pathname, action: "trinity-register-document", requireHumanApproval: true })
+      && messagingRoutes.serveTrinityRegisterDocument(req, res);
+  }
+  if (pathname === "/api/trinity/memory-event") {
+    return auth({ route: pathname, action: "trinity-memory-event", requireHumanApproval: false })
+      && messagingRoutes.serveTrinityMemoryEvent(req, res);
+  }
   if (pathname === "/api/trinity/train-propose-policy") {
     return auth({ route: pathname, action: "trinity-train-propose-policy", requireHumanApproval: true })
       && messagingRoutes.serveTrinityTrainProposePolicy(req, res);

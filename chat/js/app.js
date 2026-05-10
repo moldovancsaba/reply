@@ -14,7 +14,7 @@ import {
   CONVERSATION_SORT_STORAGE_KEY,
 } from './contacts.js?v=2.6.0';
 import { handleSendMessage } from './messages.js?v=2.6.0';
-import { getSettings, buildSecurityHeaders, proposeReplyPolicy, reportDraftReplacement, reportTrinityOutcome } from './api.js?v=2.6.0';
+import { fetchPreparedDraft, getSettings, buildSecurityHeaders, proposeReplyPolicy, reportDraftReplacement, reportTrinityMemoryEvent, reportTrinityOutcome } from './api.js?v=2.6.0';
 import './dashboard.js?v=2.6.0';
 import './kyc.js?v=2.6.0';
 import { applyReplyUiSettings } from './settings.js?v=2.6.0';
@@ -29,6 +29,8 @@ const SUGGESTION_CACHE_VERSION = 'v1';
 const suggestionJobs = new Map();
 const composerDraftCache = new Map();
 const autoAppliedSuggestionDrafts = new Map();
+const composerEditTelemetryTimers = new Map();
+const lastReportedComposerEditText = new Map();
 let activeContactDraftPollInFlight = false;
 const ACTIVE_CONTACT_DRAFT_POLL_MS = 12000;
 
@@ -107,6 +109,7 @@ window.openChannelSettings = function openChannelSettings(channel) {
 };
 window.clearCachedSuggestion = clearCachedSuggestion;
 window.getCurrentDraftContext = currentDraftContext;
+window.hydratePreparedDraftForHandle = hydratePreparedDraftForHandle;
 
 applyIconFallback(document);
 
@@ -322,6 +325,17 @@ function renderSuggestionCandidates(payload) {
     provenance.textContent = `Runtime: ${provenanceText}`;
     footer.appendChild(provenance);
   }
+  const preparedMeta = payload?.preparedDraftMeta || null;
+  if (preparedMeta?.preparedAt || preparedMeta?.expiresAt) {
+    const freshness = document.createElement('div');
+    freshness.className = 'suggestion-runtime-meta';
+    const parts = [];
+    if (preparedMeta.preparedAt) parts.push(`prepared ${preparedMeta.preparedAt}`);
+    if (preparedMeta.expiresAt) parts.push(`expires ${preparedMeta.expiresAt}`);
+    if (preparedMeta.stale === true) parts.push('stale');
+    freshness.textContent = `Prepared: ${parts.join(' • ')}`;
+    footer.appendChild(freshness);
+  }
 
   const cycleId = String(payload?.rankedDraftSet?.cycle_id || '').trim();
   if (cycleId) {
@@ -404,6 +418,7 @@ function applySuggestionCandidate(handle, candidateId, options = {}) {
   renderSuggestionCandidates(readCachedSuggestion(handle));
 
   if (options.reportSelection) {
+    lastReportedComposerEditText.delete(String(handle || ''));
     reportSuggestionOutcome(handle, selected.candidate_id, 'SELECTED', {
       original_draft_text: selected.draft_text || '',
       notes: 'ui_select_candidate',
@@ -415,6 +430,50 @@ function applySuggestionCandidate(handle, candidateId, options = {}) {
 function getActiveComposerText() {
   const chatInput = document.getElementById('chat-input');
   return normalizeDraftText(chatInput?.value || '');
+}
+
+function scheduleComposerDraftEditTelemetry(handle, nextText) {
+  const normalizedHandle = String(handle || '').trim();
+  if (!normalizedHandle) return;
+  if (composerEditTelemetryTimers.has(normalizedHandle)) {
+    clearTimeout(composerEditTelemetryTimers.get(normalizedHandle));
+  }
+  const timer = window.setTimeout(() => {
+    composerEditTelemetryTimers.delete(normalizedHandle);
+    emitComposerDraftEditTelemetry(normalizedHandle, nextText).catch((error) => {
+      console.warn('[reply] composer draft edit telemetry failed:', error?.message || error);
+    });
+  }, 900);
+  composerEditTelemetryTimers.set(normalizedHandle, timer);
+}
+
+async function emitComposerDraftEditTelemetry(handle, nextText) {
+  const draftContext = currentDraftContext(handle);
+  if (!draftContext?.cycleId || !draftContext?.selectedCandidateId) return;
+  const editedText = normalizeDraftText(nextText);
+  const originalText = normalizeDraftText(draftContext.selectedDraftText || draftContext.originalDraftText || '');
+  if (!editedText || !originalText || editedText === originalText) return;
+  const priorReported = normalizeDraftText(lastReportedComposerEditText.get(handle) || '');
+  if (priorReported === editedText) return;
+  lastReportedComposerEditText.set(handle, editedText);
+  await reportTrinityMemoryEvent({
+    company_id: draftContext.companyId || resolveReplyCompanyIdFallback(),
+    event_kind: 'draft_edited',
+    source_ref: `draft-edited:${draftContext.cycleId}:${draftContext.selectedCandidateId}:${Date.now()}`,
+    occurred_at: new Date().toISOString(),
+    thread_ref: draftContext.threadRef,
+    channel: draftContext.channel,
+    contact_handle: String(handle || '').trim() || null,
+    content_text: editedText,
+    metadata: {
+      source_product: 'reply',
+      cycle_id: draftContext.cycleId,
+      candidate_id: draftContext.selectedCandidateId,
+      original_draft_text: originalText,
+      edited_length: editedText.length,
+      original_length: originalText.length,
+    },
+  });
 }
 
 function canAutoApplySuggestionDraft(handle, nextDraft, options = {}) {
@@ -582,6 +641,32 @@ function applyCachedSuggestionForHandle(handle, options = {}) {
   renderSuggestionCandidates(payload);
   refreshSuggestButtonState();
   return canSeed;
+}
+
+async function hydratePreparedDraftForHandle(handle, options = {}) {
+  const normalizedHandle = String(handle || '').trim();
+  if (!normalizedHandle) return false;
+  try {
+    const payload = await fetchPreparedDraft(normalizedHandle, { refresh: options.refresh === true });
+    if (!payload?.suggestion || !payload?.rankedDraftSet) return false;
+    writeCachedSuggestion(normalizedHandle, {
+      suggestion: payload.suggestion,
+      explanation: payload.explanation || 'Prepared Trinity draft is ready.',
+      runtimeMode: payload.runtimeMode || 'trinity-prepared',
+      rankedDraftSet: payload.rankedDraftSet,
+      selectedCandidateId: payload.rankedDraftSet?.drafts?.[0]?.candidate_id || '',
+      generatedAtMs: Date.now(),
+      preparedDraftMeta: {
+        preparedAt: payload?.preparedDraftSet?.prepared_at || null,
+        expiresAt: payload?.preparedDraftSet?.expires_at || null,
+        stale: payload?.stale === true,
+      },
+    });
+    return applyCachedSuggestionForHandle(normalizedHandle, { force: false });
+  } catch (error) {
+    console.warn('[{reply}] Prepared draft hydrate failed:', error?.message || error);
+    return false;
+  }
 }
 
 async function requestBackgroundSuggestion(handle, existingDraft = '') {
@@ -800,6 +885,7 @@ function setupEventListeners() {
     chatInput.addEventListener('input', () => {
       autoResize();
       cacheComposerDraft(window.currentHandle, chatInput.value);
+      scheduleComposerDraftEditTelemetry(window.currentHandle, chatInput.value);
     });
     // Initial sizing
     autoResize();

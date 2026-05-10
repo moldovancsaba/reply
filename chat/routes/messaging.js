@@ -7,12 +7,16 @@ const fs = require("fs");
 const path = require("path");
 const {
     allowExperimentalBrainModes,
+    buildThreadSnapshot,
     buildDraftOutcomeFact,
     buildDraftOutcomeEvent,
     classifyRuntimeFailure,
     exportDraftTrace,
     generateReply,
+    getPreparedDraft,
     normalizeSuggestionResult,
+    queueDocumentRegistration,
+    queueMemoryEvent,
     readShadowComparisons,
     recordDraftOutcome,
     proposeTrainingPolicy,
@@ -65,6 +69,58 @@ function normalizeConversationSort(raw) {
 
 /** Stable list for clients (reply#15); lexicographic order so snapshots stay deterministic. */
 const AVAILABLE_CONVERSATION_SORT_MODES = [...CONVERSATION_SORT_MODES].sort();
+const REPLY_ENABLE_TRINITY_REQUEST_TELEMETRY = String(process.env.REPLY_ENABLE_TRINITY_REQUEST_TELEMETRY || "").trim() === "1";
+
+async function resolveLatestInboundContext(handle) {
+    const normalizedHandle = String(handle || "").trim();
+    const handles = contactStore.getAllHandles(normalizedHandle);
+    const { getHistory } = require("../vector-store");
+    const prefixes = handles.flatMap((value) => pathPrefixesForHandle(value));
+    const historyBatches = await Promise.all(prefixes.map((prefix) => getHistory(prefix)));
+    const docs = historyBatches.flat();
+    const picked = pickLatestInboundFromVectorDocs(docs);
+    let message = String(picked?.text || "").trim();
+    let inferredChannel = String(
+        picked?.channel || inferChannelFromHandle(normalizedHandle) || "other"
+    ).trim().toLowerCase();
+
+    if (!message) {
+        const dbRow = await messageStore.getLatestContextForHandles(handles, { limit: 120 });
+        message = String(dbRow?.text || "").trim();
+        const dbPath = String(dbRow?.path || "");
+        inferredChannel = (
+            dbPath.startsWith("imessage://") ? "imessage" :
+            dbPath.startsWith("whatsapp://") ? "whatsapp" :
+            dbPath.startsWith("mailto:") ? "email" :
+            dbPath.startsWith("linkedin://") ? "linkedin" :
+            inferChannelFromHandle(dbRow?.handle || normalizedHandle) || "other"
+        ).toLowerCase();
+    }
+
+    if (!message) {
+        const thread = await messageStore.getMessagesForHandles(handles, { limit: 120, offset: 0, order: "newest" });
+        const rows = Array.isArray(thread?.rows) ? thread.rows : [];
+        const inboundRow = rows.find((row) => !row?.is_from_me && String(row?.text || "").trim());
+        const fallbackRow = inboundRow || rows.find((row) => String(row?.text || "").trim()) || null;
+        if (fallbackRow) {
+            message = String(fallbackRow.text || "").trim();
+            const pathValue = String(fallbackRow.path || "");
+            inferredChannel = (
+                pathValue.startsWith("imessage://") ? "imessage" :
+                pathValue.startsWith("whatsapp://") ? "whatsapp" :
+                pathValue.startsWith("mailto:") ? "email" :
+                pathValue.startsWith("linkedin://") ? "linkedin" :
+                inferChannelFromHandle(fallbackRow.handle || normalizedHandle) || "other"
+            ).toLowerCase();
+        }
+    }
+
+    return {
+        handles,
+        message,
+        inferredChannel,
+    };
+}
 
 function normalizeChannelList(values = []) {
     return Array.from(new Set(
@@ -233,6 +289,67 @@ function resolveConversationTimestamps(row) {
         firstTimestamp,
         previewDate: latestTimestamp ? new Date(latestTimestamp).toISOString() : null,
     };
+}
+
+async function queueThreadViewedEvent({
+    companyId,
+    handle,
+    threadRef,
+    channel,
+    latestText = "",
+    metadata = {},
+}) {
+    if (!REPLY_ENABLE_TRINITY_REQUEST_TELEMETRY) return { status: "skipped", reason: "disabled" };
+    await queueMemoryEvent({
+        company_id: companyId,
+        event_kind: "thread_viewed",
+        source_ref: `thread-view:${threadRef}:${Date.now()}`,
+        occurred_at: new Date().toISOString(),
+        thread_ref: threadRef,
+        channel,
+        contact_handle: handle,
+        content_text: latestText,
+        metadata: {
+            source_product: "reply",
+            ...metadata,
+        },
+    }).catch(() => null);
+}
+
+async function queueDraftShownEvents({
+    companyId,
+    threadRef,
+    channel,
+    handle,
+    cycleId,
+    drafts = [],
+    sourceTag,
+}) {
+    if (!REPLY_ENABLE_TRINITY_REQUEST_TELEMETRY) return { status: "skipped", reason: "disabled" };
+    const shownAt = new Date().toISOString();
+    await Promise.all(
+        (Array.isArray(drafts) ? drafts : [])
+            .filter((draft) => draft && draft.candidate_id)
+            .map((draft) =>
+                queueMemoryEvent({
+                    company_id: draft.company_id || companyId,
+                    event_kind: "draft_shown",
+                    source_ref: `draft-shown:${cycleId}:${draft.candidate_id}`,
+                    occurred_at: shownAt,
+                    thread_ref: threadRef,
+                    channel,
+                    contact_handle: handle,
+                    content_text: draft.draft_text || null,
+                    metadata: {
+                        source_product: "reply",
+                        cycle_id: cycleId,
+                        candidate_id: draft.candidate_id,
+                        rank: draft.rank || null,
+                        source_tag: sourceTag || "unknown",
+                    },
+                }).catch(() => null)
+            )
+    );
 }
 const { writeJson, readJsonBody, normalizeErrorText, parseJsonSafe } = require("../utils/server-utils");
 const {
@@ -476,6 +593,22 @@ async function serveThread(req, res, url) {
             };
         }
 
+        const latestVisible = allMessages[allMessages.length - 1] || allMessages[0] || null;
+        await queueThreadViewedEvent({
+            companyId: resolveReplyCompanyId(),
+            handle,
+            threadRef: `reply:${String(latestVisible?.channel || foundationResult?.defaultChannel || inferChannelFromHandle(handle) || "other").toLowerCase()}:${handle}`,
+            channel: String(latestVisible?.channel || foundationResult?.defaultChannel || inferChannelFromHandle(handle) || "other").toLowerCase(),
+            latestText: String(latestVisible?.text || "").trim(),
+            metadata: {
+                message_count: allMessages.length,
+                offset,
+                limit,
+                order: orderParam === "oldest" ? "oldest" : "newest",
+                conversation_id: foundationResult?.conversationId || null,
+            },
+        });
+
         writeJson(res, 200, {
             messages: allMessages,
             hasMore: Number(foundationResult?.total || allMessages.length) > offset + allMessages.length,
@@ -513,29 +646,9 @@ async function serveSuggest(req, res) {
         let message = providedMessage;
         let inferredChannel = "other";
         if (!message) {
-            const handles = contactStore.getAllHandles(handle);
-            const { getHistory } = require("../vector-store");
-            const prefixes = handles.flatMap((h) => pathPrefixesForHandle(h));
-            const historyBatches = await Promise.all(prefixes.map((p) => getHistory(p)));
-            const docs = historyBatches.flat();
-            const picked = pickLatestInboundFromVectorDocs(docs);
-            message = picked?.text?.trim() || "";
-            inferredChannel = (picked?.channel || inferChannelFromHandle(handle) || "other")
-                .toString()
-                .toLowerCase();
-
-            if (!message) {
-                const dbRow = await messageStore.getLatestContextForHandles(handles, { limit: 120 });
-                message = String(dbRow?.text || '').trim();
-                const dbPath = String(dbRow?.path || '');
-                inferredChannel = (
-                    dbPath.startsWith('imessage://') ? 'imessage' :
-                    dbPath.startsWith('whatsapp://') ? 'whatsapp' :
-                    dbPath.startsWith('mailto:') ? 'email' :
-                    dbPath.startsWith('linkedin://') ? 'linkedin' :
-                    inferChannelFromHandle(dbRow?.handle || handle) || 'other'
-                ).toLowerCase();
-            }
+            const resolved = await resolveLatestInboundContext(handle);
+            message = resolved.message;
+            inferredChannel = resolved.inferredChannel;
         }
 
         if (!message) {
@@ -557,7 +670,7 @@ async function serveSuggest(req, res) {
         const contextMeta = suggestionResult.contextMeta;
         const rankedDraftSet = suggestionResult.rankedDraftSet || null;
 
-        if (rankedDraftSet && Array.isArray(rankedDraftSet.drafts)) {
+        if (REPLY_ENABLE_TRINITY_REQUEST_TELEMETRY && rankedDraftSet && Array.isArray(rankedDraftSet.drafts)) {
             const shownAt = new Date().toISOString();
             const runtimeCompanyId = String(
                 contextMeta?.companyId
@@ -582,6 +695,15 @@ async function serveSuggest(req, res) {
                     })
                 )
             );
+            await queueDraftShownEvents({
+                companyId: runtimeCompanyId,
+                threadRef: rankedDraftSet.thread_ref,
+                channel: rankedDraftSet.channel,
+                handle,
+                cycleId: rankedDraftSet.cycle_id,
+                drafts: rankedDraftSet.drafts,
+                sourceTag: "api_suggest",
+            });
         }
 
         writeJson(res, 200, {
@@ -600,6 +722,121 @@ async function serveSuggest(req, res) {
             hint: failure.hint,
             retriable: failure.retriable,
         });
+    }
+}
+
+async function serveTrinityPreparedDraft(req, res, url) {
+    try {
+        const handle = String(url.searchParams.get("handle") || "").trim();
+        const forceRefresh = String(url.searchParams.get("refresh") || "").trim() === "1";
+        if (!handle) {
+            writeJson(res, 400, { error: "Missing handle" });
+            return;
+        }
+        if (!contactStore.isInboxEligible(handle)) {
+            writeJson(res, 404, { error: "Conversation is unavailable in {reply}." });
+            return;
+        }
+
+        const resolved = await resolveLatestInboundContext(handle);
+        let message = resolved.message;
+        let inferredChannel = resolved.inferredChannel;
+        if (!message) {
+            writeJson(res, 422, {
+                error: "No inbound contact message found in index for this handle.",
+                code: "no_inbound_context",
+            });
+            return;
+        }
+
+        const snippets = await getSnippets(message, 3);
+        const threadSnapshot = await buildThreadSnapshot(message, snippets, handle);
+        await queueThreadViewedEvent({
+            companyId: threadSnapshot.company_id,
+            handle,
+            threadRef: threadSnapshot.thread_ref,
+            channel: inferredChannel || threadSnapshot.channel,
+            latestText: message,
+            metadata: {
+                requested_at: threadSnapshot.requested_at,
+                source_tag: "prepared_draft",
+            },
+        });
+
+        let prepared = await getPreparedDraft({
+            companyId: threadSnapshot.company_id,
+            threadRef: threadSnapshot.thread_ref,
+        }).catch(() => ({ status: "missing" }));
+        let fallbackSuggestionResult = null;
+        if (forceRefresh || prepared.status !== "ok" || prepared.stale) {
+            fallbackSuggestionResult = normalizeSuggestionResult(
+                await generateReply(message, snippets, handle)
+            );
+            prepared = await getPreparedDraft({
+                companyId: threadSnapshot.company_id,
+                threadRef: threadSnapshot.thread_ref,
+            }).catch(() => ({ status: "missing" }));
+        }
+
+        const preparedDraftSet = prepared?.prepared_draft_set || null;
+        const rankedDraftSet = preparedDraftSet?.ranked_draft_set || fallbackSuggestionResult?.rankedDraftSet || null;
+        const top = Array.isArray(rankedDraftSet?.drafts) ? rankedDraftSet.drafts[0] : null;
+        if (!top) {
+            writeJson(res, 404, {
+                error: "No prepared Trinity draft is available for this conversation yet.",
+                status: prepared?.status || "missing",
+            });
+            return;
+        }
+
+        await queueDraftShownEvents({
+            companyId: threadSnapshot.company_id,
+            threadRef: rankedDraftSet.thread_ref,
+            channel: rankedDraftSet.channel,
+            handle,
+            cycleId: rankedDraftSet.cycle_id,
+            drafts: rankedDraftSet.drafts,
+            sourceTag: "prepared_draft",
+        });
+
+        writeJson(res, 200, {
+            status: prepared.status === "ok" ? prepared.status : "generated",
+            stale: prepared.stale === true,
+            suggestion: String(top.draft_text || "").trim(),
+            explanation: String(top.rationale || "").trim(),
+            runtimeMode: "trinity-prepared",
+            rankedDraftSet,
+            preparedDraftSet,
+        });
+    } catch (e) {
+        console.error("[reply] prepared draft failed:", e);
+        const failure = classifyRuntimeFailure(e, { fallbackMessage: "Prepared draft failed" });
+        writeJson(res, failure.status, {
+            error: failure.error,
+            code: failure.code,
+            hint: failure.hint,
+            retriable: failure.retriable,
+        });
+    }
+}
+
+async function serveTrinityRegisterDocument(req, res) {
+    try {
+        const payload = await readJsonBody(req);
+        const result = await queueDocumentRegistration(payload);
+        writeJson(res, 200, result);
+    } catch (e) {
+        writeJson(res, 400, { error: e.message || "Failed to register document with Trinity" });
+    }
+}
+
+async function serveTrinityMemoryEvent(req, res) {
+    try {
+        const payload = await readJsonBody(req);
+        const result = await queueMemoryEvent(payload);
+        writeJson(res, 200, result);
+    } catch (e) {
+        writeJson(res, 400, { error: e.message || "Failed to queue Trinity memory event" });
     }
 }
 
@@ -637,6 +874,24 @@ async function serveTrinityOutcome(req, res, providedOutcome = null) {
         const result = await recordDraftOutcome(outcome);
         if (outcome.cycle_id) {
             await exportDraftTrace(outcome.cycle_id).catch(() => null);
+        }
+        if (String(outcome.disposition || "").trim().toUpperCase() === "SELECTED" && outcome.candidate_id) {
+            await queueMemoryEvent({
+                company_id: outcome.company_id,
+                event_kind: "draft_selected",
+                source_ref: `draft-selected:${outcome.cycle_id}:${outcome.candidate_id}`,
+                occurred_at: outcome.occurred_at,
+                thread_ref: outcome.thread_ref,
+                channel: outcome.channel,
+                contact_handle: null,
+                content_text: outcome.original_draft_text || null,
+                metadata: {
+                    source_product: "reply",
+                    cycle_id: outcome.cycle_id,
+                    candidate_id: outcome.candidate_id,
+                    notes: outcome.notes || null,
+                },
+            }).catch(() => null);
         }
         writeJson(res, 200, result);
     } catch (e) {
@@ -1008,6 +1263,21 @@ async function finalizeDraftSendOutcome(draftContext, finalText, sendResult) {
     }
     await recordDraftOutcome(outcomeFact);
     await exportDraftTrace(cycleId).catch(() => null);
+    await queueMemoryEvent({
+        company_id: sanitizedDraftContext.companyId || resolveReplyCompanyId(),
+        event_kind: "outbound_message_recorded",
+        source_ref: `${channel}:${threadRef}:${Date.now()}`,
+        occurred_at: new Date().toISOString(),
+        thread_ref: threadRef,
+        channel,
+        contact_handle: threadRef.split(":").slice(2).join(":") || null,
+        content_text: normalizedFinal,
+        metadata: {
+            send_result: sendResult || "ok",
+            cycle_id: cycleId,
+            candidate_id: selectedCandidateId || null,
+        },
+    }).catch(() => null);
 }
 
 function normalizedEditDistance(left, right) {
@@ -1037,6 +1307,9 @@ module.exports = {
     serveSuggest,
     serveRefineReply,
     serveFeedback,
+    serveTrinityPreparedDraft,
+    serveTrinityRegisterDocument,
+    serveTrinityMemoryEvent,
     serveTrinityOutcome,
     serveTrinityTrainProposePolicy,
     serveSendMessage,

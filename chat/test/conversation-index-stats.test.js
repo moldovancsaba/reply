@@ -8,10 +8,14 @@ const path = require("path");
 
 function freshMessageStore(tempDir) {
   process.env.REPLY_DATA_HOME = tempDir;
+  process.env.REPLY_CONTACTS_DB_PATH = path.join(tempDir, "contacts.db");
+  process.env.REPLY_DISABLE_TRINITY_OUTBOX_DRAIN = "1";
   const appPathsPath = require.resolve("../app-paths.js");
   const messageStorePath = require.resolve("../message-store.js");
+  const contactStorePath = require.resolve("../contact-store.js");
   delete require.cache[appPathsPath];
   delete require.cache[messageStorePath];
+  delete require.cache[contactStorePath];
   return require("../message-store.js");
 }
 
@@ -57,8 +61,11 @@ test("conversation index stats come from the local materialized index", async (t
   assert.equal(stats.byChannel.whatsapp, 1);
   assert.equal(stats.byChannel.email, 1);
 
-  t.after(() => {
+  t.after(async () => {
+    await require("../contact-store.js").close?.().catch(() => null);
     delete process.env.REPLY_DATA_HOME;
+    delete process.env.REPLY_CONTACTS_DB_PATH;
+    delete process.env.REPLY_DISABLE_TRINITY_OUTBOX_DRAIN;
     try {
       fs.rmSync(tempDir, { recursive: true, force: true });
     } catch {

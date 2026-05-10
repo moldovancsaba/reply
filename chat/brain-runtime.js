@@ -3,9 +3,11 @@ const fs = require("fs");
 const path = require("path");
 const { spawn, spawnSync } = require("child_process");
 
+const { getDraftRuntimeMode } = require("./ai-runtime-config.js");
 const contactStore = require("./contact-store.js");
 const messageStore = require("./message-store.js");
 const preparedContextStore = require("./prepared-context-store.js");
+const trinityEventOutbox = require("./trinity-event-outbox.js");
 const { ensureDataHome, dataPath } = require("./app-paths.js");
 const { pathPrefixesForHandle, inferChannelFromHandle, extractDateFromText, stripMessagePrefix } = require("./utils/chat-utils.js");
 
@@ -17,8 +19,23 @@ const REPLY_TRAIN_BUNDLE_TYPE_BY_LEARNER = {
   brevity: "brevity-learning",
   "channel-formatting": "channel-formatting-learning",
 };
+const LEGACY_TRINITY_COMMAND_ALIASES = {
+  suggest: "reply-suggest",
+  "record-outcome": "reply-record-outcome",
+  "export-trace": "reply-export-trace",
+  "export-training-bundle": "reply-export-training-bundle",
+  "run-shadow-fixtures": "reply-run-shadow-fixtures",
+  "policy-accept": "reply-policy-accept",
+  "policy-promote": "reply-policy-promote",
+  "policy-rollback": "reply-policy-rollback",
+  "policy-status": "reply-policy-status",
+  "show-config": "reply-show-config",
+  "runtime-status": "reply-runtime-status",
+  "write-config": "reply-write-config",
+};
 const brainRuntimeTestHooks = {
   legacyGenerateReply: null,
+  localGenerateReply: null,
   trinityRuntimeCall: null,
   persistShadowComparison: null,
 };
@@ -47,11 +64,21 @@ function loadLegacyReplyEngine() {
   return require("./reply-engine.js");
 }
 
+function loadLocalBrainRouter() {
+  if (typeof brainRuntimeTestHooks.localGenerateReply === "function") {
+    return { generateReplyWithLocalBrain: brainRuntimeTestHooks.localGenerateReply };
+  }
+  return require("./local-brain-router.js");
+}
+
 function getBrainRuntimeMode() {
-  const raw = String(process.env.REPLY_BRAIN_RUNTIME || "trinity").trim().toLowerCase() || "trinity";
+  const raw = String(process.env.REPLY_BRAIN_RUNTIME || "").trim().toLowerCase();
+  if (raw === "local") return "local";
   if (raw === "trinity-shadow") {
     return allowExperimentalBrainModes() ? "trinity-shadow" : "trinity";
   }
+  if (raw === "trinity") return "trinity";
+  if (getDraftRuntimeMode() === "ollama") return "local";
   return "trinity";
 }
 
@@ -151,6 +178,49 @@ function buildDraftOutcomeEvent(outcome = {}) {
   }
 
   return event;
+}
+
+function buildMemoryEvent(event = {}) {
+  const payload = event && typeof event === "object" ? event : {};
+  const built = {
+    company_id: normalizeReplyCompanyId(payload.company_id),
+    event_kind: String(payload.event_kind || "").trim(),
+    source_ref: String(payload.source_ref || "").trim(),
+    occurred_at: String(payload.occurred_at || new Date().toISOString()).trim(),
+    thread_ref: String(payload.thread_ref || "").trim() || null,
+    channel: String(payload.channel || "").trim().toLowerCase() || null,
+    contact_handle: String(payload.contact_handle || "").trim() || null,
+    content_text: payload.content_text == null ? null : String(payload.content_text),
+    metadata: payload.metadata && typeof payload.metadata === "object" ? payload.metadata : {},
+    contract_version: String(payload.contract_version || REPLY_TRINITY_CONTRACT_VERSION).trim(),
+  };
+  for (const field of ["company_id", "event_kind", "source_ref", "occurred_at"]) {
+    if (!String(built[field] || "").trim()) {
+      throw new Error(`MemoryEvent missing required field: ${field}`);
+    }
+  }
+  return built;
+}
+
+function buildDocumentRegistration(document = {}) {
+  const payload = document && typeof document === "object" ? document : {};
+  const built = {
+    company_id: normalizeReplyCompanyId(payload.company_id),
+    document_ref: String(payload.document_ref || "").trim(),
+    source: String(payload.source || "").trim(),
+    path: String(payload.path || "").trim(),
+    title: payload.title == null ? null : String(payload.title),
+    content_text: payload.content_text == null ? "" : String(payload.content_text),
+    occurred_at: String(payload.occurred_at || new Date().toISOString()).trim(),
+    metadata: payload.metadata && typeof payload.metadata === "object" ? payload.metadata : {},
+    contract_version: String(payload.contract_version || REPLY_TRINITY_CONTRACT_VERSION).trim(),
+  };
+  for (const field of ["company_id", "document_ref", "source", "path"]) {
+    if (!String(built[field] || "").trim()) {
+      throw new Error(`DocumentRegistration missing required field: ${field}`);
+    }
+  }
+  return built;
 }
 
 function classifyRuntimeFailure(error, options = {}) {
@@ -392,6 +462,15 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
   const runtimeMode = getBrainRuntimeMode();
   const shadowMode = trinityShadowEnabled();
 
+  if (runtimeMode === "local") {
+    return loadLocalBrainRouter().generateReplyWithLocalBrain(
+      message,
+      contextSnippets,
+      recipient,
+      goldenExamples,
+    );
+  }
+
   if (shadowMode) {
     const legacyResult = await loadLegacyReplyEngine().generateReply(
       message,
@@ -546,6 +625,51 @@ async function proposeTrainingPolicy(options = {}) {
   return callTrinityRuntime("train-propose-policy", null, { args });
 }
 
+async function queueMemoryEvent(event) {
+  const normalized = buildMemoryEvent(event);
+  const row = await trinityEventOutbox.enqueueEvent("memory_event", normalized);
+  await drainTrinityEventOutbox(10).catch(() => null);
+  return { status: "queued", outbox_id: row.id, payload: normalized };
+}
+
+async function queueDocumentRegistration(document) {
+  const normalized = buildDocumentRegistration(document);
+  const row = await trinityEventOutbox.enqueueEvent("document_registration", normalized);
+  await drainTrinityEventOutbox(10).catch(() => null);
+  return { status: "queued", outbox_id: row.id, payload: normalized };
+}
+
+async function drainTrinityEventOutbox(limit = 25) {
+  const pending = await trinityEventOutbox.listPendingEvents(limit);
+  const results = [];
+  for (const item of pending) {
+    try {
+      if (item.eventType === "memory_event") {
+        await callTrinityRuntime("ingest-memory-event", item.payload);
+      } else if (item.eventType === "document_registration") {
+        await callTrinityRuntime("register-document", item.payload);
+      } else {
+        throw new Error(`Unsupported Trinity outbox event type: ${item.eventType}`);
+      }
+      await trinityEventOutbox.markDelivered(item.id);
+      results.push({ id: item.id, status: "delivered" });
+    } catch (error) {
+      await trinityEventOutbox.markFailed(item.id, String(error?.message || error));
+      results.push({ id: item.id, status: "failed", error: String(error?.message || error) });
+    }
+  }
+  return { processed: results.length, results };
+}
+
+async function getPreparedDraft({ companyId, threadRef }) {
+  if (!companyId || !threadRef) {
+    throw new Error("companyId and threadRef are required.");
+  }
+  return callTrinityRuntime("get-prepared-draft", null, {
+    args: ["--company-id", String(companyId), "--thread-ref", String(threadRef)],
+  });
+}
+
 function getTrinityRuntimeStatusSync() {
   const pythonBin = resolveTrinityPythonBin();
   const trinityRepoRoot = resolveTrinityRuntimeRoot();
@@ -564,6 +688,24 @@ function getTrinityRuntimeStatusSync() {
   );
   if (result.status !== 0) {
     const detail = String(result.stderr || result.stdout || "").trim();
+    if (detail.includes("invalid choice: 'runtime-status'")) {
+      const legacy = spawnSync(
+        pythonBin,
+        ["-m", "trinity_core.cli", "reply-runtime-status", "--adapter", REPLY_TRINITY_ADAPTER],
+        {
+          cwd: trinityRepoRoot,
+          env,
+          encoding: "utf-8",
+        },
+      );
+      if (legacy.status === 0) {
+        try {
+          return JSON.parse(legacy.stdout || "{}");
+        } catch (error) {
+          throw new Error(`Failed to parse {trinity} runtime status: ${error.message}`);
+        }
+      }
+    }
     throw new Error(detail || "{trinity} runtime status check failed.");
   }
   try {
@@ -583,7 +725,11 @@ async function callTrinityRuntime(command, payload = null, options = {}) {
     ...process.env,
     PYTHONPATH: buildPythonPath(trinityRepoRoot),
   };
-  const args = ["-m", "trinity_core.cli", command, "--adapter", REPLY_TRINITY_ADAPTER];
+  const useLegacyCommandShape = command.startsWith("reply-");
+  const args = ["-m", "trinity_core.cli", command];
+  if (!useLegacyCommandShape) {
+    args.push("--adapter", REPLY_TRINITY_ADAPTER);
+  }
   if (options.cycleId) {
     args.push("--cycle-id", String(options.cycleId));
   }
@@ -610,7 +756,20 @@ async function callTrinityRuntime(command, payload = null, options = {}) {
     child.on("error", reject);
     child.on("close", (code) => {
       if (code !== 0) {
-        reject(new Error((stderr || stdout || `Trinity runtime exited with code ${code}`).trim()));
+        const detail = (stderr || stdout || `Trinity runtime exited with code ${code}`).trim();
+        const legacyCommand = LEGACY_TRINITY_COMMAND_ALIASES[command];
+        if (
+          !options.disableLegacyFallback
+          && legacyCommand
+          && detail.includes(`invalid choice: '${command}'`)
+        ) {
+          callTrinityRuntime(legacyCommand, payload, {
+            ...options,
+            disableLegacyFallback: true,
+          }).then(resolve).catch(reject);
+          return;
+        }
+        reject(new Error(detail));
         return;
       }
       try {
@@ -674,6 +833,10 @@ function resolveTrinityRuntimeRoot() {
   if (configuredRuntime) return configuredRuntime;
   const configured = String(process.env.TRINITY_REPO_ROOT || "").trim();
   if (configured) return configured;
+  const sharedRepo = "/Users/Shared/Projects/trinity";
+  if (fs.existsSync(path.join(sharedRepo, "core", "trinity_core", "cli.py"))) {
+    return sharedRepo;
+  }
   const bundled = path.resolve(__dirname, "..", "trinity-runtime");
   if (fs.existsSync(path.join(bundled, "core", "trinity_core", "cli.py"))) {
     return bundled;
@@ -821,6 +984,7 @@ function tokenOverlapRatio(left, right) {
 
 function setBrainRuntimeTestHooks(hooks = {}) {
   brainRuntimeTestHooks.legacyGenerateReply = hooks.legacyGenerateReply || null;
+  brainRuntimeTestHooks.localGenerateReply = hooks.localGenerateReply || null;
   brainRuntimeTestHooks.trinityRuntimeCall = hooks.trinityRuntimeCall || null;
   brainRuntimeTestHooks.persistShadowComparison = hooks.persistShadowComparison || null;
 }
@@ -832,23 +996,29 @@ function clearBrainRuntimeTestHooks() {
 module.exports = {
   allowExperimentalBrainModes,
   allowLegacyBrain,
+  buildDocumentRegistration,
   buildDraftOutcomeFact,
   buildDraftOutcomeEvent,
+  buildMemoryEvent,
   buildRuntimeProvenance,
   buildShadowComparisonSummary,
   buildThreadSnapshot,
   buildTrinityDraftCandidate,
   clearBrainRuntimeTestHooks,
   classifyRuntimeFailure,
+  drainTrinityEventOutbox,
   exportDraftTrace,
   generateReply,
   getBrainRuntimeMode,
+  getPreparedDraft,
   normalizeSuggestionResult,
   normalizeReplyCompanyId,
   normalizedEditDistance,
   persistShadowComparison,
   pythonVersionSatisfies,
   proposeTrainingPolicy,
+  queueDocumentRegistration,
+  queueMemoryEvent,
   readShadowComparisons,
   recordDraftOutcome,
   releaseRuntimeEnforced,

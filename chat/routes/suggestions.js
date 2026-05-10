@@ -33,7 +33,8 @@ async function readJsonBody(req) {
 }
 
 /**
- * Maps a prepared snippet artifact to the JSON shape returned on `/api/suggest-reply` under `snippets`.
+ * Maps a prepared snippet artifact to the JSON shape returned under `snippets`
+ * by the legacy compatibility suggest-reply route.
  * When `is_annotated` is true, includes summary/tags/facts for UI or clients (reply#37).
  * @param {object} doc - Prepared local snippet payload.
  * @returns {{ source: string, path: string, text: string, is_annotated: boolean, annotation_summary?: string, annotation_tags?: string[], annotation_facts?: string[] }}
@@ -143,8 +144,9 @@ async function serveSuggest(req, res) {
 }
 
 /**
- * API Endpoint: /api/suggest-reply
+ * Legacy compatibility API endpoint: /api/suggest-reply
  * Generates a reply suggestion based on the user's message and local knowledge snippets.
+ * The current primary product drafting route is `/api/suggest`.
  */
 async function serveSuggestReply(req, res) {
   if (req.method !== "POST") {

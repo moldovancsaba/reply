@@ -112,7 +112,7 @@ Current paths:
 
 Current behavior:
 
-- `/api/suggest` and `/api/suggest-reply` fetch snippets and examples live from LanceDB
+- `/api/suggest` fetches snippets and examples live from LanceDB
 - `/api/suggest` may scan vector history to find the latest inbound context before falling back to SQLite
 
 Why this only partially violates the rule:
