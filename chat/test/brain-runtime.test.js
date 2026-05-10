@@ -517,4 +517,6 @@ test("generateReply uses reply-local router in local mode", async (t) => {
   assert.equal(result.runtimeMode, "local");
   assert.equal(result.contextMeta.runtime, "local");
   assert.equal(result.contextMeta.selectedStage, "writer");
+  assert.equal(String(result.rankedDraftSet?.cycle_id || "").startsWith("reply-local:"), true);
+  assert.equal(result.rankedDraftSet?.drafts?.[0]?.draft_text, "Local draft for alice@example.com");
 });
