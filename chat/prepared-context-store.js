@@ -145,7 +145,8 @@ async function rebuildDraftContextSnapshots(handles = null) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
-    for (const row of handlesRows) {
+    const rows = Array.from(handlesRows);
+    for (const row of rows) {
       const handle = String(row.handle || "").trim();
       if (!handle) continue;
       const latestInbound = await getDb(db, `
@@ -203,15 +204,21 @@ async function rebuildDraftContextSnapshots(handles = null) {
           score: 1,
         }));
 
-      insertStmt.run(
-        handle,
-        latestInbound ? String(latestInbound.text || "") : "",
-        latestInbound?.timestamp || null,
-        latestInbound ? channelFromDoc({ path: latestInbound.path, source: latestInbound.source }) : null,
-        JSON.stringify(normalizedThread),
-        JSON.stringify(snippetCandidates),
-        new Date().toISOString()
-      );
+      await new Promise((resolve, reject) => {
+        insertStmt.run(
+          handle,
+          latestInbound ? String(latestInbound.text || "") : "",
+          latestInbound?.timestamp || null,
+          latestInbound ? channelFromDoc({ path: latestInbound.path, source: latestInbound.source }) : null,
+          JSON.stringify(normalizedThread),
+          JSON.stringify(snippetCandidates),
+          new Date().toISOString(),
+          (err) => {
+            if (err) return reject(err);
+            resolve();
+          }
+        );
+      });
     }
 
     await new Promise((resolve, reject) => {

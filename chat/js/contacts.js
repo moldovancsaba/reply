@@ -489,6 +489,9 @@ export async function selectContact(handle) {
         if (typeof window.applyCachedSuggestionForHandle === 'function') {
             window.applyCachedSuggestionForHandle(handle, { force: false });
         }
+        if (typeof window.hydratePreparedDraftForHandle === 'function') {
+            void window.hydratePreparedDraftForHandle(handle, { refresh: false });
+        }
         if (typeof window.refreshSuggestButtonState === 'function') {
             window.refreshSuggestButtonState();
         }

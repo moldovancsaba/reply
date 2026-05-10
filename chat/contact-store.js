@@ -2,7 +2,12 @@ const sqlite3 = require('sqlite3').verbose();
 const fs = require('fs');
 const path = require('path');
 const { ensureDataHome, dataPath } = require('./app-paths.js');
-const { contactHasUsableConversationIdentity, hasUsableConversationHandle } = require('./utils/chat-utils.js');
+const {
+    contactHasUsableConversationIdentity,
+    hasUsableConversationHandle,
+    normalizeEmail,
+    normalizePhone,
+} = require('./utils/chat-utils.js');
 const { normalizeStoredDisplayName } = require('./utils/contact-labels.js');
 
 ensureDataHome();
@@ -12,6 +17,34 @@ const CONTACT_STORE_REFRESH_TTL_MS = Math.max(
     parseInt(process.env.REPLY_CONTACTS_REFRESH_TTL_MS || '5000', 10) || 5000
 );
 const CONTACT_VISIBILITY_STATES = new Set(["active", "archived", "removed", "blocked"]);
+
+function normalizedLookupKeys(raw) {
+    const value = String(raw || '').trim();
+    if (!value) return [];
+    const keys = new Set([value.toLowerCase()]);
+    const normalizedEmail = normalizeEmail(value);
+    if (normalizedEmail) {
+        keys.add(normalizedEmail.toLowerCase());
+    }
+    const normalizedPhone = normalizePhone(value);
+    if (normalizedPhone) {
+        keys.add(normalizedPhone.toLowerCase());
+        keys.add(normalizedPhone.replace(/^\+/, '').toLowerCase());
+    }
+    if (/^\+\d+$/.test(value)) {
+        keys.add(value.replace(/^\+/, '').toLowerCase());
+    }
+    if (/^\d+$/.test(value)) {
+        keys.add(`+${value}`.toLowerCase());
+    }
+    return Array.from(keys);
+}
+
+function addNormalizedHandleVariants(handles, raw) {
+    for (const value of normalizedLookupKeys(raw)) {
+        if (value) handles.add(value);
+    }
+}
 
 function normalizeVisibilityState(value, fallback = "active") {
     const state = String(value || "").trim().toLowerCase();
@@ -122,11 +155,13 @@ class ContactStore {
         if (!this._db) return;
         const db = this._db;
         this._db = null;
-        try {
-            db.close(() => { /* best-effort teardown for tests */ });
-        } catch {
-            // Ignore teardown failures during test/module shutdown.
-        }
+        await new Promise((resolve) => {
+            try {
+                db.close(() => resolve());
+            } catch {
+                resolve();
+            }
+        });
     }
 
     get contacts() {
@@ -220,9 +255,10 @@ class ContactStore {
                             const contactsByHandle = new Map();
                             const contactsByLookup = new Map();
                             const addLookup = (raw, canonical) => {
-                                const key = String(raw || '').trim().toLowerCase();
-                                if (!key || contactsByLookup.has(key)) return;
-                                contactsByLookup.set(key, canonical);
+                                for (const key of normalizedLookupKeys(raw)) {
+                                    if (!key || contactsByLookup.has(key)) continue;
+                                    contactsByLookup.set(key, canonical);
+                                }
                             };
 
                             for (const contact of hydrated) {
@@ -360,7 +396,14 @@ class ContactStore {
                         this._db.run("ROLLBACK");
                         return reject(err);
                     }
-                    this.refresh().then(resolve).catch(reject);
+                    this.refresh()
+                        .then(async () => {
+                            await emitRuntimeMemoryEventsForContacts(contacts).catch((error) => {
+                                console.warn("[contact-store] failed to emit Trinity contact events:", error.message);
+                            });
+                            resolve();
+                        })
+                        .catch(reject);
                 });
             });
         });
@@ -378,9 +421,11 @@ class ContactStore {
 
     /** Match on `handle` column only (no alias resolution). Used by merge API (reply#19). */
     getContactRowByHandle(handle) {
-        const search = String(handle || "").trim().toLowerCase();
-        if (!search) return null;
-        return this._contactsByHandle.get(search) || null;
+        for (const search of normalizedLookupKeys(handle)) {
+            const matched = this._contactsByHandle.get(search);
+            if (matched) return matched;
+        }
+        return null;
     }
 
     /**
@@ -409,7 +454,17 @@ class ContactStore {
                 [aliasContactId],
                 (err) => {
                     if (err) return reject(err);
-                    this.refresh().then(resolve).catch(reject);
+                    this.refresh()
+                        .then(async () => {
+                            const refreshed = this.findById(aliasContactId);
+                            if (refreshed) {
+                                await emitRuntimeMemoryEventsForContacts([refreshed]).catch((error) => {
+                                    console.warn("[contact-store] failed to emit Trinity contact events:", error.message);
+                                });
+                            }
+                            resolve();
+                        })
+                        .catch(reject);
                 }
             );
         });
@@ -417,8 +472,11 @@ class ContactStore {
 
     findContact(identifier) {
         if (!identifier) return null;
-        const search = String(identifier).toLowerCase().trim();
-        return this._contactsByLookup.get(search) || null;
+        for (const search of normalizedLookupKeys(identifier)) {
+            const matched = this._contactsByLookup.get(search);
+            if (matched) return matched;
+        }
+        return null;
     }
 
     isVisibleInInbox(identifier) {
@@ -624,18 +682,18 @@ class ContactStore {
 
     getAllHandles(identifier) {
         const contact = this.findContact(identifier);
-        if (!contact) return [identifier];
+        if (!contact) return normalizedLookupKeys(identifier);
         const handles = new Set();
-        if (contact.handle) handles.add(contact.handle);
+        addNormalizedHandleVariants(handles, contact.handle);
         if (contact.channels) {
             for (const type in contact.channels) {
                 const values = contact.channels[type];
-                if (Array.isArray(values)) values.forEach(h => handles.add(h));
+                if (Array.isArray(values)) values.forEach((h) => addNormalizedHandleVariants(handles, h));
             }
         }
         if (contact.verifiedChannels && typeof contact.verifiedChannels === "object") {
             for (const [addr, ts] of Object.entries(contact.verifiedChannels)) {
-                if (ts && addr) handles.add(addr);
+                if (ts && addr) addNormalizedHandleVariants(handles, addr);
             }
         }
         return Array.from(handles);
@@ -785,7 +843,17 @@ class ContactStore {
                 } else {
                     this._db.run("COMMIT", (err) => {
                         if (err) return reject(err);
-                        this.refresh().then(resolve).catch(reject);
+                        this.refresh()
+                            .then(async () => {
+                                const touched = [this.findById(targetId), this.findById(sourceId)].filter(Boolean);
+                                if (touched.length) {
+                                    await emitRuntimeMemoryEventsForContacts(touched).catch((error) => {
+                                        console.warn("[contact-store] failed to emit Trinity contact events:", error.message);
+                                    });
+                                }
+                                resolve();
+                            })
+                            .catch(reject);
                     });
                 }
             });
@@ -841,6 +909,78 @@ class ContactStore {
         });
         return stats;
     }
+}
+
+async function emitRuntimeMemoryEventsForContacts(contacts) {
+    const normalized = buildRuntimeMemoryEventsForContacts(contacts);
+    if (!normalized.length) return;
+    const trinityEventOutbox = require("./trinity-event-outbox.js");
+    const { buildMemoryEvent, drainTrinityEventOutbox } = require("./brain-runtime.js");
+    for (const event of normalized) {
+        await trinityEventOutbox.enqueueEvent("memory_event", buildMemoryEvent(event));
+    }
+    if (!trinityOutboxDrainEnabled()) return;
+    drainTrinityEventOutbox(Math.max(10, normalized.length)).catch((err) => {
+        console.warn("[contact-store] Trinity outbox drain failed:", err.message);
+    });
+}
+
+function buildRuntimeMemoryEventsForContacts(contacts) {
+    const companyId = resolveReplyRuntimeCompanyId();
+    return (Array.isArray(contacts) ? contacts : [])
+        .filter((contact) => contact && typeof contact === "object")
+        .map((contact, index) => {
+            const occurredAt = new Date().toISOString();
+            return {
+                company_id: companyId,
+                event_kind: "contact_upserted",
+                source_ref: `contact:${String(contact.id || contact.handle || "unknown").trim()}:${Date.now()}:${index}`,
+                occurred_at: occurredAt,
+                thread_ref: null,
+                channel: String(contact.lastChannel || "").trim().toLowerCase() || null,
+                contact_handle: String(contact.handle || "").trim() || null,
+                content_text: null,
+                metadata: {
+                    contact_id: String(contact.id || "").trim() || null,
+                    display_name: String(contact.displayName || "").trim() || null,
+                    status: String(contact.status || "").trim() || null,
+                    last_channel: String(contact.lastChannel || "").trim() || null,
+                    last_contacted: contact.lastContacted || null,
+                    visibility_state: normalizeVisibilityState(contact.visibility_state || contact.visibilityState || "active"),
+                    primary_contact_id: String(contact.primary_contact_id || "").trim() || null,
+                    channels: contact.channels && typeof contact.channels === "object" ? contact.channels : {},
+                    verified_channels: contact.verifiedChannels && typeof contact.verifiedChannels === "object"
+                        ? contact.verifiedChannels
+                        : {},
+                },
+            };
+        });
+}
+
+function resolveReplyRuntimeCompanyId() {
+    const explicit = String(process.env.REPLY_RUNTIME_COMPANY_ID || "").trim();
+    if (explicit) return explicit;
+    return uuidFromStableText("reply.local.runtime");
+}
+
+function trinityOutboxDrainEnabled() {
+    const raw = String(process.env.REPLY_DISABLE_TRINITY_OUTBOX_DRAIN || "").trim().toLowerCase();
+    return !(raw === "1" || raw === "true" || raw === "yes");
+}
+
+function uuidFromStableText(text) {
+    const crypto = require("crypto");
+    const hash = crypto.createHash("sha1").update(String(text || "")).digest("hex");
+    const chars = hash.slice(0, 32).split("");
+    chars[12] = "5";
+    chars[16] = ((parseInt(chars[16], 16) & 0x3) | 0x8).toString(16);
+    return [
+        chars.slice(0, 8).join(""),
+        chars.slice(8, 12).join(""),
+        chars.slice(12, 16).join(""),
+        chars.slice(16, 20).join(""),
+        chars.slice(20, 32).join(""),
+    ].join("-");
 }
 
 module.exports = new ContactStore();

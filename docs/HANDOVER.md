@@ -17,6 +17,94 @@
 
 ## Latest Documentation Sync
 
+### 2026-05-09 Contract Docs Normalized
+
+The product-side live-brain docs were normalized to match implemented code instead of mixing current and target-state contracts.
+
+Updated docs:
+
+- `/Users/Shared/Projects/reply/docs/LIVE_BRAIN_PRODUCT_ARCHITECTURE.md`
+- `/Users/Shared/Projects/reply/docs/INGESTION.md`
+- `/Users/Shared/Projects/reply/docs/THIN_UI_LOCAL_PRECOMPUTE_AUDIT.md`
+
+What changed:
+
+- the live-brain architecture doc now clearly separates current implemented product/runtime behavior from target expansion
+- the API section now matches real routes:
+  - `/api/suggest`
+  - `/api/trinity/outcome`
+  - `/api/trinity/memory-event`
+  - `/api/trinity/prepared-draft`
+  - `/api/trinity/register-document`
+  - `/api/trinity/train-propose-policy`
+- stale references to `/api/trinity/suggest`, `/api/trinity/refresh-prepared-draft`, and `/api/suggest-reply` were removed from current-contract docs
+- event vocabulary is now documented using the actual runtime event kinds instead of conceptual dot-style names
+
+### 2026-05-09 Live-Brain Product Slice Implemented
+
+The first product-side live-brain slice is now implemented in working code instead of only architecture docs.
+
+Implemented changes:
+
+- added durable Trinity event outbox at `/Users/Shared/Projects/reply/chat/trinity-event-outbox.js`
+- `{reply}` can now enqueue normalized runtime memory events and document-registration payloads from `chat/brain-runtime.js`
+- the product can now ask `{trinity}` for a prepared draft on one thread through `GET /api/trinity/prepared-draft`
+- compose hydration now prefers runtime-owned prepared drafts when a contact/thread is opened
+- advanced draft metadata now surfaces prepared-draft freshness timestamps in the existing candidate UI
+- send-finalization now also emits one bounded `outbound_message_recorded` memory event back into `{trinity}`
+- canonical store paths now emit runtime events system-wide:
+  - `chat/message-store.js` emits normalized inbound/outbound message events for persisted conversation rows
+  - `chat/contact-store.js` emits normalized `contact_upserted` events for committed contact mutations
+- canonical document ingestion now also participates:
+  - `chat/vector-store.js` emits normalized Trinity document registrations for non-conversation document sources instead of relying only on the explicit registration route
+- runtime-surface visibility events are now broader:
+  - `chat/routes/messaging.js` emits `thread_viewed` on canonical thread reads
+  - `chat/routes/messaging.js` emits `draft_shown` for returned Trinity candidates on both direct suggest and prepared-draft paths
+  - `chat/routes/messaging.js` emits `draft_selected` when `/api/trinity/outcome` records a `SELECTED` operator action
+- a bounded memory-event API now exists at `/api/trinity/memory-event` for product-side runtime telemetry that is not naturally owned by a store write
+- composer telemetry is now deeper:
+  - `chat/js/app.js` emits debounced `draft_edited` runtime events when the operator materially edits an active Trinity-backed draft
+- document lifecycle coverage is broader:
+  - `chat/vector-store.js` re-registers documents after annotation updates
+  - `chat/vector-store.js` emits `document_deleted` when a document is removed through the canonical delete path
+- store-owned event emission now enqueues durably first and treats outbox drain as opportunistic, with `REPLY_DISABLE_TRINITY_OUTBOX_DRAIN=1` available for isolated test/maintenance runs
+
+Validation completed for this tranche:
+
+- `node --check /Users/Shared/Projects/reply/chat/trinity-event-outbox.js`
+- `node --check /Users/Shared/Projects/reply/chat/brain-runtime.js`
+- `node --check /Users/Shared/Projects/reply/chat/routes/messaging.js`
+- `node --check /Users/Shared/Projects/reply/chat/server.js`
+- `node --test /Users/Shared/Projects/reply/chat/test/brain-runtime.test.js`
+- `node --test --test-name-pattern "saving contacts emits normalized Trinity contact-upsert memory events" /Users/Shared/Projects/reply/chat/test/contact-store-inbox-eligibility.test.js`
+- `node --test --test-name-pattern "saving canonical messages emits normalized Trinity memory events for inbound and outbound rows" /Users/Shared/Projects/reply/chat/test/conversation-index-materialization.test.js`
+- `node --test /Users/Shared/Projects/reply/chat/test/vector-store-runtime-events.test.js`
+
+Important current limit:
+
+- inbound-message, contact-update, and document-update emission is now structurally supported, but only the first live event path is wired by default today; broader source coverage should extend the same outbox contract instead of inventing a second path
+
+### 2026-05-08 Live-Brain Architecture Allocation
+
+The repo now contains a concrete product-side live-brain architecture instead of only the narrower Trinity integration checklist.
+
+Added to repo docs:
+
+- `/Users/Shared/Projects/reply/docs/LIVE_BRAIN_PRODUCT_ARCHITECTURE.md`
+
+What it clarifies:
+
+- `{reply}` remains the product shell, not the canonical brain
+- `{reply}` must add a durable runtime event outbox for message, contact, thread, and document updates
+- compose should consume runtime-owned prepared drafts from `{trinity}`
+- long-term memory ownership belongs in `{trinity}`, while send execution and contact merge authority remain in `{reply}`
+
+Practical next lanes now made explicit:
+
+- add the Trinity memory-event outbox
+- add prepared-draft consumption and stale-state handling in compose
+- add document registration into `{trinity}`
+
 ### 2026-05-07 Trinity Integration Follow-Through
 
 Product/runtime seam tightened in the current working tree for the remaining `{reply}` side of the `{reply} <-> {trinity} <-> {train}` integration checklist.
@@ -172,6 +260,7 @@ Validated during this sync:
 2. treat conversation visibility as message-backed first and contact-enriched second in future indexing work
 3. keep raw substrate errors out of normal operator UI surfaces
 4. keep `{reply}` policy and transport authority separate from `{trinity}` learned behavior
+5. do not implement long-term runtime memory or prepared-draft ownership as product-local heuristics; follow `docs/LIVE_BRAIN_PRODUCT_ARCHITECTURE.md`
 
 ## 2026-05-05 Native App Doc Handoff
 

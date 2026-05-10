@@ -4,8 +4,10 @@ const assert = require("node:assert/strict");
 const {
   allowExperimentalBrainModes,
   allowLegacyBrain,
+  buildDocumentRegistration,
   buildDraftOutcomeFact,
   buildDraftOutcomeEvent,
+  buildMemoryEvent,
   buildRuntimeProvenance,
   buildShadowComparisonSummary,
   buildThreadSnapshot,
@@ -89,6 +91,48 @@ test("buildDraftOutcomeEvent rejects missing required identity fields", () => {
     }),
     /missing required field: cycle_id/i,
   );
+});
+
+test("buildMemoryEvent applies runtime defaults and required normalization", () => {
+  const event = buildMemoryEvent({
+    event_kind: " inbound_message_recorded ",
+    source_ref: " imessage:thread-1:42 ",
+    thread_ref: " reply:imessage:alice ",
+    channel: " iMessage ",
+    contact_handle: " alice ",
+    content_text: "Need the update today.",
+    metadata: { display_name: "Alice" },
+  });
+
+  assert.equal(event.company_id.length > 0, true);
+  assert.equal(event.event_kind, "inbound_message_recorded");
+  assert.equal(event.source_ref, "imessage:thread-1:42");
+  assert.equal(event.thread_ref, "reply:imessage:alice");
+  assert.equal(event.channel, "imessage");
+  assert.equal(event.contact_handle, "alice");
+  assert.equal(event.content_text, "Need the update today.");
+  assert.deepEqual(event.metadata, { display_name: "Alice" });
+  assert.equal(event.contract_version, "trinity.reply.v1alpha1");
+});
+
+test("buildDocumentRegistration enforces the document contract boundary", () => {
+  const registration = buildDocumentRegistration({
+    document_ref: " doc-1 ",
+    source: " notes ",
+    path: " /tmp/doc.md ",
+    title: "Operator note",
+    content_text: "Key fact",
+    metadata: { thread_ref: "reply:email:alice@example.com" },
+  });
+
+  assert.equal(registration.company_id.length > 0, true);
+  assert.equal(registration.document_ref, "doc-1");
+  assert.equal(registration.source, "notes");
+  assert.equal(registration.path, "/tmp/doc.md");
+  assert.equal(registration.title, "Operator note");
+  assert.equal(registration.content_text, "Key fact");
+  assert.deepEqual(registration.metadata, { thread_ref: "reply:email:alice@example.com" });
+  assert.equal(registration.contract_version, "trinity.reply.v1alpha1");
 });
 
 test("normalizeReplyCompanyId falls back to stable reply runtime company", () => {
@@ -233,6 +277,7 @@ test("getBrainRuntimeMode defaults to trinity", (t) => {
   const originalMode = process.env.REPLY_BRAIN_RUNTIME;
   const originalLegacyFlag = process.env.REPLY_ALLOW_LEGACY_BRAIN;
   const originalRelease = process.env.REPLY_RELEASE_MODE;
+  const originalDraftRuntime = process.env.REPLY_SETTINGS_PATH;
   t.after(() => {
     if (originalMode == null) delete process.env.REPLY_BRAIN_RUNTIME;
     else process.env.REPLY_BRAIN_RUNTIME = originalMode;
@@ -240,12 +285,26 @@ test("getBrainRuntimeMode defaults to trinity", (t) => {
     else process.env.REPLY_ALLOW_LEGACY_BRAIN = originalLegacyFlag;
     if (originalRelease == null) delete process.env.REPLY_RELEASE_MODE;
     else process.env.REPLY_RELEASE_MODE = originalRelease;
+    if (originalDraftRuntime == null) delete process.env.REPLY_SETTINGS_PATH;
+    else process.env.REPLY_SETTINGS_PATH = originalDraftRuntime;
   });
 
   delete process.env.REPLY_BRAIN_RUNTIME;
   delete process.env.REPLY_ALLOW_LEGACY_BRAIN;
   delete process.env.REPLY_RELEASE_MODE;
+  process.env.REPLY_SETTINGS_PATH = "/tmp/reply-brain-runtime-test-defaults.json";
   assert.equal(getBrainRuntimeMode(), "trinity");
+});
+
+test("getBrainRuntimeMode honors explicit local runtime", (t) => {
+  const originalMode = process.env.REPLY_BRAIN_RUNTIME;
+  t.after(() => {
+    if (originalMode == null) delete process.env.REPLY_BRAIN_RUNTIME;
+    else process.env.REPLY_BRAIN_RUNTIME = originalMode;
+  });
+
+  process.env.REPLY_BRAIN_RUNTIME = "local";
+  assert.equal(getBrainRuntimeMode(), "local");
 });
 
 test("legacy mode requires explicit developer flag", (t) => {
@@ -425,4 +484,37 @@ test("generateReply dual-runs Trinity in shadow mode while keeping legacy active
   assert.equal(shadowWrites.length, 1);
   assert.equal(shadowWrites[0].legacySuggestion, "Legacy draft reply");
   assert.equal(shadowWrites[0].trinitySuggestion, "Trinity draft reply");
+});
+
+test("generateReply uses reply-local router in local mode", async (t) => {
+  const originalMode = process.env.REPLY_BRAIN_RUNTIME;
+  t.after(() => {
+    clearBrainRuntimeTestHooks();
+    if (originalMode == null) delete process.env.REPLY_BRAIN_RUNTIME;
+    else process.env.REPLY_BRAIN_RUNTIME = originalMode;
+  });
+
+  process.env.REPLY_BRAIN_RUNTIME = "local";
+  setBrainRuntimeTestHooks({
+    localGenerateReply: async (message, contextSnippets, recipient, goldenExamples) => ({
+      suggestion: `Local draft for ${recipient}`,
+      explanation: `handled ${message} with ${contextSnippets.length} snippets and ${goldenExamples.length} golden`,
+      contextMeta: { runtime: "local", selectedStage: "writer" },
+      runtimeMode: "local",
+      rankedDraftSet: null,
+      trinityDraftCandidate: null,
+    }),
+  });
+
+  const result = await require("../brain-runtime.js").generateReply(
+    "Need the update today.",
+    [{ text: "Snippet" }],
+    "alice@example.com",
+    [{ text: "Golden" }],
+  );
+
+  assert.equal(result.suggestion, "Local draft for alice@example.com");
+  assert.equal(result.runtimeMode, "local");
+  assert.equal(result.contextMeta.runtime, "local");
+  assert.equal(result.contextMeta.selectedStage, "writer");
 });

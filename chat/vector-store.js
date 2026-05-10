@@ -96,6 +96,84 @@ async function addDocuments(docs) {
         await table.createIndex("text", { config: lancedb.Index.fts() });
     }
     console.log(`Added ${data.length} vectors to ${TABLE_NAME} and updated FTS index.`);
+    try {
+        await emitRuntimeDocumentRegistrations(docs);
+    } catch (error) {
+        console.warn("[vector-store] failed to emit Trinity document registrations:", error.message);
+    }
+}
+
+async function emitRuntimeDocumentRegistrations(docs) {
+    const registrations = buildRuntimeDocumentRegistrations(docs);
+    if (!registrations.length) return;
+    const trinityEventOutbox = require("./trinity-event-outbox.js");
+    const { buildDocumentRegistration, drainTrinityEventOutbox } = require("./brain-runtime.js");
+    for (const registration of registrations) {
+        await trinityEventOutbox.enqueueEvent(
+            "document_registration",
+            buildDocumentRegistration(registration),
+        );
+    }
+    if (!trinityOutboxDrainEnabled()) return;
+    drainTrinityEventOutbox(Math.max(10, registrations.length)).catch((err) => {
+        console.warn("[vector-store] Trinity outbox drain failed:", err.message);
+    });
+}
+
+function buildRuntimeDocumentRegistrations(docs) {
+    const nowIso = new Date().toISOString();
+    const companyId = resolveReplyRuntimeCompanyId();
+    return (Array.isArray(docs) ? docs : [])
+        .filter((doc) => doc && typeof doc === "object")
+        .filter((doc) => !isConversationDataSource(doc))
+        .map((doc) => ({
+            company_id: companyId,
+            document_ref: String(doc.id || "").trim() || `document:${Buffer.from(String(doc.path || doc.source || "unknown")).toString("base64url")}`,
+            source: String(doc.source || "").trim() || "unknown",
+            path: String(doc.path || "").trim() || `memory://${String(doc.id || "unknown")}`,
+            title: String(doc.title || "").trim() || null,
+            content_text: doc.text == null ? "" : String(doc.text),
+            occurred_at: normalizeIsoTimestamp(doc.occurred_at || doc.timestamp, nowIso),
+            metadata: {
+                source_product: "reply",
+                channel: channelFromDoc(doc),
+                is_annotated: doc.is_annotated === true,
+            },
+        }));
+}
+
+function normalizeIsoTimestamp(value, fallbackIso) {
+    const raw = String(value || "").trim();
+    if (!raw) return fallbackIso;
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return fallbackIso;
+    return parsed.toISOString();
+}
+
+function resolveReplyRuntimeCompanyId() {
+    const explicit = String(process.env.REPLY_RUNTIME_COMPANY_ID || "").trim();
+    if (explicit) return explicit;
+    return uuidFromStableText("reply.local.runtime");
+}
+
+function uuidFromStableText(text) {
+    const crypto = require("crypto");
+    const hash = crypto.createHash("sha1").update(String(text || "")).digest("hex");
+    const chars = hash.slice(0, 32).split("");
+    chars[12] = "5";
+    chars[16] = ((parseInt(chars[16], 16) & 0x3) | 0x8).toString(16);
+    return [
+        chars.slice(0, 8).join(""),
+        chars.slice(8, 12).join(""),
+        chars.slice(12, 16).join(""),
+        chars.slice(16, 20).join(""),
+        chars.slice(20, 32).join(""),
+    ].join("-");
+}
+
+function trinityOutboxDrainEnabled() {
+    const raw = String(process.env.REPLY_DISABLE_TRINITY_OUTBOX_DRAIN || "").trim().toLowerCase();
+    return !(raw === "1" || raw === "true" || raw === "yes");
 }
 
 /**
@@ -148,6 +226,17 @@ async function annotateDocument(id, annotationJson) {
         };
 
         await table.add([newDoc]);
+        await emitRuntimeDocumentRegistrations([{
+            id: newDoc.id,
+            text: newDoc.text,
+            source: newDoc.source,
+            path: newDoc.path,
+            is_annotated: true,
+            title: null,
+            timestamp: new Date().toISOString(),
+        }]).catch((error) => {
+            console.warn("[vector-store] failed to emit updated document registration:", error.message);
+        });
         return true;
     } catch (e) {
         console.error("Failed to annotate document:", e.message);
@@ -398,10 +487,45 @@ async function deleteDocument(id) {
     const db = await connect();
     try {
         const table = await db.openTable(TABLE_NAME);
+        const results = await table.query()
+            .where(`id = '${escapeSqlString(id)}'`)
+            .limit(1)
+            .toArray();
+        const existing = results.length > 0 ? (results[0].toJSON ? results[0].toJSON() : results[0]) : null;
         await table.delete(`id = '${escapeSqlString(id)}'`);
+        if (existing) {
+            await emitRuntimeDocumentDeleted(existing).catch((error) => {
+                console.warn("[vector-store] failed to emit document deletion:", error.message);
+            });
+        }
     } catch (e) {
         console.error("Failed to delete document:", e.message);
     }
+}
+
+async function emitRuntimeDocumentDeleted(doc) {
+    const trinityEventOutbox = require("./trinity-event-outbox.js");
+    const { buildMemoryEvent, drainTrinityEventOutbox } = require("./brain-runtime.js");
+    await trinityEventOutbox.enqueueEvent("memory_event", buildMemoryEvent({
+        company_id: resolveReplyRuntimeCompanyId(),
+        event_kind: "document_deleted",
+        source_ref: `document-deleted:${String(doc.id || "").trim() || Date.now()}`,
+        occurred_at: new Date().toISOString(),
+        thread_ref: null,
+        channel: null,
+        contact_handle: null,
+        content_text: null,
+        metadata: {
+            source_product: "reply",
+            document_ref: String(doc.id || "").trim() || null,
+            source: String(doc.source || "").trim() || null,
+            path: String(doc.path || "").trim() || null,
+        },
+    }));
+    if (!trinityOutboxDrainEnabled()) return;
+    drainTrinityEventOutbox(10).catch((err) => {
+        console.warn("[vector-store] Trinity outbox drain failed:", err.message);
+    });
 }
 
 /** Short-lived cache so `/api/conversations` does not rescan LanceDB on every poll. */
@@ -531,6 +655,7 @@ module.exports = {
     getUnifiedIndex,
     invalidateUnifiedIndexCache,
     dedupeDocsByStableKey,
+    buildRuntimeDocumentRegistrations,
     /** Toggle golden-example flag on an existing LanceDB row (message star). */
     setGoldenAnnotation: annotateDocumentLegacy,
 };

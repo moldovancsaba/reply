@@ -33,8 +33,8 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
 - `REPLY-001` Missing brain-runtime adapter
   Product routes and workers imported `reply-engine.js` directly, which made the legacy engine the de facto canonical brain. Fixed by inserting `chat/brain-runtime.js` as the caller-facing boundary.
 
-- `REPLY-002` Broken suggestion normalization in `/api/suggest-reply`
-  The route could persist a structured reply result instead of the actual suggestion text. Fixed by normalizing all reply results before saving or returning them.
+- `REPLY-002` Broken suggestion normalization in the legacy compatibility suggest route
+  The legacy `/api/suggest-reply` path could persist a structured reply result instead of the actual suggestion text. Fixed by normalizing all reply results before saving or returning them, while the current primary product route remains `/api/suggest`.
 
 - `REPLY-003` `channel-bridge.js` referenced an undefined data directory symbol
   This broke linting and risked audit-log persistence failures. Fixed by using `ensureDataHome()` instead of the missing symbol.
@@ -172,6 +172,24 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
 
 - `REPLY-NATIVE-015` Native bridge honesty lane
   Ensure `Telegram`, `Discord`, `Signal`, `Viber`, and `LinkedIn` are labeled truthfully as bridge-fed or draft-only where applicable, without fake sync/send promises.
+
+- `REPLY-BRAIN-001` Durable Trinity memory-event outbox
+  The live-brain target requires `{reply}` to emit normalized inbound-message, outbound-message, contact-update, thread-view, and document-registration events to `{trinity}` instead of limiting runtime interaction to `ThreadSnapshot` and outcome payloads.
+  First slice implemented. `chat/trinity-event-outbox.js` now persists bounded event deliveries in `chat.db`, and `chat/brain-runtime.js` can enqueue and drain normalized memory-event and document-registration payloads into `{trinity}`.
+  Expanded implementation now lands at the canonical store layer: `chat/message-store.js` emits inbound/outbound message events for persisted conversation rows and `chat/contact-store.js` emits `contact_upserted` events for committed contact mutations.
+
+- `REPLY-BRAIN-002` Prepared-draft consumption in compose
+  The live-brain target requires `{reply}` to prefill compose from runtime-owned prepared drafts with explicit stale-state handling instead of relying on fresh suggest calls alone.
+  First slice implemented. `GET /api/trinity/prepared-draft` now hydrates compose from runtime-owned prepared drafts and falls back to one fresh generation when the prepared result is missing or stale.
+
+- `REPLY-BRAIN-003` Trinity document registration bridge
+  `{reply}` owns raw document sources and references, but the live-brain runtime requires an explicit document registration path into `{trinity}` memory ownership.
+  First slice implemented. `{reply}` now exposes `POST /api/trinity/register-document` and the matching `chat/js/api.js` helper, both routed through the durable Trinity event outbox.
+  Expanded implementation now also emits document registrations from canonical non-conversation ingest in `chat/vector-store.js`.
+
+- `REPLY-BRAIN-004` Prepared-draft freshness and provenance visibility
+  The product needs advanced operator visibility into prepared-draft freshness, trace linkage, and accepted artifact provenance once background-ready drafting becomes normal behavior.
+  Expanded implementation now also includes explicit runtime lifecycle telemetry for `thread_viewed`, `draft_shown`, `draft_selected`, and debounced `draft_edited` events through the same durable Trinity outbox path.
 
 ## Dependencies
 
