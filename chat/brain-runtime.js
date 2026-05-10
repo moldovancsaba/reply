@@ -5,6 +5,7 @@ const { spawn, spawnSync } = require("child_process");
 
 const { getDraftRuntimeMode } = require("./ai-runtime-config.js");
 const contactStore = require("./contact-store.js");
+const draftLearningStore = require("./draft-learning-store.js");
 const messageStore = require("./message-store.js");
 const preparedContextStore = require("./prepared-context-store.js");
 const trinityEventOutbox = require("./trinity-event-outbox.js");
@@ -140,6 +141,69 @@ function buildRuntimeProvenance(payload = {}) {
       payload.accepted_artifact_version || payload.acceptedArtifactVersion || null,
     ),
   };
+}
+
+function isReplyLocalCycleId(value) {
+  return String(value || "").trim().startsWith("reply-local:");
+}
+
+function buildLocalRankedDraftSet(threadSnapshot, localResult = {}) {
+  const cycleId = `reply-local:${Date.now()}:${crypto.randomUUID()}`;
+  const candidateId = `${cycleId}:candidate-1`;
+  return {
+    company_id: threadSnapshot.company_id,
+    cycle_id: cycleId,
+    thread_ref: threadSnapshot.thread_ref,
+    channel: threadSnapshot.channel,
+    contract_version: REPLY_TRINITY_CONTRACT_VERSION,
+    trace_ref: null,
+    accepted_artifact_version: null,
+    drafts: [
+      {
+        company_id: threadSnapshot.company_id,
+        candidate_id: candidateId,
+        draft_text: String(localResult.suggestion || "").trim(),
+        rationale: String(localResult.explanation || "").trim(),
+        rank: 1,
+      },
+    ],
+    metadata: {
+      source_product: "reply",
+      runtime_mode: "local",
+      selected_stage: String(localResult?.contextMeta?.selectedStage || "").trim() || null,
+    },
+  };
+}
+
+async function recordDraftGenerationEvent({
+  threadSnapshot,
+  runtimeMode,
+  rankedDraftSet,
+  suggestionText,
+  explanation,
+  contextMeta,
+}) {
+  const top = Array.isArray(rankedDraftSet?.drafts) ? rankedDraftSet.drafts[0] : null;
+  const cycleId = String(rankedDraftSet?.cycle_id || "").trim();
+  const candidateId = String(top?.candidate_id || "").trim();
+  if (!cycleId || !candidateId) return { status: "skipped", reason: "missing_generation_identity" };
+  return draftLearningStore.appendLearningEvent({
+    event_kind: "draft_generated",
+    source_ref: `draft-generated:${cycleId}:${candidateId}`,
+    cycle_id: cycleId,
+    candidate_id: candidateId,
+    thread_ref: threadSnapshot?.thread_ref || rankedDraftSet?.thread_ref || null,
+    channel: threadSnapshot?.channel || rankedDraftSet?.channel || null,
+    contact_handle: threadSnapshot?.contact_handle || null,
+    runtime_mode: runtimeMode,
+    suggestion_text: suggestionText,
+    reason: explanation || null,
+    metadata: {
+      source_product: "reply",
+      context_meta: contextMeta || null,
+      ranked_draft_count: Array.isArray(rankedDraftSet?.drafts) ? rankedDraftSet.drafts.length : 0,
+    },
+  });
 }
 
 function buildDraftOutcomeEvent(outcome = {}) {
@@ -463,12 +527,31 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
   const shadowMode = trinityShadowEnabled();
 
   if (runtimeMode === "local") {
-    return loadLocalBrainRouter().generateReplyWithLocalBrain(
+    const threadSnapshot = await buildThreadSnapshot(
       message,
       contextSnippets,
       recipient,
       goldenExamples,
     );
+    const localResult = await loadLocalBrainRouter().generateReplyWithLocalBrain(
+      message,
+      contextSnippets,
+      recipient,
+      goldenExamples,
+    );
+    const rankedDraftSet = buildLocalRankedDraftSet(threadSnapshot, localResult);
+    await recordDraftGenerationEvent({
+      threadSnapshot,
+      runtimeMode: "local",
+      rankedDraftSet,
+      suggestionText: localResult.suggestion,
+      explanation: localResult.explanation,
+      contextMeta: localResult.contextMeta || null,
+    }).catch(() => null);
+    return {
+      ...localResult,
+      rankedDraftSet,
+    };
   }
 
   if (shadowMode) {
@@ -552,6 +635,17 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
       const top = Array.isArray(rankedDraftSet?.drafts) ? rankedDraftSet.drafts[0] : null;
       if (top?.draft_text) {
         const provenance = buildRuntimeProvenance(rankedDraftSet || {});
+        await recordDraftGenerationEvent({
+          threadSnapshot,
+          runtimeMode: "trinity",
+          rankedDraftSet,
+          suggestionText: String(top.draft_text || "").trim(),
+          explanation: String(top.rationale || "").trim(),
+          contextMeta: {
+            traceRef: provenance.traceRef,
+            acceptedArtifactVersion: provenance.acceptedArtifactVersion,
+          },
+        }).catch(() => null);
         return {
           suggestion: String(top.draft_text || "").trim(),
           explanation: String(top.rationale || "").trim(),
@@ -583,6 +677,30 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
 async function recordDraftOutcome(outcome) {
   if (!outcome || !outcome.cycle_id) {
     return { status: "skipped", reason: "missing_cycle_id" };
+  }
+  await draftLearningStore.appendLearningEvent({
+    event_kind: "draft_outcome",
+    source_ref: `draft-outcome:${outcome.cycle_id}:${outcome.candidate_id || "none"}:${String(outcome.disposition || "").trim().toLowerCase()}:${String(outcome.occurred_at || new Date().toISOString())}`,
+    cycle_id: outcome.cycle_id,
+    candidate_id: outcome.candidate_id || null,
+    thread_ref: outcome.thread_ref || null,
+    channel: outcome.channel || null,
+    contact_handle: String(outcome.thread_ref || "").split(":").slice(2).join(":") || null,
+    runtime_mode: isReplyLocalCycleId(outcome.cycle_id) ? "local" : "trinity",
+    suggestion_text: outcome.original_draft_text || null,
+    final_text: outcome.final_text || null,
+    reason: outcome.disposition || null,
+    metadata: {
+      source_product: "reply",
+      send_result: outcome.send_result || null,
+      edit_distance: outcome.edit_distance ?? null,
+      latency_ms: outcome.latency_ms ?? null,
+      notes: outcome.notes || null,
+    },
+    created_at: outcome.occurred_at || new Date().toISOString(),
+  }).catch(() => null);
+  if (isReplyLocalCycleId(outcome.cycle_id)) {
+    return { status: "recorded_local_only", cycle_id: outcome.cycle_id };
   }
   return callTrinityRuntime("record-outcome", buildDraftOutcomeEvent(outcome));
 }
