@@ -3,7 +3,11 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 const { ensureDataHome, dataPath } = require('./app-paths.js');
-const { isConversationDataSource } = require('./utils/chat-utils.js');
+const {
+    channelFromDoc,
+    hasUsableConversationHandle,
+    isConversationDataSource,
+} = require('./utils/chat-utils.js');
 
 ensureDataHome();
 const DB_PATH = dataPath('chat.db');
@@ -294,7 +298,32 @@ async function rebuildConversationIndex(handles = null) {
         `);
 
         await new Promise((resolve, reject) => {
-            for (const row of groupedRows.values()) {
+            const rows = Array.from(groupedRows.values());
+            if (!rows.length) {
+                insertStmt.finalize((err) => {
+                    if (err) return reject(err);
+                    resolve();
+                });
+                return;
+            }
+            let pending = rows.length;
+            let failed = false;
+            const finish = (err) => {
+                if (failed) return;
+                if (err) {
+                    failed = true;
+                    insertStmt.finalize(() => reject(err));
+                    return;
+                }
+                pending -= 1;
+                if (pending === 0) {
+                    insertStmt.finalize((finalizeErr) => {
+                        if (finalizeErr) return reject(finalizeErr);
+                        resolve();
+                    });
+                }
+            };
+            for (const row of rows) {
                 const sorts = computeConversationSorts({
                     latest_timestamp_ms: row.latestMs,
                     first_timestamp_ms: row.firstMs,
@@ -314,13 +343,10 @@ async function rebuildConversationIndex(handles = null) {
                     row.counts.message_count_in,
                     row.counts.message_count_out,
                     sorts.sort_freq,
-                    sorts.sort_recommendation
+                    sorts.sort_recommendation,
+                    finish,
                 );
             }
-            insertStmt.finalize((err) => {
-                if (err) return reject(err);
-                resolve();
-            });
         });
         await runDb(db, "COMMIT");
     } catch (err) {
@@ -513,35 +539,80 @@ async function saveMessages(messages) {
             `);
 
             db.run("BEGIN TRANSACTION");
-            messages.forEach(m => {
-                stmt.run(m.id, m.text, m.source, m.handle, m.timestamp, m.path, m.is_from_me == null ? null : (m.is_from_me ? 1 : 0));
-                if (m.metadata && typeof m.metadata === "object") {
-                    metadataStmt.run(
+            const operations = [];
+            messages.forEach((m) => {
+                operations.push((done) => {
+                    stmt.run(
                         m.id,
-                        m.metadata.providerMessageKey || null,
-                        m.metadata.channel || null,
-                        m.metadata.externalThreadKey || null,
-                        m.metadata.externalThreadKind || null,
-                        m.metadata.externalThreadTitle || null,
-                        m.metadata.senderIdentity || null,
-                        safeJsonStringify(m.metadata.participantIdentities || []),
-                        safeJsonStringify(m.metadata.recipientIdentities || []),
-                        safeJsonStringify(m.metadata)
+                        m.text,
+                        m.source,
+                        m.handle,
+                        m.timestamp,
+                        m.path,
+                        m.is_from_me == null ? null : (m.is_from_me ? 1 : 0),
+                        done,
                     );
+                });
+                if (m.metadata && typeof m.metadata === "object") {
+                    operations.push((done) => {
+                        metadataStmt.run(
+                            m.id,
+                            m.metadata.providerMessageKey || null,
+                            m.metadata.channel || null,
+                            m.metadata.externalThreadKey || null,
+                            m.metadata.externalThreadKind || null,
+                            m.metadata.externalThreadTitle || null,
+                            m.metadata.senderIdentity || null,
+                            safeJsonStringify(m.metadata.participantIdentities || []),
+                            safeJsonStringify(m.metadata.recipientIdentities || []),
+                            safeJsonStringify(m.metadata),
+                            done,
+                        );
+                    });
                 }
             });
-            db.run("COMMIT", (err) => {
-                stmt.finalize();
-                metadataStmt.finalize();
-                if (err) {
-                    db.close(() => reject(err));
+
+            let index = 0;
+            const rollbackAndClose = (err) => {
+                db.run("ROLLBACK", () => {
+                    stmt.finalize(() => {
+                        metadataStmt.finalize(() => {
+                            db.close(() => reject(err));
+                        });
+                    });
+                });
+            };
+            const commitAndClose = () => {
+                db.run("COMMIT", (err) => {
+                    stmt.finalize(() => {
+                        metadataStmt.finalize(() => {
+                            if (err) {
+                                db.close(() => reject(err));
+                                return;
+                            }
+                            db.close((closeErr) => {
+                                if (closeErr) return reject(closeErr);
+                                resolve();
+                            });
+                        });
+                    });
+                });
+            };
+            const runNext = () => {
+                if (index >= operations.length) {
+                    commitAndClose();
                     return;
                 }
-                db.close((closeErr) => {
-                    if (closeErr) return reject(closeErr);
-                    resolve();
+                const operation = operations[index++];
+                operation((err) => {
+                    if (err) {
+                        rollbackAndClose(err);
+                        return;
+                    }
+                    runNext();
                 });
-            });
+            };
+            runNext();
         });
     });
 
@@ -558,6 +629,99 @@ async function saveMessages(messages) {
     } catch (err) {
         console.warn("[message-store] failed to rebuild draft context snapshots:", err.message);
     }
+    try {
+        await emitRuntimeMemoryEventsForMessages(messages);
+    } catch (err) {
+        console.warn("[message-store] failed to emit Trinity memory events:", err.message);
+    }
+}
+
+async function emitRuntimeMemoryEventsForMessages(messages) {
+    const normalized = buildRuntimeMemoryEventsForMessages(messages);
+    if (!normalized.length) return;
+    const trinityEventOutbox = require("./trinity-event-outbox.js");
+    const { buildMemoryEvent, drainTrinityEventOutbox } = require("./brain-runtime.js");
+    for (const event of normalized) {
+        await trinityEventOutbox.enqueueEvent("memory_event", buildMemoryEvent(event));
+    }
+    if (!trinityOutboxDrainEnabled()) return;
+    drainTrinityEventOutbox(Math.max(10, normalized.length)).catch((err) => {
+        console.warn("[message-store] Trinity outbox drain failed:", err.message);
+    });
+}
+
+function buildRuntimeMemoryEventsForMessages(messages) {
+    const companyId = resolveReplyRuntimeCompanyId();
+    const nowIso = new Date().toISOString();
+    return (Array.isArray(messages) ? messages : [])
+        .filter((message) => isConversationMessageRow(message))
+        .filter((message) => hasUsableConversationHandle(message?.handle, {
+            channel: channelFromDoc(message),
+            source: message?.source || "",
+        }))
+        .map((message) => {
+            const channel = channelFromDoc(message);
+            const handle = String(message.handle || "").trim();
+            const sourceRef = String(message.id || "").trim()
+                ? `message:${String(message.id).trim()}`
+                : `message:${channel}:${handle}:${String(message.timestamp || nowIso).trim()}`;
+            return {
+                company_id: companyId,
+                event_kind: message.is_from_me ? "outbound_message_recorded" : "inbound_message_recorded",
+                source_ref: sourceRef,
+                occurred_at: normalizeIsoTimestamp(message.timestamp, nowIso),
+                thread_ref: buildThreadRef(handle, channel),
+                channel,
+                contact_handle: handle,
+                content_text: message.text == null ? null : String(message.text),
+                metadata: {
+                    message_id: String(message.id || "").trim() || null,
+                    source: String(message.source || "").trim() || null,
+                    path: String(message.path || "").trim() || null,
+                    provider_message_key: message?.metadata?.providerMessageKey || null,
+                    external_thread_key: message?.metadata?.externalThreadKey || null,
+                    external_thread_kind: message?.metadata?.externalThreadKind || null,
+                },
+            };
+        });
+}
+
+function normalizeIsoTimestamp(value, fallbackIso) {
+    const raw = String(value || "").trim();
+    if (!raw) return fallbackIso;
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return fallbackIso;
+    return parsed.toISOString();
+}
+
+function buildThreadRef(handle, channel) {
+    return `reply:${String(channel || "other").trim().toLowerCase()}:${String(handle || "unknown").trim()}`;
+}
+
+function resolveReplyRuntimeCompanyId() {
+    const explicit = String(process.env.REPLY_RUNTIME_COMPANY_ID || "").trim();
+    if (explicit) return explicit;
+    return uuidFromStableText("reply.local.runtime");
+}
+
+function trinityOutboxDrainEnabled() {
+    const raw = String(process.env.REPLY_DISABLE_TRINITY_OUTBOX_DRAIN || "").trim().toLowerCase();
+    return !(raw === "1" || raw === "true" || raw === "yes");
+}
+
+function uuidFromStableText(text) {
+    const crypto = require("crypto");
+    const hash = crypto.createHash("sha1").update(String(text || "")).digest("hex");
+    const chars = hash.slice(0, 32).split("");
+    chars[12] = "5";
+    chars[16] = ((parseInt(chars[16], 16) & 0x3) | 0x8).toString(16);
+    return [
+        chars.slice(0, 8).join(""),
+        chars.slice(8, 12).join(""),
+        chars.slice(12, 16).join(""),
+        chars.slice(16, 20).join(""),
+        chars.slice(20, 32).join(""),
+    ].join("-");
 }
 
 /**

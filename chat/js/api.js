@@ -244,6 +244,18 @@ export async function reportTrinityOutcome(outcome) {
     return res.json();
 }
 
+export async function reportTrinityMemoryEvent(event) {
+    if (!event || !event.event_kind || !event.source_ref) return { status: 'skipped' };
+    const res = await _request(`${API_BASE}/api/trinity/memory-event`, {
+        method: 'POST',
+        headers: buildSecurityHeaders(),
+        body: JSON.stringify(event),
+        _silent: true,
+        _showLoading: false,
+    });
+    return res.json();
+}
+
 export async function proposeReplyPolicy({ learnerKind, cycleId, bundleType = null, accept = false, transport = 'cli' }) {
     const res = await _request(`${API_BASE}/api/trinity/train-propose-policy`, {
         method: 'POST',
@@ -255,6 +267,27 @@ export async function proposeReplyPolicy({ learnerKind, cycleId, bundleType = nu
             accept: accept === true,
             transport: String(transport || 'cli'),
         }),
+        _showLoading: false,
+    });
+  return res.json();
+}
+
+export async function fetchPreparedDraft(handle, { refresh = false } = {}) {
+    const params = new URLSearchParams({ handle: String(handle || '') });
+    if (refresh === true) params.set('refresh', '1');
+    const res = await _request(`${API_BASE}/api/trinity/prepared-draft?${params.toString()}`, {
+        headers: buildSecurityHeaders({ includeJsonContentType: false }),
+        _silent: true,
+        _showLoading: false,
+    });
+    return res.json();
+}
+
+export async function registerTrinityDocument(payload) {
+    const res = await _request(`${API_BASE}/api/trinity/register-document`, {
+        method: 'POST',
+        headers: buildSecurityHeaders(),
+        body: JSON.stringify(payload || {}),
         _showLoading: false,
     });
     return res.json();
