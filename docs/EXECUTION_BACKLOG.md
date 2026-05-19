@@ -152,6 +152,24 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
 - `REPLY-NATIVE-016` Native sync trigger contract mismatch
   Fixed in the current working tree. The native shell had been calling protected `/api/sync-*` routes without the approval-bearing request shape used by the web app, causing broad trigger failures across multiple sources. The native client now sends JSON approval payloads plus the human-approval header so the trigger path can start background sync correctly.
 
+- `REPLY-NATIVE-HOTPATH-001` Native workspace hot path and incremental hydration
+  Planned on the GitHub SSOT board as [#163](https://github.com/moldovancsaba/reply/issues/163). Canonical architecture is now captured in `docs/NATIVE_WORKSPACE_HOT_PATH_SSOT.md`. This lane covers the shift from whole-workspace reload behavior to cache-backed incremental workspace updates.
+
+- `REPLY-NATIVE-HOTPATH-002` Stop workspace-wide reloads on profile, refresh, and send hot paths
+  Planned on the GitHub SSOT board as [#164](https://github.com/moldovancsaba/reply/issues/164). This is the first execution slice and is intentionally scoped to hot-action recovery rather than broad workspace caching.
+
+- `REPLY-NATIVE-HOTPATH-003` Selected-thread hot cache and delta append path
+  Planned on the GitHub SSOT board as [#165](https://github.com/moldovancsaba/reply/issues/165). This lane gives the visible thread its own fast path.
+
+- `REPLY-NATIVE-HOTPATH-004` Conversation-summary delta updates and likely-next preload
+  Planned on the GitHub SSOT board as [#166](https://github.com/moldovancsaba/reply/issues/166). This lane keeps the sidebar incremental and bounded.
+
+- `REPLY-NATIVE-HOTPATH-005` Workspace delta protocol and optimistic native state updates
+  Planned on the GitHub SSOT board as [#167](https://github.com/moldovancsaba/reply/issues/167). This lane defines the client/server delta contract needed to replace whole-surface rereads.
+
+- `REPLY-NATIVE-HOTPATH-006` Workspace latency budgets, telemetry, and degraded-path surfacing
+  Planned on the GitHub SSOT board as [#168](https://github.com/moldovancsaba/reply/issues/168). This lane exists to make the hot-path contract measurable and enforceable.
+
 - `REPLY-NATIVE-009` Native composer/send parity
   Restore reliable channel-aware send behavior and native draft/composer ergonomics.
 
@@ -180,7 +198,7 @@ Deliver the `{reply}` portion of the cross-project boundary program without mixi
 
 - `REPLY-BRAIN-002` Prepared-draft consumption in compose
   The live-brain target requires `{reply}` to prefill compose from runtime-owned prepared drafts with explicit stale-state handling instead of relying on fresh suggest calls alone.
-  First slice implemented. `GET /api/trinity/prepared-draft` now hydrates compose from runtime-owned prepared drafts and falls back to one fresh generation when the prepared result is missing or stale.
+  Expanded implementation now force-refreshes `GET /api/trinity/prepared-draft` on conversation open, applies the returned Trinity draft directly into the input, and no longer seeds compose from persisted `contact.draft` on the hot path.
 
 - `REPLY-BRAIN-003` Trinity document registration bridge
   `{reply}` owns raw document sources and references, but the live-brain runtime requires an explicit document registration path into `{trinity}` memory ownership.

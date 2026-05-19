@@ -8,12 +8,15 @@ const { channelFromDoc, isConversationDataSource, normalizeEmail, normalizePhone
 ensureDataHome();
 
 const DB_PATH = dataPath("chat.db");
+const SQLITE_BUSY_RETRY_ATTEMPTS = 80;
+const SQLITE_BUSY_RETRY_DELAY_MS = 250;
+const SQLITE_BUSY_TIMEOUT_MS = 20000;
 let readyPromise = null;
 
 function openDb(mode) {
     const db = mode == null ? new sqlite3.Database(DB_PATH) : new sqlite3.Database(DB_PATH, mode);
     try {
-        db.configure("busyTimeout", 20000);
+        db.configure("busyTimeout", SQLITE_BUSY_TIMEOUT_MS);
     } catch {
         // ignore if unsupported
     }
@@ -41,7 +44,7 @@ function allDb(db, sql, params = []) {
     }));
 }
 
-async function retryBusy(fn, attempts = 40, delayMs = 100) {
+async function retryBusy(fn, attempts = SQLITE_BUSY_RETRY_ATTEMPTS, delayMs = SQLITE_BUSY_RETRY_DELAY_MS) {
     let lastError = null;
     for (let i = 0; i < attempts; i++) {
         try {
@@ -70,7 +73,7 @@ async function initialize() {
         const db = openDb();
         try {
             db.run("PRAGMA journal_mode = WAL");
-            db.run("PRAGMA busy_timeout = 5000");
+            db.run(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS}`);
 
             await runDb(db, `
                 CREATE TABLE IF NOT EXISTS external_threads (
@@ -410,7 +413,7 @@ async function rebuildConversationFoundation(handles = null) {
 
     const db = openDb();
     try {
-        db.run("PRAGMA busy_timeout = 5000");
+        db.run(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS}`);
 
         const handleRows = await getKnownConversationHandles(db, handles);
         const grouped = new Map();
@@ -793,7 +796,12 @@ async function getConversationSummaryByHandle(handle) {
                 cs.conversation_kind,
                 cs.membership_fingerprint,
                 cs.title,
-                cs.latest_message_at
+                cs.latest_message_at,
+                cs.latest_inbound_at,
+                cs.latest_outbound_at,
+                cs.closed_at,
+                cs.closure_reason,
+                cs.last_visible_summary
             FROM conversation_snapshots cs
             JOIN conversation_participants cp
               ON cp.conversation_id = cs.conversation_id
@@ -838,6 +846,12 @@ async function getConversationSummaryByHandle(handle) {
             conversationKind: String(primary.conversation_kind || "").trim().toLowerCase() || "direct",
             conversationTitle: String(primary.title || "").trim() || null,
             defaultChannel: String(primary.channel || "").trim().toLowerCase() || null,
+            latestMessageAt: String(primary.latest_message_at || "").trim() || null,
+            latestInboundAt: String(primary.latest_inbound_at || "").trim() || null,
+            latestOutboundAt: String(primary.latest_outbound_at || "").trim() || null,
+            closedAt: String(primary.closed_at || "").trim() || null,
+            closureReason: String(primary.closure_reason || "").trim() || null,
+            lastVisibleSummary: String(primary.last_visible_summary || "").trim() || null,
             channels,
             allowedChannels,
         };

@@ -615,6 +615,114 @@ function renderConnectedServices(data, handle) {
   root.appendChild(wrap);
 }
 
+function renderUnifiedSummary(data) {
+  const root = el('kyc-unified-summary');
+  if (!root) return;
+  root.innerHTML = '';
+
+  const profile = data?.unifiedProfile || null;
+  if (!profile) {
+    root.appendChild(createEmptyRow('No unified profile summary yet.'));
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'kyc-summary-grid';
+  const stats = [
+    ['Identities', String(profile.identityCount || 0)],
+    ['Aliases', String(profile.aliasCount || 0)],
+    ['Conversations', String(profile.conversationCount || 0)],
+    ['Owner', profile.owner || 'Unassigned'],
+    ['Flags', Array.isArray(profile.customerFlags) && profile.customerFlags.length ? profile.customerFlags.join(', ') : 'None'],
+    ['Reachable Via', Array.isArray(profile.allowedChannels) && profile.allowedChannels.length ? profile.allowedChannels.join(', ') : 'None yet'],
+    ['Coverage', Array.isArray(profile.channelCoverage) && profile.channelCoverage.length ? profile.channelCoverage.join(', ') : 'No active channels'],
+    ['Last Active', formatWhen(profile.latestActiveAt)],
+  ];
+
+  for (const [label, value] of stats) {
+    const card = document.createElement('div');
+    card.className = 'kyc-summary-stat';
+    const labelEl = document.createElement('div');
+    labelEl.className = 'kyc-summary-stat-label';
+    labelEl.textContent = label;
+    const valueEl = document.createElement('div');
+    valueEl.className = 'kyc-summary-stat-value';
+    valueEl.textContent = value;
+    card.appendChild(labelEl);
+    card.appendChild(valueEl);
+    grid.appendChild(card);
+  }
+
+  root.appendChild(grid);
+}
+
+function renderRecentActivity(data) {
+  const root = el('kyc-recent-activity');
+  if (!root) return;
+  root.innerHTML = '';
+
+  const items = Array.isArray(data?.recentActivity) ? data.recentActivity : [];
+  if (!items.length) {
+    root.appendChild(createEmptyRow('No recent cross-channel activity.'));
+    return;
+  }
+
+  const list = document.createElement('div');
+  list.className = 'kyc-timeline';
+
+  for (const item of items) {
+    const row = document.createElement('div');
+    row.className = 'kyc-timeline-row';
+
+    const header = document.createElement('div');
+    header.className = 'kyc-timeline-header';
+
+    const tags = document.createElement('div');
+    tags.className = 'kyc-timeline-tags';
+    const kindTag = document.createElement('span');
+    kindTag.className = 'kyc-timeline-tag';
+    kindTag.textContent = String(item.kind || 'event').replace(/_/g, ' ');
+    tags.appendChild(kindTag);
+
+    const channelTag = document.createElement('span');
+    channelTag.className = 'kyc-timeline-tag';
+    channelTag.textContent = String(item.channel || 'other');
+    tags.appendChild(channelTag);
+
+    if (item.direction && item.direction !== 'system') {
+      const directionTag = document.createElement('span');
+      directionTag.className = 'kyc-timeline-tag';
+      directionTag.textContent = String(item.direction);
+      tags.appendChild(directionTag);
+    }
+
+    const at = document.createElement('div');
+    at.className = 'kyc-timeline-at';
+    at.textContent = formatWhen(item.occurredAt);
+
+    header.appendChild(tags);
+    header.appendChild(at);
+
+    const preview = document.createElement('div');
+    preview.className = 'kyc-timeline-preview';
+    preview.textContent = String(item.preview || '').trim() || 'No preview';
+
+    row.appendChild(header);
+    row.appendChild(preview);
+
+    if (item.handle) {
+      const handleEl = document.createElement('div');
+      handleEl.className = 'kyc-timeline-handle';
+      handleEl.textContent = String(item.handle);
+      row.appendChild(handleEl);
+    }
+
+    list.appendChild(row);
+  }
+
+  root.appendChild(list);
+}
+
 function renderSuggestions(handle, pendingSuggestions) {
   const root = el('kyc-suggestions');
   if (!root) return;
@@ -821,6 +929,8 @@ export async function loadKYCData(handle) {
   const companyInput = el('kyc-company-input');
   const linkedinInput = el('kyc-linkedin-input');
   const relInput = el('kyc-rel-input');
+  const ownerInput = el('kyc-owner-input');
+  const flagsInput = el('kyc-flags-input');
   const handleInput = el('kyc-handle-input');
 
   if (handleInput) handleInput.value = handle;
@@ -832,6 +942,8 @@ export async function loadKYCData(handle) {
   if (companyInput) companyInput.placeholder = 'Loading...';
   if (linkedinInput) linkedinInput.placeholder = 'Loading...';
   if (relInput) relInput.placeholder = 'Loading...';
+  if (ownerInput) ownerInput.placeholder = 'Loading...';
+  if (flagsInput) flagsInput.placeholder = 'Loading...';
 
   try {
     const data = await fetchJson(`/api/kyc?handle=${encodeURIComponent(handle)}`, {
@@ -858,7 +970,17 @@ export async function loadKYCData(handle) {
       relInput.value = data.relationship || '';
       relInput.placeholder = 'Relationship';
     }
+    if (ownerInput) {
+      ownerInput.value = data.owner || '';
+      ownerInput.placeholder = 'Primary owner or queue';
+    }
+    if (flagsInput) {
+      flagsInput.value = Array.isArray(data.customerFlags) ? data.customerFlags.join(', ') : '';
+      flagsInput.placeholder = 'vip, renewal, at_risk';
+    }
     renderNotes(data.notes);
+    renderUnifiedSummary(data);
+    renderRecentActivity(data);
     renderChannels(data.channels);
     renderConnectedServices(data, handle);
     renderSuggestions(handle, data.pendingSuggestions);
@@ -893,8 +1015,18 @@ export async function loadKYCData(handle) {
       relInput.value = '';
       relInput.placeholder = 'Relationship';
     }
+    if (ownerInput) {
+      ownerInput.value = '';
+      ownerInput.placeholder = 'Primary owner or queue';
+    }
+    if (flagsInput) {
+      flagsInput.value = '';
+      flagsInput.placeholder = 'vip, renewal, at_risk';
+    }
     renderHandlePreview(handle);
     renderNotes([]);
+    renderUnifiedSummary(null);
+    renderRecentActivity(null);
     renderChannels(null);
     renderConnectedServices(null, handle);
     renderSuggestions(handle, []);
@@ -954,7 +1086,12 @@ export async function saveInlineProfile(btn = null) {
       profession: el('kyc-role-input')?.value?.trim() || '',
       company: el('kyc-company-input')?.value?.trim() || '',
       linkedinUrl: el('kyc-linkedin-input')?.value?.trim() || '',
+      owner: el('kyc-owner-input')?.value?.trim() || '',
       relationship: el('kyc-rel-input')?.value?.trim() || '',
+      customerFlags: String(el('kyc-flags-input')?.value || '')
+        .split(',')
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean),
     };
 
     const result = await fetchJson('/api/kyc', {

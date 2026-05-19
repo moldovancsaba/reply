@@ -11,16 +11,24 @@ const { dataPath, ensureDataHome } = require('./app-paths.js');
 const statusManager = require('./status-manager.js');
 const { cleanMessageText } = require('./message-cleaner.js');
 const { normalizeEmail } = require('./utils/chat-utils.js');
+const { APPLE_MAIL_INDEX_ENV, resolveAppleMailIndexPath, buildMailStatus } = require('./mail-runtime-utils.js');
 
 const APPLE_MAIL_STATE_FILE = dataPath('apple_mail_sync_state.json');
-const APPLE_MAIL_INDEX_PATH = path.join(process.env.HOME || '', 'Library/Mail/V10/MailData/Envelope Index');
 
 function updateStatus(status) {
-    statusManager.update('mail', status);
+    statusManager.replace('mail', status);
 }
 
-function withMailConnector(status, connector) {
-    return { ...status, connector };
+function readCurrentMailStatus() {
+    try {
+        return statusManager.get('mail') || {};
+    } catch {
+        return {};
+    }
+}
+
+function updateMailStatus(status, connector) {
+    return updateStatus(buildMailStatus(readCurrentMailStatus(), status, connector));
 }
 
 function hasGmailConfig() {
@@ -89,7 +97,21 @@ function saveAppleMailState(next) {
 }
 
 function openAppleMailIndex() {
-    return new sqlite3.Database(APPLE_MAIL_INDEX_PATH, sqlite3.OPEN_READONLY);
+    const dbPath = resolveAppleMailIndexPath();
+    return new Promise((resolve, reject) => {
+        const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY, (err) => {
+            if (err) {
+                try {
+                    db.close();
+                } catch {
+                    // Ignore cleanup errors when the open callback itself failed.
+                }
+                reject(err);
+                return;
+            }
+            resolve(db);
+        });
+    });
 }
 
 function runDbAll(db, query, params = []) {
@@ -111,8 +133,9 @@ function runDbGet(db, query, params = []) {
 }
 
 function appleMailIndexExists() {
-    return fs.existsSync(APPLE_MAIL_INDEX_PATH);
+    return !!resolveAppleMailIndexPath();
 }
+
 
 function decodeMailboxUrl(raw) {
     const value = String(raw || '').trim();
@@ -152,6 +175,48 @@ function toIsoFromUnixSeconds(value) {
     const seconds = Number(value) || 0;
     if (!seconds) return new Date().toISOString();
     return new Date(seconds * 1000).toISOString();
+}
+
+function resolveReplyHelperPath() {
+    const explicit = String(process.env.REPLY_HELPER_PATH || "").trim();
+    if (explicit && fs.existsSync(explicit)) {
+        return explicit;
+    }
+    return null;
+}
+
+function execFileAsync(command, args, options = {}) {
+    return new Promise((resolve, reject) => {
+        const { execFile } = require('child_process');
+        execFile(command, args, options, (error, stdout, stderr) => {
+            if (error) {
+                error.stdout = stdout;
+                error.stderr = stderr;
+                return reject(error);
+            }
+            resolve({ stdout, stderr });
+        });
+    });
+}
+
+async function loadRowsViaHelper(afterRowId, limit) {
+    const helperPath = resolveReplyHelperPath();
+    if (!helperPath) {
+        return null;
+    }
+    const args = [
+        'export-mail',
+        '--after-rowid', String(afterRowId),
+        '--limit', String(limit),
+    ];
+    const explicitIndexPath = String(process.env[APPLE_MAIL_INDEX_ENV] || '').trim();
+    if (explicitIndexPath) {
+        args.splice(1, 0, '--db-path', explicitIndexPath);
+    }
+    const { stdout } = await execFileAsync(helperPath, args, {
+        maxBuffer: 25 * 1024 * 1024,
+    });
+    return JSON.parse(stdout || '{}');
 }
 
 async function getAppleMailSourceMaxRowId(db) {
@@ -293,7 +358,7 @@ async function syncMail() {
             return (typeof result === 'object') ? result : { added: Number(result) || 0, hasMore: false };
         } catch (e) {
             console.error("[Mail Sync] Gmail sync failed:", e.message);
-            updateStatus(withMailConnector({ state: "error", message: `Gmail failed, falling back to local mail: ${e.message}` }, "gmail"));
+            updateMailStatus({ state: "error", message: `Gmail failed, falling back to local mail: ${e.message}` }, "gmail");
         }
     }
 
@@ -341,7 +406,7 @@ async function syncMail() {
             imapTotal += Number(n) || 0;
         } catch (e) {
             console.error(`[Mail Sync] Extra IMAP account ${acct.id} failed:`, e.message);
-            updateStatus(withMailConnector({ state: 'error', message: `IMAP ${acct.label || acct.id}: ${e.message}` }, 'imap'));
+            updateMailStatus({ state: 'error', message: `IMAP ${acct.label || acct.id}: ${e.message}` }, 'imap');
         }
     }
 
@@ -349,64 +414,103 @@ async function syncMail() {
         return { added: imapTotal, hasMore: false };
     }
 
-    if (!appleMailIndexExists()) {
-        const msg = `Apple Mail index not found at ${APPLE_MAIL_INDEX_PATH}`;
-        updateStatus(withMailConnector({ state: "error", message: msg }, "apple_mail"));
+    const helperPath = resolveReplyHelperPath();
+    const helperRequired = process.platform === 'darwin' && String(process.env.REPLY_RELEASE_MODE || '').trim() === '1';
+    if (helperRequired && !helperPath) {
+        const msg = "Apple Mail fallback requires the bundled protected-data helper.";
+        updateMailStatus({ state: "error", message: msg }, "apple_mail");
+        throw new Error(msg);
+    }
+
+    if (!helperPath && !appleMailIndexExists()) {
+        const msg = `Apple Mail index not found under ~/Library/Mail or ${APPLE_MAIL_INDEX_ENV}.`;
+        updateMailStatus({ state: "error", message: msg }, "apple_mail");
         throw new Error(msg);
     }
 
     console.log("Synchronizing Apple Mail index...");
-    updateStatus(withMailConnector({ state: "running", message: "Reading Apple Mail index..." }, "apple_mail"));
+    updateMailStatus({ state: "running", message: "Reading Apple Mail index..." }, "apple_mail");
 
     let db = null;
     try {
-        db = openAppleMailIndex();
-        db.run("PRAGMA journal_mode = WAL");
-        db.run("PRAGMA busy_timeout = 5000");
         const state = loadAppleMailState();
-        const sourceMaxRowId = await getAppleMailSourceMaxRowId(db);
-        const selfEmails = await collectAppleMailSelfEmails(db);
         const maxMessages = Math.max(100, Math.min(Number(settings?.worker?.quantities?.mail) || 1000, 5000));
+        let sourceMaxRowId = 0;
+        let selfEmails = new Set();
+        let filtered = [];
 
         console.log(`Processing Apple Mail index rows > ${state.lastRowId}...`);
-        updateStatus(withMailConnector({ state: "running", progress: 20, message: `Processing Apple Mail index rows > ${state.lastRowId}...` }, "apple_mail"));
+        updateMailStatus({ state: "running", progress: 20, message: `Processing Apple Mail index rows > ${state.lastRowId}...` }, "apple_mail");
 
         let savedCount = 0;
-        const rows = await runDbAll(
-            db,
-            `
-            SELECT
-                m.ROWID AS rowid,
-                m.global_message_id AS global_message_id,
-                m.document_id AS document_id,
-                m.conversation_id AS conversation_id,
-                m.date_sent AS date_sent,
-                m.date_received AS date_received,
-                mb.url AS mailbox_url,
-                a.address AS sender_address,
-                subj.subject AS subject,
-                sm.summary AS summary
-            FROM messages m
-            LEFT JOIN mailboxes mb ON mb.ROWID = m.mailbox
-            LEFT JOIN addresses a ON a.ROWID = m.sender
-            LEFT JOIN subjects subj ON subj.ROWID = m.subject
-            LEFT JOIN summaries sm ON sm.ROWID = m.summary
-            WHERE m.ROWID > ?
-              AND m.deleted = 0
-            ORDER BY m.ROWID ASC
-            LIMIT ?
-            `,
-            [state.lastRowId, maxMessages * 3]
-        );
-        const filtered = rows.filter((row) => !isExcludedAppleMailbox(row.mailbox_url)).slice(0, maxMessages);
-        const recipientMap = await loadAppleMailRecipientMap(db, filtered.map((row) => row.rowid));
+        if (helperPath) {
+            const helperPayload = await loadRowsViaHelper(state.lastRowId, maxMessages * 3);
+            sourceMaxRowId = Math.max(0, Number(helperPayload?.sourceMaxRowID) || 0);
+            selfEmails = new Set((helperPayload?.selfEmails || []).map((value) => extractEmailAddress(value)).filter(Boolean));
+            filtered = (helperPayload?.rows || [])
+                .filter((row) => !isExcludedAppleMailbox(row.mailboxURL))
+                .slice(0, maxMessages)
+                .map((row) => ({
+                    rowid: Number(row.rowID) || 0,
+                    global_message_id: row.globalMessageID || '',
+                    document_id: row.documentID || '',
+                    conversation_id: row.conversationID || '',
+                    date_sent: Number(row.dateSent) || 0,
+                    date_received: Number(row.dateReceived) || 0,
+                    mailbox_url: row.mailboxURL || '',
+                    sender_address: row.senderAddress || '',
+                    subject: row.subject || '',
+                    summary: row.summary || '',
+                    recipients: Array.isArray(row.recipients) ? row.recipients : [],
+                }));
+        } else {
+            db = await openAppleMailIndex();
+            db.run("PRAGMA journal_mode = WAL");
+            db.run("PRAGMA busy_timeout = 5000");
+            sourceMaxRowId = await getAppleMailSourceMaxRowId(db);
+            selfEmails = await collectAppleMailSelfEmails(db);
+            const rows = await runDbAll(
+                db,
+                `
+                SELECT
+                    m.ROWID AS rowid,
+                    m.global_message_id AS global_message_id,
+                    m.document_id AS document_id,
+                    m.conversation_id AS conversation_id,
+                    m.date_sent AS date_sent,
+                    m.date_received AS date_received,
+                    mb.url AS mailbox_url,
+                    a.address AS sender_address,
+                    subj.subject AS subject,
+                    sm.summary AS summary
+                FROM messages m
+                LEFT JOIN mailboxes mb ON mb.ROWID = m.mailbox
+                LEFT JOIN addresses a ON a.ROWID = m.sender
+                LEFT JOIN subjects subj ON subj.ROWID = m.subject
+                LEFT JOIN summaries sm ON sm.ROWID = m.summary
+                WHERE m.ROWID > ?
+                  AND m.deleted = 0
+                ORDER BY m.ROWID ASC
+                LIMIT ?
+                `,
+                [state.lastRowId, maxMessages * 3]
+            );
+            const recipientMap = await loadAppleMailRecipientMap(db, rows.map((row) => row.rowid));
+            filtered = rows
+                .filter((row) => !isExcludedAppleMailbox(row.mailbox_url))
+                .slice(0, maxMessages)
+                .map((row) => ({
+                    ...row,
+                    recipients: recipientMap.get(row.rowid) || [],
+                }));
+        }
         const docs = [];
         const unifiedDocs = [];
         let lastProcessedRowId = state.lastRowId;
 
         for (const row of filtered) {
             lastProcessedRowId = Math.max(lastProcessedRowId, Number(row.rowid) || 0);
-            const recipients = recipientMap.get(row.rowid) || [];
+            const recipients = Array.isArray(row.recipients) ? row.recipients : [];
             const { isFromMe, handle } = chooseAppleMailHandle({
                 senderAddress: row.sender_address,
                 mailboxUrl: row.mailbox_url,
@@ -456,11 +560,11 @@ async function syncMail() {
         if (unifiedDocs.length) {
             await saveMessages(unifiedDocs);
             savedCount += unifiedDocs.length;
-            updateStatus(withMailConnector({
+            updateMailStatus({
                 state: "running",
                 progress: 80,
                 message: `Saved ${savedCount} Apple Mail index rows...`
-            }, "apple_mail"));
+            }, "apple_mail");
             try {
                 await addDocuments(docs);
                 enqueueSuggestionDraftsFromDocBatch(docs);
@@ -480,22 +584,22 @@ async function syncMail() {
         if (savedCount > 0) {
             console.log("Mail index sync complete.");
 
-            const currentStatus = statusManager.get('mail');
+            const currentStatus = readCurrentMailStatus();
             const currentCount = currentStatus.processed || 0;
 
-            updateStatus(withMailConnector({ state: "idle", lastSync: new Date().toISOString(), processed: currentCount + savedCount }, "apple_mail"));
+            updateMailStatus({ state: "idle", lastSync: new Date().toISOString(), processed: currentCount + savedCount }, "apple_mail");
         } else {
-            const currentStatus = statusManager.get('mail');
+            const currentStatus = readCurrentMailStatus();
             const currentCount = currentStatus.processed || 0;
 
-            updateStatus(withMailConnector({ state: "idle", lastSync: new Date().toISOString(), processed: currentCount, message: "No new Apple Mail index rows found" }, "apple_mail"));
+            updateMailStatus({ state: "idle", lastSync: new Date().toISOString(), processed: currentCount, message: "No new Apple Mail index rows found" }, "apple_mail");
         }
 
         return { added: savedCount, hasMore: nextState.lastRowId < sourceMaxRowId };
 
     } catch (e) {
         console.error("Mail Sync Error:", e);
-        updateStatus(withMailConnector({ state: "error", message: e.message }, "apple_mail"));
+        updateMailStatus({ state: "error", message: e.message }, "apple_mail");
         throw e;
     } finally {
         if (db) {
@@ -515,6 +619,6 @@ if (require.main === module) {
     });
 }
 
-module.exports = { syncMail };
+module.exports = { syncMail, resolveAppleMailIndexPath, buildMailStatus };
 module.exports.isImapConfigured = hasImapConfig;
 module.exports.isGmailConfigured = hasGmailConfig;

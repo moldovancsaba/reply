@@ -3,7 +3,7 @@
 ## Current State
 
 - canonical repo root is `/Users/Shared/Projects/reply`
-- documented package version is `0.5.14`
+- documented package version is `0.5.15`
 - live drafting runtime is `{trinity}`
 - legacy drafting is no longer part of the normal live path
 - structured draft outcomes use `/api/trinity/outcome`
@@ -49,7 +49,8 @@ Implemented changes:
 - added durable Trinity event outbox at `/Users/Shared/Projects/reply/chat/trinity-event-outbox.js`
 - `{reply}` can now enqueue normalized runtime memory events and document-registration payloads from `chat/brain-runtime.js`
 - the product can now ask `{trinity}` for a prepared draft on one thread through `GET /api/trinity/prepared-draft`
-- compose hydration now prefers runtime-owned prepared drafts when a contact/thread is opened
+- compose hydration now force-refreshes runtime-owned prepared drafts when a contact/thread is opened so Trinity always fills the input with a fresh-or-best-available draft
+- persisted `contact.draft` no longer seeds the input on conversation open
 - advanced draft metadata now surfaces prepared-draft freshness timestamps in the existing candidate UI
 - send-finalization now also emits one bounded `outbound_message_recorded` memory event back into `{trinity}`
 - canonical store paths now emit runtime events system-wide:
@@ -284,7 +285,7 @@ Validated during this sync:
 ## 2026-05-05 Foundation And Documentation Sync
 
 - README, install docs, architecture docs, dependency map, contribution guide, and build handoff are now aligned on:
-  - version `0.5.14`
+  - version `0.5.15`
   - manual-only merge authority
   - current conversation foundation schema presence
   - native shell install/build contract

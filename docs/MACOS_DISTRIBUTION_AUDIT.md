@@ -39,16 +39,23 @@ Legacy `{reply}` paths are still migrated forward for compatibility.
 
 ### Protected-data access
 
-The app now uses a first-class helper executable for the protected iMessage read path:
+The app now uses a first-class helper executable for Apple-private read paths:
 
 - Helper:
   - `reply-helper`
 - Current role:
   - mirror `~/Library/Messages/chat.db` into the app-owned mirror store
+  - export Apple Mail rows from the active `Envelope Index` store
 - Mirror target:
   - `~/Library/Application Support/reply/apple-source-mirrors/imessage/chat.db`
 
 This is materially better than granting Full Disk Access to a generic Homebrew `node` binary. It gives the protected-data path a stable in-bundle identity.
+
+Operational rule:
+
+- bundled Node services must not open Apple-private SQLite stores directly
+- the helper owns protected source access
+- the hub/worker consume only helper exports, mirrors, and app-owned normalized stores
 
 ### Native operational surfaces
 

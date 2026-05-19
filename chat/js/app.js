@@ -649,6 +649,10 @@ async function hydratePreparedDraftForHandle(handle, options = {}) {
   try {
     const payload = await fetchPreparedDraft(normalizedHandle, { refresh: options.refresh === true });
     if (!payload?.suggestion || !payload?.rankedDraftSet) return false;
+    const replaceIfComposerMatches = normalizeDraftText(options.replaceIfComposerMatches || '');
+    const shouldForceApply =
+      options.force === true
+      || (replaceIfComposerMatches && getActiveComposerText() === replaceIfComposerMatches);
     writeCachedSuggestion(normalizedHandle, {
       suggestion: payload.suggestion,
       explanation: payload.explanation || 'Prepared Trinity draft is ready.',
@@ -662,7 +666,7 @@ async function hydratePreparedDraftForHandle(handle, options = {}) {
         stale: payload?.stale === true,
       },
     });
-    return applyCachedSuggestionForHandle(normalizedHandle, { force: false });
+    return applyCachedSuggestionForHandle(normalizedHandle, { force: shouldForceApply });
   } catch (error) {
     console.warn('[{reply}] Prepared draft hydrate failed:', error?.message || error);
     return false;

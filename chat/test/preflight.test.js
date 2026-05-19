@@ -47,6 +47,23 @@ test("buildPreflightReport: blocked when worker offline", (t) => {
     assert.ok(r.checks.some((c) => c.id === "background_worker" && c.status === "blocked"));
 });
 
+test("buildPreflightReport: worker unknown is degraded while launch is still starting", () => {
+    const h = baseHealth({
+        launch: {
+            ready: false,
+            stage: "conversation_rebuild",
+        },
+        services: {
+            ...baseHealth().services,
+            worker: { status: "unknown" }
+        }
+    });
+    const r = buildPreflightReport(h, pathsOk, { settings: {} });
+    const worker = r.checks.find((c) => c.id === "background_worker");
+    assert.strictEqual(worker?.status, "degraded");
+    assert.notStrictEqual(r.overall, "blocked");
+});
+
 test("buildPreflightReport: openclaw critical when send transport needs it and gateway offline", (t) => {
     process.env.REPLY_WHATSAPP_SEND_TRANSPORT = "openclaw_cli";
     try {

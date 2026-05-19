@@ -11,6 +11,9 @@ const {
 
 ensureDataHome();
 const DB_PATH = dataPath('chat.db');
+const SQLITE_BUSY_RETRY_ATTEMPTS = 80;
+const SQLITE_BUSY_RETRY_DELAY_MS = 250;
+const SQLITE_BUSY_TIMEOUT_MS = 20000;
 let conversationIndexReadyPromise = null;
 let storeReadyPromise = null;
 
@@ -19,6 +22,11 @@ function openMessageStoreDb(mode) {
         mode === undefined
             ? new sqlite3.Database(DB_PATH)
             : new sqlite3.Database(DB_PATH, mode);
+    try {
+        db.configure("busyTimeout", SQLITE_BUSY_TIMEOUT_MS);
+    } catch {
+        // ignore if unsupported
+    }
     db.on('error', (err) => {
         console.error('[message-store] SQLite error:', err.message);
     });
@@ -85,30 +93,44 @@ function normalizeConversationSort(sort) {
 }
 
 function runDb(db, sql, params = []) {
-    return new Promise((resolve, reject) => {
+    return retryBusy(() => new Promise((resolve, reject) => {
         db.run(sql, params, function onRun(err) {
             if (err) return reject(err);
             resolve(this);
         });
-    });
+    }));
 }
 
 function allDb(db, sql, params = []) {
-    return new Promise((resolve, reject) => {
+    return retryBusy(() => new Promise((resolve, reject) => {
         db.all(sql, params, (err, rows) => {
             if (err) return reject(err);
             resolve(rows || []);
         });
-    });
+    }));
 }
 
 function getDb(db, sql, params = []) {
-    return new Promise((resolve, reject) => {
+    return retryBusy(() => new Promise((resolve, reject) => {
         db.get(sql, params, (err, row) => {
             if (err) return reject(err);
             resolve(row || null);
         });
-    });
+    }));
+}
+
+async function retryBusy(fn, attempts = SQLITE_BUSY_RETRY_ATTEMPTS, delayMs = SQLITE_BUSY_RETRY_DELAY_MS) {
+    let lastError = null;
+    for (let i = 0; i < attempts; i += 1) {
+        try {
+            return await fn();
+        } catch (err) {
+            if (String(err?.code || "") !== "SQLITE_BUSY") throw err;
+            lastError = err;
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+    }
+    throw lastError || new Error("SQLITE_BUSY");
 }
 
 function safeTimestampMs(value) {
@@ -142,7 +164,7 @@ async function rebuildConversationIndex(handles = null) {
 
     const db = openMessageStoreDb();
     try {
-        db.run("PRAGMA busy_timeout = 5000");
+        db.run(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS}`);
 
         const rawHandles = Array.isArray(handles) ? handles : [];
         const expandedHandles = [];
@@ -362,7 +384,7 @@ async function ensureConversationIndexReady() {
         conversationIndexReadyPromise = (async () => {
             const db = openMessageStoreDb(sqlite3.OPEN_READONLY);
             try {
-                db.run("PRAGMA busy_timeout = 5000");
+                db.run(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS}`);
                 const row = await getDb(db, `
                     SELECT
                         COUNT(*) AS total_count,
@@ -396,7 +418,7 @@ function initialize() {
     const db = openMessageStoreDb();
     storeReadyPromise = new Promise((resolve, reject) => {
         db.serialize(() => {
-            db.run("PRAGMA busy_timeout = 5000");
+            db.run(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS}`);
             db.run(`
                 CREATE TABLE IF NOT EXISTS unified_messages (
                     id TEXT PRIMARY KEY,
@@ -514,105 +536,107 @@ async function saveMessages(messages) {
     if (!messages || messages.length === 0) return;
     await initialize();
 
-    const db = openMessageStoreDb();
-    await new Promise((resolve, reject) => {
-        db.serialize(() => {
-            db.run("PRAGMA busy_timeout = 5000");
+    await retryBusy(() => {
+        const db = openMessageStoreDb();
+        return new Promise((resolve, reject) => {
+            db.serialize(() => {
+                db.run(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS}`);
 
-            const stmt = db.prepare(`
-                INSERT OR REPLACE INTO unified_messages (id, text, source, handle, timestamp, path, is_from_me)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            `);
-            const metadataStmt = db.prepare(`
-                INSERT OR REPLACE INTO unified_message_metadata (
-                    message_id,
-                    provider_message_key,
-                    channel,
-                    external_thread_key,
-                    external_thread_kind,
-                    external_thread_title,
-                    sender_identity,
-                    participant_identities_json,
-                    recipient_identities_json,
-                    metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `);
+                const stmt = db.prepare(`
+                    INSERT OR REPLACE INTO unified_messages (id, text, source, handle, timestamp, path, is_from_me)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                `);
+                const metadataStmt = db.prepare(`
+                    INSERT OR REPLACE INTO unified_message_metadata (
+                        message_id,
+                        provider_message_key,
+                        channel,
+                        external_thread_key,
+                        external_thread_kind,
+                        external_thread_title,
+                        sender_identity,
+                        participant_identities_json,
+                        recipient_identities_json,
+                        metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `);
 
-            db.run("BEGIN TRANSACTION");
-            const operations = [];
-            messages.forEach((m) => {
-                operations.push((done) => {
-                    stmt.run(
-                        m.id,
-                        m.text,
-                        m.source,
-                        m.handle,
-                        m.timestamp,
-                        m.path,
-                        m.is_from_me == null ? null : (m.is_from_me ? 1 : 0),
-                        done,
-                    );
-                });
-                if (m.metadata && typeof m.metadata === "object") {
+                db.run("BEGIN TRANSACTION");
+                const operations = [];
+                messages.forEach((m) => {
                     operations.push((done) => {
-                        metadataStmt.run(
+                        stmt.run(
                             m.id,
-                            m.metadata.providerMessageKey || null,
-                            m.metadata.channel || null,
-                            m.metadata.externalThreadKey || null,
-                            m.metadata.externalThreadKind || null,
-                            m.metadata.externalThreadTitle || null,
-                            m.metadata.senderIdentity || null,
-                            safeJsonStringify(m.metadata.participantIdentities || []),
-                            safeJsonStringify(m.metadata.recipientIdentities || []),
-                            safeJsonStringify(m.metadata),
+                            m.text,
+                            m.source,
+                            m.handle,
+                            m.timestamp,
+                            m.path,
+                            m.is_from_me == null ? null : (m.is_from_me ? 1 : 0),
                             done,
                         );
                     });
-                }
-            });
-
-            let index = 0;
-            const rollbackAndClose = (err) => {
-                db.run("ROLLBACK", () => {
-                    stmt.finalize(() => {
-                        metadataStmt.finalize(() => {
-                            db.close(() => reject(err));
+                    if (m.metadata && typeof m.metadata === "object") {
+                        operations.push((done) => {
+                            metadataStmt.run(
+                                m.id,
+                                m.metadata.providerMessageKey || null,
+                                m.metadata.channel || null,
+                                m.metadata.externalThreadKey || null,
+                                m.metadata.externalThreadKind || null,
+                                m.metadata.externalThreadTitle || null,
+                                m.metadata.senderIdentity || null,
+                                safeJsonStringify(m.metadata.participantIdentities || []),
+                                safeJsonStringify(m.metadata.recipientIdentities || []),
+                                safeJsonStringify(m.metadata),
+                                done,
+                            );
                         });
-                    });
+                    }
                 });
-            };
-            const commitAndClose = () => {
-                db.run("COMMIT", (err) => {
-                    stmt.finalize(() => {
-                        metadataStmt.finalize(() => {
-                            if (err) {
+
+                let index = 0;
+                const rollbackAndClose = (err) => {
+                    db.run("ROLLBACK", () => {
+                        stmt.finalize(() => {
+                            metadataStmt.finalize(() => {
                                 db.close(() => reject(err));
-                                return;
-                            }
-                            db.close((closeErr) => {
-                                if (closeErr) return reject(closeErr);
-                                resolve();
                             });
                         });
                     });
-                });
-            };
-            const runNext = () => {
-                if (index >= operations.length) {
-                    commitAndClose();
-                    return;
-                }
-                const operation = operations[index++];
-                operation((err) => {
-                    if (err) {
-                        rollbackAndClose(err);
+                };
+                const commitAndClose = () => {
+                    db.run("COMMIT", (err) => {
+                        stmt.finalize(() => {
+                            metadataStmt.finalize(() => {
+                                if (err) {
+                                    db.close(() => reject(err));
+                                    return;
+                                }
+                                db.close((closeErr) => {
+                                    if (closeErr) return reject(closeErr);
+                                    resolve();
+                                });
+                            });
+                        });
+                    });
+                };
+                const runNext = () => {
+                    if (index >= operations.length) {
+                        commitAndClose();
                         return;
                     }
-                    runNext();
-                });
-            };
-            runNext();
+                    const operation = operations[index++];
+                    operation((err) => {
+                        if (err) {
+                            rollbackAndClose(err);
+                            return;
+                        }
+                        runNext();
+                    });
+                };
+                runNext();
+            });
         });
     });
 

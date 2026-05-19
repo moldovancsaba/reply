@@ -56,11 +56,35 @@ test("system health attaches preflight + api contract", () => {
   assert.ok(src.includes("health.preflight"), "health should include preflight report");
   assert.ok(src.includes("health.apiContract"), "health should include apiContract for clients");
   assert.ok(src.includes("servePreflight"), "/api/preflight route handler should exist");
-  assert.ok(src.includes("launch: hubRuntime.getBootstrapState()"), "health should include launch bootstrap state");
+  assert.ok(src.includes("const launch = getLaunchState()"), "health should capture launch bootstrap state through startup guard");
+  assert.ok(/\blaunch,\s*\n\s*httpPort\b/.test(src), "health should include launch bootstrap state");
+  assert.ok(src.includes("clearStaleTransientSqliteBusy(mailStatus, launch)"), "health should clear stale transient mail errors on startup");
+  assert.ok(src.includes("clearStaleTransientSqliteBusy(notesStatus, launch)"), "health should clear stale transient notes errors on startup");
+  assert.ok(src.includes("clearStaleTransientSqliteBusy(calendarStatus, launch)"), "health should clear stale transient calendar errors on startup");
 });
 
 test("server initializes conversation foundation schema during startup", () => {
   const src = fs.readFileSync(path.join(__dirname, "../server.js"), "utf8");
   assert.ok(src.includes('require("./conversation-foundation-store.js")'), "server should load conversation foundation store");
   assert.ok(src.includes("conversationFoundationStore.waitUntilReady()"), "server startup should initialize conversation foundation schema");
+  assert.ok(src.includes("const rebuildPromise = conversationFoundationStore.rebuildConversationFoundation()"), "server should start canonical rebuild during startup");
+  assert.ok(src.includes("STARTUP_REBUILD_BUDGET_MS"), "server should budget foreground rebuild time");
+  assert.ok(src.includes("continuing in background"), "server should continue startup when rebuild exceeds budget");
+});
+
+test("sync and bridge routes gate startup-sensitive ingestion through startup guard", () => {
+  const syncSrc = fs.readFileSync(path.join(__dirname, "../routes/sync.js"), "utf8");
+  const bridgeSrc = fs.readFileSync(path.join(__dirname, "../routes/bridge.js"), "utf8");
+  assert.ok(syncSrc.includes('const { buildStartupBlockMessage } = require("../startup-guard")'), "sync routes should use startup guard");
+  assert.ok(syncSrc.includes('unifiedStoreStartupBlock("Notes sync")'), "notes sync should be blocked during startup");
+  assert.ok(syncSrc.includes('unifiedStoreStartupBlock("Calendar sync")'), "calendar sync should be blocked during startup");
+  assert.ok(syncSrc.includes('unifiedStoreStartupBlock("LinkedIn sync")'), "linkedin sync should be blocked during startup");
+  assert.ok(bridgeSrc.includes('buildStartupBlockMessage({ noun: "Channel bridge ingest" })'), "bridge inbound should be blocked during startup");
+});
+
+test("message-store retries SQLITE_BUSY in the normal ingest path", () => {
+  const src = fs.readFileSync(path.join(__dirname, "../message-store.js"), "utf8");
+  assert.ok(src.includes("const SQLITE_BUSY_RETRY_ATTEMPTS = 80"), "message-store should define busy retry attempts");
+  assert.ok(src.includes("db.configure(\"busyTimeout\", SQLITE_BUSY_TIMEOUT_MS)"), "message-store should configure a longer busy timeout");
+  assert.ok(src.includes("await retryBusy(() => {"), "message-store saveMessages should retry on SQLITE_BUSY");
 });
