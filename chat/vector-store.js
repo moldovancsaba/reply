@@ -3,6 +3,9 @@ const path = require("path");
 const fs = require("fs");
 const { channelFromDoc, isConversationDataSource } = require("./utils/chat-utils");
 const { dataPath } = require("./app-paths.js");
+const { applySharedModelEnv, getEmbeddingModelRef } = require("./model-paths.js");
+
+applySharedModelEnv();
 
 function escapeSqlString(value) {
     return String(value ?? "").replace(/'/g, "''");
@@ -32,7 +35,7 @@ const TABLE_NAME = "documents";
 async function getPipeline() {
     if (!pipelineInstance) {
         const { pipeline } = await import("@xenova/transformers");
-        pipelineInstance = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
+        pipelineInstance = await pipeline("feature-extraction", getEmbeddingModelRef());
     }
     return pipelineInstance;
 }

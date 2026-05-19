@@ -6,7 +6,7 @@
 <p align="center"><strong>A local-first macOS communication workspace with a native shell, a Node hub, and a Trinity-backed drafting runtime.</strong></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.5.14-2563EB?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/version-v0.5.15-2563EB?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/platform-macOS%2015%2B-0F172A?style=for-the-badge" alt="Platform">
   <img src="https://img.shields.io/badge/runtime-Node%20%7C%20Swift%20%7C%20Python-0EA5E9?style=for-the-badge" alt="Runtime">
 </p>
@@ -65,6 +65,7 @@ Canonical docs:
 - [docs/TRINITY_INTEGRATION_SPINE.md](/Users/Shared/Projects/reply/docs/TRINITY_INTEGRATION_SPINE.md)
 - [docs/POLICY_LOOP_REPO_BREAKDOWN.md](/Users/Shared/Projects/reply/docs/POLICY_LOOP_REPO_BREAKDOWN.md)
 - [docs/THIN_UI_LOCAL_PRECOMPUTE_AUDIT.md](/Users/Shared/Projects/reply/docs/THIN_UI_LOCAL_PRECOMPUTE_AUDIT.md)
+- [docs/NATIVE_WORKSPACE_HOT_PATH_SSOT.md](/Users/Shared/Projects/reply/docs/NATIVE_WORKSPACE_HOT_PATH_SSOT.md)
 - [CONTRIBUTING.md](/Users/Shared/Projects/reply/CONTRIBUTING.md)
 
 ## What Changed Recently
@@ -79,6 +80,8 @@ This README now reflects the current product state, including:
 - thread loading now preloads the first 20 and last 20 messages, then fills the history gap incrementally in the background
 - message threads now render explicit left/right sent-versus-received rows instead of one undifferentiated feed
 - suggest and drafting routes now consume prepared local snapshot artifacts rather than assembling snippets, history, or fallback inbound context in the request path
+- opening one conversation now forces a Trinity prepared-draft check and immediate refresh so the composer gets a Trinity draft even when the cached draft is missing or stale
+- persisted `contact.draft` no longer seeds compose on conversation open; the operator-visible input is now Trinity-owned on the hot path
 - native sync triggers now send the same protected approval payload/header shape as the web app, so per-source sync actions can start background work from the native shell
 - native shell expectations are now first-class: `reply.app` is the operator shell, the hub/runtime sit behind it
 - thin-read architecture is now explicit: passive UI routes are expected to consume local materialized read models instead of request-time reconstruction
@@ -95,7 +98,7 @@ This README now reflects the current product state, including:
 
 Current documented runtime versions:
 
-- `{reply}` package version: `0.5.14`
+- `{reply}` package version: `0.5.15`
 - native shell target: `macOS 15+`
 - Node.js: `>=20.17.0`
 - Python for `{trinity}`: `>=3.12`
@@ -302,6 +305,7 @@ cd chat
 npm test
 npm run lint
 npm run audit:conversations
+npm run verify:trinity-train
 ```
 
 Useful runtime checks:
@@ -317,6 +321,8 @@ Mail-specific checks:
 ```bash
 cat ~/Library/Application\\ Support/reply/mail_sync_status.json
 ```
+
+`npm run verify:trinity-train` is the end-to-end runtime smoke check for the live `{reply} -> {trinity} -> {train}` contract. It verifies one synthetic cycle through `suggest`, `record-outcome`, `export-trace`, and `train-propose-policy`.
 
 ## Architecture Notes
 

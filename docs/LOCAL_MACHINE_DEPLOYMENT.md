@@ -31,7 +31,7 @@ Optional but commonly required:
 
 Current documented versions for this deployment guide:
 
-- `{reply}` package: `0.5.14`
+- `{reply}` package: `0.5.15`
 - native shell platform target: `macOS 15+`
 - Node.js: `>=20.17.0`
 - Python for `{trinity}`: `>=3.12`
@@ -207,8 +207,9 @@ Current mail ingestion order:
 Important operator notes:
 
 - if Gmail returns `invalid_grant`, reconnect Gmail in settings or rely on Apple Mail fallback
-- Apple Mail fallback now normalizes sender/recipient addresses into `mailto:` conversation handles
-- Apple Mail fallback only works if Mail.app is configured locally and can be automated
+- Apple Mail fallback now reads through the bundled `reply-helper`, not directly from the Node worker
+- Apple Mail fallback normalizes sender/recipient addresses into `mailto:` conversation handles
+- Full Disk Access onboarding should target `/Applications/reply.app/Contents/Helpers/reply-helper`
 
 ### Failure handling
 
@@ -248,7 +249,10 @@ cd /Users/Shared/Projects/reply/chat
 npm test
 npm run lint
 npm run audit:conversations
+npm run verify:trinity-train
 ```
+
+`npm run verify:trinity-train` should pass before release-oriented validation if this machine has the sibling `{trinity}` runtime available. It proves the live drafting, outcome recording, trace export, and bounded `{train}` handoff path instead of only unit-level behavior.
 
 ## Troubleshooting
 

@@ -1,6 +1,6 @@
 {
   "name": "reply-chat",
-  "version": "0.5.14",
+  "version": "0.5.15",
   "description": "{reply} POC — localhost chat to ask for reply suggestions",
   "main": "server.js",
   "scripts": {
@@ -14,6 +14,7 @@
     "audit:conversations": "node scripts/audit-conversation-integrity.js",
     "channel-bridge:ingest": "node channel-bridge-sidecar.js",
     "verify:openclaw": "node verify_openclaw.js",
+    "verify:trinity-train": "node scripts/verify-trinity-train-integration.js",
     "linkedin:sync": "node linkedin-sidecar.js",
     "linkedin:install-browsers": "playwright install chromium",
     "lint": "eslint .",

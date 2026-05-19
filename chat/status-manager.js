@@ -53,6 +53,16 @@ class StatusManager {
         return merged;
     }
 
+    replace(channel, nextStatus) {
+        const filename = `${channel}_sync_status.json`;
+        const payload = {
+            ...nextStatus,
+            timestamp: new Date().toISOString()
+        };
+        this._write(filename, payload);
+        return payload;
+    }
+
     get(channel) {
         return this._read(`${channel}_sync_status.json`);
     }

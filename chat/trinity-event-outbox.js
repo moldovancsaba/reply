@@ -4,30 +4,53 @@ const { ensureDataHome, dataPath } = require("./app-paths.js");
 ensureDataHome();
 
 const DB_PATH = process.env.REPLY_CHAT_DB_PATH || dataPath("chat.db");
+const SQLITE_BUSY_RETRY_ATTEMPTS = 80;
+const SQLITE_BUSY_RETRY_DELAY_MS = 250;
+const SQLITE_BUSY_TIMEOUT_MS = 20000;
 let readyPromise = null;
 
 function openDb(mode) {
-  return mode == null
+  const db = mode == null
     ? new sqlite3.Database(DB_PATH)
     : new sqlite3.Database(DB_PATH, mode);
+  try {
+    db.configure("busyTimeout", SQLITE_BUSY_TIMEOUT_MS);
+  } catch {
+    // Ignore if the sqlite binding does not expose configure().
+  }
+  return db;
 }
 
 function runDb(db, sql, params = []) {
-  return new Promise((resolve, reject) => {
+  return retryBusy(() => new Promise((resolve, reject) => {
     db.run(sql, params, function onRun(err) {
       if (err) return reject(err);
       resolve(this);
     });
-  });
+  }));
 }
 
 function allDb(db, sql, params = []) {
-  return new Promise((resolve, reject) => {
+  return retryBusy(() => new Promise((resolve, reject) => {
     db.all(sql, params, (err, rows) => {
       if (err) return reject(err);
       resolve(rows || []);
     });
-  });
+  }));
+}
+
+async function retryBusy(fn, attempts = SQLITE_BUSY_RETRY_ATTEMPTS, delayMs = SQLITE_BUSY_RETRY_DELAY_MS) {
+  let lastError = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (String(err?.code || "") !== "SQLITE_BUSY") throw err;
+      lastError = err;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  throw lastError || new Error("SQLITE_BUSY");
 }
 
 function waitUntilReady() {
@@ -36,7 +59,7 @@ function waitUntilReady() {
   readyPromise = new Promise((resolve, reject) => {
     db.serialize(() => {
       db.run("PRAGMA journal_mode = WAL");
-      db.run("PRAGMA busy_timeout = 5000");
+      db.run(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS}`);
       db.run(`
         CREATE TABLE IF NOT EXISTS trinity_event_outbox (
           id INTEGER PRIMARY KEY AUTOINCREMENT,

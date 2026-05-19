@@ -5,6 +5,7 @@
 
 const { writeJson, readJsonBody } = require("../utils/server-utils");
 const { readSettings, getChannelBridgeInboundMode, CHANNEL_BRIDGE_CHANNELS } = require("../settings-store");
+const { buildStartupBlockMessage } = require("../startup-guard");
 const {
     normalizeInboundEvent,
     toVectorDoc,
@@ -15,6 +16,11 @@ const {
 
 async function serveInbound(req, res, invalidateCaches) {
     try {
+        const startupBlock = buildStartupBlockMessage({ noun: "Channel bridge ingest" });
+        if (startupBlock) {
+            writeJson(res, 503, startupBlock);
+            return;
+        }
         const payload = await readJsonBody(req);
         const events = Array.isArray(payload)
             ? payload

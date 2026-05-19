@@ -27,7 +27,15 @@ class SyncGuard {
         if (!fs.existsSync(lockPath)) return false;
 
         try {
-            const pid = parseInt(fs.readFileSync(lockPath, 'utf8'), 10);
+            const raw = fs.readFileSync(lockPath, 'utf8');
+            let pid = parseInt(raw, 10);
+            if (!Number.isFinite(pid)) {
+                try {
+                    pid = Number(JSON.parse(raw)?.pid);
+                } catch {
+                    pid = NaN;
+                }
+            }
             if (isNaN(pid)) return false;
 
             // Check if process still exists
@@ -50,16 +58,51 @@ class SyncGuard {
      * @returns {boolean} True if lock acquired, false if already locked.
      */
     acquireLock(source) {
-        if (this.isLocked(source)) return false;
-
         const lockPath = this._getLockPath(source);
         try {
-            fs.writeFileSync(lockPath, process.pid.toString());
+            if (this.isLocked(source)) return false;
+            const fd = fs.openSync(lockPath, 'wx');
+            try {
+                fs.writeFileSync(fd, JSON.stringify({
+                    pid: process.pid,
+                    source,
+                    startedAt: new Date().toISOString()
+                }));
+            } finally {
+                fs.closeSync(fd);
+            }
             return true;
         } catch (e) {
+            if (e && e.code === 'EEXIST') {
+                if (this.isLocked(source)) return false;
+                try {
+                    fs.unlinkSync(lockPath);
+                } catch (_) {
+                    /* ignore */
+                }
+                return this.acquireLock(source);
+            }
             console.error(`[SyncGuard] Failed to acquire lock for ${source}:`, e.message);
             return false;
         }
+    }
+
+    /**
+     * Attempts to acquire multiple locks in order.
+     * Releases any partially acquired locks if one fails.
+     * @param {string[]} sources
+     * @returns {boolean}
+     */
+    acquireLocks(sources) {
+        const acquired = [];
+        for (const source of sources) {
+            if (!this.acquireLock(source)) {
+                this.releaseLocks(acquired);
+                return false;
+            }
+            acquired.push(source);
+        }
+        return true;
     }
 
     /**
@@ -73,6 +116,16 @@ class SyncGuard {
             } catch (e) {
                 console.error(`[SyncGuard] Failed to release lock for ${source}:`, e.message);
             }
+        }
+    }
+
+    /**
+     * Releases multiple locks.
+     * @param {string[]} sources
+     */
+    releaseLocks(sources) {
+        for (const source of [...sources].reverse()) {
+            this.releaseLock(source);
         }
     }
 }

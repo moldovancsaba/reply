@@ -30,7 +30,14 @@ final class ReplyCoreService: ObservableObject {
     @Published var threadGapRemaining: Int = 0
     @Published var isLoadingMoreThreadGap = false
     @Published var selectedProfile: ReplyProfile?
-    @Published var draftMessage: String = ""
+    @Published var draftMessage: String = "" {
+        didSet {
+            guard !suppressDraftTracking else { return }
+            if let handle = selectedConversationHandle, composerSeedHandle == handle {
+                composerHasManualEdits = true
+            }
+        }
+    }
     @Published var selectedChannel: ReplyMessageChannel = .imessage
     @Published var currentConversationChannels: [ReplyMessageChannel] = []
     @Published var allowedReplyChannels: [ReplyMessageChannel] = []
@@ -44,14 +51,21 @@ final class ReplyCoreService: ObservableObject {
     @Published var profileErrorMessage: String = ""
     @Published var profileSaveErrorMessage: String = ""
     @Published var sendInFlight = false
+    @Published var regenerateDraftInFlight = false
     @Published var conversationRefreshInFlight = false
     @Published var profileDraft: ReplyProfileDraft = .empty
+
+    private var suppressDraftTracking = false
+    private var composerSeedHandle: String?
+    private var composerHasManualEdits = false
+    private var currentDraftTelemetryContext: ReplyDraftTelemetryContext?
+    private var currentDraftSelectionReportKey: String?
 
     private var launchProcess: Process?
     private var refreshTask: Task<Void, Never>?
     private var launchWatchTask: Task<Void, Never>?
     private var mirrorRefreshTask: Task<Void, Never>?
-    private let preferredPorts = Array(45431...45446)
+    private let preferredPorts = Array(45311...45326) + Array(45431...45446)
     private var hasAttemptedAutoLaunch = false
     private var consecutiveHealthFailures = 0
     private var lastIMessageMirrorAt: Date?
@@ -197,8 +211,13 @@ final class ReplyCoreService: ObservableObject {
 
     func loadConversation(handle: String) async {
         guard !handle.isEmpty else { return }
+        let previousHandle = selectedConversationHandle
         workspaceMode = .conversations
         selectedConversationHandle = handle
+        if previousHandle != handle {
+            applyComposerDraft("", for: handle, preserveManualEdits: false, draftTelemetryContext: nil)
+            sendErrorMessage = ""
+        }
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.loadMessages(handle: handle) }
             group.addTask { await self.loadProfile(handle: handle) }
@@ -292,6 +311,7 @@ final class ReplyCoreService: ObservableObject {
                 selectedProfile = payload
                 profileDraft = ReplyProfileDraft(profile: payload)
             }
+            await seedComposerDraft(for: handle, profile: payload)
         } catch {
             if selectedConversationHandle == handle {
                 selectedProfile = nil
@@ -321,7 +341,6 @@ final class ReplyCoreService: ObservableObject {
         if isSavingProfile { return }
         isSavingProfile = true
         profileSaveErrorMessage = ""
-        defer { isSavingProfile = false }
 
         struct Payload: Encodable {
             let handle: String
@@ -364,9 +383,13 @@ final class ReplyCoreService: ObservableObject {
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 throw NSError(domain: "ReplyCoreService", code: 7, userInfo: [NSLocalizedDescriptionKey: "Saving profile failed."])
             }
+            isSavingProfile = false
             await loadProfile(handle: handle)
-            await loadConversations()
+            Task { @MainActor in
+                await self.loadConversations()
+            }
         } catch {
+            isSavingProfile = false
             profileSaveErrorMessage = error.localizedDescription
         }
     }
@@ -394,7 +417,7 @@ final class ReplyCoreService: ObservableObject {
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             applyProtectedHeaders(to: &request, includeHumanApproval: true)
-            request.httpBody = try JSONSerialization.data(withJSONObject: [
+            var payload: [String: Any] = [
                 "recipient": handle,
                 "text": text,
                 "trigger": [
@@ -406,19 +429,51 @@ final class ReplyCoreService: ObservableObject {
                     "source": "native-send",
                     "at": ISO8601DateFormatter().string(from: Date())
                 ]
-            ])
-            if let conversationId = currentConversationId, !conversationId.isEmpty,
-               var json = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any] {
-                json["conversationId"] = conversationId
-                request.httpBody = try JSONSerialization.data(withJSONObject: json)
+            ]
+            if let conversationId = currentConversationId, !conversationId.isEmpty {
+                payload["conversationId"] = conversationId
             }
+            if let draftTelemetryContext = currentDraftTelemetryContext {
+                payload["draftContext"] = draftTelemetryContext.sendPayload
+            }
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
             let (_, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 throw NSError(domain: "ReplyCoreService", code: 5, userInfo: [NSLocalizedDescriptionKey: "Send failed."])
             }
-            draftMessage = ""
+            if let draftTelemetryContext = currentDraftTelemetryContext {
+                if draftShouldEmitEditedMemoryEvent(finalText: text, draftContext: draftTelemetryContext) {
+                    await reportDraftEditedMemoryEvent(handle: handle, finalText: text, draftContext: draftTelemetryContext)
+                }
+            } else {
+                await reportGenericSendFeedback(handle: handle, finalText: text)
+            }
+            applyComposerDraft("", for: handle, preserveManualEdits: false, draftTelemetryContext: nil)
             await loadConversation(handle: handle)
             await loadConversations()
+        } catch {
+            sendErrorMessage = error.localizedDescription
+        }
+    }
+
+    func regenerateDraft() async {
+        guard let handle = selectedConversationHandle else { return }
+        if regenerateDraftInFlight { return }
+        regenerateDraftInFlight = true
+        sendErrorMessage = ""
+        defer { regenerateDraftInFlight = false }
+
+        let existingText = draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            try await reportRegenerateFeedback(handle: handle, existingText: existingText)
+            let prepared = try await fetchPreparedDraft(for: handle, refresh: true)
+            let suggestion = (prepared.suggestion ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !suggestion.isEmpty else {
+                throw NSError(domain: "ReplyCoreService", code: 8, userInfo: [NSLocalizedDescriptionKey: "No regenerated draft is available for this conversation."])
+            }
+            let context = ReplyDraftTelemetryContext(handle: handle, response: prepared)
+            applyComposerDraft(suggestion, for: handle, preserveManualEdits: false, draftTelemetryContext: context)
+            await reportDraftSelectedIfNeeded(handle: handle, draftContext: context, notes: "native_regenerate_auto_apply")
         } catch {
             sendErrorMessage = error.localizedDescription
         }
@@ -469,7 +524,7 @@ final class ReplyCoreService: ObservableObject {
         env["REPLY_NATIVE_CLIENT_TOKEN"] = nativeClientToken
         env["REPLY_HELPER_PATH"] = helperBinary.path
         env["TRINITY_RUNTIME_ROOT"] = runtimeRoot.appending(path: "trinity-runtime").path
-        env["PORT"] = String(preferredPorts.first ?? 45431)
+        env["PORT"] = String(preferredPorts.first ?? 45311)
         if let mirrored = mirroredIMessageDbURL(), FileManager.default.fileExists(atPath: mirrored.path) {
             env["REPLY_IMESSAGE_DB_PATH"] = mirrored.path
         }
@@ -904,6 +959,256 @@ final class ReplyCoreService: ObservableObject {
         return try decoder.decode(T.self, from: data)
     }
 
+    private func seedComposerDraft(for handle: String, profile: ReplyProfile) async {
+        guard selectedConversationHandle == handle else { return }
+
+        let storedDraft = (profile.draft ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !storedDraft.isEmpty {
+            applyComposerDraft(storedDraft, for: handle, preserveManualEdits: true, draftTelemetryContext: nil)
+        }
+
+        guard shouldAutoSeedPreparedDraft(for: handle) || currentDraftTelemetryContext == nil else { return }
+        guard let prepared = try? await fetchPreparedDraft(for: handle, refresh: false) else { return }
+        let suggestion = (prepared.suggestion ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let context = ReplyDraftTelemetryContext(handle: handle, response: prepared)
+
+        if storedDraft.isEmpty {
+            guard !suggestion.isEmpty else { return }
+            applyComposerDraft(suggestion, for: handle, preserveManualEdits: true, draftTelemetryContext: context)
+            await reportDraftSelectedIfNeeded(handle: handle, draftContext: context, notes: "native_auto_apply_top_candidate")
+            return
+        }
+
+        if normalizeDraft(storedDraft) == normalizeDraft(suggestion) {
+            applyComposerDraft(storedDraft, for: handle, preserveManualEdits: true, draftTelemetryContext: context)
+            await reportDraftSelectedIfNeeded(handle: handle, draftContext: context, notes: "native_attach_context_to_saved_draft")
+        }
+    }
+
+    private func shouldAutoSeedPreparedDraft(for handle: String) -> Bool {
+        guard selectedConversationHandle == handle else { return false }
+        if composerSeedHandle != handle { return true }
+        if composerHasManualEdits { return false }
+        return draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func fetchPreparedDraft(for handle: String, refresh: Bool) async throws -> ReplyPreparedDraftResponse {
+        guard let baseURL else {
+            throw NSError(domain: "ReplyCoreService", code: 11, userInfo: [NSLocalizedDescriptionKey: "The {reply} runtime is not connected."])
+        }
+        var components = URLComponents(url: baseURL.appending(path: "api/trinity/prepared-draft"), resolvingAgainstBaseURL: false)
+        var queryItems = [URLQueryItem(name: "handle", value: handle)]
+        if refresh {
+            queryItems.append(URLQueryItem(name: "refresh", value: "1"))
+        }
+        components?.queryItems = queryItems
+        guard let url = components?.url else {
+            throw NSError(domain: "ReplyCoreService", code: 12, userInfo: [NSLocalizedDescriptionKey: "Invalid prepared draft URL."])
+        }
+        return try await requestJSON(url: url, protectedRoute: true)
+    }
+
+    private func applyComposerDraft(
+        _ text: String,
+        for handle: String,
+        preserveManualEdits: Bool,
+        draftTelemetryContext: ReplyDraftTelemetryContext?
+    ) {
+        guard selectedConversationHandle == handle else { return }
+        if preserveManualEdits && composerSeedHandle == handle && composerHasManualEdits {
+            return
+        }
+        suppressDraftTracking = true
+        draftMessage = text
+        suppressDraftTracking = false
+        composerSeedHandle = handle
+        composerHasManualEdits = false
+        let previousContextKey = currentDraftTelemetryContext.map {
+            "\($0.cycleId)::\($0.selectedCandidateId ?? "none")"
+        }
+        let nextContextKey = draftTelemetryContext.map {
+            "\($0.cycleId)::\($0.selectedCandidateId ?? "none")"
+        }
+        if previousContextKey != nextContextKey {
+            currentDraftSelectionReportKey = nil
+        }
+        currentDraftTelemetryContext = draftTelemetryContext
+    }
+
+    private func normalizeDraft(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\r\n", with: "\n")
+    }
+
+    private func draftShouldEmitEditedMemoryEvent(
+        finalText: String,
+        draftContext: ReplyDraftTelemetryContext
+    ) -> Bool {
+        let edited = normalizeDraft(finalText)
+        let original = normalizeDraft(draftContext.selectedDraftText)
+        return !edited.isEmpty && !original.isEmpty && edited != original
+    }
+
+    private func reportDraftEditedMemoryEvent(
+        handle: String,
+        finalText: String,
+        draftContext: ReplyDraftTelemetryContext
+    ) async {
+        guard let baseURL else { return }
+        let edited = normalizeDraft(finalText)
+        let original = normalizeDraft(draftContext.selectedDraftText)
+        guard !edited.isEmpty, !original.isEmpty, edited != original else { return }
+
+        var metadata: [String: Any] = [
+            "source_product": "reply",
+            "cycle_id": draftContext.cycleId,
+            "original_draft_text": original,
+            "edited_length": edited.count,
+            "original_length": original.count,
+        ]
+        if let selectedCandidateId = draftContext.selectedCandidateId, !selectedCandidateId.isEmpty {
+            metadata["candidate_id"] = selectedCandidateId
+        }
+
+        var payload: [String: Any] = [
+            "event_kind": "draft_edited",
+            "source_ref": "draft-edited:\(draftContext.cycleId):\(draftContext.selectedCandidateId ?? "none"):\(Int(Date().timeIntervalSince1970 * 1000))",
+            "occurred_at": ISO8601DateFormatter().string(from: Date()),
+            "thread_ref": draftContext.threadRef,
+            "channel": draftContext.channel,
+            "contact_handle": handle,
+            "content_text": edited,
+            "metadata": metadata,
+        ]
+        if let companyId = draftContext.companyId, !companyId.isEmpty {
+            payload["company_id"] = companyId
+        }
+
+        var request = URLRequest(url: baseURL.appending(path: "api/trinity/memory-event"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        applyProtectedHeaders(to: &request, includeHumanApproval: false)
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+        _ = try? await URLSession.shared.data(for: request)
+    }
+
+    private func reportRegenerateFeedback(handle: String, existingText: String) async throws {
+        if let draftContext = currentDraftTelemetryContext {
+            var payload: [String: Any] = [
+                "cycle_id": draftContext.cycleId,
+                "thread_ref": draftContext.threadRef,
+                "channel": draftContext.channel,
+                "disposition": "REWORK_REQUESTED",
+                "occurred_at": ISO8601DateFormatter().string(from: Date()),
+                "original_draft_text": draftContext.selectedDraftText,
+                "notes": "native_regenerate_requested",
+            ]
+            if let companyId = draftContext.companyId, !companyId.isEmpty {
+                payload["company_id"] = companyId
+            }
+            if let selectedCandidateId = draftContext.selectedCandidateId, !selectedCandidateId.isEmpty {
+                payload["candidate_id"] = selectedCandidateId
+            }
+            let normalizedExistingText = normalizeDraft(existingText)
+            if !normalizedExistingText.isEmpty {
+                payload["final_text"] = normalizedExistingText
+            }
+            try await reportTrinityOutcome(payload)
+        } else if !existingText.isEmpty {
+            try await postFeedback([
+                "type": "draft_replaced",
+                "handle": handle,
+                "original_text": normalizeDraft(existingText),
+                "reason": "native_regenerate_requested",
+            ])
+        }
+    }
+
+    private func reportGenericSendFeedback(handle: String, finalText: String) async {
+        let sentText = normalizeDraft(finalText)
+        guard !sentText.isEmpty else { return }
+        let original = normalizeDraft(profileDraft.draft)
+        do {
+            if !original.isEmpty && original == sentText {
+                try await postFeedback([
+                    "type": "accepted",
+                    "handle": handle,
+                    "suggestion": sentText,
+                    "rating": 1,
+                    "reason": "native_send_as_is_without_cycle",
+                ])
+            } else if !original.isEmpty {
+                try await postFeedback([
+                    "type": "draft_replaced",
+                    "handle": handle,
+                    "original_text": original,
+                    "final_text": sentText,
+                    "reason": "native_send_with_modification_without_cycle",
+                ])
+            }
+        } catch {
+            // Non-blocking feedback path.
+        }
+    }
+
+    private func reportDraftSelectedIfNeeded(
+        handle: String,
+        draftContext: ReplyDraftTelemetryContext?,
+        notes: String
+    ) async {
+        guard let draftContext else { return }
+        guard let selectedCandidateId = draftContext.selectedCandidateId, !selectedCandidateId.isEmpty else { return }
+        let reportKey = "\(draftContext.cycleId)::\(selectedCandidateId)"
+        if currentDraftSelectionReportKey == reportKey {
+            return
+        }
+        var payload: [String: Any] = [
+            "cycle_id": draftContext.cycleId,
+            "thread_ref": draftContext.threadRef,
+            "channel": draftContext.channel,
+            "candidate_id": selectedCandidateId,
+            "disposition": "SELECTED",
+            "occurred_at": ISO8601DateFormatter().string(from: Date()),
+            "original_draft_text": draftContext.selectedDraftText,
+            "notes": notes,
+        ]
+        if let companyId = draftContext.companyId, !companyId.isEmpty {
+            payload["company_id"] = companyId
+        }
+        do {
+            try await reportTrinityOutcome(payload)
+            currentDraftSelectionReportKey = reportKey
+        } catch {
+            // Non-blocking selection telemetry path.
+        }
+    }
+
+    private func reportTrinityOutcome(_ payload: [String: Any]) async throws {
+        guard let baseURL else { return }
+        var request = URLRequest(url: baseURL.appending(path: "api/trinity/outcome"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        applyProtectedHeaders(to: &request, includeHumanApproval: false)
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw NSError(domain: "ReplyCoreService", code: 9, userInfo: [NSLocalizedDescriptionKey: "Failed to report Trinity outcome."])
+        }
+    }
+
+    private func postFeedback(_ payload: [String: Any]) async throws {
+        guard let baseURL else { return }
+        var request = URLRequest(url: baseURL.appending(path: "api/feedback"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        applyProtectedHeaders(to: &request, includeHumanApproval: false)
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw NSError(domain: "ReplyCoreService", code: 10, userInfo: [NSLocalizedDescriptionKey: "Failed to save draft feedback."])
+        }
+    }
+
     private func inferChannel(for handle: String, messages: [ReplyMessage]) {
         if let channel = messages.first(where: { !($0.authoredByMe) })?.channel?.lowercased() {
             selectedChannel = ReplyMessageChannel(rawValue: channel) ?? fallbackChannel(for: handle)
@@ -1068,7 +1373,7 @@ final class ReplyCoreService: ObservableObject {
         if baseURL != nil && consecutiveHealthFailures < 6 {
             // Keep the current workspace alive across transient misses so the UI does not
             // tear down and force the embedded app to reload from zero.
-            launchErrorMessage = "Transient runtime check miss. Preserving the current workspace session."
+            launchErrorMessage = ""
             runtimeState = .online
             return
         }

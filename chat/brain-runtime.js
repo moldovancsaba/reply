@@ -40,6 +40,7 @@ const brainRuntimeTestHooks = {
   trinityRuntimeCall: null,
   persistShadowComparison: null,
 };
+let trinityOutboxDrainQueue = Promise.resolve();
 
 function envFlagEnabled(name) {
   const value = String(process.env[name] || "").trim().toLowerCase();
@@ -758,25 +759,30 @@ async function queueDocumentRegistration(document) {
 }
 
 async function drainTrinityEventOutbox(limit = 25) {
-  const pending = await trinityEventOutbox.listPendingEvents(limit);
-  const results = [];
-  for (const item of pending) {
-    try {
-      if (item.eventType === "memory_event") {
-        await callTrinityRuntime("ingest-memory-event", item.payload);
-      } else if (item.eventType === "document_registration") {
-        await callTrinityRuntime("register-document", item.payload);
-      } else {
-        throw new Error(`Unsupported Trinity outbox event type: ${item.eventType}`);
+  const run = async () => {
+    const pending = await trinityEventOutbox.listPendingEvents(limit);
+    const results = [];
+    for (const item of pending) {
+      try {
+        if (item.eventType === "memory_event") {
+          await callTrinityRuntime("ingest-memory-event", item.payload);
+        } else if (item.eventType === "document_registration") {
+          await callTrinityRuntime("register-document", item.payload);
+        } else {
+          throw new Error(`Unsupported Trinity outbox event type: ${item.eventType}`);
+        }
+        await trinityEventOutbox.markDelivered(item.id);
+        results.push({ id: item.id, status: "delivered" });
+      } catch (error) {
+        await trinityEventOutbox.markFailed(item.id, String(error?.message || error));
+        results.push({ id: item.id, status: "failed", error: String(error?.message || error) });
       }
-      await trinityEventOutbox.markDelivered(item.id);
-      results.push({ id: item.id, status: "delivered" });
-    } catch (error) {
-      await trinityEventOutbox.markFailed(item.id, String(error?.message || error));
-      results.push({ id: item.id, status: "failed", error: String(error?.message || error) });
     }
-  }
-  return { processed: results.length, results };
+    return { processed: results.length, results };
+  };
+  const next = trinityOutboxDrainQueue.then(run, run);
+  trinityOutboxDrainQueue = next.catch(() => null);
+  return next;
 }
 
 async function getPreparedDraft({ companyId, threadRef }) {
@@ -948,18 +954,30 @@ function pythonVersionSatisfies(pythonBin) {
 
 function resolveTrinityRuntimeRoot() {
   const configuredRuntime = String(process.env.TRINITY_RUNTIME_ROOT || "").trim();
-  if (configuredRuntime) return configuredRuntime;
+  // Only trust configured paths that actually contain the Trinity CLI layout.
+  const hasCli = (root) =>
+    Boolean(root) && fs.existsSync(path.join(root, "core", "trinity_core", "cli.py"));
+  if (hasCli(configuredRuntime)) return configuredRuntime;
   const configured = String(process.env.TRINITY_REPO_ROOT || "").trim();
-  if (configured) return configured;
+  if (hasCli(configured)) return configured;
   const sharedRepo = "/Users/Shared/Projects/trinity";
-  if (fs.existsSync(path.join(sharedRepo, "core", "trinity_core", "cli.py"))) {
+  if (hasCli(sharedRepo)) {
     return sharedRepo;
   }
   const bundled = path.resolve(__dirname, "..", "trinity-runtime");
-  if (fs.existsSync(path.join(bundled, "core", "trinity_core", "cli.py"))) {
+  if (hasCli(bundled)) {
     return bundled;
   }
-  return path.resolve(__dirname, "..", "..", "trinity");
+  const legacyBundled = path.resolve(__dirname, "trinity-runtime");
+  if (hasCli(legacyBundled)) {
+    return legacyBundled;
+  }
+  const fallbackRepo = path.resolve(__dirname, "..", "..", "trinity");
+  if (hasCli(fallbackRepo)) {
+    return fallbackRepo;
+  }
+  // Preserve the original fallback order so downstream errors still point at the attempted root.
+  return configuredRuntime || configured || bundled;
 }
 
 function buildPythonPath(trinityRepoRoot) {
