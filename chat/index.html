@@ -83,6 +83,19 @@
           <option value="volume_total">Volume (total)</option>
           <option value="recommendation">Recommended</option>
         </select>
+        <div class="workspace-filter-group">
+          <div class="workspace-filter-heading">Workspace</div>
+          <div class="workspace-filter-owner">
+            <label class="u-sr-only" for="workspace-owner-identity">My owner name</label>
+            <input id="workspace-owner-identity" class="workspace-owner-input" type="text" placeholder="My owner name" autocomplete="off" spellcheck="false">
+          </div>
+          <div id="workspace-workload-summary" class="workspace-workload-grid" aria-live="polite"></div>
+          <div id="workspace-sla-summary" class="workspace-workload-grid workspace-workload-grid--sla" aria-live="polite"></div>
+          <div id="workspace-bulk-actions" class="workspace-bulk-bar u-display-none" aria-live="polite"></div>
+          <div id="workspace-owner-filters" class="workspace-filter-row workspace-filter-row--owners"></div>
+          <div id="workspace-queue-filters" class="workspace-filter-row"></div>
+          <div id="workspace-channel-filters" class="workspace-filter-row workspace-filter-row--channels"></div>
+        </div>
       </div>
       <div id="contact-list" class="contact-list">
         <!-- Contact Items will be injected here -->
@@ -231,12 +244,36 @@
           </div>
 
           <div class="kyc-field">
+            <label class="kyc-field-label" for="kyc-owner-input">Owner</label>
+            <input id="kyc-owner-input" class="kyc-field-input" autocomplete="off" placeholder="Primary owner or queue">
+          </div>
+
+          <div class="kyc-field">
+            <label class="kyc-field-label" for="kyc-flags-input">Customer Flags</label>
+            <input id="kyc-flags-input" class="kyc-field-input" autocomplete="off" placeholder="vip, renewal, at_risk">
+          </div>
+
+          <div class="kyc-field">
             <label class="kyc-field-label" for="kyc-handle-input">Handle</label>
             <input id="kyc-handle-input" class="kyc-field-input kyc-field-input--mono" readonly>
           </div>
         </div>
 
         <div class="kyc-card">
+          <div class="kyc-section">
+            <div class="kyc-section-label">Unified Record</div>
+            <div id="kyc-unified-summary" class="kyc-section-body">
+              <!-- Unified record summary injected here -->
+            </div>
+          </div>
+
+          <div class="kyc-section">
+            <div class="kyc-section-label">Recent Activity</div>
+            <div id="kyc-recent-activity" class="kyc-section-body">
+              <!-- Recent activity timeline injected here -->
+            </div>
+          </div>
+
           <div class="kyc-section">
             <div class="kyc-section-label">Channels</div>
             <div id="kyc-channels" class="kyc-section-body">

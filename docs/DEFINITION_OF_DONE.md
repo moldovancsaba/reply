@@ -26,6 +26,7 @@ Every task, pull request, or commit must satisfy these criteria before being con
 *   **Automated Verification:** Every feature must include a verification script (e.g., `chat/verify-*.js`) proving it works.
 *   **Manual Verification:** The developer must manually verify the change (e.g., running the app, checking UI) and document the results.
 *   **Zero Regressions:** Existing functionality (e.g., previous verifications) must still pass.
+*   **Runtime Contract Checks:** Changes that affect `{reply}` / `{trinity}` / `{train}` integration must pass the product-side smoke check: `cd chat && npm run verify:trinity-train` when the local Trinity runtime is available.
 
 ## 4. Project Management (GitHub Board) & Issues
 *   **Single Source of Truth:** The [`{reply}` GitHub Project (#7)](https://github.com/users/moldovancsaba/projects/7) and issues in [`moldovancsaba/reply`](https://github.com/moldovancsaba/reply) are the authority for `{reply}` roadmap, backlog, and tasks.

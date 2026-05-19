@@ -6,7 +6,7 @@ Use it when another agent or project needs to understand the native app boundary
 
 Documented version context:
 
-- `{reply}` package: `0.5.14`
+- `{reply}` package: `0.5.15`
 - native shell target: `macOS 15+`
 - Swift toolchain: `Swift 6`
 

@@ -11,11 +11,21 @@ const { getIMessageAccessError } = require("../sync-imessage");
 const { execFile } = require("child_process");
 const path = require("path");
 const syncGuard = require("../utils/sync-guard");
+const { buildStartupBlockMessage } = require("../startup-guard");
+const CONVERSATION_INGEST_LOCK = "conversation_ingest";
+
+function unifiedStoreStartupBlock(noun) {
+    return buildStartupBlockMessage({ noun });
+}
 
 /**
  * API Endpoint: /api/sync-notes
  */
 function serveSyncNotes(req, res) {
+    const startupBlock = unifiedStoreStartupBlock("Notes sync");
+    if (startupBlock) {
+        return writeJson(res, 503, startupBlock);
+    }
     if (syncGuard.isLocked("notes")) {
         return writeJson(res, 409, { status: "error", message: "Notes sync already in progress" });
     }
@@ -43,8 +53,15 @@ function serveSyncNotes(req, res) {
  * API Endpoint: /api/sync-imessage
  */
 function serveSyncIMessage(req, res) {
+    const startupBlock = unifiedStoreStartupBlock("iMessage sync");
+    if (startupBlock) {
+        return writeJson(res, 503, startupBlock);
+    }
     if (syncGuard.isLocked("imessage")) {
         return writeJson(res, 409, { status: "error", message: "iMessage sync already in progress" });
+    }
+    if (syncGuard.isLocked(CONVERSATION_INGEST_LOCK)) {
+        return writeJson(res, 409, { status: "error", message: "Another conversation sync is already in progress" });
     }
     const accessError = getIMessageAccessError();
     if (accessError) {
@@ -53,12 +70,14 @@ function serveSyncIMessage(req, res) {
             message: accessError
         });
     }
-    syncGuard.acquireLock("imessage");
+    if (!syncGuard.acquireLocks(["imessage", CONVERSATION_INGEST_LOCK])) {
+        return writeJson(res, 409, { status: "error", message: "Another conversation sync is already in progress" });
+    }
 
     console.log("Starting iMessage sync in background...");
     const scriptPath = path.join(__dirname, "../sync-imessage.js");
     execFile(process.argv0 || process.execPath, [scriptPath], { cwd: path.join(__dirname, "..") }, (error, stdout, stderr) => {
-        syncGuard.releaseLock("imessage");
+        syncGuard.releaseLocks(["imessage", CONVERSATION_INGEST_LOCK]);
         if (error) {
             console.error(`iMessage sync error: ${error.message}`);
             return;
@@ -73,10 +92,19 @@ function serveSyncIMessage(req, res) {
  * API Endpoint: /api/sync-mail
  */
 function serveSyncMail(req, res) {
+    const startupBlock = unifiedStoreStartupBlock("Mail sync");
+    if (startupBlock) {
+        return writeJson(res, 503, startupBlock);
+    }
     if (syncGuard.isLocked("mail")) {
         return writeJson(res, 409, { status: "error", message: "Mail sync already in progress" });
     }
-    syncGuard.acquireLock("mail");
+    if (syncGuard.isLocked(CONVERSATION_INGEST_LOCK)) {
+        return writeJson(res, 409, { status: "error", message: "Another conversation sync is already in progress" });
+    }
+    if (!syncGuard.acquireLocks(["mail", CONVERSATION_INGEST_LOCK])) {
+        return writeJson(res, 409, { status: "error", message: "Another conversation sync is already in progress" });
+    }
 
     console.log("Starting Mail sync in background...");
     const { syncMail } = require("../sync-mail");
@@ -85,7 +113,7 @@ function serveSyncMail(req, res) {
     }).catch(err => {
         console.error(`Mail sync error: ${err.message}`);
     }).finally(() => {
-        syncGuard.releaseLock("mail");
+        syncGuard.releaseLocks(["mail", CONVERSATION_INGEST_LOCK]);
     });
 
     writeJson(res, 200, { status: "started", message: "Mail sync started in background" });
@@ -95,6 +123,10 @@ function serveSyncMail(req, res) {
  * API Endpoint: /api/sync-calendar
  */
 function serveSyncCalendar(req, res) {
+    const startupBlock = unifiedStoreStartupBlock("Calendar sync");
+    if (startupBlock) {
+        return writeJson(res, 503, startupBlock);
+    }
     if (syncGuard.isLocked("calendar")) {
         return writeJson(res, 409, { status: "error", message: "Calendar sync already in progress" });
     }
@@ -116,10 +148,19 @@ function serveSyncCalendar(req, res) {
  * API Endpoint: /api/sync-whatsapp
  */
 function serveSyncWhatsApp(req, res) {
+    const startupBlock = unifiedStoreStartupBlock("WhatsApp sync");
+    if (startupBlock) {
+        return writeJson(res, 503, startupBlock);
+    }
     if (syncGuard.isLocked("whatsapp")) {
         return writeJson(res, 409, { status: "error", message: "WhatsApp sync already in progress" });
     }
-    syncGuard.acquireLock("whatsapp");
+    if (syncGuard.isLocked(CONVERSATION_INGEST_LOCK)) {
+        return writeJson(res, 409, { status: "error", message: "Another conversation sync is already in progress" });
+    }
+    if (!syncGuard.acquireLocks(["whatsapp", CONVERSATION_INGEST_LOCK])) {
+        return writeJson(res, 409, { status: "error", message: "Another conversation sync is already in progress" });
+    }
 
     console.log("Starting WhatsApp sync in background...");
     const { syncWhatsApp } = require("../sync-whatsapp");
@@ -128,7 +169,7 @@ function serveSyncWhatsApp(req, res) {
     }).catch(err => {
         console.error("WhatsApp sync error:", err);
     }).finally(() => {
-        syncGuard.releaseLock("whatsapp");
+        syncGuard.releaseLocks(["whatsapp", CONVERSATION_INGEST_LOCK]);
     });
 
     writeJson(res, 200, { status: "started", message: "WhatsApp sync started in background" });
@@ -138,6 +179,10 @@ function serveSyncWhatsApp(req, res) {
  * API Endpoint: /api/sync-linkedin
  */
 function serveSyncLinkedIn(req, res) {
+    const startupBlock = unifiedStoreStartupBlock("LinkedIn sync");
+    if (startupBlock) {
+        return writeJson(res, 503, startupBlock);
+    }
     if (syncGuard.isLocked("linkedin")) {
         return writeJson(res, 409, { status: "error", message: "LinkedIn sync already in progress" });
     }

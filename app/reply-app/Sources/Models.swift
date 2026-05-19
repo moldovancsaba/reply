@@ -433,6 +433,7 @@ struct ReplyProfileDraft: Equatable {
     var relationship: String
     var linkedinURL: String
     var intro: String
+    var draft: String
 
     static let empty = ReplyProfileDraft(
         displayName: "",
@@ -440,7 +441,8 @@ struct ReplyProfileDraft: Equatable {
         company: "",
         relationship: "",
         linkedinURL: "",
-        intro: ""
+        intro: "",
+        draft: ""
     )
 
     init(
@@ -449,7 +451,8 @@ struct ReplyProfileDraft: Equatable {
         company: String,
         relationship: String,
         linkedinURL: String,
-        intro: String
+        intro: String,
+        draft: String
     ) {
         self.displayName = displayName
         self.profession = profession
@@ -457,6 +460,7 @@ struct ReplyProfileDraft: Equatable {
         self.relationship = relationship
         self.linkedinURL = linkedinURL
         self.intro = intro
+        self.draft = draft
     }
 
     init(profile: ReplyProfile) {
@@ -466,6 +470,116 @@ struct ReplyProfileDraft: Equatable {
         self.relationship = profile.relationship ?? ""
         self.linkedinURL = profile.linkedinUrl ?? ""
         self.intro = profile.intro ?? ""
+        self.draft = profile.draft ?? ""
+    }
+}
+
+struct ReplyPreparedDraftResponse: Decodable {
+    let status: String?
+    let stale: Bool?
+    let suggestion: String?
+    let explanation: String?
+    let runtimeMode: String?
+    let rankedDraftSet: ReplyRankedDraftSet?
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case stale
+        case suggestion
+        case explanation
+        case runtimeMode
+        case rankedDraftSet
+    }
+}
+
+struct ReplyRankedDraftSet: Decodable {
+    let cycleId: String?
+    let threadRef: String?
+    let channel: String?
+    let traceRef: String?
+    let contractVersion: String?
+    let drafts: [ReplyDraftCandidate]?
+
+    enum CodingKeys: String, CodingKey {
+        case cycleId = "cycle_id"
+        case threadRef = "thread_ref"
+        case channel
+        case traceRef = "trace_ref"
+        case contractVersion = "contract_version"
+        case drafts
+    }
+}
+
+struct ReplyDraftCandidate: Decodable {
+    let companyId: String?
+    let candidateId: String?
+    let rank: Int?
+    let draftText: String?
+    let rationale: String?
+
+    enum CodingKeys: String, CodingKey {
+        case companyId = "company_id"
+        case candidateId = "candidate_id"
+        case rank
+        case draftText = "draft_text"
+        case rationale
+    }
+}
+
+struct ReplyDraftTelemetryContext: Equatable {
+    let companyId: String?
+    let cycleId: String
+    let threadRef: String
+    let channel: String
+    let selectedCandidateId: String?
+    let selectedDraftText: String
+    let originalDraftText: String
+    let generatedAtMs: Int64
+
+    init?(
+        handle: String,
+        response: ReplyPreparedDraftResponse,
+        generatedAt: Date = Date()
+    ) {
+        let rankedDraftSet = response.rankedDraftSet
+        let cycleId = String(rankedDraftSet?.cycleId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let threadRef = String(rankedDraftSet?.threadRef ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let channel = String(rankedDraftSet?.channel ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let drafts = rankedDraftSet?.drafts ?? []
+        let topDraft = drafts.first
+        let selectedDraftText = String(topDraft?.draftText ?? response.suggestion ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if cycleId.isEmpty || threadRef.isEmpty || channel.isEmpty || selectedDraftText.isEmpty {
+            return nil
+        }
+        self.companyId = topDraft?.companyId
+        self.cycleId = cycleId
+        self.threadRef = threadRef
+        self.channel = channel
+        self.selectedCandidateId = {
+            let value = String(topDraft?.candidateId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return value.isEmpty ? nil : value
+        }()
+        self.selectedDraftText = selectedDraftText
+        self.originalDraftText = selectedDraftText
+        self.generatedAtMs = Int64(generatedAt.timeIntervalSince1970 * 1000)
+    }
+
+    var sendPayload: [String: Any] {
+        var payload: [String: Any] = [
+            "cycleId": cycleId,
+            "threadRef": threadRef,
+            "channel": channel,
+            "selectedDraftText": selectedDraftText,
+            "originalDraftText": originalDraftText,
+            "generatedAtMs": generatedAtMs,
+        ]
+        if let companyId, !companyId.isEmpty {
+            payload["companyId"] = companyId
+        }
+        if let selectedCandidateId, !selectedCandidateId.isEmpty {
+            payload["selectedCandidateId"] = selectedCandidateId
+        }
+        return payload
     }
 }
 

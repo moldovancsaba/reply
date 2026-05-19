@@ -358,6 +358,15 @@ struct ReplyNativeWorkspaceView: View {
                         }
                     }
                     Spacer()
+                    Button(service.regenerateDraftInFlight ? "Regenerating..." : "Regenerate") {
+                        Task { await service.regenerateDraft() }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(
+                        service.regenerateDraftInFlight ||
+                        service.sendInFlight ||
+                        service.selectedConversationHandle != handle
+                    )
                     Button(service.sendInFlight ? "Sending..." : "Send") {
                         Task { await service.sendCurrentMessage() }
                     }

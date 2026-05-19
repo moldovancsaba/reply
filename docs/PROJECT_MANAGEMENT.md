@@ -23,6 +23,7 @@ Cross-portfolio governance and other products may still use [`moldovancsaba/mvp-
 *   **Rule:** Documentation (`HANDOVER.md`) should be updated when a task is completed, in line with the board.
 *   **Rule:** Create and manage **`{reply}` issues in `moldovancsaba/reply`** and add them to **Project #7** immediately.
 *   **Rule:** Do not track `{reply}` tasks only in local `IDEABANK.md`, `ROADMAP.md`, `TASKLIST.md`, or similar files.
+*   **Rule:** When a delivery lane has a dedicated architecture contract, implementation must follow that doc as well as the board. Current example: native workspace hot-path work follows `docs/NATIVE_WORKSPACE_HOT_PATH_SSOT.md` and issues `#163` through `#168`.
 
 ## 3. Mandatory Issue Recording & Management SOP
 Use this process for every `{reply}` task/idea/bug.

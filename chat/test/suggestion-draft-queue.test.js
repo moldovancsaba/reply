@@ -72,3 +72,107 @@ test("processOneSuggestionDraft skips hidden contacts", async () => {
     delete require.cache[require.resolve("../suggestion-draft-queue.js")];
   }
 });
+
+test("processOneSuggestionDraft reuses fresh Trinity prepared draft when available", async () => {
+  const prev = fs.existsSync(QUEUE_PATH) ? fs.readFileSync(QUEUE_PATH, "utf8") : null;
+  try {
+    if (fs.existsSync(QUEUE_PATH)) fs.unlinkSync(QUEUE_PATH);
+    delete require.cache[require.resolve("../suggestion-draft-queue.js")];
+    const q = require("../suggestion-draft-queue.js");
+    q.writeQueue([{ handle: "alice@example.com", queuedAt: new Date().toISOString() }]);
+
+    let persistedDraft = null;
+    const result = await q.processOneSuggestionDraft({
+      contactStore: {
+        findContact: () => ({ handle: "alice@example.com", status: "open", draft: "" }),
+        isVisibleInInbox: () => true,
+        setDraft: async (_handle, text) => {
+          persistedDraft = text;
+        },
+      },
+      buildThreadSnapshot: async () => ({
+        company_id: "company-1",
+        thread_ref: "reply:email:alice@example.com",
+      }),
+      getPreparedDraft: async () => ({
+        status: "ok",
+        stale: false,
+        prepared_draft_set: {
+          ranked_draft_set: {
+            drafts: [{ draft_text: "Prepared Trinity draft." }],
+          },
+        },
+      }),
+      generateReply: async () => {
+        throw new Error("should not generate");
+      },
+      getPreparedDraftContext: async () => ({
+        message: "Latest inbound",
+        snippets: [],
+      }),
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.reason, "prepared_draft_ready");
+    assert.equal(persistedDraft, "Prepared Trinity draft.");
+  } finally {
+    try {
+      if (prev) fs.writeFileSync(QUEUE_PATH, prev, "utf8");
+      else if (fs.existsSync(QUEUE_PATH)) fs.unlinkSync(QUEUE_PATH);
+    } catch {
+      /* ignore */
+    }
+    delete require.cache[require.resolve("../suggestion-draft-queue.js")];
+  }
+});
+
+test("processOneSuggestionDraft generates when prepared draft is stale", async () => {
+  const prev = fs.existsSync(QUEUE_PATH) ? fs.readFileSync(QUEUE_PATH, "utf8") : null;
+  try {
+    if (fs.existsSync(QUEUE_PATH)) fs.unlinkSync(QUEUE_PATH);
+    delete require.cache[require.resolve("../suggestion-draft-queue.js")];
+    const q = require("../suggestion-draft-queue.js");
+    q.writeQueue([{ handle: "alice@example.com", queuedAt: new Date().toISOString() }]);
+
+    let persistedDraft = null;
+    const result = await q.processOneSuggestionDraft({
+      contactStore: {
+        findContact: () => ({ handle: "alice@example.com", status: "open", draft: "" }),
+        isVisibleInInbox: () => true,
+        setDraft: async (_handle, text) => {
+          persistedDraft = text;
+        },
+      },
+      buildThreadSnapshot: async () => ({
+        company_id: "company-1",
+        thread_ref: "reply:email:alice@example.com",
+      }),
+      getPreparedDraft: async () => ({
+        status: "ok",
+        stale: true,
+        prepared_draft_set: {
+          ranked_draft_set: {
+            drafts: [{ draft_text: "Old draft." }],
+          },
+        },
+      }),
+      getPreparedDraftContext: async () => ({
+        message: "Latest inbound",
+        snippets: [],
+      }),
+      generateReply: async () => ({ suggestion: "Fresh Trinity draft." }),
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.reason, undefined);
+    assert.equal(persistedDraft, "Fresh Trinity draft.");
+  } finally {
+    try {
+      if (prev) fs.writeFileSync(QUEUE_PATH, prev, "utf8");
+      else if (fs.existsSync(QUEUE_PATH)) fs.unlinkSync(QUEUE_PATH);
+    } catch {
+      /* ignore */
+    }
+    delete require.cache[require.resolve("../suggestion-draft-queue.js")];
+  }
+});

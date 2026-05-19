@@ -1,6 +1,6 @@
 # Next Agent Continuation Prompt
 
-**Doc freshness:** 2026-04-11 — `{reply}` SSOT is **[Project #7](https://github.com/users/moldovancsaba/projects/7)** + **[moldovancsaba/reply](https://github.com/moldovancsaba/reply) issues** + **[HANDOVER.md](./HANDOVER.md)** (especially “Active Session Update”). This file is a **boot prompt**, not a backlog.
+**Doc freshness:** 2026-05-18 — `{reply}` SSOT is **[Project #7](https://github.com/users/moldovancsaba/projects/7)** + **[moldovancsaba/reply](https://github.com/moldovancsaba/reply) issues** + **[HANDOVER.md](./HANDOVER.md)** + **[NATIVE_WORKSPACE_HOT_PATH_SSOT.md](./NATIVE_WORKSPACE_HOT_PATH_SSOT.md)**. This file is a **boot prompt**, not a backlog.
 
 **Product / release:** See `chat/package.json` `version` and [RELEASE_NOTES.md](./RELEASE_NOTES.md) for shipped facts.
 
@@ -15,6 +15,7 @@ You are a Developer Agent working on `{reply}`. Follow these operating principle
 - **Prefer “prove it” over “trust me”**: include commands run + outputs/observations.
 - **Keep the board and handover current** as you work (not at the end).
 - **Documentation = code**: when behavior changes, update the same PR: `docs/HANDOVER.md`, and `docs/RELEASE_NOTES.md` **only** for shipped user-visible changes.
+- **Workspace hot path has a dedicated SSOT**: do not reintroduce whole-workspace reload behavior when `docs/NATIVE_WORKSPACE_HOT_PATH_SSOT.md` says the path must be incremental or cache-backed.
 
 ### Definition of Done (DoD)
 1. **Scope & acceptance**: Match the issue/card acceptance criteria explicitly.

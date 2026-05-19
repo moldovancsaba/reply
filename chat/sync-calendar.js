@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const path = require("path");
+const fs = require("fs");
 const { execFile } = require("child_process");
 const { addDocuments, connect } = require("./vector-store.js");
 const { saveMessages } = require("./message-store.js");
@@ -54,7 +55,61 @@ async function getExistingCalendarIds() {
 }
 
 async function readCalendarEvents() {
-  const raw = await new Promise((resolve, reject) => {
+  const helperPath = resolveReplyHelperPath();
+  const raw = helperPath
+    ? await readCalendarEventsViaHelper(helperPath)
+    : await readCalendarEventsViaCompiledExporter();
+  if (!raw) return [];
+  const parsed = JSON.parse(raw);
+  return (Array.isArray(parsed) ? parsed : [])
+    .map((event) => ({
+      calendar: sanitizeField(event.calendar),
+      title: sanitizeField(event.title),
+      start: sanitizeField(event.start),
+      end: sanitizeField(event.end),
+      location: sanitizeField(event.location),
+      description: sanitizeField(event.description),
+    }))
+    .filter((event) => event.title && event.start);
+}
+
+function resolveReplyHelperPath() {
+  const candidates = [
+    String(process.env.REPLY_HELPER_PATH || "").trim(),
+    "/Applications/reply.app/Contents/Helpers/reply-helper",
+    path.join(__dirname, "..", "app", "reply-app", "dist", "reply.app", "Contents", "Helpers", "reply-helper"),
+    path.join(__dirname, "..", "app", "reply-app", ".build", "debug", "reply-helper"),
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return candidate;
+    } catch {
+      // keep scanning
+    }
+  }
+  return null;
+}
+
+async function readCalendarEventsViaHelper(helperPath) {
+  return await new Promise((resolve, reject) => {
+    execFile(
+      helperPath,
+      ["export-calendar"],
+      { maxBuffer: 50 * 1024 * 1024, timeout: 120000 },
+      (err, stdout, stderr) => {
+        if (err) {
+          const detail = String(stderr || err.message || "").trim();
+          return reject(new Error(detail || "Calendar export failed"));
+        }
+        resolve(String(stdout || "").trim());
+      }
+    );
+  });
+}
+
+async function readCalendarEventsViaCompiledExporter() {
+  return await new Promise((resolve, reject) => {
     ensureDataHome();
     const binPath = dataPath("bin", "apple-calendar-export");
     execFile(
@@ -71,28 +126,16 @@ async function readCalendarEvents() {
           [],
           { maxBuffer: 50 * 1024 * 1024, timeout: 120000 },
           (err, stdout, stderr) => {
-        if (err) {
-          const detail = String(stderr || err.message || "").trim();
-          return reject(new Error(detail || "Calendar export failed"));
-        }
-        resolve(String(stdout || "").trim());
+            if (err) {
+              const detail = String(stderr || err.message || "").trim();
+              return reject(new Error(detail || "Calendar export failed"));
+            }
+            resolve(String(stdout || "").trim());
           }
         );
       }
     );
   });
-  if (!raw) return [];
-  const parsed = JSON.parse(raw);
-  return (Array.isArray(parsed) ? parsed : [])
-    .map((event) => ({
-      calendar: sanitizeField(event.calendar),
-      title: sanitizeField(event.title),
-      start: sanitizeField(event.start),
-      end: sanitizeField(event.end),
-      location: sanitizeField(event.location),
-      description: sanitizeField(event.description),
-    }))
-    .filter((event) => event.title && event.start);
 }
 
 async function syncCalendar(limit = null) {

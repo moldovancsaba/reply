@@ -94,10 +94,15 @@ function normalizeErrorText(raw, fallback = '') {
  * @param {boolean} [showLoadingUi=true] — Set false for pagination appends (no global spinner).
  * @returns {Promise<{contacts: Array, hasMore: boolean, total: number}>}
  */
-export async function fetchConversations(offset = 0, limit = 20, query = '', sort = 'newest', showLoadingUi = true) {
+export async function fetchConversations(offset = 0, limit = 20, query = '', sort = 'newest', queue = 'all', channel = 'all', ownerScope = 'all', ownerIdentity = '', showLoadingUi = true) {
     const q = (query || '').toString().trim();
     const s = (sort || 'newest').toString().trim() || 'newest';
-    const params = new URLSearchParams({ offset: String(offset), limit: String(limit), sort: s });
+    const queueKey = (queue || 'all').toString().trim() || 'all';
+    const channelKey = (channel || 'all').toString().trim() || 'all';
+    const ownerScopeKey = (ownerScope || 'all').toString().trim() || 'all';
+    const ownerIdentityKey = (ownerIdentity || '').toString().trim();
+    const params = new URLSearchParams({ offset: String(offset), limit: String(limit), sort: s, queue: queueKey, channel: channelKey, owner_scope: ownerScopeKey });
+    if (ownerIdentityKey) params.set('owner_identity', ownerIdentityKey);
     if (q) params.set('q', q);
     const res = await _request(`${API_BASE}/api/conversations?${params.toString()}`, {
         headers: buildSecurityHeaders(),
@@ -393,14 +398,16 @@ export async function loadKYC(handle) {
  * @param {Object} data - KYC profile data
  * @returns {Promise<Object>} Save result
  */
-export async function saveKYC(handle, data) {
+export async function saveKYC(handle, data, options = {}) {
     const res = await _request(`${API_BASE}/api/kyc`, {
         method: 'POST',
         headers: buildSecurityHeaders(),
         body: JSON.stringify(withApproval({ handle, ...data }, 'ui-save-kyc'))
     });
     const result = await res.json();
-    UI.showToast('Profile saved!', 'success');
+    if (options.toastMessage !== null) {
+        UI.showToast(options.toastMessage || 'Profile saved!', 'success');
+    }
     return result;
 }
 

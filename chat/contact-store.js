@@ -65,6 +65,20 @@ function readStoreChangeStamp() {
     return latest;
 }
 
+function safeJsonArray(raw) {
+    if (Array.isArray(raw)) return Array.from(new Set(raw.map((value) => String(value || "").trim()).filter(Boolean)));
+    const text = String(raw || "").trim();
+    if (!text) return [];
+    try {
+        const parsed = JSON.parse(text);
+        return Array.isArray(parsed)
+            ? Array.from(new Set(parsed.map((value) => String(value || "").trim()).filter(Boolean)))
+            : [];
+    } catch {
+        return [];
+    }
+}
+
 class ContactStore {
     constructor() {
         this._contacts = [];
@@ -102,6 +116,8 @@ class ContactStore {
                     lastChannel TEXT,
                     profession TEXT,
                     relationship TEXT,
+                    owner TEXT,
+                    customer_flags TEXT,
                     draft TEXT,
                     status TEXT,
                     lastMtimeMs INTEGER,
@@ -115,6 +131,8 @@ class ContactStore {
                 this._db.run("ALTER TABLE contacts ADD COLUMN company TEXT", () => { });
                 this._db.run("ALTER TABLE contacts ADD COLUMN linkedinUrl TEXT", () => { });
                 this._db.run("ALTER TABLE contacts ADD COLUMN intro TEXT", () => { });
+                this._db.run("ALTER TABLE contacts ADD COLUMN owner TEXT", () => { });
+                this._db.run("ALTER TABLE contacts ADD COLUMN customer_flags TEXT", () => { });
                 this._db.run("ALTER TABLE contacts ADD COLUMN visibility_state TEXT", () => { });
                 this._db.run("ALTER TABLE contacts ADD COLUMN visibility_changed_at TEXT", () => { });
                 this._db.run(`CREATE TABLE IF NOT EXISTS contact_channels (
@@ -208,6 +226,8 @@ class ContactStore {
                             const hydrated = (rows || []).map(c => {
                                 const contact = { ...c };
                                 contact.displayName = normalizeStoredDisplayName(contact.displayName, contact.handle);
+                                contact.owner = String(contact.owner || "").trim();
+                                contact.customerFlags = safeJsonArray(contact.customer_flags);
                                 contact.visibility_state = normalizeVisibilityState(contact.visibility_state);
                                 contact.visibility_changed_at = contact.visibility_changed_at || null;
                                 contact.visibilityState = contact.visibility_state;
@@ -317,14 +337,57 @@ class ContactStore {
         if (!contacts || contacts.length === 0) return;
         return new Promise((resolve, reject) => {
             this._db.serialize(() => {
-                this._db.run("BEGIN TRANSACTION");
-                let hasError = false;
-                const handleError = (err) => {
+                let pendingStatements = 0;
+                let finalized = false;
+
+                const rejectAndRollback = (err) => {
+                    if (finalized) return;
+                    finalized = true;
+                    const error = err instanceof Error ? err : new Error(String(err || "Contact transaction failed"));
+                    console.error("Database error in transaction:", error.message);
+                    this._db.run("ROLLBACK", () => reject(error));
+                };
+
+                const onStatementComplete = (err) => {
+                    if (finalized) return;
                     if (err) {
-                        hasError = true;
-                        console.error("Database error in transaction:", err.message);
+                        rejectAndRollback(err);
+                        return;
+                    }
+                    pendingStatements -= 1;
+                    if (pendingStatements === 0) {
+                        this._db.run("COMMIT", (commitErr) => {
+                            if (commitErr) {
+                                console.error("COMMIT failed:", commitErr.message);
+                                rejectAndRollback(commitErr);
+                                return;
+                            }
+                            finalized = true;
+                            this.refresh()
+                                .then(() => {
+                                    scheduleRuntimeMemoryEventsForContacts(contacts);
+                                    resolve();
+                                })
+                                .catch(reject);
+                        });
                     }
                 };
+
+                const runStatement = (sql, params, callback) => {
+                    pendingStatements += 1;
+                    this._db.run(sql, params, (err) => {
+                        if (!err && typeof callback === "function") {
+                            callback();
+                        }
+                        onStatementComplete(err);
+                    });
+                };
+
+                this._db.run("BEGIN TRANSACTION", (beginErr) => {
+                    if (beginErr) {
+                        reject(beginErr);
+                    }
+                });
 
                 contacts.forEach(contact => {
                     const hasVisibilityState =
@@ -332,15 +395,17 @@ class ContactStore {
                     const visibilityState = hasVisibilityState
                         ? normalizeVisibilityState(contact.visibility_state || contact.visibilityState)
                         : null;
-                    this._db.run(`
-                        INSERT INTO contacts (id, displayName, handle, lastContacted, lastChannel, profession, relationship, draft, status, primary_contact_id, company, linkedinUrl, intro, visibility_state, visibility_changed_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    runStatement(`
+                        INSERT INTO contacts (id, displayName, handle, lastContacted, lastChannel, profession, relationship, owner, customer_flags, draft, status, primary_contact_id, company, linkedinUrl, intro, visibility_state, visibility_changed_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(handle) DO UPDATE SET
                             displayName = COALESCE(NULLIF(?, ''), displayName),
                             lastContacted = COALESCE(?, lastContacted),
                             lastChannel = COALESCE(NULLIF(?, ''), lastChannel),
                             profession = COALESCE(NULLIF(?, ''), profession),
                             relationship = COALESCE(NULLIF(?, ''), relationship),
+                            owner = COALESCE(?, owner),
+                            customer_flags = COALESCE(NULLIF(?, ''), customer_flags),
                             draft = COALESCE(NULLIF(?, ''), draft),
                             status = COALESCE(NULLIF(?, ''), status),
                             primary_contact_id = COALESCE(NULLIF(?, ''), primary_contact_id),
@@ -351,31 +416,29 @@ class ContactStore {
                             visibility_changed_at = COALESCE(?, visibility_changed_at)
                     `,
                         [
-                            contact.id, contact.displayName, contact.handle, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status, contact.primary_contact_id, contact.company, contact.linkedinUrl, contact.intro,
+                            contact.id, contact.displayName, contact.handle, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.owner, JSON.stringify(safeJsonArray(contact.customerFlags || contact.customer_flags)), contact.draft, contact.status, contact.primary_contact_id, contact.company, contact.linkedinUrl, contact.intro,
                             visibilityState,
                             contact.visibility_changed_at || null,
-                            contact.displayName, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.draft, contact.status, contact.primary_contact_id, contact.company, contact.linkedinUrl, contact.intro,
+                            contact.displayName, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.owner, JSON.stringify(safeJsonArray(contact.customerFlags || contact.customer_flags)), contact.draft, contact.status, contact.primary_contact_id, contact.company, contact.linkedinUrl, contact.intro,
                             visibilityState,
                             contact.visibility_changed_at || null
                         ],
-                        (err) => {
-                            if (err) handleError(err);
-                            else if (contact.company || contact.linkedinUrl) {
+                        () => {
+                            if (contact.company || contact.linkedinUrl) {
                                 console.log(`[ContactStore] Saved KYC for ${contact.handle}: ${contact.company}, ${contact.linkedinUrl}`);
                             }
                         }
                     );
 
                     if (contact.channels) {
-                        this._db.run("DELETE FROM contact_channels WHERE contact_id = ?", [contact.id], handleError);
+                        runStatement("DELETE FROM contact_channels WHERE contact_id = ?", [contact.id]);
                         Object.keys(contact.channels).forEach(type => {
                             const values = contact.channels[type];
                             if (Array.isArray(values)) {
                                 values.forEach(v => {
                                     const verifiedAt = contact.verifiedChannels && contact.verifiedChannels[v] ? contact.verifiedChannels[v] : null;
-                                    this._db.run("INSERT OR REPLACE INTO contact_channels (contact_id, type, value, inbound_verified_at) VALUES (?, ?, ?, ?)",
+                                    runStatement("INSERT OR REPLACE INTO contact_channels (contact_id, type, value, inbound_verified_at) VALUES (?, ?, ?, ?)",
                                         [contact.id, type, v, verifiedAt],
-                                        handleError
                                     );
                                 });
                             }
@@ -383,28 +446,17 @@ class ContactStore {
                     }
                 });
 
-                if (hasError) {
-                    this._db.run("ROLLBACK", () => {
-                        reject(new Error("Transaction failed and was rolled back"));
+                if (pendingStatements === 0 && !finalized) {
+                    finalized = true;
+                    this._db.run("COMMIT", (err) => {
+                        if (err) {
+                            console.error("COMMIT failed:", err.message);
+                            this._db.run("ROLLBACK");
+                            return reject(err);
+                        }
+                        resolve();
                     });
-                    return;
                 }
-
-                this._db.run("COMMIT", (err) => {
-                    if (err) {
-                        console.error("COMMIT failed:", err.message);
-                        this._db.run("ROLLBACK");
-                        return reject(err);
-                    }
-                    this.refresh()
-                        .then(async () => {
-                            await emitRuntimeMemoryEventsForContacts(contacts).catch((error) => {
-                                console.warn("[contact-store] failed to emit Trinity contact events:", error.message);
-                            });
-                            resolve();
-                        })
-                        .catch(reject);
-                });
             });
         });
     }
@@ -455,12 +507,10 @@ class ContactStore {
                 (err) => {
                     if (err) return reject(err);
                     this.refresh()
-                        .then(async () => {
+                        .then(() => {
                             const refreshed = this.findById(aliasContactId);
                             if (refreshed) {
-                                await emitRuntimeMemoryEventsForContacts([refreshed]).catch((error) => {
-                                    console.warn("[contact-store] failed to emit Trinity contact events:", error.message);
-                                });
+                                scheduleRuntimeMemoryEventsForContacts([refreshed]);
                             }
                             resolve();
                         })
@@ -526,12 +576,14 @@ class ContactStore {
         // Force refresh to ensure we have the latest ground-truth before updating
         await this.refresh();
 
-        let contact = this.findContact(handle);
+        let contact = this.getContactRowByHandle(handle) || this.findContact(handle);
         if (!contact) {
             contact = {
                 id: 'id-' + Math.random().toString(36).substr(2, 9),
                 handle: handle,
                 displayName: "",
+                owner: "",
+                customerFlags: [],
                 lastContacted: new Date().toISOString(),
                 status: 'open',
                 visibility_state: 'active',
@@ -541,6 +593,9 @@ class ContactStore {
             if (handle.includes('@')) contact.channels.email.push(handle);
             else if (/^\+?\d+$/.test(handle)) contact.channels.phone.push(handle);
             this._contacts.push(contact);
+        }
+        if (Array.isArray(data.customerFlags)) {
+            data.customerFlags = safeJsonArray(data.customerFlags);
         }
         if (data.channels && typeof data.channels === "object") {
             contact.channels = { ...(contact.channels || {}), ...data.channels };
@@ -580,6 +635,8 @@ class ContactStore {
                         id: 'id-' + Math.random().toString(36).substr(2, 9),
                         handle: handle,
                         displayName: "",
+                        owner: "",
+                        customerFlags: [],
                         lastContacted: date.toISOString(),
                         lastChannel: channel,
                         status: 'open',
@@ -844,12 +901,10 @@ class ContactStore {
                     this._db.run("COMMIT", (err) => {
                         if (err) return reject(err);
                         this.refresh()
-                            .then(async () => {
+                            .then(() => {
                                 const touched = [this.findById(targetId), this.findById(sourceId)].filter(Boolean);
                                 if (touched.length) {
-                                    await emitRuntimeMemoryEventsForContacts(touched).catch((error) => {
-                                        console.warn("[contact-store] failed to emit Trinity contact events:", error.message);
-                                    });
+                                    scheduleRuntimeMemoryEventsForContacts(touched);
                                 }
                                 resolve();
                             })
@@ -925,6 +980,14 @@ async function emitRuntimeMemoryEventsForContacts(contacts) {
     });
 }
 
+function scheduleRuntimeMemoryEventsForContacts(contacts) {
+    setImmediate(() => {
+        emitRuntimeMemoryEventsForContacts(contacts).catch((error) => {
+            console.warn("[contact-store] failed to emit Trinity contact events:", error.message);
+        });
+    });
+}
+
 function buildRuntimeMemoryEventsForContacts(contacts) {
     const companyId = resolveReplyRuntimeCompanyId();
     return (Array.isArray(contacts) ? contacts : [])
@@ -940,10 +1003,12 @@ function buildRuntimeMemoryEventsForContacts(contacts) {
                 channel: String(contact.lastChannel || "").trim().toLowerCase() || null,
                 contact_handle: String(contact.handle || "").trim() || null,
                 content_text: null,
-                metadata: {
-                    contact_id: String(contact.id || "").trim() || null,
-                    display_name: String(contact.displayName || "").trim() || null,
-                    status: String(contact.status || "").trim() || null,
+                    metadata: {
+                        contact_id: String(contact.id || "").trim() || null,
+                        display_name: String(contact.displayName || "").trim() || null,
+                        owner: String(contact.owner || "").trim() || null,
+                        customer_flags: safeJsonArray(contact.customerFlags || contact.customer_flags),
+                        status: String(contact.status || "").trim() || null,
                     last_channel: String(contact.lastChannel || "").trim() || null,
                     last_contacted: contact.lastContacted || null,
                     visibility_state: normalizeVisibilityState(contact.visibility_state || contact.visibilityState || "active"),

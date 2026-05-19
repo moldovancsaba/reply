@@ -16,6 +16,13 @@ function isWorkerConsideredUp(status) {
     return s === "online" || s === "loading in queue" || s.startsWith("restarting");
 }
 
+function launchStillStarting(health) {
+    const ready = health?.launch?.ready;
+    if (ready === true) return false;
+    const stage = String(health?.launch?.stage || "").trim().toLowerCase();
+    return ready === false || stage.length > 0;
+}
+
 /**
  * @param {object} health - payload from buildSystemHealthPayloadCore
  * @param {object} pathCtx - from collectPathContext()
@@ -43,16 +50,21 @@ function buildPreflightReport(health, pathCtx, options = {}) {
 
     const w = health.services?.worker?.status || "unknown";
     const workerUp = isWorkerConsideredUp(w);
+    const workerStartupPending = !workerUp && launchStillStarting(health);
     checks.push({
         id: "background_worker",
         category: "core",
         title: "Background worker",
         severity: "critical",
-        status: workerUp ? "ok" : "blocked",
-        detail: workerUp ? "running" : `status=${w}`,
+        status: workerUp ? "ok" : (workerStartupPending ? "degraded" : "blocked"),
+        detail: workerUp
+            ? "running"
+            : (workerStartupPending ? `startup pending (status=${w})` : `status=${w}`),
         hint: workerUp
             ? null
-            : "Restart the worker from Settings or the dashboard. See chat/logs/worker.log"
+            : (workerStartupPending
+                ? "The hub is still starting background services. This should clear once launch finishes."
+                : "Restart the worker from Settings or the dashboard. See chat/logs/worker.log")
     });
 
     const dbOk = health.db?.status === "ok";
@@ -121,6 +133,27 @@ function buildPreflightReport(health, pathCtx, options = {}) {
         detail: ol,
         hint: olOk ? null : "Start with: ollama serve"
     });
+
+    if (health.models && typeof health.models === "object") {
+        const modelStorage = health.models;
+        const sharedModelsOk =
+            modelStorage.rootExists === true &&
+            modelStorage.huggingFaceCacheDirShared === true &&
+            modelStorage.transformersCacheDirShared === true;
+        checks.push({
+            id: "shared_model_root",
+            category: "ai",
+            title: "Shared model root",
+            severity: "warning",
+            status: sharedModelsOk ? "ok" : "degraded",
+            detail: sharedModelsOk
+                ? modelStorage.root || "/Users/Shared/Models"
+                : `root=${modelStorage.root || "/Users/Shared/Models"}, cache=${modelStorage.huggingFaceCacheDir || "unresolved"}`,
+            hint: sharedModelsOk
+                ? null
+                : "Set REPLY_MODELS_ROOT to /Users/Shared/Models and keep Hugging Face / embedding assets under that shared root."
+        });
+    }
 
     const summary = { ok: 0, degraded: 0, blocked: 0, skipped: 0 };
     for (const c of checks) {

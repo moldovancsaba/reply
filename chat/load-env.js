@@ -4,6 +4,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { applySharedModelEnv } = require("./model-paths.js");
 
 const CHAT_DIR = __dirname;
 
@@ -13,6 +14,7 @@ function loadReplyEnv() {
   if (fs.existsSync(localPath)) {
     require("dotenv").config({ path: localPath, override: true });
   }
+  applySharedModelEnv();
 }
 
 module.exports = { loadReplyEnv, CHAT_DIR };

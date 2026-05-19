@@ -29,10 +29,11 @@ const { addDocuments } = require('./vector-store.js');
 const preparedContextStore = require('./prepared-context-store.js');
 const contactStore = require('./contact-store.js');
 const { saveMessages } = require('./message-store.js');
-const { generateReply } = require('./brain-runtime.js');
+const { buildThreadSnapshot, generateReply, getPreparedDraft } = require('./brain-runtime.js');
 const {
     enqueueSuggestionDraft,
     processOneSuggestionDraft,
+    getSuggestionDraftBatchSize,
     getSuggestionDraftIntervalMs
 } = require('./suggestion-draft-queue.js');
 const {
@@ -48,6 +49,8 @@ const { extractSignals } = require('./signal-extractor.js');
 const { mergeProfile } = require('./kyc-merge.js');
 const { execFile } = require('child_process');
 const statusManager = require('./status-manager.js');
+const syncGuard = require('./utils/sync-guard');
+const CONVERSATION_INGEST_LOCK = "conversation_ingest";
 
 /**
  * Optimized Background Worker (SQLite version)
@@ -281,11 +284,27 @@ async function poll() {
 
     try {
         // 1. Sync Messages
-        console.log("Running iMessage sync...");
-        await syncIMessage();
+        if (syncGuard.acquireLocks(["imessage", CONVERSATION_INGEST_LOCK])) {
+            try {
+                console.log("Running iMessage sync...");
+                await syncIMessage();
+            } finally {
+                syncGuard.releaseLocks(["imessage", CONVERSATION_INGEST_LOCK]);
+            }
+        } else {
+            console.log("[Worker] Skipping iMessage sync: source or conversation ingest lock already held.");
+        }
 
-        console.log("Running WhatsApp sync...");
-        await syncWhatsApp();
+        if (syncGuard.acquireLocks(["whatsapp", CONVERSATION_INGEST_LOCK])) {
+            try {
+                console.log("Running WhatsApp sync...");
+                await syncWhatsApp();
+            } finally {
+                syncGuard.releaseLocks(["whatsapp", CONVERSATION_INGEST_LOCK]);
+            }
+        } else {
+            console.log("[Worker] Skipping WhatsApp sync: source or conversation ingest lock already held.");
+        }
 
         // 2. Optional email sync (Gmail OAuth or IMAP)
         const imapOk = typeof isImapConfigured === 'function'
@@ -293,11 +312,19 @@ async function poll() {
             : (process.env.REPLY_IMAP_HOST && process.env.REPLY_IMAP_USER && process.env.REPLY_IMAP_PASS);
         const gmailOk = typeof isGmailConfigured === 'function' ? isGmailConfigured() : false;
         if (gmailOk || imapOk) {
-            console.log(`Running Mail sync (${gmailOk ? 'Gmail' : 'IMAP'})...`);
-            const res = await syncMail();
-            if (res && res.hasMore) {
-                console.log("[Worker] Gmail backfill in progress, requested fast poll.");
-                pollFastRequested = true;
+            if (syncGuard.acquireLocks(["mail", CONVERSATION_INGEST_LOCK])) {
+                try {
+                    console.log(`Running Mail sync (${gmailOk ? 'Gmail' : 'IMAP'})...`);
+                    const res = await syncMail();
+                    if (res && res.hasMore) {
+                        console.log("[Worker] Gmail backfill in progress, requested fast poll.");
+                        pollFastRequested = true;
+                    }
+                } finally {
+                    syncGuard.releaseLocks(["mail", CONVERSATION_INGEST_LOCK]);
+                }
+            } else {
+                console.log("[Worker] Skipping Mail sync: source or conversation ingest lock already held.");
             }
         }
     } catch (e) {
@@ -500,26 +527,38 @@ async function pollLoop() {
 }
 
 /**
- * Background suggestion drafts: at most one generateReply per interval (default 5 min),
- * queue order newest-first. Disable with REPLY_SUGGEST_BACKGROUND_DISABLE=1.
+ * Background suggestion drafts: precompute Trinity-backed drafts for queued
+ * conversations in the background. Disable with REPLY_SUGGEST_BACKGROUND_DISABLE=1.
  */
 async function runSuggestionDraftSweepOnce() {
     const everyMs = getSuggestionDraftIntervalMs();
     if (!everyMs) return;
+    const batchSize = getSuggestionDraftBatchSize();
     try {
-        const res = await processOneSuggestionDraft({
-            contactStore,
-            generateReply,
-            isBusy: () => isProcessing
-        });
-        if (res.skipped) {
-            console.log('[Worker] Suggestion draft sweep skipped (iMessage poll in progress).');
-        } else if (res.ok) {
-            console.log(`[Worker] Background suggestion draft ready for ${res.handle}.`);
-        } else if (res.reason && res.reason !== 'queue_empty') {
-            console.log(
-                `[Worker] Suggestion draft sweep: ${res.handle || '(no handle)'} — ${res.reason}`
-            );
+        for (let i = 0; i < batchSize; i++) {
+            const res = await processOneSuggestionDraft({
+                contactStore,
+                generateReply,
+                getPreparedDraft,
+                buildThreadSnapshot,
+                isBusy: () => isProcessing
+            });
+            if (res.skipped) {
+                console.log('[Worker] Suggestion draft sweep skipped (iMessage poll in progress).');
+                break;
+            }
+            if (res.ok) {
+                console.log(`[Worker] Background suggestion draft ready for ${res.handle}.`);
+                continue;
+            }
+            if (res.reason && res.reason !== 'queue_empty') {
+                console.log(
+                    `[Worker] Suggestion draft sweep: ${res.handle || '(no handle)'} — ${res.reason}`
+                );
+            }
+            if (res.reason === 'queue_empty') {
+                break;
+            }
         }
     } catch (e) {
         console.error('[Worker] Suggestion draft sweep error:', e.message || e);
@@ -532,9 +571,12 @@ async function runSuggestionDraftSweepOnce() {
         console.log('[Worker] Background suggestion drafts disabled (REPLY_SUGGEST_BACKGROUND_DISABLE=1).');
         return;
     }
-    console.log(`[Worker] Background suggestion drafts every ${Math.round(everyMs / 1000)}s (newest queued first).`);
+    console.log(
+        `[Worker] Background suggestion drafts every ${Math.round(everyMs / 1000)}s `
+        + `(batch ${getSuggestionDraftBatchSize()}, newest queued first).`
+    );
     setInterval(runSuggestionDraftSweepOnce, everyMs);
-    setTimeout(runSuggestionDraftSweepOnce, 45 * 1000);
+    setTimeout(runSuggestionDraftSweepOnce, 10 * 1000);
 })();
 
 function getPreparedContextRefreshIntervalMs() {

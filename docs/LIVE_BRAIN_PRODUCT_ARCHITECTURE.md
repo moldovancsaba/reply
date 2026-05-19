@@ -166,8 +166,8 @@ The implemented compose flow is:
 1. operator opens a thread
 2. `{reply}` loads local thread state immediately
 3. `{reply}` asks `{trinity}` for the latest prepared draft through `GET /api/trinity/prepared-draft`
-4. if a fresh prepared draft exists, compose hydrates from that runtime artifact
-5. if it is missing or stale, the current flow can trigger one fresh runtime generation rather than blocking the UI
+4. if a fresh prepared draft exists, compose hydrates from that runtime artifact directly
+5. if it is missing or stale, `{reply}` force-refreshes the runtime path so `{trinity}` returns a fresh-or-best-available draft for the opened thread instead of falling back to product-owned local draft text
 6. operator edits remain product-owned, but material draft changes now emit bounded `draft_edited` runtime telemetry
 7. send or selection outcomes are emitted back to `{trinity}` through the structured outcome or memory-event path
 

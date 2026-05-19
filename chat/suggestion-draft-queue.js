@@ -1,6 +1,6 @@
 /**
- * Background suggestion drafts: queue handles on inbound, process one draft per interval
- * (default 5 minutes) from newest-queued toward older, using latest inbound text + history.
+ * Background suggestion drafts: queue handles on inbound, process drafts from
+ * newest-queued toward older, using latest inbound text + history.
  */
 
 const fs = require("fs");
@@ -149,11 +149,18 @@ async function getPreparedDraftContext(handle, opts = {}) {
 
 /**
  * Process at most one queued suggestion draft.
- * @param {{ contactStore: object, generateReply: Function, isBusy?: () => boolean }} opts
+ * @param {{ contactStore: object, generateReply: Function, getPreparedDraft?: Function, buildThreadSnapshot?: Function, getPreparedDraftContext?: Function, isBusy?: () => boolean }} opts
  * @returns {Promise<{ ok: boolean, handle?: string, reason?: string, skipped?: boolean }>}
  */
 async function processOneSuggestionDraft(opts) {
-  const { contactStore, generateReply, isBusy } = opts;
+  const {
+    contactStore,
+    generateReply,
+    getPreparedDraft,
+    buildThreadSnapshot,
+    getPreparedDraftContext: resolvePreparedDraftContext,
+    isBusy,
+  } = opts;
   if (typeof isBusy === "function" && isBusy()) {
     return { ok: false, skipped: true, reason: "worker_busy" };
   }
@@ -181,14 +188,12 @@ async function processOneSuggestionDraft(opts) {
     return { ok: false, handle, reason: "no_contact_or_closed" };
   }
 
-  if (String(contact.draft || "").trim() && String(process.env.REPLY_SUGGEST_REGENERATE_IF_DRAFT || "") !== "1") {
-    return { ok: false, handle, reason: "already_has_draft" };
-  }
-
   let message = "";
   let snippets = [];
   try {
-    const prepared = await getPreparedDraftContext(handle, { contactStore });
+    const prepared = typeof resolvePreparedDraftContext === "function"
+      ? await resolvePreparedDraftContext(handle, { contactStore })
+      : await getPreparedDraftContext(handle, { contactStore });
     message = prepared.message;
     snippets = prepared.snippets;
   } catch (e) {
@@ -198,6 +203,28 @@ async function processOneSuggestionDraft(opts) {
 
   if (!message) {
     return { ok: false, handle, reason: "no_inbound_text" };
+  }
+
+  if (
+    typeof getPreparedDraft === "function"
+    && typeof buildThreadSnapshot === "function"
+    && String(process.env.REPLY_SUGGEST_REGENERATE_IF_DRAFT || "") !== "1"
+  ) {
+    try {
+      const threadSnapshot = await buildThreadSnapshot(message, snippets, handle);
+      const prepared = await getPreparedDraft({
+        companyId: threadSnapshot.company_id,
+        threadRef: threadSnapshot.thread_ref,
+      }).catch(() => ({ status: "missing" }));
+      const rankedDraftSet = prepared?.prepared_draft_set?.ranked_draft_set || null;
+      const top = Array.isArray(rankedDraftSet?.drafts) ? rankedDraftSet.drafts[0] : null;
+      if (prepared?.status === "ok" && prepared?.stale !== true && String(top?.draft_text || "").trim()) {
+        await contactStore.setDraft(handle, String(top.draft_text || "").trim());
+        return { ok: true, handle, reason: "prepared_draft_ready" };
+      }
+    } catch (e) {
+      return { ok: false, handle, reason: `prepared_draft_check_failed:${e.message}` };
+    }
   }
 
   try {
@@ -226,7 +253,18 @@ function getSuggestionDraftIntervalMs() {
       return Math.min(n, 24 * 60 * 60 * 1000);
     }
   }
-  return 5 * 60 * 1000;
+  return 60 * 1000;
+}
+
+function getSuggestionDraftBatchSize() {
+  const raw = process.env.REPLY_SUGGEST_DRAFT_BATCH_SIZE;
+  if (raw != null && String(raw).trim() !== "") {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n > 0) {
+      return Math.min(Math.floor(n), 12);
+    }
+  }
+  return 3;
 }
 
 module.exports = {
@@ -235,6 +273,7 @@ module.exports = {
   processOneSuggestionDraft,
   seedQueueFromUndraftedContacts,
   getSuggestionDraftIntervalMs,
+  getSuggestionDraftBatchSize,
   readQueue,
   writeQueue,
   getPreparedDraftContext,

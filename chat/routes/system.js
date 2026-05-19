@@ -10,10 +10,12 @@ const messageStore = require("../message-store");
 const fs = require("fs");
 const path = require("path");
 const hubRuntime = require("../hub-runtime");
+const { getLaunchState } = require("../startup-guard");
 const { ensureWorkerCanStartFromHub } = require("../ensure-hub-worker.js");
 const { resolveOllamaHttpBase } = require("../ai-runtime-config.js");
 const { execFile } = require("child_process");
 const { getDataHome, dataPath } = require("../app-paths.js");
+const { getModelStorageStatus } = require("../model-paths.js");
 
 const DATA_DIR = getDataHome();
 const CHAT_DIR = path.join(__dirname, "..");
@@ -187,6 +189,33 @@ function normalizeChannelStatus(baseStatus, ingestedTotal, extras = {}) {
     };
 }
 
+function isTransientSqliteBusyStatus(status) {
+    const state = String(status?.state || status?.status || "").trim().toLowerCase();
+    const message = String(status?.message || "").trim().toLowerCase();
+    return state === "error" && (message.includes("sqlite_busy") || message.includes("database is locked"));
+}
+
+function clearStaleTransientSqliteBusy(status, launch) {
+    if (!isTransientSqliteBusyStatus(status)) return status;
+    const launchStartedAtMs = Date.parse(String(launch?.startedAt || ""));
+    if (!Number.isFinite(launchStartedAtMs)) return status;
+    const attemptedAtMs = Date.parse(String(
+        status?.lastAttemptedSync ||
+        status?.timestamp ||
+        status?.lastSync ||
+        ""
+    ));
+    if (!Number.isFinite(attemptedAtMs) || attemptedAtMs >= launchStartedAtMs) {
+        return status;
+    }
+    return {
+        ...status,
+        state: "idle",
+        message: "Awaiting next sync.",
+        progress: 0
+    };
+}
+
 function resolveMailProvider({ mailStatus = {}, gmailOk = false, imapOk = false } = {}) {
     const connector = String(mailStatus?.connector || "").trim().toLowerCase();
     if (connector) return connector;
@@ -332,6 +361,15 @@ async function buildSystemHealthPayloadCore() {
         apple_contacts: contactStats.byChannel?.apple_contacts || 0
     };
 
+    const launch = getLaunchState();
+    const normalizedIMessageStatus = clearStaleTransientSqliteBusy(imessageStatus, launch);
+    const normalizedWhatsAppStatus = clearStaleTransientSqliteBusy(whatsappStatus, launch);
+    const normalizedMailStatus = clearStaleTransientSqliteBusy(mailStatus, launch);
+    const normalizedNotesStatus = clearStaleTransientSqliteBusy(notesStatus, launch);
+    const normalizedCalendarStatus = clearStaleTransientSqliteBusy(calendarStatus, launch);
+    const normalizedLinkedInMessagesStatus = clearStaleTransientSqliteBusy(linkedinMessagesStatus, launch);
+    const normalizedLinkedInPostsStatus = clearStaleTransientSqliteBusy(linkedinPostsStatus, launch);
+
     const health = {
         ok: true,
         version: replyVersion,
@@ -346,32 +384,32 @@ async function buildSystemHealthPayloadCore() {
             ollama: { status: ollamaStatus }
         },
         channels: {
-            imessage: normalizeChannelStatus(imessageStatus, imessageCount, {
-                lastSuccessfulSync: imessageStatus?.lastSuccessfulSync || imessageStatus?.lastSync || getIMessageCheckpointLastSync()
+            imessage: normalizeChannelStatus(normalizedIMessageStatus, imessageCount, {
+                lastSuccessfulSync: normalizedIMessageStatus?.lastSuccessfulSync || normalizedIMessageStatus?.lastSync || getIMessageCheckpointLastSync()
             }),
-            whatsapp: normalizeChannelStatus(whatsappStatus, whatsappCount),
-            notes: normalizeChannelStatus(notesStatus, notesCountIngested, {
-                total: Math.max(numeric(notesStatus.total), numeric(notesStatus.processed), numeric(notesStatus.updated), numeric(getNotesCount()), numeric(notesCountIngested))
+            whatsapp: normalizeChannelStatus(normalizedWhatsAppStatus, whatsappCount),
+            notes: normalizeChannelStatus(normalizedNotesStatus, notesCountIngested, {
+                total: Math.max(numeric(normalizedNotesStatus.total), numeric(normalizedNotesStatus.processed), numeric(normalizedNotesStatus.updated), numeric(getNotesCount()), numeric(notesCountIngested))
             }),
-            calendar: normalizeChannelStatus(calendarStatus, calendarCount),
+            calendar: normalizeChannelStatus(normalizedCalendarStatus, calendarCount),
             mail: {
-                ...mailStatus,
-                lastAt: mailStatus.lastSync || null,
+                ...normalizedMailStatus,
+                lastAt: normalizedMailStatus.lastSync || null,
                 provider: mailProvider,
                 account: mailAccount,
                 connected: !!(gmailOk || imapOk),
-                processed: Math.max(numeric(mailStatus.processed), numeric(mailStatus.total), numeric(mailCount)),
-                total: Math.max(numeric(mailStatus.total), numeric(mailStatus.processed), numeric(mailCount)),
-                status: (mailStatus.state === 'error') ? "repair_required" : (mailStatus.state || "ok")
+                processed: Math.max(numeric(normalizedMailStatus.processed), numeric(normalizedMailStatus.total), numeric(mailCount)),
+                total: Math.max(numeric(normalizedMailStatus.total), numeric(normalizedMailStatus.processed), numeric(mailCount)),
+                status: (normalizedMailStatus.state === 'error') ? "repair_required" : (normalizedMailStatus.state || "ok")
             },
             linkedin_messages: {
-                ...linkedinMessagesStatus,
+                ...normalizedLinkedInMessagesStatus,
                 processed: linkedinMessagesCount,
                 total: linkedinMessagesCount,
                 lastAt: readChannelSyncState().linkedin || null
             },
             linkedin_posts: {
-                ...linkedinPostsStatus,
+                ...normalizedLinkedInPostsStatus,
                 processed: linkedinPostsCount,
                 total: linkedinPostsCount,
                 lastAt: readChannelSyncState().linkedin_posts || null
@@ -387,8 +425,9 @@ async function buildSystemHealthPayloadCore() {
                 ...visibleByChannel
             }
         },
+        models: getModelStorageStatus(),
         lastCheck: new Date().toISOString(),
-        launch: hubRuntime.getBootstrapState(),
+        launch,
         httpPort,
         httpHost
     };

@@ -70,7 +70,89 @@ function normalizeConversationSort(raw) {
 
 /** Stable list for clients (reply#15); lexicographic order so snapshots stay deterministic. */
 const AVAILABLE_CONVERSATION_SORT_MODES = [...CONVERSATION_SORT_MODES].sort();
+const WORKSPACE_QUEUE_MODES = new Set([
+    "all",
+    "escalated",
+    "needs_reply",
+    "draft_ready",
+    "waiting_on_contact",
+    "resolved",
+]);
+const AVAILABLE_WORKSPACE_QUEUE_MODES = [...WORKSPACE_QUEUE_MODES];
+const WORKSPACE_OWNER_SCOPE_MODES = new Set([
+    "all",
+    "mine",
+    "team",
+    "unassigned",
+]);
+const AVAILABLE_WORKSPACE_OWNER_SCOPE_MODES = [...WORKSPACE_OWNER_SCOPE_MODES];
 const REPLY_ENABLE_TRINITY_REQUEST_TELEMETRY = String(process.env.REPLY_ENABLE_TRINITY_REQUEST_TELEMETRY || "").trim() === "1";
+
+function normalizeWorkspaceQueue(raw) {
+    const s = String(raw || "all").toLowerCase().trim();
+    return WORKSPACE_QUEUE_MODES.has(s) ? s : "all";
+}
+
+function normalizeWorkspaceChannel(raw) {
+    const s = String(raw || "all").toLowerCase().trim();
+    return s || "all";
+}
+
+function normalizeWorkspaceOwnerScope(raw) {
+    const s = String(raw || "all").toLowerCase().trim();
+    return WORKSPACE_OWNER_SCOPE_MODES.has(s) ? s : "all";
+}
+
+function normalizeWorkspaceOwnerIdentity(raw) {
+    return String(raw || "").trim();
+}
+
+function workspaceQueueLabel(key) {
+    switch (String(key || "").trim().toLowerCase()) {
+    case "escalated":
+        return "Escalated";
+    case "needs_reply":
+        return "Needs Reply";
+    case "draft_ready":
+        return "Draft Ready";
+    case "waiting_on_contact":
+        return "Waiting";
+    case "resolved":
+        return "Resolved";
+    default:
+        return "All";
+    }
+}
+
+function workspaceOwnerScopeLabel(key, ownerIdentity = "") {
+    const owner = normalizeWorkspaceOwnerIdentity(ownerIdentity);
+    switch (String(key || "").trim().toLowerCase()) {
+    case "mine":
+        return owner ? `Mine (${owner})` : "Mine";
+    case "team":
+        return "Team";
+    case "unassigned":
+        return "Unassigned";
+    default:
+        return "All Owners";
+    }
+}
+
+const WORKSPACE_WORKLOAD_SEGMENTS = [
+    { key: "escalated_total", label: "Escalated", ownerScope: "all", queue: "escalated" },
+    { key: "mine_needs_reply", label: "Mine Needing Reply", ownerScope: "mine", queue: "needs_reply" },
+    { key: "mine_draft_ready", label: "Mine Draft Ready", ownerScope: "mine", queue: "draft_ready" },
+    { key: "unassigned_needs_reply", label: "Unassigned Needing Reply", ownerScope: "unassigned", queue: "needs_reply" },
+    { key: "unassigned_draft_ready", label: "Unassigned Draft Ready", ownerScope: "unassigned", queue: "draft_ready" },
+    { key: "team_needs_reply", label: "Team Needing Reply", ownerScope: "team", queue: "needs_reply" },
+    { key: "team_waiting_on_contact", label: "Team Waiting", ownerScope: "team", queue: "waiting_on_contact" },
+];
+const WORKSPACE_SLA_SEGMENTS = [
+    { key: "needs_reply_over_1h", label: "Needs Reply >1h", queue: "needs_reply", minAgeHours: 1 },
+    { key: "needs_reply_over_24h", label: "Needs Reply >24h", queue: "needs_reply", minAgeHours: 24 },
+    { key: "draft_ready_over_1h", label: "Draft Ready >1h", queue: "draft_ready", minAgeHours: 1 },
+    { key: "draft_ready_over_24h", label: "Draft Ready >24h", queue: "draft_ready", minAgeHours: 24 },
+];
 
 async function resolveLatestInboundContext(handle) {
     const normalizedHandle = String(handle || "").trim();
@@ -259,6 +341,196 @@ function sanitizeConversationItemForApi(it, sort) {
     return o;
 }
 
+function deriveWorkspaceState(item) {
+    const status = String(item?.contact?.status || "").trim().toLowerCase() || "open";
+    const draftText = String(item?.contact?.draft || "").trim();
+    const customerFlags = Array.isArray(item?.customerFlags)
+        ? item.customerFlags
+        : (Array.isArray(item?.contact?.customerFlags) ? item.contact.customerFlags : []);
+    const normalizedFlags = Array.from(new Set(customerFlags.map((value) => String(value || "").trim().toLowerCase()).filter(Boolean)));
+    const pendingSuggestions = Array.isArray(item?.contact?.pendingSuggestions)
+        ? item.contact.pendingSuggestions.filter((entry) => String(entry?.status || "pending").trim().toLowerCase() === "pending")
+        : [];
+    const latestInboundAt = String(item?.latestInboundAt || "").trim() || null;
+    const latestOutboundAt = String(item?.latestOutboundAt || "").trim() || null;
+    const latestMessageAt = String(item?.latestMessageAt || "").trim() || item?.previewDate || null;
+    const inboundMs = safeDateMs(latestInboundAt);
+    const outboundMs = safeDateMs(latestOutboundAt);
+    const latestMs = safeDateMs(latestMessageAt);
+    let latestDirection = "unknown";
+
+    if (inboundMs && inboundMs >= outboundMs) latestDirection = "inbound";
+    else if (outboundMs) latestDirection = "outbound";
+    else if (latestMs && Number(item?.countIn || 0) > 0 && Number(item?.countOut || 0) === 0) latestDirection = "inbound";
+    else if (latestMs && Number(item?.countOut || 0) > 0 && Number(item?.countIn || 0) === 0) latestDirection = "outbound";
+
+    let queueKey = "needs_reply";
+    if (status === "closed" || item?.closedAt) queueKey = "resolved";
+    else if (normalizedFlags.includes("escalated")) queueKey = "escalated";
+    else if (draftText || pendingSuggestions.length) queueKey = "draft_ready";
+    else if (latestDirection === "outbound" || outboundMs > inboundMs) queueKey = "waiting_on_contact";
+
+    let pendingSinceAt = null;
+    if (queueKey === "needs_reply" || queueKey === "escalated") pendingSinceAt = latestInboundAt || latestMessageAt || null;
+    else if (queueKey === "draft_ready") pendingSinceAt = latestMessageAt || latestInboundAt || null;
+    else if (queueKey === "waiting_on_contact") pendingSinceAt = latestOutboundAt || latestMessageAt || null;
+
+    return {
+        queueKey,
+        queueLabel: workspaceQueueLabel(queueKey),
+        latestDirection,
+        hasDraft: Boolean(draftText),
+        pendingSuggestionCount: pendingSuggestions.length,
+        latestInboundAt,
+        latestOutboundAt,
+        latestMessageAt,
+        pendingSinceAt,
+        customerFlags: normalizedFlags,
+        status,
+        isResolved: queueKey === "resolved",
+    };
+}
+
+function deriveWorkspaceAge(item, nowMs = Date.now()) {
+    const workspace = item?.workspace || deriveWorkspaceState(item);
+    const pendingSinceAt = String(workspace?.pendingSinceAt || "").trim() || null;
+    const pendingSinceMs = safeDateMs(pendingSinceAt);
+    const actionable = workspace.queueKey === "needs_reply" || workspace.queueKey === "draft_ready" || workspace.queueKey === "escalated";
+    const ageMs = actionable && pendingSinceMs ? Math.max(0, nowMs - pendingSinceMs) : 0;
+    const ageHours = ageMs ? Math.round((ageMs / 3600000) * 10) / 10 : 0;
+    let ageBucket = "none";
+    if (actionable && ageMs >= 86400000) ageBucket = "over_24h";
+    else if (actionable && ageMs >= 3600000) ageBucket = "over_1h";
+    else if (actionable && ageMs > 0) ageBucket = "under_1h";
+    return {
+        actionable,
+        pendingSinceAt,
+        pendingSinceMs,
+        ageMs,
+        ageHours,
+        ageBucket,
+    };
+}
+
+function deriveWorkspaceOwnership(item, currentOwnerIdentity = "") {
+    const owner = String(item?.owner || item?.contact?.owner || "").trim();
+    const ownerNormalized = owner.toLowerCase();
+    const currentOwner = normalizeWorkspaceOwnerIdentity(currentOwnerIdentity);
+    const currentOwnerNormalized = currentOwner.toLowerCase();
+    const isAssigned = Boolean(owner);
+    const isMine = Boolean(ownerNormalized && currentOwnerNormalized && ownerNormalized === currentOwnerNormalized);
+    return {
+        owner,
+        ownerNormalized,
+        currentOwner,
+        isAssigned,
+        isMine,
+        ownershipKey: !isAssigned ? "unassigned" : (isMine ? "mine" : "team"),
+    };
+}
+
+function matchesWorkspaceFilters(item, { queue = "all", channel = "all", ownerScope = "all", ownerIdentity = "" } = {}) {
+    const queueKey = normalizeWorkspaceQueue(queue);
+    const channelKey = normalizeWorkspaceChannel(channel);
+    const ownerScopeKey = normalizeWorkspaceOwnerScope(ownerScope);
+    const workspace = item?.workspace || deriveWorkspaceState(item);
+    const ownership = item?.workspaceOwnership || deriveWorkspaceOwnership(item, ownerIdentity);
+    const channels = Array.isArray(item?.channels) && item.channels.length
+        ? item.channels.map((value) => String(value || "").trim().toLowerCase()).filter(Boolean)
+        : [String(item?.channel || "").trim().toLowerCase()].filter(Boolean);
+    const queueOk = queueKey === "all" ? true : workspace.queueKey === queueKey;
+    const channelOk = channelKey === "all"
+        ? true
+        : channels.includes(channelKey) || String(item?.channel || "").trim().toLowerCase() === channelKey;
+    const ownerOk = ownerScopeKey === "all" ? true : ownership.ownershipKey === ownerScopeKey;
+    return queueOk && channelOk && ownerOk;
+}
+
+function buildWorkspaceWorkloadSegments(items = [], ownerIdentity = "") {
+    return WORKSPACE_WORKLOAD_SEGMENTS.map((segment) => {
+        const count = items.filter((item) => matchesWorkspaceFilters(item, {
+            ownerScope: segment.ownerScope,
+            queue: segment.queue,
+            channel: "all",
+            ownerIdentity,
+        })).length;
+        return {
+            key: segment.key,
+            label: segment.label,
+            ownerScope: segment.ownerScope,
+            queue: segment.queue,
+            count,
+        };
+    });
+}
+
+function buildWorkspaceSlaSegments(items = [], nowMs = Date.now()) {
+    return WORKSPACE_SLA_SEGMENTS.map((segment) => {
+        const count = items.filter((item) => {
+            const workspace = item?.workspace || deriveWorkspaceState(item);
+            const age = item?.workspaceAge || deriveWorkspaceAge(item, nowMs);
+            return workspace.queueKey === segment.queue && age.actionable && age.ageHours >= segment.minAgeHours;
+        }).length;
+        return {
+            key: segment.key,
+            label: segment.label,
+            queue: segment.queue,
+            minAgeHours: segment.minAgeHours,
+            count,
+        };
+    });
+}
+
+function buildWorkspaceMeta(items = [], requested = {}) {
+    const queueCounts = {};
+    for (const key of AVAILABLE_WORKSPACE_QUEUE_MODES) queueCounts[key] = 0;
+    const channelCounts = { all: items.length };
+    const ownerScopeCounts = {};
+    for (const key of AVAILABLE_WORKSPACE_OWNER_SCOPE_MODES) ownerScopeCounts[key] = 0;
+    const ownerIdentity = normalizeWorkspaceOwnerIdentity(requested.ownerIdentity);
+    const nowMs = Number(requested.nowMs) > 0 ? Number(requested.nowMs) : Date.now();
+
+    for (const item of items) {
+        const workspace = item?.workspace || deriveWorkspaceState(item);
+        const ownership = item?.workspaceOwnership || deriveWorkspaceOwnership(item, ownerIdentity);
+        queueCounts.all += 1;
+        if (queueCounts[workspace.queueKey] == null) queueCounts[workspace.queueKey] = 0;
+        queueCounts[workspace.queueKey] += 1;
+        ownerScopeCounts.all += 1;
+        if (ownerScopeCounts[ownership.ownershipKey] == null) ownerScopeCounts[ownership.ownershipKey] = 0;
+        ownerScopeCounts[ownership.ownershipKey] += 1;
+
+        const primaryChannel = String(item?.channel || "").trim().toLowerCase();
+        if (primaryChannel) channelCounts[primaryChannel] = (channelCounts[primaryChannel] || 0) + 1;
+    }
+
+    return {
+        queue: normalizeWorkspaceQueue(requested.queue),
+        channel: normalizeWorkspaceChannel(requested.channel),
+        ownerScope: normalizeWorkspaceOwnerScope(requested.ownerScope),
+        ownerIdentity,
+        workloadSegments: buildWorkspaceWorkloadSegments(items, ownerIdentity),
+        slaSegments: buildWorkspaceSlaSegments(items, nowMs),
+        availableOwnerScopes: AVAILABLE_WORKSPACE_OWNER_SCOPE_MODES.map((key) => ({
+            key,
+            label: workspaceOwnerScopeLabel(key, ownerIdentity),
+            count: Number(ownerScopeCounts[key] || 0),
+        })),
+        availableQueues: AVAILABLE_WORKSPACE_QUEUE_MODES.map((key) => ({
+            key,
+            label: workspaceQueueLabel(key),
+            count: Number(queueCounts[key] || 0),
+        })),
+        availableChannels: Object.keys(channelCounts)
+            .sort((a, b) => (a === "all" ? -1 : b === "all" ? 1 : a.localeCompare(b)))
+            .map((key) => ({
+                key,
+                label: key === "all" ? "All Channels" : key,
+                count: Number(channelCounts[key] || 0),
+            })),
+    };
+}
+
 function normalizeThreadStoreRows(rows = []) {
     return (Array.isArray(rows) ? rows : []).map((row) => {
         const isFromMe = row.is_from_me == null ? false : Boolean(row.is_from_me);
@@ -391,7 +663,45 @@ function isConversationCandidate(row) {
     });
 }
 
-async function getConversationsIndexFresh(q = "", sortMode = "newest") {
+async function hydrateConversationPage(items = []) {
+    const pageItems = Array.isArray(items) ? items : [];
+    if (!pageItems.length) return [];
+    const summaryMap = await conversationFoundationStore.getConversationSummariesByHandles(
+        pageItems.map((item) => item.handle)
+    );
+    return pageItems.map((item) => {
+        const summary = summaryMap.get(item.handle);
+        if (!summary) {
+            return {
+                ...item,
+                channels: item.channel ? [item.channel] : [],
+                allowedChannels: [],
+                conversationId: null,
+                latestMessageAt: item.previewDate || null,
+                latestInboundAt: null,
+                latestOutboundAt: null,
+                closedAt: null,
+                closureReason: null,
+                lastVisibleSummary: null,
+            };
+        }
+        return {
+            ...item,
+            conversationId: summary.conversationId,
+            channels: Array.isArray(summary.channels) && summary.channels.length ? summary.channels : (item.channel ? [item.channel] : []),
+            allowedChannels: summary.allowedChannels || [],
+            channel: summary.defaultChannel || item.channel,
+            latestMessageAt: summary.latestMessageAt || item.previewDate || null,
+            latestInboundAt: summary.latestInboundAt || null,
+            latestOutboundAt: summary.latestOutboundAt || null,
+            closedAt: summary.closedAt || null,
+            closureReason: summary.closureReason || null,
+            lastVisibleSummary: summary.lastVisibleSummary || null,
+        };
+    });
+}
+
+async function getConversationsIndexFresh(q = "", sortMode = "newest", workspaceFilters = {}) {
     const sort = normalizeConversationSort(sortMode);
     const nowMs = Date.now();
     const cacheOk =
@@ -437,6 +747,8 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
             lastMessage: row.text || "No recent messages",
             preview: row.text || "No recent messages",
             previewDate,
+            owner: String(contact?.owner || "").trim() || null,
+            customerFlags: Array.isArray(contact?.customerFlags) ? contact.customerFlags : [],
             count: Number(row.total_count) || 0,
             countIn: Number(row.message_count_in) || 0,
             countOut: Number(row.message_count_out) || 0,
@@ -453,28 +765,6 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
     if (q) {
         items = items.filter((item) => matchesQuery(conversationSearchHaystack(item), q));
     }
-
-    const summaryMap = await conversationFoundationStore.getConversationSummariesByHandles(
-        items.map((item) => item.handle)
-    );
-    items = items.map((item) => {
-        const summary = summaryMap.get(item.handle);
-        if (!summary) {
-            return {
-                ...item,
-                channels: item.channel ? [item.channel] : [],
-                allowedChannels: [],
-                conversationId: null,
-            };
-        }
-        return {
-            ...item,
-            conversationId: summary.conversationId,
-            channels: Array.isArray(summary.channels) && summary.channels.length ? summary.channels : (item.channel ? [item.channel] : []),
-            allowedChannels: summary.allowedChannels || [],
-            channel: summary.defaultChannel || item.channel,
-        };
-    });
 
     const seenKeys = new Set(items.map((item) => item.key));
     for (const c of contacts) {
@@ -501,17 +791,38 @@ async function getConversationsIndexFresh(q = "", sortMode = "newest") {
             lastMessage: "No recent messages",
             preview: "No recent messages",
             previewDate: c.lastContacted,
+            owner: String(c.owner || "").trim() || null,
+            customerFlags: Array.isArray(c.customerFlags) ? c.customerFlags : [],
             count: 0,
             countIn: 0,
             countOut: 0,
             firstTimestamp: null,
             conversationId: null,
             channels: c.lastChannel ? [c.lastChannel] : [],
-            allowedChannels: []
+            allowedChannels: [],
+            latestMessageAt: c.lastContacted || null,
+            latestInboundAt: null,
+            latestOutboundAt: null,
+            closedAt: c.status === "closed" ? c.lastContacted || new Date().toISOString() : null,
+            closureReason: null,
+            lastVisibleSummary: null,
         });
     }
 
-    return { items, sort };
+    items = items.map((item) => {
+        const workspace = deriveWorkspaceState(item);
+        return {
+            ...item,
+            workspace,
+            workspaceOwnership: deriveWorkspaceOwnership(item, workspaceFilters.ownerIdentity),
+            workspaceAge: deriveWorkspaceAge({ ...item, workspace }),
+        };
+    });
+
+    const workspaceMeta = buildWorkspaceMeta(items, workspaceFilters);
+    items = items.filter((item) => matchesWorkspaceFilters(item, workspaceFilters));
+
+    return { items, sort, workspaceMeta };
 }
 
 
@@ -521,12 +832,21 @@ async function serveConversations(req, res, url) {
     const offset = parseInt(url.searchParams.get("offset")) || 0;
     const q = (url.searchParams.get("q") || url.searchParams.get("query") || "").toString();
     const sortRaw = (url.searchParams.get("sort") || url.searchParams.get("rank") || "newest").toString();
+    const queueRaw = (url.searchParams.get("queue") || "all").toString();
+    const channelRaw = (url.searchParams.get("channel") || "all").toString();
+    const ownerScopeRaw = (url.searchParams.get("owner_scope") || "all").toString();
+    const ownerIdentityRaw = (url.searchParams.get("owner_identity") || "").toString();
 
     try {
         const sort = normalizeConversationSort(sortRaw);
-        const { items } = await getConversationsIndexFresh(q, sort);
-        const page = items
-            .slice(offset, offset + limit)
+        const queue = normalizeWorkspaceQueue(queueRaw);
+        const channel = normalizeWorkspaceChannel(channelRaw);
+        const ownerScope = normalizeWorkspaceOwnerScope(ownerScopeRaw);
+        const ownerIdentity = normalizeWorkspaceOwnerIdentity(ownerIdentityRaw);
+        const { items, workspaceMeta } = await getConversationsIndexFresh(q, sort, { queue, channel, ownerScope, ownerIdentity });
+        const pageItems = items.slice(offset, offset + limit);
+        const hydratedPage = await hydrateConversationPage(pageItems);
+        const page = hydratedPage
             .map((it) => sanitizeConversationItemForApi(it, sort));
 
         // `meta` keys are stable API surface (reply#31): sort, sortRequested, sortValid — no legacy `mode`.
@@ -540,7 +860,8 @@ async function serveConversations(req, res, url) {
                 sortValid: CONVERSATION_SORT_MODES.has(
                     String(sortRaw || "").toLowerCase().trim()
                 ),
-                availableSortModes: AVAILABLE_CONVERSATION_SORT_MODES
+                availableSortModes: AVAILABLE_CONVERSATION_SORT_MODES,
+                workspace: workspaceMeta,
             }
         });
     } catch (err) {
@@ -1370,11 +1691,23 @@ module.exports = {
     normalizeConversationSort,
     CONVERSATION_SORT_MODES,
     AVAILABLE_CONVERSATION_SORT_MODES,
+    normalizeWorkspaceQueue,
+    normalizeWorkspaceChannel,
+    normalizeWorkspaceOwnerScope,
+    normalizeWorkspaceOwnerIdentity,
+    WORKSPACE_QUEUE_MODES,
+    AVAILABLE_WORKSPACE_QUEUE_MODES,
+    WORKSPACE_OWNER_SCOPE_MODES,
+    AVAILABLE_WORKSPACE_OWNER_SCOPE_MODES,
     getConversationsIndexFresh,
     applyConversationSort,
     sanitizeConversationItemForApi,
     normalizeThreadStoreRows,
     resolveConversationTimestamps,
+    deriveWorkspaceState,
+    deriveWorkspaceOwnership,
+    deriveWorkspaceAge,
+    buildWorkspaceMeta,
     checkConversationCapabilityGate,
     invalidateConversationsCache: () => {
         conversationsIndexCache.builtAtMs = 0;

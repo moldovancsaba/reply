@@ -56,6 +56,10 @@ const serviceManager = require("./service-manager.js");
 const hubRuntime = require("./hub-runtime.js");
 const { ensureWorkerCanStartFromHub } = require("./ensure-hub-worker.js");
 const conversationFoundationStore = require("./conversation-foundation-store.js");
+const STARTUP_REBUILD_BUDGET_MS = Math.max(
+  1000,
+  Math.min(parseInt(process.env.REPLY_STARTUP_REBUILD_BUDGET_MS || "5000", 10) || 5000, 30000)
+);
 
 hubRuntime.resetBootstrap("initializing", "Initializing hub...");
 let httpListening = false;
@@ -77,13 +81,42 @@ function refreshBootstrapReadyState() {
   hubRuntime.setBootstrapStage("initializing", "Initializing hub...");
 }
 
+async function waitForRebuildBudget(rebuildPromise) {
+  let timedOut = false;
+  const finishedInBudget = await Promise.race([
+    Promise.resolve(rebuildPromise).then(() => true),
+    new Promise((resolve) => {
+      setTimeout(() => {
+        timedOut = true;
+        resolve(false);
+      }, STARTUP_REBUILD_BUDGET_MS);
+    }),
+  ]);
+  return { finishedInBudget, timedOut };
+}
+
+function continueRebuildInBackground(rebuildPromise) {
+  Promise.resolve(rebuildPromise)
+    .then(() => {
+      console.log("[Startup] Canonical conversation rebuild completed in background.");
+    })
+    .catch((error) => {
+      console.warn("[Startup] Canonical conversation rebuild failed in background:", error.message);
+    });
+}
+
 // Start managed services for the local product runtime.
 async function startManagedServices() {
   try {
     hubRuntime.setBootstrapStage("schema_initializing", "Initializing local conversation foundation...");
     await conversationFoundationStore.waitUntilReady();
     hubRuntime.setBootstrapStage("conversation_rebuild", "Rebuilding canonical conversation projections...");
-    await conversationFoundationStore.rebuildConversationFoundation();
+    const rebuildPromise = conversationFoundationStore.rebuildConversationFoundation();
+    const { finishedInBudget } = await waitForRebuildBudget(rebuildPromise);
+    if (!finishedInBudget) {
+      console.log(`[Startup] Canonical conversation rebuild exceeded startup budget (${STARTUP_REBUILD_BUDGET_MS}ms); continuing in background.`);
+      continueRebuildInBackground(rebuildPromise);
+    }
     hubRuntime.setBootstrapStage("services_starting", "Launching background services...");
     serviceManager.setStatus("worker", "loading in queue");
     statusManager.update("system", { progress: 40, message: "Launching background worker..." });
