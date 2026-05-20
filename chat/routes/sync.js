@@ -1,6 +1,8 @@
 /**
  * {reply} - Sync Routes
  * Handles background synchronization for various data sources.
+ * These routes acknowledge that background work started; they do not imply the
+ * underlying sync already completed successfully.
  */
 
 const { writeJson } = require("../utils/server-utils");

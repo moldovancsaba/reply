@@ -40,7 +40,7 @@ struct NativeSettingsView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(service.isSavingSettings || service.runtimeState != .online)
             }
-            Text("Configure the shipped {reply} runtime directly from the native app. These controls replace the old browser-only operational settings surface.")
+            Text("Configure the shipped {reply} runtime directly from the native app. Auto drafting prefers {trinity} when it is healthy and falls back to the local Ollama path when it is unavailable or too slow.")
                 .foregroundStyle(ReplyConstellationPalette.textSecondary)
             if !service.settingsLoadError.isEmpty {
                 Text(service.settingsLoadError)
@@ -69,6 +69,10 @@ struct NativeSettingsView: View {
                 Text("Ollama").tag("ollama")
             }
             .pickerStyle(.segmented)
+
+            Text("`Auto` keeps the Trinity-first route enabled. Choose `Ollama` only when you want to bypass Trinity and force the local runtime.")
+                .font(.caption)
+                .foregroundStyle(ReplyConstellationPalette.textSecondary)
 
             TextField("Ollama host", text: Binding(
                 get: { service.settingsDraft.ai.ollamaHost ?? "" },

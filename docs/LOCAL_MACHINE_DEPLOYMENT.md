@@ -11,6 +11,10 @@ It now covers:
 - OpenClaw transport dependencies
 - current app-owned data and log paths
 
+For the full bidirectional app/service inventory and the latest audited health snapshot, see:
+
+- [RELATION_AUDIT.md](/Users/Shared/Projects/reply/docs/RELATION_AUDIT.md)
+
 ## Target Environment
 
 Required:
@@ -135,6 +139,7 @@ Launch hardening notes:
 - the bundled native shell starts the hub on preferred local ports `45431` through `45446`
 - `script/build_and_run.sh --verify` now waits for `/api/health` readiness, not just a visible process
 - the native UI stays in a startup state until the hub reports launch readiness
+- use `app/reply-app/install-bundle.sh` when you need to install or refresh `/Applications/reply.app`
 
 ### Legacy LaunchAgent mode
 
@@ -159,6 +164,8 @@ Current notable files:
 - `~/Library/Application Support/reply/chat.db`
 - `~/Library/Application Support/reply/contacts.db`
 - `~/Library/Application Support/reply/settings.json`
+- `~/Library/Application Support/reply/channel_bridge_pending.json`
+- `~/Library/Application Support/reply/channel_bridge_events.jsonl`
 - `~/Library/Application Support/reply/shadow/trinity-draft-comparisons.jsonl`
 - `~/Library/Application Support/reply/mail_sync_status.json`
 - `~/Library/Logs/reply/hub.log`
@@ -167,6 +174,7 @@ Current notable files:
 Default HTTP health endpoint:
 
 - `http://127.0.0.1:45311/api/health`
+- `http://127.0.0.1:45311/api/system/health`
 
 Bundled native-shell preferred health endpoints:
 
@@ -178,10 +186,20 @@ Bundled native-shell preferred health endpoints:
 
 ### Drafting runtime
 
-- live drafting is `{trinity}` only
-- legacy drafting is not part of the normal live path
+- live drafting is `{trinity}` first
+- if `{trinity}` `suggest` fails or times out, `{reply}` falls back to bounded local drafting
+- legacy drafting is not part of the normal operator path except developer shadow comparison
 - developer-only `trinity-shadow` mode exists for comparison logging
 - structured draft outcomes are posted to `/api/trinity/outcome`
+
+### Channel bridge and LinkedIn runtime
+
+- LinkedIn defaults to `browser_bridge`
+- Playwright sidecar mode exists, but it is explicit-only
+- inbound bridge writes are bounded against `chat.db`
+- when `chat.db` is busy, bridge messages are queued in `channel_bridge_pending.json`
+- queued bridge writes are replayed by the background worker under a dedicated outbox lock
+- bridge replay reconciles against `unified_messages` before retrying, so already-persisted rows are removed from the queue
 
 ### Conversation assembly
 
@@ -239,9 +257,26 @@ cd /Users/Shared/Projects/reply
 make status
 ```
 
+Additional relation checks:
+
+```bash
+cd /Users/Shared/Projects/reply/chat
+npm run verify:openclaw
+npm run verify:trinity-train
+```
+
+Current health endpoint aliases on the hub:
+
+- `/api/health`
+- `/api/system-health`
+- `/api/system/health`
+- `/api/system/services`
+
 ```bash
 curl http://127.0.0.1:45311/api/health
+curl http://127.0.0.1:45311/api/system-health
 curl http://127.0.0.1:45311/api/system/health
+cat ~/Library/Application\\ Support/reply/channel_bridge_pending.json
 ```
 
 ```bash

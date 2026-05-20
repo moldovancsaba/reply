@@ -529,10 +529,38 @@ function initialize() {
 }
 
 /**
+ * Run the read-model and runtime side effects that follow a durable unified-message write.
+ * This is intentionally split from the SQLite insert path so some callers can defer the
+ * heavier rebuild work without skipping it entirely.
+ * @param {Array} messages - List of unified message rows
+ */
+async function runPostSaveMaintenance(messages) {
+    await rebuildConversationIndex(messages.map((m) => m.handle));
+    try {
+        const conversationFoundationStore = require("./conversation-foundation-store.js");
+        await conversationFoundationStore.rebuildConversationFoundation(messages.map((m) => m.handle));
+    } catch (err) {
+        console.warn("[message-store] failed to rebuild canonical conversation foundation:", err.message);
+    }
+    try {
+        const preparedContextStore = require("./prepared-context-store.js");
+        await preparedContextStore.rebuildDraftContextSnapshots(messages.map((m) => m.handle));
+    } catch (err) {
+        console.warn("[message-store] failed to rebuild draft context snapshots:", err.message);
+    }
+    try {
+        await emitRuntimeMemoryEventsForMessages(messages);
+    } catch (err) {
+        console.warn("[message-store] failed to emit Trinity memory events:", err.message);
+    }
+}
+
+/**
  * Save a batch of messages to the unified store
  * @param {Array} messages - List of {id, text, source, handle, timestamp, path, is_from_me, metadata}
+ * @param {{ deferMaintenance?: boolean }} [options]
  */
-async function saveMessages(messages) {
+async function saveMessages(messages, options = {}) {
     if (!messages || messages.length === 0) return;
     await initialize();
 
@@ -640,24 +668,15 @@ async function saveMessages(messages) {
         });
     });
 
-    await rebuildConversationIndex(messages.map((m) => m.handle));
-    try {
-        const conversationFoundationStore = require("./conversation-foundation-store.js");
-        await conversationFoundationStore.rebuildConversationFoundation(messages.map((m) => m.handle));
-    } catch (err) {
-        console.warn("[message-store] failed to rebuild canonical conversation foundation:", err.message);
+    if (options.deferMaintenance) {
+        setImmediate(() => {
+            runPostSaveMaintenance(messages).catch((err) => {
+                console.warn("[message-store] deferred post-save maintenance failed:", err.message);
+            });
+        });
+        return;
     }
-    try {
-        const preparedContextStore = require("./prepared-context-store.js");
-        await preparedContextStore.rebuildDraftContextSnapshots(messages.map((m) => m.handle));
-    } catch (err) {
-        console.warn("[message-store] failed to rebuild draft context snapshots:", err.message);
-    }
-    try {
-        await emitRuntimeMemoryEventsForMessages(messages);
-    } catch (err) {
-        console.warn("[message-store] failed to emit Trinity memory events:", err.message);
-    }
+    await runPostSaveMaintenance(messages);
 }
 
 async function emitRuntimeMemoryEventsForMessages(messages) {
@@ -1043,9 +1062,24 @@ async function getMessagesForHandles(handles = [], filter = {}) {
     });
 }
 
+async function messageExists(messageId) {
+    const id = String(messageId || "").trim();
+    if (!id) return false;
+    await initialize();
+    const db = openMessageStoreDb(sqlite3.OPEN_READONLY);
+    try {
+        db.run(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS}`);
+        const row = await getDb(db, "SELECT 1 AS found FROM unified_messages WHERE id = ? LIMIT 1", [id]);
+        return Boolean(row?.found);
+    } finally {
+        await closeMessageStoreDb(db).catch(() => null);
+    }
+}
+
 module.exports = {
     initialize,
     saveMessages,
+    messageExists,
     getMessages,
     getRecentConversations,
     getConversationIndexRows,

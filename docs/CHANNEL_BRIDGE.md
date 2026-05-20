@@ -1,11 +1,13 @@
 # Channel Bridge (Inbound, Draft-First)
 
+**Doc freshness:** 2026-05-20
+
 `{reply}` exposes a local inbound bridge route for external sidecars (for example OpenClaw adapters) to normalize omnichannel events into the local memory store.
 
 ## Endpoint
 
 - `POST /api/channel-bridge/inbound`
-- Local-only and operator-token protected.
+- Local-only route. Depending on the active security policy, it may require the operator token / protected-route headers.
 - Human approval is not required for inbound ingestion.
 - Supports single-event payloads, JSON arrays, or `{ "events": [...] }`.
 - `GET /api/channel-bridge/events?limit=50` returns recent immutable bridge event records.
@@ -40,10 +42,10 @@ Current bridge-managed channels:
 - `viber`
 - `linkedin`
 
-### Required headers
+### Common headers
 
 - `Content-Type: application/json`
-- `X-Reply-Operator-Token: <REPLY_OPERATOR_TOKEN>`
+- `X-Reply-Operator-Token: <REPLY_OPERATOR_TOKEN>` when the active security policy requires it
 
 ## Inbound payload contract
 
@@ -83,8 +85,16 @@ Notes:
 On success, the server:
 - normalizes the event to `{channel, peer, messageId, text, timestamp, attachments}`
 - stores a document in LanceDB (`documents` table)
-- updates `contact-store` last-contacted metadata
+- attempts a bounded `chat.db` write for `unified_messages`
+- updates `contact-store` last-contacted metadata asynchronously
 - invalidates conversation caches for immediate UI visibility
+
+If `chat.db` is busy:
+
+- the bridge does not keep the HTTP request open indefinitely
+- the message is queued in `~/Library/Application Support/reply/channel_bridge_pending.json`
+- the background worker replays queued bridge writes under a dedicated outbox lock
+- replay reconciles against `unified_messages` before retrying, so already-persisted messages are removed from the queue cleanly
 
 For duplicate retries:
 - response status is `duplicate` (single event) or includes `skipped` count (batch).
@@ -97,6 +107,11 @@ For batch requests:
 - Recent bridge ingest decisions are appended to:
   - `~/Library/Application Support/reply/channel_bridge_events.jsonl`
 - Each row includes status (`ingested`, `duplicate`, `error`), channel, message id, peer, and doc metadata.
+- Additional replay statuses now include:
+  - `queued_persistence`
+  - `pending_retry`
+  - `pending_drained`
+  - `pending_reconciled`
 
 ## Summary response
 
@@ -133,14 +148,16 @@ cat events.ndjson | npm run channel-bridge:ingest -- --batch
 
 ## Outbound Safety
 
-Bridge channels are inbound + draft-only in `{reply}`. Outbound send remains blocked in the composer for:
+Bridge channels are inbound + draft-first in `{reply}`. Outbound send remains blocked in the composer for:
 - Telegram
 - Discord
 - Signal
 - Viber
-- LinkedIn
 
-LinkedIn should remain draft-only unless you have an official compliant integration path.
+LinkedIn is the exception:
+
+- LinkedIn uses the same inbound bridge architecture for ingest
+- outbound LinkedIn handoff exists in the product, but it is not the same thing as enabling outbound send for the generic bridge-managed channels
 
 ## Implementation Reference
 

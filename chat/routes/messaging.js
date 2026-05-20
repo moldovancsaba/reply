@@ -1413,9 +1413,11 @@ end run
             source: 'iMessage',
             path: `imessage://${recipient}`
         }]);
-        contactStore.updateLastContacted(recipient, sentAt, {
+        void contactStore.updateLastContacted(recipient, sentAt, {
             channel: 'imessage',
             direction: 'outbound'
+        }).catch((error) => {
+            console.warn("[messaging] Failed to update last-contacted after iMessage send:", error.message);
         });
         await contactStore.clearDraft(recipient);
         await autoAnnotateSentMessage("imessage", recipient, text);
