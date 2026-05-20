@@ -1,5 +1,7 @@
 /**
  * {reply} - System & Health Routes
+ * Builds the live runtime/status payload behind `/api/health`,
+ * `/api/system-health`, `/api/system/health`, and `/api/system/services`.
  */
 
 const { writeJson } = require("../utils/server-utils");
@@ -19,6 +21,7 @@ const { getModelStorageStatus } = require("../model-paths.js");
 
 const DATA_DIR = getDataHome();
 const CHAT_DIR = path.join(__dirname, "..");
+const LINKEDIN_INGEST_MODES = new Set(["browser_bridge", "sidecar", "disabled"]);
 
 function readStatus(filename) {
     const p = dataPath(filename);
@@ -224,6 +227,147 @@ function resolveMailProvider({ mailStatus = {}, gmailOk = false, imapOk = false 
     return "";
 }
 
+function resolveLinkedInIngestMode(settings = null) {
+    const explicit = String(
+        process.env.REPLY_LINKEDIN_INGEST_MODE ||
+        settings?.linkedin?.ingestMode ||
+        ""
+    ).trim().toLowerCase();
+    if (LINKEDIN_INGEST_MODES.has(explicit)) return explicit;
+    return "browser_bridge";
+}
+
+function detectRuntimeMode() {
+    const explicit = String(process.env.REPLY_RUNTIME_MODE || "").trim().toLowerCase();
+    if (explicit) return explicit;
+    if (String(process.env.REPLY_RELEASE_MODE || "").trim() === "1") return "app_managed";
+    return "session";
+}
+
+function detectNativeAppInstalled() {
+    const appBundlePath = "/Applications/reply.app";
+    const requiredPaths = [
+        "Contents/Info.plist",
+        "Contents/MacOS/reply",
+        "Contents/Resources/reply runtime",
+        "Contents/Resources/reply.icns",
+        "Contents/Resources/reply-core",
+    ];
+    const missing = requiredPaths.filter((suffix) => !fs.existsSync(path.join(appBundlePath, suffix)));
+    return {
+        configured: fs.existsSync(appBundlePath),
+        status: !fs.existsSync(appBundlePath) ? "not_configured" : (missing.length ? "degraded" : "online"),
+        appBundlePath,
+        missingPaths: missing,
+    };
+}
+
+function buildRelationStatus({ configured, online, degraded = false, detail = null, extras = {} }) {
+    return {
+        configured: configured !== false,
+        status: configured === false ? "not_configured" : (online ? "online" : (degraded ? "degraded" : "offline")),
+        detail,
+        ...extras,
+    };
+}
+
+function buildRelations({
+    settings,
+    services,
+    channels,
+    launch,
+    runtimeMode,
+    nativeApp,
+    trinityProviderStatus,
+    mailProvider,
+    linkedinIngestMode,
+}) {
+    return {
+        runtime_mode: buildRelationStatus({
+            configured: true,
+            online: true,
+            detail: `runtime mode: ${runtimeMode}`,
+            extras: {
+                activeMode: runtimeMode,
+                launchdConfigured: fs.existsSync(path.join(process.env.HOME || "", "Library/LaunchAgents/com.reply.hub.plist")),
+                bootstrapStage: launch?.stage || null,
+            },
+        }),
+        native_app_bundle: buildRelationStatus({
+            configured: nativeApp.configured,
+            online: nativeApp.status === "online",
+            degraded: nativeApp.status === "degraded",
+            detail: nativeApp.status === "online"
+                ? "Native bundle integrity verified."
+                : (nativeApp.status === "not_configured"
+                    ? "Native app not installed."
+                    : (nativeApp.missingPaths.length ? `Missing bundle paths: ${nativeApp.missingPaths.join(", ")}` : "Native app not installed.")),
+            extras: {
+                appBundlePath: nativeApp.appBundlePath,
+                missingPaths: nativeApp.missingPaths,
+            },
+        }),
+        trinity_runtime: buildRelationStatus({
+            configured: true,
+            online: String(trinityProviderStatus || "").toLowerCase() === "ready",
+            degraded: String(trinityProviderStatus || "").trim().length > 0,
+            detail: trinityProviderStatus ? `provider_status=${trinityProviderStatus}` : "provider status unavailable",
+        }),
+        ollama_runtime: buildRelationStatus({
+            configured: true,
+            online: String(services?.ollama?.status || "").toLowerCase() === "online",
+            detail: String(services?.ollama?.status || "unknown"),
+        }),
+        openclaw_gateway: buildRelationStatus({
+            configured: true,
+            online: String(services?.openclaw?.status || "").toLowerCase() === "online",
+            detail: services?.openclaw?.detail || services?.openclaw?.lastError || null,
+        }),
+        gmail_connector: buildRelationStatus({
+            configured: mailProvider === "gmail",
+            online: mailProvider === "gmail" && channels?.mail?.connected === true,
+            detail: mailProvider === "gmail" ? `account=${channels?.mail?.account || "unknown"}` : "gmail not active",
+        }),
+        imap_connector: buildRelationStatus({
+            configured: mailProvider === "imap",
+            online: mailProvider === "imap" && channels?.mail?.connected === true,
+            detail: mailProvider === "imap" ? `account=${channels?.mail?.account || "unknown"}` : "imap not active",
+        }),
+        imessage_source: buildRelationStatus({
+            configured: true,
+            online: String(channels?.imessage?.state || channels?.imessage?.status || "").toLowerCase() !== "error",
+            degraded: String(channels?.imessage?.state || "").toLowerCase() === "idle",
+            detail: channels?.imessage?.message || null,
+            extras: {
+                lastSuccessfulSync: channels?.imessage?.lastSuccessfulSync || null,
+                ingestedTotal: Number(channels?.imessage?.ingestedTotal) || 0,
+            },
+        }),
+        whatsapp_source: buildRelationStatus({
+            configured: true,
+            online: String(channels?.whatsapp?.state || channels?.whatsapp?.status || "").toLowerCase() !== "error",
+            degraded: String(channels?.whatsapp?.state || "").toLowerCase() === "idle",
+            detail: channels?.whatsapp?.message || null,
+            extras: {
+                lastSuccessfulSync: channels?.whatsapp?.lastSuccessfulSync || null,
+                ingestedTotal: Number(channels?.whatsapp?.ingestedTotal) || 0,
+            },
+        }),
+        linkedin_ingest: buildRelationStatus({
+            configured: linkedinIngestMode !== "disabled",
+            online: linkedinIngestMode === "browser_bridge"
+                ? String(channels?.linkedin_messages?.state || "").toLowerCase() !== "error"
+                : String(channels?.linkedin_messages?.state || channels?.linkedin_messages?.status || "").toLowerCase() === "running",
+            degraded: String(channels?.linkedin_messages?.state || "").toLowerCase() === "idle",
+            detail: channels?.linkedin_messages?.message || null,
+            extras: {
+                activeMode: linkedinIngestMode,
+                lastSuccessfulSync: channels?.linkedin_messages?.lastAt || null,
+            },
+        }),
+    };
+}
+
 const serviceManager = require("../service-manager");
 const { buildPreflightReport, collectPathContext, API_CONTRACT_HUB, PREFLIGHT_SCHEMA_VERSION } = require("../preflight.js");
 
@@ -369,6 +513,51 @@ async function buildSystemHealthPayloadCore() {
     const normalizedCalendarStatus = clearStaleTransientSqliteBusy(calendarStatus, launch);
     const normalizedLinkedInMessagesStatus = clearStaleTransientSqliteBusy(linkedinMessagesStatus, launch);
     const normalizedLinkedInPostsStatus = clearStaleTransientSqliteBusy(linkedinPostsStatus, launch);
+    const runtimeMode = detectRuntimeMode();
+    const linkedinIngestMode = resolveLinkedInIngestMode(settings);
+    const nativeApp = detectNativeAppInstalled();
+    let trinityRuntimeStatus = null;
+    try {
+        trinityRuntimeStatus = require("../brain-runtime.js").getTrinityRuntimeStatusSync();
+    } catch {
+        trinityRuntimeStatus = null;
+    }
+
+    const channels = {
+        imessage: normalizeChannelStatus(normalizedIMessageStatus, imessageCount, {
+            lastSuccessfulSync: normalizedIMessageStatus?.lastSuccessfulSync || normalizedIMessageStatus?.lastSync || getIMessageCheckpointLastSync()
+        }),
+        whatsapp: normalizeChannelStatus(normalizedWhatsAppStatus, whatsappCount),
+        notes: normalizeChannelStatus(normalizedNotesStatus, notesCountIngested, {
+            total: Math.max(numeric(normalizedNotesStatus.total), numeric(normalizedNotesStatus.processed), numeric(normalizedNotesStatus.updated), numeric(getNotesCount()), numeric(notesCountIngested))
+        }),
+        calendar: normalizeChannelStatus(normalizedCalendarStatus, calendarCount),
+        mail: {
+            ...normalizedMailStatus,
+            lastAt: normalizedMailStatus.lastSync || null,
+            provider: mailProvider,
+            account: mailAccount,
+            connected: !!(gmailOk || imapOk),
+            processed: Math.max(numeric(normalizedMailStatus.processed), numeric(normalizedMailStatus.total), numeric(mailCount)),
+            total: Math.max(numeric(normalizedMailStatus.total), numeric(normalizedMailStatus.processed), numeric(mailCount)),
+            status: (normalizedMailStatus.state === 'error') ? "repair_required" : (normalizedMailStatus.state || "ok")
+        },
+        linkedin_messages: {
+            ...normalizedLinkedInMessagesStatus,
+            ingestMode: linkedinIngestMode,
+            processed: linkedinMessagesCount,
+            total: linkedinMessagesCount,
+            lastAt: readChannelSyncState().linkedin || null
+        },
+        linkedin_posts: {
+            ...normalizedLinkedInPostsStatus,
+            processed: linkedinPostsCount,
+            total: linkedinPostsCount,
+            lastAt: readChannelSyncState().linkedin_posts || null
+        },
+        contacts: readStatus("contacts_sync_status.json"),
+        kyc: kycStatus
+    };
 
     const health = {
         ok: true,
@@ -383,40 +572,7 @@ async function buildSystemHealthPayloadCore() {
             ...services,
             ollama: { status: ollamaStatus }
         },
-        channels: {
-            imessage: normalizeChannelStatus(normalizedIMessageStatus, imessageCount, {
-                lastSuccessfulSync: normalizedIMessageStatus?.lastSuccessfulSync || normalizedIMessageStatus?.lastSync || getIMessageCheckpointLastSync()
-            }),
-            whatsapp: normalizeChannelStatus(normalizedWhatsAppStatus, whatsappCount),
-            notes: normalizeChannelStatus(normalizedNotesStatus, notesCountIngested, {
-                total: Math.max(numeric(normalizedNotesStatus.total), numeric(normalizedNotesStatus.processed), numeric(normalizedNotesStatus.updated), numeric(getNotesCount()), numeric(notesCountIngested))
-            }),
-            calendar: normalizeChannelStatus(normalizedCalendarStatus, calendarCount),
-            mail: {
-                ...normalizedMailStatus,
-                lastAt: normalizedMailStatus.lastSync || null,
-                provider: mailProvider,
-                account: mailAccount,
-                connected: !!(gmailOk || imapOk),
-                processed: Math.max(numeric(normalizedMailStatus.processed), numeric(normalizedMailStatus.total), numeric(mailCount)),
-                total: Math.max(numeric(normalizedMailStatus.total), numeric(normalizedMailStatus.processed), numeric(mailCount)),
-                status: (normalizedMailStatus.state === 'error') ? "repair_required" : (normalizedMailStatus.state || "ok")
-            },
-            linkedin_messages: {
-                ...normalizedLinkedInMessagesStatus,
-                processed: linkedinMessagesCount,
-                total: linkedinMessagesCount,
-                lastAt: readChannelSyncState().linkedin || null
-            },
-            linkedin_posts: {
-                ...normalizedLinkedInPostsStatus,
-                processed: linkedinPostsCount,
-                total: linkedinPostsCount,
-                lastAt: readChannelSyncState().linkedin_posts || null
-            },
-            contacts: readStatus("contacts_sync_status.json"),
-            kyc: kycStatus
-        },
+        channels,
         stats: {
             ...contactStats,
             total: conversationIndexStats.total,
@@ -428,6 +584,24 @@ async function buildSystemHealthPayloadCore() {
         models: getModelStorageStatus(),
         lastCheck: new Date().toISOString(),
         launch,
+        runtime: {
+            mode: runtimeMode,
+            releaseMode: String(process.env.REPLY_RELEASE_MODE || "").trim() === "1",
+        },
+        relations: buildRelations({
+            settings,
+            services: {
+                ...services,
+                ollama: { status: ollamaStatus },
+            },
+            channels,
+            launch,
+            runtimeMode,
+            nativeApp,
+            trinityProviderStatus: trinityRuntimeStatus?.provider_status || null,
+            mailProvider,
+            linkedinIngestMode,
+        }),
         httpPort,
         httpHost
     };
@@ -622,6 +796,9 @@ module.exports = {
     buildSystemHealthPayload,
     buildSystemHealthPayloadCore,
     resolveMailProvider,
+    resolveLinkedInIngestMode,
+    detectRuntimeMode,
+    buildRelations,
     attachPreflightToHealth,
     maybeBlockOutboundOnPreflight,
     serveServiceControl,

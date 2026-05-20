@@ -87,6 +87,7 @@ class ContactStore {
         this._contactsById = new Map();
         this._contactsByHandle = new Map();
         this._contactsByLookup = new Map();
+        this._writeQueue = Promise.resolve();
         try {
             const dir = path.dirname(DB_PATH);
             if (!fs.existsSync(dir)) {
@@ -100,6 +101,12 @@ class ContactStore {
             console.error('[contact-store] SQLite error:', err.message);
         });
         this._readyPromise = this._initDb();
+    }
+
+    _enqueueWrite(task) {
+        const run = this._writeQueue.then(() => task());
+        this._writeQueue = run.catch(() => null);
+        return run;
     }
 
     async _initDb() {
@@ -170,6 +177,7 @@ class ContactStore {
 
     async close() {
         await this.waitUntilReady().catch(() => null);
+        await this._writeQueue.catch(() => null);
         if (!this._db) return;
         const db = this._db;
         this._db = null;
@@ -335,7 +343,7 @@ class ContactStore {
 
     async saveContacts(contacts) {
         if (!contacts || contacts.length === 0) return;
-        return new Promise((resolve, reject) => {
+        return this._enqueueWrite(() => new Promise((resolve, reject) => {
             this._db.serialize(() => {
                 let pendingStatements = 0;
                 let finalized = false;
@@ -458,7 +466,7 @@ class ContactStore {
                     });
                 }
             });
-        });
+        }));
     }
 
     /**
@@ -584,7 +592,7 @@ class ContactStore {
                 displayName: "",
                 owner: "",
                 customerFlags: [],
-                lastContacted: new Date().toISOString(),
+                lastContacted: null,
                 status: 'open',
                 visibility_state: 'active',
                 visibility_changed_at: null,
@@ -981,6 +989,9 @@ async function emitRuntimeMemoryEventsForContacts(contacts) {
 }
 
 function scheduleRuntimeMemoryEventsForContacts(contacts) {
+    if (!trinityOutboxDrainEnabled()) {
+        return;
+    }
     setImmediate(() => {
         emitRuntimeMemoryEventsForContacts(contacts).catch((error) => {
             console.warn("[contact-store] failed to emit Trinity contact events:", error.message);

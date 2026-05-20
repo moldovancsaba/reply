@@ -250,7 +250,7 @@ struct SystemStatusView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Label("Deferred Connectors", systemImage: "shippingbox")
                         .font(.headline)
-                    Text("These are not part of the core MVP runtime path. They are shown separately so they do not block the main product surface.")
+                    Text("These are tracked separately from the core reply runtime path so degraded bridge-style connectors do not mask the main product health.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     ForEach(Array(visibleDeferred.enumerated()), id: \.offset) { _, pair in

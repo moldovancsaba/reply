@@ -15,6 +15,7 @@ chmod +x "$MIRROR_DAEMON"
 "$MIRROR_DAEMON" || true
 
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:${PATH:-}"
+export REPLY_RUNTIME_MODE="session"
 if [[ -r "${MIRROR_DB}" ]]; then
   export REPLY_IMESSAGE_DB_PATH="${MIRROR_DB}"
 fi

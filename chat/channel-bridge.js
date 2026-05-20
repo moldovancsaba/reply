@@ -2,12 +2,13 @@ const crypto = require("crypto");
 const fs = require("fs");
 const { addDocuments, connect } = require("./vector-store.js");
 const contactStore = require("./contact-store.js");
-const { saveMessages } = require("./message-store.js");
+const { saveMessages, messageExists } = require("./message-store.js");
 const triageEngine = require("./triage-engine.js");
 const { normalizeLinkedInHandle } = require("./linkedin-utils.js");
 const { generateReply } = require("./brain-runtime.js");
 const { getSnippets } = require("./vector-store.js");
 const { dataPath, ensureDataHome } = require("./app-paths.js");
+const statusManager = require("./status-manager.js");
 
 function withTimeout(promise, timeoutMs, label) {
   return new Promise((resolve, reject) => {
@@ -53,6 +54,25 @@ async function persistLocalNbaForInbound({ doc, event }) {
   });
 }
 
+function scheduleBridgeTask(label, task, event) {
+  setImmediate(() => {
+    Promise.resolve()
+      .then(task)
+      .catch((err) => {
+        const message = err?.message || String(err);
+        console.warn(`[Bridge] ${label} failed:`, message);
+        appendBridgeEvent({
+          status: "async_error",
+          stage: label,
+          channel: event?.channel,
+          messageId: event?.messageId,
+          peer: event?.peer,
+          error: message,
+        });
+      });
+  });
+}
+
 const SUPPORTED_CHANNELS = new Set([
   "imessage",
   "whatsapp",
@@ -84,8 +104,21 @@ const inflightByDocId = new Map();
 const SEEN_DOC_IDS_PATH = dataPath("channel_bridge_seen.json");
 const BRIDGE_SYNC_STATE_PATH = dataPath("channel_bridge_sync.json");
 const BRIDGE_EVENTS_LOG_PATH = dataPath("channel_bridge_events.jsonl");
+const BRIDGE_PENDING_WRITES_PATH = dataPath("channel_bridge_pending.json");
 const SEEN_DOC_IDS_MAX = 100000;
 const SEEN_DOC_IDS_TRIM_TARGET = 80000;
+const BRIDGE_MESSAGE_WRITE_TIMEOUT_MS = Math.max(
+  250,
+  parseInt(process.env.REPLY_BRIDGE_MESSAGE_WRITE_TIMEOUT_MS || "2000", 10) || 2000
+);
+const BRIDGE_PENDING_WRITE_RETRY_TIMEOUT_MS = Math.max(
+  BRIDGE_MESSAGE_WRITE_TIMEOUT_MS,
+  parseInt(process.env.REPLY_BRIDGE_PENDING_WRITE_RETRY_TIMEOUT_MS || "15000", 10) || 15000
+);
+const BRIDGE_PENDING_DRAIN_INTERVAL_MS = Math.max(
+  5000,
+  parseInt(process.env.REPLY_BRIDGE_PENDING_DRAIN_INTERVAL_MS || "15000", 10) || 15000
+);
 
 let seenDocIdsLoaded = false;
 const seenDocIds = new Set();
@@ -182,6 +215,20 @@ function recordChannelSync(channel) {
   }
 }
 
+function updateChannelBridgeStatus(channel, status = {}) {
+  const normalized = String(channel || "").trim().toLowerCase();
+  if (!normalized) return;
+  const payload = {
+    state: "idle",
+    message: "Browser bridge event ingested.",
+    lastSync: new Date().toISOString(),
+    lastSuccessfulSync: new Date().toISOString(),
+    ingestMode: normalized === "linkedin" ? "browser_bridge" : undefined,
+    ...status,
+  };
+  statusManager.update(normalized, payload);
+}
+
 function readChannelSyncState() {
   try {
     if (!fs.existsSync(BRIDGE_SYNC_STATE_PATH)) return {};
@@ -210,6 +257,115 @@ function readBridgeEventLog(limit = 50) {
   } catch {
     return [];
   }
+}
+
+function readPendingBridgeWrites() {
+  try {
+    if (!fs.existsSync(BRIDGE_PENDING_WRITES_PATH)) return [];
+    const parsed = JSON.parse(fs.readFileSync(BRIDGE_PENDING_WRITES_PATH, "utf8"));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePendingBridgeWrites(items) {
+  try {
+    ensureDataHome();
+    const payload = Array.isArray(items) ? items : [];
+    const tmp = `${BRIDGE_PENDING_WRITES_PATH}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(payload, null, 2), { mode: 0o600 });
+    fs.renameSync(tmp, BRIDGE_PENDING_WRITES_PATH);
+    fs.chmodSync(BRIDGE_PENDING_WRITES_PATH, 0o600);
+  } catch (e) {
+    console.warn("[Bridge] Failed to persist pending writes:", e.message);
+  }
+}
+
+function enqueuePendingBridgeWrite(item) {
+  const items = readPendingBridgeWrites();
+  items.push({
+    queuedAt: new Date().toISOString(),
+    ...item,
+  });
+  writePendingBridgeWrites(items);
+  return items.length;
+}
+
+async function drainPendingBridgeWrites(limit = 10) {
+  const items = readPendingBridgeWrites();
+  if (!items.length) return { drained: 0, remaining: 0 };
+
+  const keep = [];
+  let drained = 0;
+  for (const item of items) {
+    if (drained >= limit) {
+      keep.push(item);
+      continue;
+    }
+    if (await messageExists(item?.message?.id)) {
+      drained += 1;
+      updateChannelBridgeStatus(item?.event?.channel, {
+        state: "idle",
+        message: "Browser bridge event ingested.",
+        lastAttemptedSync: item?.event?.timestamp || new Date().toISOString(),
+        lastSuccessfulSync: item?.event?.timestamp || new Date().toISOString(),
+        lastSync: item?.event?.timestamp || new Date().toISOString(),
+        ingestMode: item?.event?.channel === "linkedin" ? "browser_bridge" : undefined,
+      });
+      appendBridgeEvent({
+        status: "pending_reconciled",
+        channel: item?.event?.channel,
+        messageId: item?.event?.messageId,
+        peer: item?.event?.peer,
+      });
+      continue;
+    }
+    try {
+      await withTimeout(
+        saveMessages([item.message], { deferMaintenance: true }),
+        BRIDGE_PENDING_WRITE_RETRY_TIMEOUT_MS,
+        "bridge_pending_save"
+      );
+      drained += 1;
+      updateChannelBridgeStatus(item?.event?.channel, {
+        state: "idle",
+        message: "Browser bridge event ingested.",
+        lastAttemptedSync: item?.event?.timestamp || new Date().toISOString(),
+        lastSuccessfulSync: item?.event?.timestamp || new Date().toISOString(),
+        lastSync: item?.event?.timestamp || new Date().toISOString(),
+        ingestMode: item?.event?.channel === "linkedin" ? "browser_bridge" : undefined,
+      });
+      appendBridgeEvent({
+        status: "pending_drained",
+        channel: item?.event?.channel,
+        messageId: item?.event?.messageId,
+        peer: item?.event?.peer,
+      });
+    } catch (err) {
+      keep.push(item);
+      appendBridgeEvent({
+        status: "pending_retry",
+        channel: item?.event?.channel,
+        messageId: item?.event?.messageId,
+        peer: item?.event?.peer,
+        error: err?.message || String(err),
+      });
+    }
+  }
+
+  writePendingBridgeWrites(keep);
+  return { drained, remaining: keep.length };
+}
+
+const pendingBridgeDrainTimer = setInterval(() => {
+  drainPendingBridgeWrites().catch((err) => {
+    console.warn("[Bridge] Periodic pending drain failed:", err.message);
+  });
+}, BRIDGE_PENDING_DRAIN_INTERVAL_MS);
+
+if (typeof pendingBridgeDrainTimer?.unref === "function") {
+  pendingBridgeDrainTimer.unref();
 }
 
 function rememberDocId(docId, options = {}) {
@@ -573,6 +729,10 @@ async function ingestInboundEvent(rawEvent) {
   const exists = await docExists(doc.id);
   if (exists) {
     recordChannelSync(event.channel);
+    updateChannelBridgeStatus(event.channel, {
+      message: "Browser bridge duplicate observed.",
+      lastAttemptedSync: new Date().toISOString(),
+    });
     const out = asDuplicate();
     appendBridgeEvent({
       status: "duplicate",
@@ -589,50 +749,85 @@ async function ingestInboundEvent(rawEvent) {
     await addDocuments([doc]);
     rememberDocId(doc.id);
 
-    // 2. Save to unified chat.db
-    await saveMessages([{
+    // 2. Try the unified-message write with a short budget. If SQLite is busy,
+    // queue the row for background replay instead of holding the bridge request open.
+    const messageRow = {
       id: doc.id,
       text: event.text,
       source: doc.source,
       handle: event.peer.handle,
       timestamp: event.timestamp,
       path: doc.path
-    }]);
+    };
 
-    await contactStore.updateContact(event.peer.handle, {
-      lastContacted: event.timestamp,
-      lastChannel: event.channel,
-      channels: {
-        [event.channel]: [event.peer.handle]
-      }
-    });
-
-    if (event.direction === "inbound") {
-      contactStore.markChannelInboundVerified(event.peer.handle, event.peer.handle, event.timestamp).catch(e => console.error("[Bridge] Inbound verification failed:", e));
-    }
-    maybeUpdateDisplayName(event.peer.handle, event.peer.displayName);
-    recordChannelSync(event.channel);
-
-    // 3. Triage Evaluation
+    let messagePersisted = false;
     try {
-      triageEngine.evaluate(event.text, pathForEvent(event));
-    } catch (e) {
-      console.warn("[Bridge] Triage failed:", e.message);
-    }
-
-    // 4. Local Next Best Action (NBA) generation
-    try {
-      await persistLocalNbaForInbound({ doc, event });
+      await withTimeout(
+        saveMessages([messageRow], { deferMaintenance: true }),
+        BRIDGE_MESSAGE_WRITE_TIMEOUT_MS,
+        "bridge_message_save"
+      );
+      messagePersisted = true;
     } catch (err) {
-      console.warn("[Bridge] Local NBA generation failed:", err.message);
+      const queuedCount = enqueuePendingBridgeWrite({ event, message: messageRow });
       appendBridgeEvent({
-        status: "nba_error",
+        status: "queued_persistence",
         channel: event.channel,
         messageId: event.messageId,
         peer: event.peer,
+        doc: stableDoc,
+        queueDepth: queuedCount,
         error: err?.message || String(err),
       });
+      console.warn("[Bridge] Deferred unified message persistence:", err?.message || String(err));
     }
+
+    recordChannelSync(event.channel);
+    updateChannelBridgeStatus(event.channel, {
+      message: messagePersisted
+        ? "Browser bridge event ingested."
+        : "Browser bridge event queued for message-store persistence.",
+      lastAttemptedSync: event.timestamp,
+      lastSuccessfulSync: event.timestamp,
+      lastSync: event.timestamp,
+    });
+
+    scheduleBridgeTask("contact_update", async () => {
+      await contactStore.updateContact(event.peer.handle, {
+        lastContacted: event.timestamp,
+        lastChannel: event.channel,
+        channels: {
+          [event.channel]: [event.peer.handle]
+        }
+      });
+    }, event);
+
+    if (event.direction === "inbound") {
+      scheduleBridgeTask("inbound_verification", async () => {
+        await contactStore.markChannelInboundVerified(event.peer.handle, event.peer.handle, event.timestamp);
+      }, event);
+    }
+
+    if (event.peer.displayName) {
+      scheduleBridgeTask("display_name_update", async () => {
+        await maybeUpdateDisplayName(event.peer.handle, event.peer.displayName);
+      }, event);
+    }
+
+    scheduleBridgeTask("triage", async () => {
+      triageEngine.evaluate(event.text, pathForEvent(event));
+    }, event);
+
+    scheduleBridgeTask("pending_drain", async () => {
+      await drainPendingBridgeWrites();
+    }, event);
+
+    // 4. Local Next Best Action (NBA) generation stays fully off the request path.
+    // It may still use Trinity-first drafting with local fallback, but bridge ingest
+    // should already be acknowledged by then.
+    scheduleBridgeTask("local_nba", async () => {
+      await persistLocalNbaForInbound({ doc, event });
+    }, event);
   })();
   inflightByDocId.set(doc.id, ingestPromise);
 
@@ -650,6 +845,12 @@ async function ingestInboundEvent(rawEvent) {
     });
     return out;
   } catch (err) {
+    updateChannelBridgeStatus(event.channel, {
+      state: "error",
+      message: err?.message || String(err),
+      lastAttemptedSync: event.timestamp,
+      ingestMode: event.channel === "linkedin" ? "browser_bridge" : undefined,
+    });
     appendBridgeEvent({
       status: "error",
       channel: event.channel,
@@ -705,6 +906,7 @@ module.exports = {
   toVectorDoc,
   ingestInboundEvent,
   ingestInboundEvents,
+  drainPendingBridgeWrites,
   BRIDGE_EVENTS_LOG_PATH,
   readBridgeEventLog,
   readChannelSyncState,

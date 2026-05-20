@@ -20,6 +20,14 @@ function getLogHome() {
   return raw || defaultLogHome();
 }
 
+function hasExplicitDataHomeOverride() {
+  return String(process.env.REPLY_DATA_HOME || "").trim().length > 0;
+}
+
+function hasExplicitLogHomeOverride() {
+  return String(process.env.REPLY_LOG_HOME || "").trim().length > 0;
+}
+
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -69,13 +77,17 @@ function migrateLegacyLogHomeIfNeeded(targetDir) {
 
 function ensureDataHome() {
   const dir = ensureDir(getDataHome());
-  migrateLegacyDataHomeIfNeeded(dir);
+  if (!hasExplicitDataHomeOverride()) {
+    migrateLegacyDataHomeIfNeeded(dir);
+  }
   return dir;
 }
 
 function ensureLogHome() {
   const dir = ensureDir(getLogHome());
-  migrateLegacyLogHomeIfNeeded(dir);
+  if (!hasExplicitLogHomeOverride()) {
+    migrateLegacyLogHomeIfNeeded(dir);
+  }
   return dir;
 }
 
@@ -92,6 +104,8 @@ module.exports = {
   defaultLogHome,
   getDataHome,
   getLogHome,
+  hasExplicitDataHomeOverride,
+  hasExplicitLogHomeOverride,
   ensureDataHome,
   ensureLogHome,
   dataPath,

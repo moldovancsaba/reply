@@ -4,7 +4,8 @@
  * Routing lives under `routes/*` (messaging, sync, system, …). Managed children (worker,
  * optional helpers) go through `service-manager.js`. Before starting the worker, the hub calls
  * `ensure-hub-worker.js` so a stale `data/worker.pid` or duplicate worker does not exit 0
- * immediately. `hub-runtime.js` records the bound port for `/api/health` (`httpPort`/`httpHost`).
+ * immediately. `hub-runtime.js` records the bound port for the health surface
+ * (`/api/health`, `/api/system-health`, `/api/system/health`) via `httpPort`/`httpHost`.
  *
  * Shutdown: `SIGINT` / `SIGTERM` trigger `gracefulShutdown()` → `serviceManager.shutdownAllAsync()`
  * then `server.close()` (see bottom of this file).
@@ -237,7 +238,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/api/channel-bridge/events") return bridgeRoutes.serveEventsList(req, res, url);
 
   // System Health
-  if (pathname === "/api/health" || pathname === "/api/system-health" || pathname === "/api/system/services") return systemRoutes.serveSystemHealth(req, res);
+  if (pathname === "/api/health" || pathname === "/api/system-health" || pathname === "/api/system/health" || pathname === "/api/system/services") return systemRoutes.serveSystemHealth(req, res);
   if (pathname === "/api/preflight") return systemRoutes.servePreflight(req, res);
   if (pathname === "/api/system/service/control") return auth({ route: pathname, action: "service-control" }) && systemRoutes.serveServiceControl(req, res);
   if (pathname === "/api/openclaw/status") return systemRoutes.serveOpenClawStatus(req, res);

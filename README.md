@@ -63,6 +63,7 @@ Canonical docs:
 
 - [REPLY_OVERVIEW.md](/Users/Shared/Projects/reply/REPLY_OVERVIEW.md)
 - [docs/TRINITY_INTEGRATION_SPINE.md](/Users/Shared/Projects/reply/docs/TRINITY_INTEGRATION_SPINE.md)
+- [docs/RELATION_AUDIT.md](/Users/Shared/Projects/reply/docs/RELATION_AUDIT.md)
 - [docs/POLICY_LOOP_REPO_BREAKDOWN.md](/Users/Shared/Projects/reply/docs/POLICY_LOOP_REPO_BREAKDOWN.md)
 - [docs/THIN_UI_LOCAL_PRECOMPUTE_AUDIT.md](/Users/Shared/Projects/reply/docs/THIN_UI_LOCAL_PRECOMPUTE_AUDIT.md)
 - [docs/NATIVE_WORKSPACE_HOT_PATH_SSOT.md](/Users/Shared/Projects/reply/docs/NATIVE_WORKSPACE_HOT_PATH_SSOT.md)
@@ -72,8 +73,8 @@ Canonical docs:
 
 This README now reflects the current product state, including:
 
-- live drafting runtime is `{trinity}` only in production paths
-- legacy drafting is no longer a live fallback and survives only as developer-only shadow comparison behavior
+- live drafting runtime is `{trinity}` first, with bounded local fallback when `suggest` times out or fails
+- legacy drafting survives only as developer-only shadow comparison behavior
 - structured draft outcomes now go to `/api/trinity/outcome` instead of piggybacking on generic feedback logs
 - runtime failures are operator-safe and no longer expose Docker, Colima, socket, or raw substrate errors in normal UI surfaces
 - the conversation sidebar is driven by a local materialized conversation index in `chat.db` rather than by request-time reconstruction or hard gating from `contacts.db`
@@ -126,6 +127,7 @@ Open:
 
 - product UI or embedded hub: `http://127.0.0.1:45311/`
 - health: `http://127.0.0.1:45311/api/health`
+- health alias: `http://127.0.0.1:45311/api/system/health`
 
 When you launch the native shell, the bundled hub prefers ports `45431` through `45446` and the app now waits for `/api/health` readiness instead of only checking whether a `reply` process exists.
 
@@ -240,6 +242,8 @@ cd app/reply-app
 ./install-bundle.sh
 ```
 
+`app/reply-app/install-bundle.sh` is the supported local install/update path for `/Applications/reply.app`.
+
 ## Current Runtime Shape
 
 ### Product shell
@@ -251,9 +255,22 @@ cd app/reply-app
 ### Drafting runtime
 
 - live drafting goes through `chat/brain-runtime.js`
-- `{trinity}` is the only live drafting runtime in normal product mode
+- `{trinity}` is the primary live drafting runtime in normal product mode
+- if `{trinity}` `suggest` fails or times out, `{reply}` falls back to bounded local drafting and records `runtimeMode: trinity-fallback-local`
 - developer-only `trinity-shadow` mode exists for comparison against legacy output
 - accepted artifact provenance is carried through draft context, outcomes, traces, and training bundles
+
+### Channel bridge and LinkedIn ingest
+
+- external inbound bridge route: `POST /api/channel-bridge/inbound`
+- event audit log: `~/Library/Application Support/reply/channel_bridge_events.jsonl`
+- dedupe cache: `~/Library/Application Support/reply/channel_bridge_seen.json`
+- queued bridge message outbox: `~/Library/Application Support/reply/channel_bridge_pending.json`
+- LinkedIn now defaults to `browser_bridge`; sidecar mode is explicit-only
+- bridge writes are fail-soft:
+  - vector ingest happens first
+  - unified `chat.db` writes are bounded
+  - when `chat.db` is busy, bridge messages are queued and replayed by the background worker
 
 ### Conversation model
 
@@ -314,6 +331,7 @@ Useful runtime checks:
 npm run verify:openclaw
 curl http://127.0.0.1:45311/api/health
 curl http://127.0.0.1:45311/api/system/health
+cat ~/Library/Application\\ Support/reply/channel_bridge_pending.json
 ```
 
 Mail-specific checks:
@@ -322,7 +340,7 @@ Mail-specific checks:
 cat ~/Library/Application\\ Support/reply/mail_sync_status.json
 ```
 
-`npm run verify:trinity-train` is the end-to-end runtime smoke check for the live `{reply} -> {trinity} -> {train}` contract. It verifies one synthetic cycle through `suggest`, `record-outcome`, `export-trace`, and `train-propose-policy`.
+`npm run verify:trinity-train` is the end-to-end runtime smoke check for the live `{reply} -> {trinity} -> {train}` contract. It verifies one synthetic cycle through `suggest`, `record-outcome`, `export-trace`, and `train-propose-policy`. The check is now bounded and should fail fast with step timing instead of hanging indefinitely.
 
 ## Architecture Notes
 

@@ -29,6 +29,7 @@ const { addDocuments } = require('./vector-store.js');
 const preparedContextStore = require('./prepared-context-store.js');
 const contactStore = require('./contact-store.js');
 const { saveMessages } = require('./message-store.js');
+const { drainPendingBridgeWrites } = require('./channel-bridge.js');
 const { buildThreadSnapshot, generateReply, getPreparedDraft } = require('./brain-runtime.js');
 const {
     enqueueSuggestionDraft,
@@ -51,6 +52,7 @@ const { execFile } = require('child_process');
 const statusManager = require('./status-manager.js');
 const syncGuard = require('./utils/sync-guard');
 const CONVERSATION_INGEST_LOCK = "conversation_ingest";
+const BRIDGE_OUTBOX_LOCK = "channel_bridge_outbox";
 
 /**
  * Optimized Background Worker (SQLite version)
@@ -419,7 +421,9 @@ async function poll() {
 
                     // 2. Track activity
                     if (handle) {
-                        contactStore.updateLastContacted(handle, date, { channel: 'imessage' });
+                        void contactStore.updateLastContacted(handle, date, { channel: 'imessage' }).catch((error) => {
+                            console.warn("[Worker] Failed to update last-contacted for iMessage handle:", error.message);
+                        });
                     }
 
                     // 3. Intelligence Pipeline (Only if NOT from me)
@@ -443,11 +447,34 @@ async function poll() {
                         invalidateUnifiedIndexCache();
                     } catch (_) { /* ignore */ }
                 }
+                try {
+                    await drainBridgeOutboxOnce();
+                } catch (error) {
+                    console.warn("[Worker] Bridge outbox drain after poll failed:", error.message);
+                }
                 isProcessing = false;
                 resolve();
             }
         });
     });
+}
+
+async function drainBridgeOutboxOnce() {
+    // The worker is the long-lived owner of queued bridge-message replay. A dedicated
+    // lock prevents concurrent drains across hub/runtime shapes.
+    if (isProcessing) return { drained: 0, remaining: 0, skipped: true };
+    if (!syncGuard.acquireLock(BRIDGE_OUTBOX_LOCK)) {
+        return { drained: 0, remaining: 0, skipped: true };
+    }
+    try {
+        const result = await drainPendingBridgeWrites(20);
+        if (result.drained > 0 || result.remaining > 0) {
+            console.log(`[Worker] Bridge outbox drain: drained=${result.drained} remaining=${result.remaining}`);
+        }
+        return result;
+    } finally {
+        syncGuard.releaseLock(BRIDGE_OUTBOX_LOCK);
+    }
 }
 
 async function runIntelligencePipeline(handle, text) {
@@ -527,8 +554,10 @@ async function pollLoop() {
 }
 
 /**
- * Background suggestion drafts: precompute Trinity-backed drafts for queued
- * conversations in the background. Disable with REPLY_SUGGEST_BACKGROUND_DISABLE=1.
+ * Background suggestion drafts: precompute drafts for queued conversations in the
+ * background. In normal product mode this is Trinity-first, but the runtime may
+ * fall back locally if Trinity stalls or fails. Disable with
+ * REPLY_SUGGEST_BACKGROUND_DISABLE=1.
  */
 async function runSuggestionDraftSweepOnce() {
     const everyMs = getSuggestionDraftIntervalMs();
@@ -577,6 +606,27 @@ async function runSuggestionDraftSweepOnce() {
     );
     setInterval(runSuggestionDraftSweepOnce, everyMs);
     setTimeout(runSuggestionDraftSweepOnce, 10 * 1000);
+})();
+
+function getBridgeOutboxDrainIntervalMs() {
+    const raw = process.env.REPLY_BRIDGE_OUTBOX_DRAIN_INTERVAL_MS;
+    if (raw != null && String(raw).trim() !== "") {
+        const n = Number(raw);
+        if (Number.isFinite(n) && n > 0) return Math.min(n, 10 * 60 * 1000);
+        if (Number.isFinite(n) && n === 0) return 0;
+    }
+    return 30 * 1000;
+}
+
+(() => {
+    const everyMs = getBridgeOutboxDrainIntervalMs();
+    if (!everyMs) {
+        console.log("[Worker] Bridge outbox drain disabled.");
+        return;
+    }
+    console.log(`[Worker] Bridge outbox drain every ~${Math.round(everyMs / 1000)}s.`);
+    setTimeout(() => void drainBridgeOutboxOnce(), 20 * 1000);
+    setInterval(() => void drainBridgeOutboxOnce(), everyMs);
 })();
 
 function getPreparedContextRefreshIntervalMs() {

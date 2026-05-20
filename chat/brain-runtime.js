@@ -34,6 +34,15 @@ const LEGACY_TRINITY_COMMAND_ALIASES = {
   "runtime-status": "reply-runtime-status",
   "write-config": "reply-write-config",
 };
+const DEFAULT_TRINITY_RUNTIME_TIMEOUT_MS = clampRuntimeTimeoutMs(
+  process.env.REPLY_TRINITY_RUNTIME_TIMEOUT_MS,
+  45000,
+);
+const DEFAULT_TRINITY_SUGGEST_TIMEOUT_MS = clampRuntimeTimeoutMs(
+  process.env.REPLY_TRINITY_SUGGEST_TIMEOUT_MS,
+  DEFAULT_TRINITY_RUNTIME_TIMEOUT_MS,
+);
+const TRINITY_RUNTIME_LOG_PATH = dataPath("trinity-runtime.log");
 const brainRuntimeTestHooks = {
   legacyGenerateReply: null,
   localGenerateReply: null,
@@ -669,7 +678,47 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
       }
       throw new Error("{trinity} returned no usable draft candidates.");
     } catch (error) {
-      throw new Error(`{trinity} suggest failed: ${error.message}`);
+      // Normal product mode remains Trinity-first, but suggest failures are bounded
+      // so operator drafting can degrade to the local router instead of stalling.
+      console.warn("[reply-runtime] Trinity suggest failed, falling back to local drafting:", error.message);
+      const threadSnapshot = await buildThreadSnapshot(
+        message,
+        contextSnippets,
+        recipient,
+        goldenExamples,
+      );
+      const localResult = await loadLocalBrainRouter().generateReplyWithLocalBrain(
+        message,
+        contextSnippets,
+        recipient,
+        goldenExamples,
+      );
+      const rankedDraftSet = buildLocalRankedDraftSet(threadSnapshot, localResult);
+      await recordDraftGenerationEvent({
+        threadSnapshot,
+        runtimeMode: "trinity-fallback-local",
+        rankedDraftSet,
+        suggestionText: localResult.suggestion,
+        explanation: localResult.explanation,
+        contextMeta: {
+          ...(localResult.contextMeta || {}),
+          fallbackFrom: "trinity",
+          trinityError: error.message,
+        },
+      }).catch(() => null);
+      return {
+        ...localResult,
+        contextMeta: {
+          ...(localResult.contextMeta || {}),
+          runtime: "trinity-fallback-local",
+          fallbackFrom: "trinity",
+          trinityError: error.message,
+          companyId: threadSnapshot.company_id,
+        },
+        runtimeMode: "trinity-fallback-local",
+        rankedDraftSet,
+        trinityDraftCandidate: null,
+      };
     }
   }
   throw new Error(`Unsupported brain runtime mode: ${runtimeMode}`);
@@ -860,6 +909,14 @@ async function callTrinityRuntime(command, payload = null, options = {}) {
   if (Array.isArray(options.args) && options.args.length) {
     args.push(...options.args.map((value) => String(value)));
   }
+  const timeoutMs = resolveTrinityCommandTimeoutMs(command, options.timeoutMs);
+  const startedAt = Date.now();
+  logTrinityRuntimeEvent("start", {
+    command,
+    timeout_ms: timeoutMs,
+    args: Array.isArray(options.args) ? options.args : [],
+    cycle_id: options.cycleId || null,
+  });
 
   return new Promise((resolve, reject) => {
     const child = spawn(pythonBin, args, {
@@ -870,6 +927,18 @@ async function callTrinityRuntime(command, payload = null, options = {}) {
 
     let stdout = "";
     let stderr = "";
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+      setTimeout(() => {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          // ignore
+        }
+      }, 2000).unref?.();
+    }, timeoutMs);
 
     child.stdout.on("data", (chunk) => {
       stdout += chunk.toString();
@@ -879,6 +948,16 @@ async function callTrinityRuntime(command, payload = null, options = {}) {
     });
     child.on("error", reject);
     child.on("close", (code) => {
+      clearTimeout(timer);
+      if (timedOut) {
+        logTrinityRuntimeEvent("timeout", {
+          command,
+          timeout_ms: timeoutMs,
+          elapsed_ms: Date.now() - startedAt,
+        });
+        reject(new Error(`Trinity command timed out after ${timeoutMs}ms: ${command}`));
+        return;
+      }
       if (code !== 0) {
         const detail = (stderr || stdout || `Trinity runtime exited with code ${code}`).trim();
         const legacyCommand = LEGACY_TRINITY_COMMAND_ALIASES[command];
@@ -893,12 +972,30 @@ async function callTrinityRuntime(command, payload = null, options = {}) {
           }).then(resolve).catch(reject);
           return;
         }
+        logTrinityRuntimeEvent("error", {
+          command,
+          code,
+          elapsed_ms: Date.now() - startedAt,
+          detail: detail.slice(0, 1000),
+        });
         reject(new Error(detail));
         return;
       }
       try {
-        resolve(stdout ? JSON.parse(stdout) : {});
+        const parsed = stdout ? JSON.parse(stdout) : {};
+        logTrinityRuntimeEvent("success", {
+          command,
+          elapsed_ms: Date.now() - startedAt,
+          stdout_bytes: Buffer.byteLength(stdout || "", "utf8"),
+          stderr_bytes: Buffer.byteLength(stderr || "", "utf8"),
+        });
+        resolve(parsed);
       } catch (error) {
+        logTrinityRuntimeEvent("parse_error", {
+          command,
+          elapsed_ms: Date.now() - startedAt,
+          detail: error.message,
+        });
         reject(new Error(`Failed to parse Trinity runtime response: ${error.message}`));
       }
     });
@@ -908,6 +1005,36 @@ async function callTrinityRuntime(command, payload = null, options = {}) {
     }
     child.stdin.end();
   });
+}
+
+function resolveTrinityCommandTimeoutMs(command, explicitTimeoutMs) {
+  if (explicitTimeoutMs != null) {
+    return clampRuntimeTimeoutMs(explicitTimeoutMs, DEFAULT_TRINITY_RUNTIME_TIMEOUT_MS);
+  }
+  if (String(command || "").trim() === "suggest") {
+    return DEFAULT_TRINITY_SUGGEST_TIMEOUT_MS;
+  }
+  return DEFAULT_TRINITY_RUNTIME_TIMEOUT_MS;
+}
+
+function clampRuntimeTimeoutMs(raw, fallback) {
+  const parsed = Number.parseInt(String(raw || fallback), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1000, Math.min(parsed, 300000));
+}
+
+function logTrinityRuntimeEvent(kind, details = {}) {
+  try {
+    ensureDataHome();
+    const record = {
+      at: new Date().toISOString(),
+      kind,
+      ...details,
+    };
+    fs.appendFileSync(TRINITY_RUNTIME_LOG_PATH, `${JSON.stringify(record)}\n`, "utf8");
+  } catch {
+    // best effort only
+  }
 }
 
 function resolveTrinityPythonBin() {

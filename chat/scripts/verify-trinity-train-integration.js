@@ -17,6 +17,15 @@ const {
   resolveTrinityRuntimeRoot,
 } = require("../brain-runtime.js");
 
+const TRINITY_COMMAND_TIMEOUT_MS = clampTimeoutMs(
+  process.env.REPLY_TRINITY_VERIFY_STEP_TIMEOUT_MS,
+  45000,
+);
+const TRINITY_ASYNC_TIMEOUT_MS = clampTimeoutMs(
+  process.env.REPLY_TRINITY_VERIFY_ASYNC_TIMEOUT_MS,
+  30000,
+);
+
 async function main() {
   const status = getTrinityRuntimeStatusSync();
   const pythonBin = resolveTrinityPythonBin();
@@ -60,11 +69,14 @@ async function main() {
 
   fs.writeFileSync(snapshotPath, `${JSON.stringify(threadSnapshot, null, 2)}\n`, "utf-8");
 
-  const suggestResult = runTrinityCommand({
-    pythonBin,
-    trinityRoot,
-    args: ["suggest", "--adapter", "reply", "--input-file", snapshotPath],
-  });
+  const stepTimings = [];
+  const suggestResult = await runTimedStep(stepTimings, "trinity_suggest", async () =>
+    runTrinityCommand({
+      pythonBin,
+      trinityRoot,
+      args: ["suggest", "--adapter", "reply", "--input-file", snapshotPath],
+    }),
+  );
 
   const rankedDraftSet = parseJsonResult(suggestResult.stdout, "suggest");
   const topDraft = Array.isArray(rankedDraftSet?.drafts) ? rankedDraftSet.drafts[0] : null;
@@ -89,16 +101,39 @@ async function main() {
     contract_version: rankedDraftSet.contract_version || "trinity.reply.v1alpha1",
   });
 
-  const outcomeResult = await recordDraftOutcome(outcome);
-  const traceExport = await exportDraftTrace(rankedDraftSet.cycle_id);
-  const trainProposal = await proposeTrainingPolicy({
-    learnerKind: "tone",
-    cycleId: rankedDraftSet.cycle_id,
-    transport: "cli",
-  });
+  const outcomeResult = await runTimedStep(stepTimings, "record_outcome", () =>
+    withStepTimeout(
+      recordDraftOutcome(outcome),
+      TRINITY_ASYNC_TIMEOUT_MS,
+      "record_outcome",
+    ),
+  );
+  const traceExport = await runTimedStep(stepTimings, "export_trace", () =>
+    withStepTimeout(
+      exportDraftTrace(rankedDraftSet.cycle_id),
+      TRINITY_ASYNC_TIMEOUT_MS,
+      "export_trace",
+    ),
+  );
+  const trainProposal = await runTimedStep(stepTimings, "propose_training_policy", () =>
+    withStepTimeout(
+      proposeTrainingPolicy({
+        learnerKind: "tone",
+        cycleId: rankedDraftSet.cycle_id,
+        transport: "cli",
+      }),
+      TRINITY_ASYNC_TIMEOUT_MS,
+      "propose_training_policy",
+    ),
+  );
 
   const summary = {
     status: "ok",
+    timeouts: {
+      command_ms: TRINITY_COMMAND_TIMEOUT_MS,
+      async_ms: TRINITY_ASYNC_TIMEOUT_MS,
+    },
+    steps: stepTimings,
     runtime_status: {
       adapter: status?.adapter || "reply",
       provider: status?.provider || null,
@@ -139,8 +174,14 @@ function runTrinityCommand({ pythonBin, trinityRoot, args }) {
       cwd: trinityRoot,
       env,
       encoding: "utf-8",
+      timeout: TRINITY_COMMAND_TIMEOUT_MS,
     },
   );
+  if (result.error?.code === "ETIMEDOUT" || result.signal === "SIGTERM") {
+    throw new Error(
+      `Trinity command timed out after ${TRINITY_COMMAND_TIMEOUT_MS}ms: ${args.join(" ")}`,
+    );
+  }
   if (result.status !== 0) {
     throw new Error(String(result.stderr || result.stdout || `Trinity command failed: ${args.join(" ")}`).trim());
   }
@@ -153,6 +194,44 @@ function parseJsonResult(stdout, commandName) {
   } catch (error) {
     throw new Error(`Failed to parse Trinity ${commandName} response: ${error.message}`);
   }
+}
+
+async function runTimedStep(stepTimings, name, fn) {
+  const startedAt = Date.now();
+  try {
+    const result = await fn();
+    stepTimings.push({
+      name,
+      status: "ok",
+      duration_ms: Date.now() - startedAt,
+    });
+    return result;
+  } catch (error) {
+    stepTimings.push({
+      name,
+      status: "error",
+      duration_ms: Date.now() - startedAt,
+      message: error.message || String(error),
+    });
+    throw error;
+  }
+}
+
+async function withStepTimeout(promise, timeoutMs, stepName) {
+  return await Promise.race([
+    Promise.resolve(promise),
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Step '${stepName}' timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    }),
+  ]);
+}
+
+function clampTimeoutMs(raw, fallback) {
+  const parsed = Number.parseInt(String(raw || fallback), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1000, Math.min(parsed, 300000));
 }
 
 main().catch((error) => {

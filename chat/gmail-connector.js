@@ -460,7 +460,9 @@ async function syncGmail({ maxMessages = 500 } = {}) {
         continue;
       }
 
-      contactStore.updateLastContacted(counterparty, date);
+      void contactStore.updateLastContacted(counterparty, date).catch((error) => {
+        console.warn("[gmail-connector] Failed to update last-contacted:", error.message);
+      });
 
       const safeSubject = subject ? `Subject: ${subject}\n\n` : "";
       const clippedBody = body.length > 2000 ? `${body.slice(0, 2000)}…` : body;

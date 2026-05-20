@@ -335,7 +335,9 @@ function buildEmailMetadata({
  * 3. Apple Mail fallback
  *
  * Returns a bounded sync summary instead of a raw count so callers can tell
- * whether additional backfill work remains.
+ * whether additional backfill work remains. The fallback order is operational,
+ * not additive: Gmail is preferred first, then IMAP, then Apple Mail fallback
+ * if the earlier paths are unavailable or not configured.
  *
  * @returns {Promise<{ added: number, hasMore: boolean }>}
  */
@@ -527,7 +529,9 @@ async function syncMail() {
             const stableKey = row.global_message_id || row.document_id || row.rowid;
             const messageId = `mailidx-${stableKey}`;
 
-            contactStore.updateLastContacted(cleanHandle, isoDate, { channel: 'email' });
+            void contactStore.updateLastContacted(cleanHandle, isoDate, { channel: 'email' }).catch((error) => {
+                console.warn("[sync-mail] Failed to update last-contacted:", error.message);
+            });
             if (!isFromMe) {
                 await contactStore.markChannelInboundVerified(cleanHandle, cleanHandle, isoDate);
             }

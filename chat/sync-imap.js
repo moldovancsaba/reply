@@ -215,7 +215,9 @@ async function syncMailbox(client, mailboxName, opts) {
 
       // Update contact store last contacted.
       try {
-        contactStore.updateLastContacted(counterparty, date);
+        void contactStore.updateLastContacted(counterparty, date).catch((error) => {
+            console.warn("[sync-imap] Failed to update last-contacted:", error.message);
+        });
       } catch { }
 
       const safeSubject = subject ? `Subject: ${subject}\n\n` : '';

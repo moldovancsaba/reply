@@ -383,7 +383,9 @@ async function updateContactActivityFromRows(rows = []) {
     const contactStore = require('./contact-store.js');
     for (const row of rows) {
         const date = convertDate(row.date);
-        contactStore.updateLastContacted(row.handle_id, date, { channel: 'imessage' });
+        void contactStore.updateLastContacted(row.handle_id, date, { channel: 'imessage' }).catch((error) => {
+            console.warn("[sync-imessage] Failed to update last-contacted:", error.message);
+        });
         if (!row.is_from_me && row.handle_id) {
             await contactStore.markChannelInboundVerified(row.handle_id, row.handle_id, date);
         }

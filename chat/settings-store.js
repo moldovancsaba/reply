@@ -7,6 +7,7 @@ ensureDataHome();
 const SETTINGS_PATH = dataPath("settings.json");
 const CHANNEL_BRIDGE_MODES = new Set(["disabled", "draft_only"]);
 const CHANNEL_BRIDGE_CHANNELS = ["imessage", "whatsapp", "telegram", "discord", "signal", "viber", "linkedin"];
+const LINKEDIN_INGEST_MODES = new Set(["browser_bridge", "sidecar", "disabled"]);
 
 function debugSettingsLoggingEnabled() {
   const v = String(process.env.REPLY_DEBUG_SETTINGS || "").toLowerCase().trim();
@@ -103,6 +104,12 @@ function processSensitive(settings, action) {
 function normalizeChannelBridgeMode(value, fallback = "disabled") {
   const v = String(value || "").trim().toLowerCase();
   if (CHANNEL_BRIDGE_MODES.has(v)) return v;
+  return fallback;
+}
+
+function normalizeLinkedInIngestMode(value, fallback = "browser_bridge") {
+  const v = String(value || "").trim().toLowerCase();
+  if (LINKEDIN_INGEST_MODES.has(v)) return v;
   return fallback;
 }
 
@@ -219,6 +226,10 @@ function withDefaults(settings) {
         5000,
         Math.min(Number(s?.health?.uiHealthPollIntervalMs) || 15000, 300000)
       ),
+    },
+    linkedin: {
+      ...(s?.linkedin || {}),
+      ingestMode: normalizeLinkedInIngestMode(s?.linkedin?.ingestMode, "browser_bridge"),
     },
     ui: {
       channels: {

@@ -1,6 +1,6 @@
 # {reply} Dependency Map
 
-**Doc freshness:** 2026-05-05  
+**Doc freshness:** 2026-05-20  
 **Purpose:** current runtime and install dependency map for `{reply}` after the Trinity runtime cutover, native-shell rollout, thin-read work, and conversation-foundation insertion.
 
 This document is no longer a historical issue graph. It is the current dependency map for:
@@ -9,6 +9,10 @@ This document is no longer a historical issue graph. It is the current dependenc
 - cross-repo dependencies
 - product-layer boundaries
 - operator-critical failure points
+
+See also:
+
+- [RELATION_AUDIT.md](/Users/Shared/Projects/reply/docs/RELATION_AUDIT.md) for the bidirectional app/service inventory and the latest local health audit snapshot
 
 ## Runtime Layers
 
@@ -75,6 +79,7 @@ Provides:
 - contact enrichment
 - local settings
 - semantic retrieval
+- bridge pending-write outbox reconciliation
 
 ### 4. Drafting runtime
 
@@ -171,6 +176,19 @@ Provides:
 - Ollama for local drafting/ranking models
 - OpenClaw for WhatsApp transport
 
+## Bidirectional Relation Inventory
+
+This document tracks architectural dependency classes. The concrete relation list now lives in:
+
+- [RELATION_AUDIT.md](/Users/Shared/Projects/reply/docs/RELATION_AUDIT.md)
+
+That document records:
+
+- what `{reply}` requires or references
+- what requires or references `{reply}`
+- which channels are first-class versus vocabulary-only
+- the latest observed local health snapshot
+
 ## Failure Concentration Points
 
 ### Message ingestion vs conversation visibility
@@ -217,8 +235,17 @@ Reason:
 
 If `{trinity}` is unavailable:
 
-- suggest endpoints degrade with operator-safe `503` responses
+- suggest endpoints degrade with operator-safe `503` responses or bounded local fallback, depending on the runtime path
 - sends and conversation browsing remain product-owned in `{reply}`
+
+### Bridge write durability
+
+Current product rule:
+
+- inbound bridge normalization should not block indefinitely on `chat.db`
+- bridge writes may spool into `channel_bridge_pending.json` when SQLite is busy
+- the background worker owns queued bridge replay under a dedicated lock
+- replay must reconcile against already-persisted `unified_messages` rows before retrying
 
 ### Review and provenance health
 
