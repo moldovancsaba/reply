@@ -57,7 +57,7 @@ test("system health attaches preflight + api contract", () => {
   assert.ok(src.includes("health.apiContract"), "health should include apiContract for clients");
   assert.ok(src.includes("servePreflight"), "/api/preflight route handler should exist");
   assert.ok(src.includes("const launch = getLaunchState()"), "health should capture launch bootstrap state through startup guard");
-  assert.ok(/\blaunch,\s*\n\s*httpPort\b/.test(src), "health should include launch bootstrap state");
+  assert.ok(/\blaunch,\s*\n[\s\S]*?\bhttpPort\b/.test(src), "health should include launch bootstrap state");
   assert.ok(src.includes("clearStaleTransientSqliteBusy(mailStatus, launch)"), "health should clear stale transient mail errors on startup");
   assert.ok(src.includes("clearStaleTransientSqliteBusy(notesStatus, launch)"), "health should clear stale transient notes errors on startup");
   assert.ok(src.includes("clearStaleTransientSqliteBusy(calendarStatus, launch)"), "health should clear stale transient calendar errors on startup");

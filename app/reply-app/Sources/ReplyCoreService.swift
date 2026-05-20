@@ -517,6 +517,7 @@ final class ReplyCoreService: ObservableObject {
         env["REPLY_DATA_HOME"] = replyDataHome.path
         env["REPLY_LOG_HOME"] = replyLogHome.path
         env["REPLY_RELEASE_MODE"] = "1"
+        env["REPLY_RUNTIME_MODE"] = "app_managed"
         env["REPLY_BRAIN_RUNTIME"] = "trinity"
         env["USE_TRINITY_DRAFTS"] = "1"
         env["REPLY_ALLOW_LEGACY_BRAIN"] = "0"
@@ -907,14 +908,27 @@ final class ReplyCoreService: ObservableObject {
     }
 
     private func fetchHealth(from baseURL: URL) async throws -> HealthPayload {
-        let url = baseURL.appending(path: "api/health")
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 5
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw NSError(domain: "ReplyCoreService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Health endpoint returned a non-200 response."])
+        let candidates = [
+            baseURL.appending(path: "api/system/health"),
+            baseURL.appending(path: "api/health"),
+        ]
+
+        var lastError: Error?
+        for url in candidates {
+            do {
+                var request = URLRequest(url: url)
+                request.timeoutInterval = 5
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                    throw NSError(domain: "ReplyCoreService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Health endpoint returned a non-200 response."])
+                }
+                return try JSONDecoder().decode(HealthPayload.self, from: data)
+            } catch {
+                lastError = error
+            }
         }
-        return try JSONDecoder().decode(HealthPayload.self, from: data)
+
+        throw lastError ?? NSError(domain: "ReplyCoreService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Health endpoint request failed."])
     }
 
     private func loadThreadPage(

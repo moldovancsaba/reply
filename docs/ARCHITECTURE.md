@@ -123,6 +123,21 @@ Target state:
   - normalize result payloads
   - record structured outcomes
   - export traces
+  - bound `{trinity}` calls and fall back to local drafting when `suggest` stalls or fails
+
+### Bridge outbox and replay
+
+- path: `chat/channel-bridge.js`
+- primary route: `POST /api/channel-bridge/inbound`
+- replay owner: `chat/background-worker.js`
+
+Current rule:
+
+- bridge-side inbound normalization and vector ingest should not block on long `chat.db` write contention
+- unified message persistence is attempted with a bounded timeout
+- if the write window is busy, the message is queued in `channel_bridge_pending.json`
+- the background worker replays queued bridge writes under its own `channel_bridge_outbox` lock
+- replay first reconciles against `unified_messages` so already-persisted rows are removed instead of retried forever
 
 ## Conversation Model
 
@@ -204,7 +219,8 @@ Current compose-path boundary:
 1. `{reply}` assembles a `ThreadSnapshot`
 2. `{reply}` calls `{trinity}` `suggest --adapter reply`
 3. `{trinity}` returns a ranked draft set and accepted artifact provenance
-4. `{reply}` renders the selected draft and stores runtime context for later outcome submission
+4. if `{trinity}` fails or times out, `{reply}` falls back to bounded local drafting
+5. `{reply}` renders the selected draft and stores runtime context for later outcome submission
 
 ### Outcome path
 

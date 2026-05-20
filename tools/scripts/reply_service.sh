@@ -14,6 +14,7 @@ ln -sf "$HUB_LOG" /tmp/reply-hub.log
 
 # launchd sets PATH in com.reply.hub.plist; still resolve Node explicitly for nvm-free reliability.
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:${PATH:-}"
+export REPLY_RUNTIME_MODE="launchd"
 
 resolve_node() {
   if [[ -n "${REPLY_NODE_BIN:-}" && -x "${REPLY_NODE_BIN}" ]]; then

@@ -27,6 +27,9 @@ let pipelineInstance = null;
 
 const DB_PATH = process.env.REPLY_KNOWLEDGE_DB_PATH || process.env.REPLY_LANCEDB_URI || dataPath("lancedb");
 const TABLE_NAME = "documents";
+const ANNOTATION_FIELDS = ["annotation_tags", "annotation_summary", "annotation_facts"];
+
+let schemaRepairPromise = null;
 
 /**
  * Initialize and retrieve the feature extraction pipeline.
@@ -63,6 +66,94 @@ async function connect() {
     return await lancedb.connect(DB_PATH);
 }
 
+function normalizeStoredDocument(doc, vectorOverride = null) {
+    const normalized = doc && doc.toJSON ? doc.toJSON() : doc;
+    const vectorSource = vectorOverride ?? normalized?.vector;
+    return {
+        id: normalized?.id,
+        text: normalized?.text,
+        source: normalized?.source,
+        path: normalized?.path,
+        is_annotated: normalized?.is_annotated === true,
+        vector: Array.isArray(vectorSource) ? vectorSource : Array.from(vectorSource || []),
+        annotation_tags: typeof normalized?.annotation_tags === "string"
+            ? normalized.annotation_tags
+            : JSON.stringify(normalized?.annotation_tags || []),
+        annotation_summary: typeof normalized?.annotation_summary === "string"
+            ? normalized.annotation_summary
+            : String(normalized?.annotation_summary || ""),
+        annotation_facts: typeof normalized?.annotation_facts === "string"
+            ? normalized.annotation_facts
+            : JSON.stringify(normalized?.annotation_facts || []),
+    };
+}
+
+function isMissingTableError(error) {
+    const message = String(error?.message || error || "").toLowerCase();
+    return message.includes("table") && (message.includes("not found") || message.includes("does not exist"));
+}
+
+function isAlreadyExistsError(error) {
+    const message = String(error?.message || error || "").toLowerCase();
+    return message.includes("already exists");
+}
+
+function isSchemaDriftError(error) {
+    const message = String(error?.message || error || "").toLowerCase();
+    return message.includes("field not in schema") || message.includes("schema");
+}
+
+async function createOrReplaceTextIndex(table) {
+    await table.createIndex("text", { config: lancedb.Index.fts(), replace: true });
+}
+
+async function openDocumentsTable(db, seedRows = []) {
+    let missingTableError = null;
+    try {
+        return await db.openTable(TABLE_NAME);
+    } catch (error) {
+        if (!isMissingTableError(error)) throw error;
+        missingTableError = error;
+    }
+
+    const normalizedSeed = (Array.isArray(seedRows) ? seedRows : []).map((row) => normalizeStoredDocument(row));
+    if (!normalizedSeed.length) {
+        throw missingTableError || new Error(`Table '${TABLE_NAME}' does not exist.`);
+    }
+    try {
+        const table = await db.createTable(TABLE_NAME, normalizedSeed);
+        await createOrReplaceTextIndex(table);
+        return table;
+    } catch (error) {
+        if (!isAlreadyExistsError(error)) throw error;
+        const reopened = await db.openTable(TABLE_NAME);
+        await createOrReplaceTextIndex(reopened);
+        return reopened;
+    }
+}
+
+async function ensureAnnotationSchema(db) {
+    if (!schemaRepairPromise) {
+        schemaRepairPromise = (async () => {
+            const table = await db.openTable(TABLE_NAME);
+            const queryResult = await table.query().limit(100000).toArray();
+            const existingRows = queryResult.map((row) => normalizeStoredDocument(row));
+            await db.dropTable(TABLE_NAME);
+            const rebuilt = await db.createTable(TABLE_NAME, existingRows);
+            await createOrReplaceTextIndex(rebuilt);
+            return rebuilt;
+        })().finally(() => {
+            schemaRepairPromise = null;
+        });
+    }
+    return await schemaRepairPromise;
+}
+
+function documentHasAnnotationSchema(doc) {
+    const normalized = doc && doc.toJSON ? doc.toJSON() : doc;
+    return ANNOTATION_FIELDS.every((field) => Object.prototype.hasOwnProperty.call(normalized || {}, field));
+}
+
 /**
  * Add a batch of documents to the vector store.
  * Automatically handles table creation and FTS indexing.
@@ -77,26 +168,22 @@ async function addDocuments(docs) {
     console.log(`Generating embeddings for ${docs.length} documents...`);
     for (const doc of docs) {
         const vector = await getEmbedding(doc.text);
-        data.push({
-            id: doc.id,
-            text: doc.text,
-            source: doc.source,
-            path: doc.path,
-            is_annotated: !!doc.is_annotated, // Apply incoming boolean or default to false
-            vector
-        });
+        data.push(normalizeStoredDocument({
+            ...doc,
+            is_annotated: !!doc.is_annotated,
+        }, vector));
     }
 
     try {
-        const table = await db.openTable(TABLE_NAME);
+        const table = await openDocumentsTable(db, data);
         await table.add(data);
-        // Ensure the Full-Text Search (FTS) index is updated for hybrid search.
-        await table.createIndex("text", { config: lancedb.Index.fts(), replace: true });
+        await createOrReplaceTextIndex(table);
     } catch (e) {
-        // If the table does not exist, create it and build the initial FTS index.
-        const table = await db.createTable(TABLE_NAME, data);
-        console.log("Creating initial FTS index...");
-        await table.createIndex("text", { config: lancedb.Index.fts() });
+        if (!isSchemaDriftError(e)) throw e;
+        console.warn("[vector-store] detected schema drift during addDocuments; rebuilding documents table");
+        const table = await ensureAnnotationSchema(db);
+        await table.add(data);
+        await createOrReplaceTextIndex(table);
     }
     console.log(`Added ${data.length} vectors to ${TABLE_NAME} and updated FTS index.`);
     try {
@@ -188,7 +275,7 @@ function trinityOutboxDrainEnabled() {
 async function annotateDocument(id, annotationJson) {
     const db = await connect();
     try {
-        const table = await db.openTable(TABLE_NAME);
+        let table = await openDocumentsTable(db);
 
         // 1. Fetch existing row to retain text/vector/source/path
         const results = await table.query()
@@ -206,29 +293,29 @@ async function annotateDocument(id, annotationJson) {
             return false;
         }
 
+        if (!documentHasAnnotationSchema(existing)) {
+            table = await ensureAnnotationSchema(db);
+        }
+
         // 2. Delete the old row
         await table.delete(`id = '${escapeSqlString(id)}'`);
 
-        // Ensure existing vector is a plain float array, not an internal LanceDB Float32Array wrapper object
-        let flatVector = [];
-        if (existing.vector) {
-            flatVector = Array.from(existing.vector);
-        }
-
         // 3. Re-insert with annotations
-        const newDoc = {
-            id: existing.id,
-            text: existing.text,
-            source: existing.source,
-            path: existing.path,
-            vector: flatVector,
+        const newDoc = normalizeStoredDocument({
+            ...existing,
             is_annotated: true,
-            annotation_tags: JSON.stringify(annotationJson.tags || []),
+            annotation_tags: annotationJson.tags || [],
             annotation_summary: annotationJson.summary || "",
-            annotation_facts: JSON.stringify(annotationJson.facts || [])
-        };
+            annotation_facts: annotationJson.facts || [],
+        });
 
-        await table.add([newDoc]);
+        try {
+            await table.add([newDoc]);
+        } catch (error) {
+            if (!isSchemaDriftError(error)) throw error;
+            table = await ensureAnnotationSchema(db);
+            await table.add([newDoc]);
+        }
         await emitRuntimeDocumentRegistrations([{
             id: newDoc.id,
             text: newDoc.text,

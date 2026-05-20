@@ -358,13 +358,20 @@ test("shadow mode is developer-only and disabled in release mode", (t) => {
 
 test("resolveTrinityRuntimeRoot prefers explicit bundled runtime env", (t) => {
   const original = process.env.TRINITY_RUNTIME_ROOT;
+  const fs = require("fs");
+  const os = require("os");
+  const path = require("path");
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "trinity-runtime-bundle-"));
+  fs.mkdirSync(path.join(runtimeRoot, "core", "trinity_core"), { recursive: true });
+  fs.writeFileSync(path.join(runtimeRoot, "core", "trinity_core", "cli.py"), "# test\n", "utf8");
   t.after(() => {
     if (original == null) delete process.env.TRINITY_RUNTIME_ROOT;
     else process.env.TRINITY_RUNTIME_ROOT = original;
+    fs.rmSync(runtimeRoot, { recursive: true, force: true });
   });
 
-  process.env.TRINITY_RUNTIME_ROOT = "/tmp/trinity-runtime-bundle";
-  assert.equal(resolveTrinityRuntimeRoot(), "/tmp/trinity-runtime-bundle");
+  process.env.TRINITY_RUNTIME_ROOT = runtimeRoot;
+  assert.equal(resolveTrinityRuntimeRoot(), runtimeRoot);
 });
 
 test("pythonVersionSatisfies rejects unsupported Python minors", () => {
@@ -519,4 +526,42 @@ test("generateReply uses reply-local router in local mode", async (t) => {
   assert.equal(result.contextMeta.selectedStage, "writer");
   assert.equal(String(result.rankedDraftSet?.cycle_id || "").startsWith("reply-local:"), true);
   assert.equal(result.rankedDraftSet?.drafts?.[0]?.draft_text, "Local draft for alice@example.com");
+});
+
+test("generateReply falls back to local drafting when Trinity suggest fails", async (t) => {
+  const originalMode = process.env.REPLY_BRAIN_RUNTIME;
+  t.after(() => {
+    clearBrainRuntimeTestHooks();
+    if (originalMode == null) delete process.env.REPLY_BRAIN_RUNTIME;
+    else process.env.REPLY_BRAIN_RUNTIME = originalMode;
+  });
+
+  process.env.REPLY_BRAIN_RUNTIME = "trinity";
+  setBrainRuntimeTestHooks({
+    trinityRuntimeCall: async () => {
+      throw new Error("Trinity command timed out after 45000ms");
+    },
+    localGenerateReply: async (message, _contextSnippets, recipient) => ({
+      suggestion: `Local fallback for ${recipient}`,
+      explanation: `fallback handled ${message}`,
+      contextMeta: { runtime: "local", selectedStage: "writer" },
+      runtimeMode: "local",
+      rankedDraftSet: null,
+      trinityDraftCandidate: null,
+    }),
+  });
+
+  const result = await require("../brain-runtime.js").generateReply(
+    "Need the update today.",
+    [],
+    "alice@example.com",
+    [],
+  );
+
+  assert.equal(result.suggestion, "Local fallback for alice@example.com");
+  assert.equal(result.runtimeMode, "trinity-fallback-local");
+  assert.equal(result.contextMeta.runtime, "trinity-fallback-local");
+  assert.equal(result.contextMeta.fallbackFrom, "trinity");
+  assert.match(result.contextMeta.trinityError, /timed out/i);
+  assert.equal(String(result.rankedDraftSet?.cycle_id || "").startsWith("reply-local:"), true);
 });

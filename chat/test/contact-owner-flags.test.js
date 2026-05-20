@@ -129,3 +129,23 @@ test("explicit contact updates prefer the exact handle row over alias-resolved c
     assert.equal(resolved.displayName, "Canonical Owner");
   });
 });
+
+test("contact store serializes concurrent last-contacted writes", async () => {
+  await withFreshStore(async ({ store }) => {
+    await store.updateContact("+36707282522", {
+      displayName: "Csaba",
+      channels: { phone: ["+36707282522"] },
+    });
+
+    await Promise.all([
+      store.updateLastContacted("+36707282522", "2026-05-19T10:00:00.000Z", { channel: "imessage" }),
+      store.updateLastContacted("+36707282522", "2026-05-19T10:05:00.000Z", { channel: "whatsapp" }),
+      store.updateLastContacted("+36707282522", "2026-05-19T10:03:00.000Z", { channel: "email" }),
+    ]);
+
+    await store.refreshIfChanged(0);
+    const contact = store.findContact("+36707282522");
+    assert.equal(contact.lastContacted, "2026-05-19T10:05:00.000Z");
+    assert.equal(contact.lastChannel, "whatsapp");
+  });
+});

@@ -1,6 +1,8 @@
 /**
  * {reply} - Channel Bridge Routes
- * Handles external inbound events and provides sync summaries.
+ * Handles external inbound events plus bridge event/status summaries.
+ * The actual ingest path is intentionally fail-soft: channel-bridge.js may queue
+ * unified-message persistence for background replay instead of blocking the HTTP request.
  */
 
 const { writeJson, readJsonBody } = require("../utils/server-utils");

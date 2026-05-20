@@ -6,10 +6,35 @@
 const { chromium } = require('playwright');
 const { normalizeLinkedInHandle } = require('./linkedin-utils.js');
 const { dataPath, ensureDataHome } = require('./app-paths.js');
+const { buildLinkedInHubPortScanList } = require('./linkedin-hub-port-scan.js');
 
-const ENDPOINT = process.env.REPLY_BRIDGE_ENDPOINT || "http://localhost:3000/api/channel-bridge/inbound";
 const POLL_INTERVAL = 30000; // 30 seconds
 const SEEN_IDS = new Set();
+const BRIDGE_ENDPOINT = "/api/channel-bridge/inbound";
+const HEALTH_ENDPOINT = "/api/health";
+let activeHubBaseUrl = null;
+
+async function resolveHubBaseUrl() {
+    const explicit = String(process.env.REPLY_BRIDGE_ENDPOINT || "").trim();
+    if (explicit) {
+        return explicit.replace(/\/api\/channel-bridge\/inbound\/?$/i, "").replace(/\/$/, "");
+    }
+
+    if (activeHubBaseUrl) return activeHubBaseUrl;
+    for (const port of buildLinkedInHubPortScanList()) {
+        const baseUrl = `http://localhost:${port}`;
+        try {
+            const response = await fetch(`${baseUrl}${HEALTH_ENDPOINT}`);
+            if (response.ok) {
+                activeHubBaseUrl = baseUrl;
+                return baseUrl;
+            }
+        } catch {
+            // keep scanning
+        }
+    }
+    throw new Error("Local {reply} hub is not reachable on the LinkedIn bridge port set.");
+}
 
 async function runSidecar() {
     console.log("🚀 Starting LinkedIn Sidecar Scraper...");
@@ -73,8 +98,9 @@ async function runSidecar() {
             const newEvents = messages.filter(m => !SEEN_IDS.has(m.messageId));
             if (newEvents.length > 0) {
                 console.log(`✅ Found ${newEvents.length} new messages for ${partnerName}`);
+                const hubBaseUrl = await resolveHubBaseUrl();
 
-                const response = await fetch(ENDPOINT, {
+                const response = await fetch(`${hubBaseUrl}${BRIDGE_ENDPOINT}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ events: newEvents })
@@ -85,6 +111,7 @@ async function runSidecar() {
                     console.log("📤 Synced successfully.");
                 } else {
                     console.error("❌ Bridge sync failed:", response.status);
+                    activeHubBaseUrl = null;
                 }
             } else {
                 console.log("No new messages.");
