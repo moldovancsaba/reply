@@ -123,7 +123,22 @@ Target state:
   - normalize result payloads
   - record structured outcomes
   - export traces
-  - bound `{trinity}` calls and fall back to local drafting when `suggest` stalls or fails
+  - bound `{trinity}` calls, recover prepared drafts when possible, and only then fall back to local drafting when `suggest` stalls or fails
+  - include bounded recent-learning summaries from the reply-owned local learning store in snapshot metadata
+
+### Selected-thread hot cache
+
+- path: `chat/thread-hot-cache.js`
+- routes:
+  - `GET /api/thread`
+  - `GET /api/thread-delta`
+
+Current rule:
+
+- the hub may keep a bounded hot cache for recently visible threads
+- `/api/thread` seeds that cache from canonical SQLite reads
+- `/api/thread-delta` reads only messages newer than the current cursor when possible
+- the cache is disposable acceleration only; canonical timeline truth remains in SQLite-backed message stores
 
 ### Bridge outbox and replay
 
@@ -135,9 +150,27 @@ Current rule:
 
 - bridge-side inbound normalization and vector ingest should not block on long `chat.db` write contention
 - unified message persistence is attempted with a bounded timeout
+- durable `chat.db` writes are serialized before post-save maintenance runs
 - if the write window is busy, the message is queued in `channel_bridge_pending.json`
 - the background worker replays queued bridge writes under its own `channel_bridge_outbox` lock
 - replay first reconciles against `unified_messages` so already-persisted rows are removed instead of retried forever
+
+### Relation health contract
+
+- path: `chat/routes/system.js`
+- role:
+  - expose `/api/health`, `/api/system-health`, and `/api/system/health`
+  - report causal relation state instead of coarse service booleans
+
+Current rule:
+
+- each major relation should report:
+  - active mode
+  - last success
+  - last failure
+  - failure class
+  - recovery state
+- stale historical errors should not outrank fresh recovery evidence in the active relation view
 
 ## Conversation Model
 
@@ -219,8 +252,9 @@ Current compose-path boundary:
 1. `{reply}` assembles a `ThreadSnapshot`
 2. `{reply}` calls `{trinity}` `suggest --adapter reply`
 3. `{trinity}` returns a ranked draft set and accepted artifact provenance
-4. if `{trinity}` fails or times out, `{reply}` falls back to bounded local drafting
-5. `{reply}` renders the selected draft and stores runtime context for later outcome submission
+4. if live `suggest` fails but a prepared draft is already available, `{reply}` recovers the prepared Trinity draft
+5. otherwise `{reply}` falls back to bounded local drafting
+6. `{reply}` renders the selected draft and stores runtime context for later outcome submission
 
 ### Outcome path
 

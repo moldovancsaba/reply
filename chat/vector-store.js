@@ -30,6 +30,8 @@ const TABLE_NAME = "documents";
 const ANNOTATION_FIELDS = ["annotation_tags", "annotation_summary", "annotation_facts"];
 
 let schemaRepairPromise = null;
+let vectorWriteQueue = Promise.resolve();
+let textIndexEnsurePromise = null;
 
 /**
  * Initialize and retrieve the feature extraction pipeline.
@@ -104,7 +106,44 @@ function isSchemaDriftError(error) {
 }
 
 async function createOrReplaceTextIndex(table) {
-    await table.createIndex("text", { config: lancedb.Index.fts(), replace: true });
+    await table.createIndex("text", { config: lancedb.Index.fts() });
+}
+
+function isBenignIndexError(error) {
+    const message = String(error?.message || error || "").toLowerCase();
+    return (
+        message.includes("already exists")
+        || message.includes("duplicate")
+        || message.includes("index")
+    );
+}
+
+function enqueueVectorWrite(task) {
+    const run = vectorWriteQueue.then(() => task());
+    vectorWriteQueue = run.catch(() => null);
+    return run;
+}
+
+async function ensureTextIndex(table, { force = false } = {}) {
+    if (force) {
+        textIndexEnsurePromise = null;
+    }
+    if (!textIndexEnsurePromise) {
+        textIndexEnsurePromise = (async () => {
+            try {
+                await createOrReplaceTextIndex(table);
+            } catch (error) {
+                if (!isBenignIndexError(error)) {
+                    throw error;
+                }
+            }
+        })().finally(() => {
+            if (force) {
+                textIndexEnsurePromise = null;
+            }
+        });
+    }
+    return await textIndexEnsurePromise;
 }
 
 async function openDocumentsTable(db, seedRows = []) {
@@ -122,12 +161,12 @@ async function openDocumentsTable(db, seedRows = []) {
     }
     try {
         const table = await db.createTable(TABLE_NAME, normalizedSeed);
-        await createOrReplaceTextIndex(table);
+        await ensureTextIndex(table, { force: true });
         return table;
     } catch (error) {
         if (!isAlreadyExistsError(error)) throw error;
         const reopened = await db.openTable(TABLE_NAME);
-        await createOrReplaceTextIndex(reopened);
+        await ensureTextIndex(reopened);
         return reopened;
     }
 }
@@ -140,7 +179,7 @@ async function ensureAnnotationSchema(db) {
             const existingRows = queryResult.map((row) => normalizeStoredDocument(row));
             await db.dropTable(TABLE_NAME);
             const rebuilt = await db.createTable(TABLE_NAME, existingRows);
-            await createOrReplaceTextIndex(rebuilt);
+            await ensureTextIndex(rebuilt, { force: true });
             return rebuilt;
         })().finally(() => {
             schemaRepairPromise = null;
@@ -174,18 +213,20 @@ async function addDocuments(docs) {
         }, vector));
     }
 
-    try {
-        const table = await openDocumentsTable(db, data);
-        await table.add(data);
-        await createOrReplaceTextIndex(table);
-    } catch (e) {
-        if (!isSchemaDriftError(e)) throw e;
-        console.warn("[vector-store] detected schema drift during addDocuments; rebuilding documents table");
-        const table = await ensureAnnotationSchema(db);
-        await table.add(data);
-        await createOrReplaceTextIndex(table);
-    }
-    console.log(`Added ${data.length} vectors to ${TABLE_NAME} and updated FTS index.`);
+    await enqueueVectorWrite(async () => {
+        try {
+            const table = await openDocumentsTable(db, data);
+            await table.add(data);
+            await ensureTextIndex(table);
+        } catch (e) {
+            if (!isSchemaDriftError(e)) throw e;
+            console.warn("[vector-store] detected schema drift during addDocuments; rebuilding documents table");
+            const table = await ensureAnnotationSchema(db);
+            await table.add(data);
+            await ensureTextIndex(table, { force: true });
+        }
+    });
+    console.log(`Added ${data.length} vectors to ${TABLE_NAME} and verified FTS index.`);
     try {
         await emitRuntimeDocumentRegistrations(docs);
     } catch (error) {
@@ -275,59 +316,57 @@ function trinityOutboxDrainEnabled() {
 async function annotateDocument(id, annotationJson) {
     const db = await connect();
     try {
-        let table = await openDocumentsTable(db);
+        return await enqueueVectorWrite(async () => {
+            let table = await openDocumentsTable(db);
 
-        // 1. Fetch existing row to retain text/vector/source/path
-        const results = await table.query()
-            .where(`id = '${escapeSqlString(id)}'`)
-            .limit(1)
-            .toArray();
+            const results = await table.query()
+                .where(`id = '${escapeSqlString(id)}'`)
+                .limit(1)
+                .toArray();
 
-        let existing = results.length > 0 ? results[0] : null;
+            let existing = results.length > 0 ? results[0] : null;
+            existing = existing && existing.toJSON ? existing.toJSON() : existing;
 
-        // Ensure it's a plain object
-        existing = existing && existing.toJSON ? existing.toJSON() : existing;
+            if (!existing) {
+                console.warn(`Cannot annotate: Doc ${id} not found.`);
+                return false;
+            }
 
-        if (!existing) {
-            console.warn(`Cannot annotate: Doc ${id} not found.`);
-            return false;
-        }
+            if (!documentHasAnnotationSchema(existing)) {
+                table = await ensureAnnotationSchema(db);
+            }
 
-        if (!documentHasAnnotationSchema(existing)) {
-            table = await ensureAnnotationSchema(db);
-        }
+            await table.delete(`id = '${escapeSqlString(id)}'`);
 
-        // 2. Delete the old row
-        await table.delete(`id = '${escapeSqlString(id)}'`);
+            const newDoc = normalizeStoredDocument({
+                ...existing,
+                is_annotated: true,
+                annotation_tags: annotationJson.tags || [],
+                annotation_summary: annotationJson.summary || "",
+                annotation_facts: annotationJson.facts || [],
+            });
 
-        // 3. Re-insert with annotations
-        const newDoc = normalizeStoredDocument({
-            ...existing,
-            is_annotated: true,
-            annotation_tags: annotationJson.tags || [],
-            annotation_summary: annotationJson.summary || "",
-            annotation_facts: annotationJson.facts || [],
+            try {
+                await table.add([newDoc]);
+            } catch (error) {
+                if (!isSchemaDriftError(error)) throw error;
+                table = await ensureAnnotationSchema(db);
+                await table.add([newDoc]);
+            }
+            await ensureTextIndex(table);
+            await emitRuntimeDocumentRegistrations([{
+                id: newDoc.id,
+                text: newDoc.text,
+                source: newDoc.source,
+                path: newDoc.path,
+                is_annotated: true,
+                title: null,
+                timestamp: new Date().toISOString(),
+            }]).catch((error) => {
+                console.warn("[vector-store] failed to emit updated document registration:", error.message);
+            });
+            return true;
         });
-
-        try {
-            await table.add([newDoc]);
-        } catch (error) {
-            if (!isSchemaDriftError(error)) throw error;
-            table = await ensureAnnotationSchema(db);
-            await table.add([newDoc]);
-        }
-        await emitRuntimeDocumentRegistrations([{
-            id: newDoc.id,
-            text: newDoc.text,
-            source: newDoc.source,
-            path: newDoc.path,
-            is_annotated: true,
-            title: null,
-            timestamp: new Date().toISOString(),
-        }]).catch((error) => {
-            console.warn("[vector-store] failed to emit updated document registration:", error.message);
-        });
-        return true;
     } catch (e) {
         console.error("Failed to annotate document:", e.message);
         return false;
@@ -576,18 +615,20 @@ async function getPendingSuggestions(limit = 20) {
 async function deleteDocument(id) {
     const db = await connect();
     try {
-        const table = await db.openTable(TABLE_NAME);
-        const results = await table.query()
-            .where(`id = '${escapeSqlString(id)}'`)
-            .limit(1)
-            .toArray();
-        const existing = results.length > 0 ? (results[0].toJSON ? results[0].toJSON() : results[0]) : null;
-        await table.delete(`id = '${escapeSqlString(id)}'`);
-        if (existing) {
-            await emitRuntimeDocumentDeleted(existing).catch((error) => {
-                console.warn("[vector-store] failed to emit document deletion:", error.message);
-            });
-        }
+        await enqueueVectorWrite(async () => {
+            const table = await db.openTable(TABLE_NAME);
+            const results = await table.query()
+                .where(`id = '${escapeSqlString(id)}'`)
+                .limit(1)
+                .toArray();
+            const existing = results.length > 0 ? (results[0].toJSON ? results[0].toJSON() : results[0]) : null;
+            await table.delete(`id = '${escapeSqlString(id)}'`);
+            if (existing) {
+                await emitRuntimeDocumentDeleted(existing).catch((error) => {
+                    console.warn("[vector-store] failed to emit document deletion:", error.message);
+                });
+            }
+        });
     } catch (e) {
         console.error("Failed to delete document:", e.message);
     }

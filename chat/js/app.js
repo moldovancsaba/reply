@@ -337,6 +337,26 @@ function renderSuggestionCandidates(payload) {
     footer.appendChild(freshness);
   }
 
+  const importedKnowledge = payload?.contextMeta?.runtimeDiagnostics?.importedRuntimeKnowledge || null;
+  if (importedKnowledge?.importedRecordCount) {
+    const imported = document.createElement('div');
+    imported.className = 'suggestion-runtime-meta';
+    const familyCount = Object.keys(importedKnowledge.familyCounts || {}).length;
+    imported.textContent = `Imported support: ${importedKnowledge.importedRecordCount} records • ${familyCount} families`;
+    footer.appendChild(imported);
+
+    if (Array.isArray(importedKnowledge.topSupport) && importedKnowledge.topSupport.length) {
+      const topSupport = document.createElement('div');
+      topSupport.className = 'suggestion-runtime-meta';
+      topSupport.textContent = `Sources: ${importedKnowledge.topSupport
+        .map((item) => item.documentTitle || item.documentPath || item.family || 'imported-support')
+        .filter(Boolean)
+        .slice(0, 3)
+        .join(' • ')}`;
+      footer.appendChild(topSupport);
+    }
+  }
+
   const cycleId = String(payload?.rankedDraftSet?.cycle_id || '').trim();
   if (cycleId) {
     const trainActions = document.createElement('div');
@@ -656,6 +676,7 @@ async function hydratePreparedDraftForHandle(handle, options = {}) {
     writeCachedSuggestion(normalizedHandle, {
       suggestion: payload.suggestion,
       explanation: payload.explanation || 'Prepared Trinity draft is ready.',
+      contextMeta: payload.contextMeta || null,
       runtimeMode: payload.runtimeMode || 'trinity-prepared',
       rankedDraftSet: payload.rankedDraftSet,
       selectedCandidateId: payload.rankedDraftSet?.drafts?.[0]?.candidate_id || '',
@@ -733,6 +754,7 @@ async function requestBackgroundSuggestion(handle, existingDraft = '') {
     writeCachedSuggestion(handle, {
       suggestion,
       explanation,
+      contextMeta: data?.contextMeta || null,
       runtimeMode: data?.runtimeMode || null,
       rankedDraftSet,
       selectedCandidateId: rankedDraftSet?.drafts?.[0]?.candidate_id || '',

@@ -153,6 +153,130 @@ function buildRuntimeProvenance(payload = {}) {
   };
 }
 
+function summarizeTrinityRuntimeDiagnostics(payload = {}) {
+  const diagnostics = payload?.runtime_diagnostics;
+  if (!diagnostics || typeof diagnostics !== "object") return null;
+  const pipeline = diagnostics.pipeline && typeof diagnostics.pipeline === "object"
+    ? diagnostics.pipeline
+    : {};
+  const stageTimings = diagnostics.stage_timings && typeof diagnostics.stage_timings === "object"
+    ? diagnostics.stage_timings
+    : {};
+  return {
+    provider: String(diagnostics.provider || "").trim() || null,
+    totalMs: Number.isFinite(Number(pipeline.total_ms)) ? Number(pipeline.total_ms) : null,
+    stageTimings: {
+      policyResolutionMs: Number.isFinite(Number(stageTimings.policy_resolution_ms)) ? Number(stageTimings.policy_resolution_ms) : null,
+      memoryResolutionMs: Number.isFinite(Number(stageTimings.memory_resolution_ms)) ? Number(stageTimings.memory_resolution_ms) : null,
+      evidenceBuildMs: Number.isFinite(Number(stageTimings.evidence_build_ms)) ? Number(stageTimings.evidence_build_ms) : null,
+      pipelineMs: Number.isFinite(Number(stageTimings.pipeline_ms)) ? Number(stageTimings.pipeline_ms) : null,
+      postProcessMs: Number.isFinite(Number(stageTimings.post_process_ms)) ? Number(stageTimings.post_process_ms) : null,
+      persistMs: Number.isFinite(Number(stageTimings.persist_ms)) ? Number(stageTimings.persist_ms) : null,
+    },
+    providerDiagnostics: diagnostics.provider_diagnostics || null,
+    importedRuntimeKnowledge: summarizeImportedRuntimeKnowledge(
+      diagnostics.imported_runtime_knowledge || null,
+    ),
+  };
+}
+
+function summarizeImportedRuntimeKnowledge(payload = null) {
+  if (!payload || typeof payload !== "object") return null;
+  const importedRecordCount = Number(
+    payload.imported_record_count ?? payload.importedRecordCount,
+  );
+  const familyCounts = payload.family_counts && typeof payload.family_counts === "object"
+    ? payload.family_counts
+    : (payload.familyCounts && typeof payload.familyCounts === "object" ? payload.familyCounts : {});
+  const importIds = Array.isArray(payload.import_ids)
+    ? payload.import_ids
+    : (Array.isArray(payload.importIds) ? payload.importIds : []);
+  const artifactRefs = Array.isArray(payload.artifact_refs)
+    ? payload.artifact_refs
+    : (Array.isArray(payload.artifactRefs) ? payload.artifactRefs : []);
+  const topSupportRaw = Array.isArray(payload.top_support)
+    ? payload.top_support
+    : (Array.isArray(payload.topSupport) ? payload.topSupport : []);
+  const topSupport = Array.isArray(topSupportRaw)
+    ? topSupportRaw
+      .slice(0, 3)
+      .map((item) => ({
+        recordKey: String(item?.record_key || item?.recordKey || "").trim() || null,
+        family: String(item?.family || "").trim() || null,
+        documentTitle: String(item?.document_title || item?.documentTitle || "").trim() || null,
+        documentPath: String(item?.document_path || item?.documentPath || "").trim() || null,
+        confidence: Number.isFinite(Number(item?.confidence)) ? Number(item.confidence) : null,
+        freshnessBucket: String(item?.freshness_bucket || item?.freshnessBucket || "").trim() || null,
+      }))
+    : [];
+  if (!Number.isFinite(importedRecordCount) || importedRecordCount <= 0) return null;
+  return {
+    importedRecordCount,
+    familyCounts,
+    importIds,
+    artifactRefs,
+    topSupport,
+  };
+}
+
+function normalizeImportedRuntimeKnowledgeFact(payload = null) {
+  const summarized = summarizeImportedRuntimeKnowledge(payload);
+  if (!summarized) return null;
+  return {
+    importedRecordCount: summarized.importedRecordCount,
+    familyCounts: summarized.familyCounts || {},
+    importIds: Array.isArray(summarized.importIds) ? summarized.importIds.slice(0, 5) : [],
+    artifactRefs: Array.isArray(summarized.artifactRefs) ? summarized.artifactRefs.slice(0, 5) : [],
+    topSupport: Array.isArray(summarized.topSupport)
+      ? summarized.topSupport.slice(0, 3).map((item) => ({
+          recordKey: item?.recordKey || null,
+          family: item?.family || null,
+          documentTitle: item?.documentTitle || null,
+        }))
+      : [],
+  };
+}
+
+function extractPreparedDraftPayload(prepared) {
+  const preparedDraftSet = prepared?.prepared_draft_set || null;
+  const rankedDraftSet = preparedDraftSet?.ranked_draft_set || null;
+  const top = Array.isArray(rankedDraftSet?.drafts) ? rankedDraftSet.drafts[0] : null;
+  const suggestion = String(top?.draft_text || "").trim();
+  if (!suggestion) return null;
+  return {
+    suggestion,
+    explanation: String(top?.rationale || "").trim(),
+    rankedDraftSet,
+    preparedDraftSet,
+    contextMeta: {
+      runtime: "trinity-prepared",
+      runtimeDiagnostics: summarizeTrinityRuntimeDiagnostics(rankedDraftSet || {}),
+    },
+    runtimeDiagnostics: summarizeTrinityRuntimeDiagnostics(rankedDraftSet || {}),
+  };
+}
+
+async function recoverPreparedDraftAfterSuggestFailure(threadSnapshot, error) {
+  try {
+    const prepared = await getPreparedDraft({
+      companyId: threadSnapshot.company_id,
+      threadRef: threadSnapshot.thread_ref,
+      timeoutMs: 3000,
+    });
+    if (prepared?.stale === true) {
+      return null;
+    }
+    const recovered = extractPreparedDraftPayload(prepared);
+    if (!recovered) return null;
+    return {
+      ...recovered,
+      fallbackReason: String(error?.message || error || "").trim(),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function isReplyLocalCycleId(value) {
   return String(value || "").trim().startsWith("reply-local:");
 }
@@ -211,6 +335,9 @@ async function recordDraftGenerationEvent({
     metadata: {
       source_product: "reply",
       context_meta: contextMeta || null,
+      imported_runtime_knowledge: normalizeImportedRuntimeKnowledgeFact(
+        contextMeta?.importedRuntimeKnowledge || contextMeta?.runtimeDiagnostics?.importedRuntimeKnowledge || null,
+      ),
       ranked_draft_count: Array.isArray(rankedDraftSet?.drafts) ? rankedDraftSet.drafts.length : 0,
     },
   });
@@ -380,6 +507,13 @@ function sanitizeDraftContext(draftContext = {}, options = {}) {
   ).trim();
   const generatedAtMs = Number(payload.generatedAtMs ?? payload.generated_at_ms);
   const provenance = buildRuntimeProvenance(payload);
+  const importedRuntimeKnowledge = normalizeImportedRuntimeKnowledgeFact(
+    payload.importedRuntimeKnowledge
+    || payload.imported_runtime_knowledge
+    || payload?.runtimeDiagnostics?.importedRuntimeKnowledge
+    || payload?.runtime_diagnostics?.imported_runtime_knowledge
+    || null,
+  );
 
   return {
     companyId: normalizedCompanyId,
@@ -392,6 +526,7 @@ function sanitizeDraftContext(draftContext = {}, options = {}) {
     selectedDraftText: String(payload.selectedDraftText || payload.selected_draft_text || "").trim(),
     originalDraftText: String(payload.originalDraftText || payload.original_draft_text || "").trim(),
     generatedAtMs: Number.isFinite(generatedAtMs) ? generatedAtMs : Date.now(),
+    importedRuntimeKnowledge,
   };
 }
 
@@ -406,7 +541,7 @@ function buildDraftOutcomeFact(draftContext = {}, outcome = {}, options = {}) {
   const latencyMs = outcome.latency_ms != null
     ? outcome.latency_ms
     : Math.max(0, Date.now() - Number(sanitized.generatedAtMs || Date.now()));
-  return buildDraftOutcomeEvent({
+  const built = buildDraftOutcomeEvent({
     company_id: normalizeReplyCompanyId(outcome.company_id || sanitized.companyId),
     cycle_id: sanitized.cycleId,
     thread_ref: sanitized.threadRef,
@@ -422,6 +557,10 @@ function buildDraftOutcomeFact(draftContext = {}, outcome = {}, options = {}) {
     notes: outcome.notes || null,
     contract_version: outcome.contract_version || REPLY_TRINITY_CONTRACT_VERSION,
   });
+  if (sanitized.importedRuntimeKnowledge) {
+    built.imported_runtime_knowledge = sanitized.importedRuntimeKnowledge;
+  }
+  return built;
 }
 
 async function buildTrinityDraftCandidate(
@@ -478,6 +617,14 @@ async function buildThreadSnapshot(
   const channel = inferChannelFromHandle(handle) || "other";
   const handles = handle ? contactStore.getAllHandles(handle) : [];
   const thread = await messageStore.getMessagesForHandles(handles, { limit: 12, offset: 0 });
+  const recentLearning = handle
+    ? await draftLearningStore.listRecentLearningSummary({
+        contactHandle: handle,
+        channel,
+        summaryLimit: 5,
+        limit: 100,
+      }).catch(() => [])
+    : [];
   const orderedRows = Array.isArray(thread?.rows) ? [...thread.rows].reverse() : [];
   const messages = orderedRows
     .filter((row) => String(row?.text || "").trim())
@@ -527,6 +674,7 @@ async function buildThreadSnapshot(
       source_product: "reply",
       runtime_mode: getBrainRuntimeMode(),
       thread_message_count: String(messages.length),
+      recent_learning_summary: recentLearning,
     },
     contract_version: REPLY_TRINITY_CONTRACT_VERSION,
   };
@@ -645,6 +793,7 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
       const top = Array.isArray(rankedDraftSet?.drafts) ? rankedDraftSet.drafts[0] : null;
       if (top?.draft_text) {
         const provenance = buildRuntimeProvenance(rankedDraftSet || {});
+        const runtimeDiagnostics = summarizeTrinityRuntimeDiagnostics(rankedDraftSet || {});
         await recordDraftGenerationEvent({
           threadSnapshot,
           runtimeMode: "trinity",
@@ -654,6 +803,7 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
           contextMeta: {
             traceRef: provenance.traceRef,
             acceptedArtifactVersion: provenance.acceptedArtifactVersion,
+            runtimeDiagnostics,
           },
         }).catch(() => null);
         return {
@@ -664,6 +814,7 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
             cycleId: rankedDraftSet.cycle_id || null,
             traceRef: provenance.traceRef,
             acceptedArtifactVersion: provenance.acceptedArtifactVersion,
+            runtimeDiagnostics,
             companyId: threadSnapshot.company_id,
           },
           runtimeMode: "trinity",
@@ -687,6 +838,37 @@ async function generateReply(message, contextSnippets = [], recipient = null, go
         recipient,
         goldenExamples,
       );
+      const preparedRecovery = await recoverPreparedDraftAfterSuggestFailure(threadSnapshot, error);
+      if (preparedRecovery) {
+        await recordDraftGenerationEvent({
+          threadSnapshot,
+          runtimeMode: "trinity-prepared-fallback",
+          rankedDraftSet: preparedRecovery.rankedDraftSet,
+          suggestionText: preparedRecovery.suggestion,
+          explanation: preparedRecovery.explanation,
+          contextMeta: {
+            fallbackFrom: "trinity",
+            trinityError: error.message,
+            recoveredFromPreparedDraft: true,
+            runtimeDiagnostics: preparedRecovery.runtimeDiagnostics,
+          },
+        }).catch(() => null);
+        return {
+          suggestion: preparedRecovery.suggestion,
+          explanation: preparedRecovery.explanation,
+          contextMeta: {
+            runtime: "trinity-prepared-fallback",
+            fallbackFrom: "trinity",
+            trinityError: error.message,
+            recoveredFromPreparedDraft: true,
+            runtimeDiagnostics: preparedRecovery.runtimeDiagnostics,
+            companyId: threadSnapshot.company_id,
+          },
+          runtimeMode: "trinity-prepared-fallback",
+          rankedDraftSet: preparedRecovery.rankedDraftSet,
+          trinityDraftCandidate: null,
+        };
+      }
       const localResult = await loadLocalBrainRouter().generateReplyWithLocalBrain(
         message,
         contextSnippets,
@@ -746,6 +928,9 @@ async function recordDraftOutcome(outcome) {
       edit_distance: outcome.edit_distance ?? null,
       latency_ms: outcome.latency_ms ?? null,
       notes: outcome.notes || null,
+      imported_runtime_knowledge: normalizeImportedRuntimeKnowledgeFact(
+        outcome.imported_runtime_knowledge || null,
+      ),
     },
     created_at: outcome.occurred_at || new Date().toISOString(),
   }).catch(() => null);
@@ -834,12 +1019,13 @@ async function drainTrinityEventOutbox(limit = 25) {
   return next;
 }
 
-async function getPreparedDraft({ companyId, threadRef }) {
+async function getPreparedDraft({ companyId, threadRef, timeoutMs } = {}) {
   if (!companyId || !threadRef) {
     throw new Error("companyId and threadRef are required.");
   }
   return callTrinityRuntime("get-prepared-draft", null, {
     args: ["--company-id", String(companyId), "--thread-ref", String(threadRef)],
+    timeoutMs,
   });
 }
 
@@ -983,11 +1169,13 @@ async function callTrinityRuntime(command, payload = null, options = {}) {
       }
       try {
         const parsed = stdout ? JSON.parse(stdout) : {};
+        const runtimeDiagnostics = summarizeTrinityRuntimeDiagnostics(parsed);
         logTrinityRuntimeEvent("success", {
           command,
           elapsed_ms: Date.now() - startedAt,
           stdout_bytes: Buffer.byteLength(stdout || "", "utf8"),
           stderr_bytes: Buffer.byteLength(stderr || "", "utf8"),
+          runtime_diagnostics: runtimeDiagnostics,
         });
         resolve(parsed);
       } catch (error) {
@@ -1291,6 +1479,7 @@ module.exports = {
   resolveTrinityPythonBin,
   resolveTrinityRuntimeRoot,
   getTrinityRuntimeStatusSync,
+  summarizeTrinityRuntimeDiagnostics,
   tokenOverlapRatio,
   trinityDraftsEnabled,
   trinityShadowEnabled,

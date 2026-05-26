@@ -79,6 +79,25 @@ function safeJsonArray(raw) {
     }
 }
 
+function safeJsonObject(raw) {
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        return raw;
+    }
+    const text = String(raw || "").trim();
+    if (!text) return null;
+    try {
+        const parsed = JSON.parse(text);
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+    } catch {
+        return null;
+    }
+}
+
+function stableHash(value) {
+    const crypto = require("crypto");
+    return crypto.createHash("sha1").update(String(value || "")).digest("hex");
+}
+
 class ContactStore {
     constructor() {
         this._contacts = [];
@@ -140,6 +159,7 @@ class ContactStore {
                 this._db.run("ALTER TABLE contacts ADD COLUMN intro TEXT", () => { });
                 this._db.run("ALTER TABLE contacts ADD COLUMN owner TEXT", () => { });
                 this._db.run("ALTER TABLE contacts ADD COLUMN customer_flags TEXT", () => { });
+                this._db.run("ALTER TABLE contacts ADD COLUMN kyc_analysis_json TEXT", () => { });
                 this._db.run("ALTER TABLE contacts ADD COLUMN visibility_state TEXT", () => { });
                 this._db.run("ALTER TABLE contacts ADD COLUMN visibility_changed_at TEXT", () => { });
                 this._db.run(`CREATE TABLE IF NOT EXISTS contact_channels (
@@ -236,6 +256,7 @@ class ContactStore {
                                 contact.displayName = normalizeStoredDisplayName(contact.displayName, contact.handle);
                                 contact.owner = String(contact.owner || "").trim();
                                 contact.customerFlags = safeJsonArray(contact.customer_flags);
+                                contact.kycAnalysis = safeJsonObject(contact.kyc_analysis_json);
                                 contact.visibility_state = normalizeVisibilityState(contact.visibility_state);
                                 contact.visibility_changed_at = contact.visibility_changed_at || null;
                                 contact.visibilityState = contact.visibility_state;
@@ -404,8 +425,8 @@ class ContactStore {
                         ? normalizeVisibilityState(contact.visibility_state || contact.visibilityState)
                         : null;
                     runStatement(`
-                        INSERT INTO contacts (id, displayName, handle, lastContacted, lastChannel, profession, relationship, owner, customer_flags, draft, status, primary_contact_id, company, linkedinUrl, intro, visibility_state, visibility_changed_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO contacts (id, displayName, handle, lastContacted, lastChannel, profession, relationship, owner, customer_flags, kyc_analysis_json, draft, status, primary_contact_id, company, linkedinUrl, intro, visibility_state, visibility_changed_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(handle) DO UPDATE SET
                             displayName = COALESCE(NULLIF(?, ''), displayName),
                             lastContacted = COALESCE(?, lastContacted),
@@ -414,6 +435,7 @@ class ContactStore {
                             relationship = COALESCE(NULLIF(?, ''), relationship),
                             owner = COALESCE(?, owner),
                             customer_flags = COALESCE(NULLIF(?, ''), customer_flags),
+                            kyc_analysis_json = COALESCE(NULLIF(?, ''), kyc_analysis_json),
                             draft = COALESCE(NULLIF(?, ''), draft),
                             status = COALESCE(NULLIF(?, ''), status),
                             primary_contact_id = COALESCE(NULLIF(?, ''), primary_contact_id),
@@ -424,10 +446,10 @@ class ContactStore {
                             visibility_changed_at = COALESCE(?, visibility_changed_at)
                     `,
                         [
-                            contact.id, contact.displayName, contact.handle, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.owner, JSON.stringify(safeJsonArray(contact.customerFlags || contact.customer_flags)), contact.draft, contact.status, contact.primary_contact_id, contact.company, contact.linkedinUrl, contact.intro,
+                            contact.id, contact.displayName, contact.handle, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.owner, JSON.stringify(safeJsonArray(contact.customerFlags || contact.customer_flags)), JSON.stringify(contact.kycAnalysis || null), contact.draft, contact.status, contact.primary_contact_id, contact.company, contact.linkedinUrl, contact.intro,
                             visibilityState,
                             contact.visibility_changed_at || null,
-                            contact.displayName, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.owner, JSON.stringify(safeJsonArray(contact.customerFlags || contact.customer_flags)), contact.draft, contact.status, contact.primary_contact_id, contact.company, contact.linkedinUrl, contact.intro,
+                            contact.displayName, contact.lastContacted, contact.lastChannel, contact.profession, contact.relationship, contact.owner, JSON.stringify(safeJsonArray(contact.customerFlags || contact.customer_flags)), JSON.stringify(contact.kycAnalysis || null), contact.draft, contact.status, contact.primary_contact_id, contact.company, contact.linkedinUrl, contact.intro,
                             visibilityState,
                             contact.visibility_changed_at || null
                         ],
@@ -1003,23 +1025,57 @@ function buildRuntimeMemoryEventsForContacts(contacts) {
     const companyId = resolveReplyRuntimeCompanyId();
     return (Array.isArray(contacts) ? contacts : [])
         .filter((contact) => contact && typeof contact === "object")
-        .map((contact, index) => {
-            const occurredAt = new Date().toISOString();
+        .map((contact) => {
+            const occurredAt = String(contact.lastContacted || "").trim() || new Date().toISOString();
+            const notes = Array.isArray(contact.notes)
+                ? contact.notes.map((note) => String(note?.text || "").trim()).filter(Boolean)
+                : [];
+            const summarySeed = JSON.stringify({
+                id: contact.id || null,
+                handle: contact.handle || null,
+                displayName: contact.displayName || null,
+                owner: contact.owner || null,
+                customerFlags: safeJsonArray(contact.customerFlags || contact.customer_flags),
+                status: contact.status || null,
+                lastChannel: contact.lastChannel || null,
+                lastContacted: contact.lastContacted || null,
+                visibilityState: normalizeVisibilityState(contact.visibility_state || contact.visibilityState || "active"),
+                primaryContactId: contact.primary_contact_id || null,
+                channels: contact.channels && typeof contact.channels === "object" ? contact.channels : {},
+                verifiedChannels: contact.verifiedChannels && typeof contact.verifiedChannels === "object"
+                    ? contact.verifiedChannels
+                    : {},
+                profession: contact.profession || null,
+                relationship: contact.relationship || null,
+                company: contact.company || null,
+                linkedinUrl: contact.linkedinUrl || null,
+                intro: contact.intro || null,
+                notes,
+                pendingSuggestions: Array.isArray(contact.pendingSuggestions)
+                    ? contact.pendingSuggestions.map((item) => ({
+                        type: String(item?.type || "").trim() || null,
+                        content: String(item?.content || "").trim() || null,
+                        timestamp: String(item?.timestamp || "").trim() || null,
+                    }))
+                    : [],
+                rejectedSuggestions: Array.isArray(contact.rejectedSuggestions) ? contact.rejectedSuggestions : [],
+                kycAnalysis: contact.kycAnalysis && typeof contact.kycAnalysis === "object" ? contact.kycAnalysis : null,
+            });
             return {
                 company_id: companyId,
                 event_kind: "contact_upserted",
-                source_ref: `contact:${String(contact.id || contact.handle || "unknown").trim()}:${Date.now()}:${index}`,
+                source_ref: `contact:${String(contact.id || contact.handle || "unknown").trim()}:${stableHash(summarySeed)}`,
                 occurred_at: occurredAt,
                 thread_ref: null,
                 channel: String(contact.lastChannel || "").trim().toLowerCase() || null,
                 contact_handle: String(contact.handle || "").trim() || null,
                 content_text: null,
-                    metadata: {
-                        contact_id: String(contact.id || "").trim() || null,
-                        display_name: String(contact.displayName || "").trim() || null,
-                        owner: String(contact.owner || "").trim() || null,
-                        customer_flags: safeJsonArray(contact.customerFlags || contact.customer_flags),
-                        status: String(contact.status || "").trim() || null,
+                metadata: {
+                    contact_id: String(contact.id || "").trim() || null,
+                    display_name: String(contact.displayName || "").trim() || null,
+                    owner: String(contact.owner || "").trim() || null,
+                    customer_flags: safeJsonArray(contact.customerFlags || contact.customer_flags),
+                    status: String(contact.status || "").trim() || null,
                     last_channel: String(contact.lastChannel || "").trim() || null,
                     last_contacted: contact.lastContacted || null,
                     visibility_state: normalizeVisibilityState(contact.visibility_state || contact.visibilityState || "active"),
@@ -1028,6 +1084,21 @@ function buildRuntimeMemoryEventsForContacts(contacts) {
                     verified_channels: contact.verifiedChannels && typeof contact.verifiedChannels === "object"
                         ? contact.verifiedChannels
                         : {},
+                    profession: String(contact.profession || "").trim() || null,
+                    relationship: String(contact.relationship || "").trim() || null,
+                    company: String(contact.company || "").trim() || null,
+                    linkedin_url: String(contact.linkedinUrl || "").trim() || null,
+                    intro: String(contact.intro || "").trim() || null,
+                    notes,
+                    pending_suggestions: Array.isArray(contact.pendingSuggestions)
+                        ? contact.pendingSuggestions.map((item) => ({
+                            type: String(item?.type || "").trim() || null,
+                            content: String(item?.content || "").trim() || null,
+                            timestamp: String(item?.timestamp || "").trim() || null,
+                        }))
+                        : [],
+                    rejected_suggestions: Array.isArray(contact.rejectedSuggestions) ? contact.rejectedSuggestions : [],
+                    kyc_analysis: contact.kycAnalysis && typeof contact.kycAnalysis === "object" ? contact.kycAnalysis : null,
                 },
             };
         });
@@ -1059,4 +1130,6 @@ function uuidFromStableText(text) {
     ].join("-");
 }
 
-module.exports = new ContactStore();
+module.exports = Object.assign(new ContactStore(), {
+    buildRuntimeMemoryEventsForContacts,
+});

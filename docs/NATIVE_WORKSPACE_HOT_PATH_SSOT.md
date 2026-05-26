@@ -168,6 +168,12 @@ If a full event stream is too large for the first slice, implement:
 
 That still gets most of the product benefit.
 
+Current implemented first step:
+
+- `GET /api/thread` returns `deltaCursor` / `threadVersion`
+- `GET /api/thread-delta` returns only rows newer than the current cursor
+- successful send/profile actions patch local UI state first and schedule background revalidation separately
+
 ## Data Ownership Contract
 
 ### Background Worker / Hub Owns

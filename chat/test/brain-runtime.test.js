@@ -199,6 +199,7 @@ test("sanitizeDraftContext keeps only bounded runtime fact fields", () => {
     selectedDraftText: "Draft reply",
     originalDraftText: "Draft reply",
     generatedAtMs: 1234,
+    importedRuntimeKnowledge: null,
   });
   assert.equal("transport" in sanitized, false);
   assert.equal("humanApprovalBypass" in sanitized, false);
@@ -233,6 +234,52 @@ test("buildDraftOutcomeFact emits bounded operator outcome facts", () => {
   assert.equal(event.send_result, "ok");
   assert.equal(event.notes, "reply_send");
   assert.equal("transport" in event, false);
+});
+
+test("buildDraftOutcomeFact preserves imported runtime knowledge summary", () => {
+  const event = buildDraftOutcomeFact({
+    companyId: "company-1",
+    cycleId: "cycle-1",
+    threadRef: "reply:email:alice@example.com",
+    channel: "email",
+    selectedCandidateId: "candidate-1",
+    selectedDraftText: "Draft reply",
+    generatedAtMs: Date.now() - 10,
+    runtimeDiagnostics: {
+      importedRuntimeKnowledge: {
+        importedRecordCount: 3,
+        familyCounts: { "runtime-summary-candidate": 2 },
+        importIds: ["import-1"],
+        artifactRefs: ["runtime-pack@2026-05-25.1"],
+        topSupport: [
+          {
+            recordKey: "record-1",
+            family: "runtime-summary-candidate",
+            documentTitle: "Client Brief",
+          },
+        ],
+      },
+    },
+  }, {
+    disposition: "SENT_AS_IS",
+    final_text: "Draft reply",
+    send_result: "ok",
+    notes: "reply_send",
+  }, { expectedChannel: "email" });
+
+  assert.deepEqual(event.imported_runtime_knowledge, {
+    importedRecordCount: 3,
+    familyCounts: { "runtime-summary-candidate": 2 },
+    importIds: ["import-1"],
+    artifactRefs: ["runtime-pack@2026-05-25.1"],
+    topSupport: [
+      {
+        recordKey: "record-1",
+        family: "runtime-summary-candidate",
+        documentTitle: "Client Brief",
+      },
+    ],
+  });
 });
 
 test("proposeTrainingPolicy shells into bounded Trinity train proposals", async () => {
@@ -564,4 +611,155 @@ test("generateReply falls back to local drafting when Trinity suggest fails", as
   assert.equal(result.contextMeta.fallbackFrom, "trinity");
   assert.match(result.contextMeta.trinityError, /timed out/i);
   assert.equal(String(result.rankedDraftSet?.cycle_id || "").startsWith("reply-local:"), true);
+});
+
+test("generateReply preserves imported runtime knowledge diagnostics from Trinity", async (t) => {
+  const originalMode = process.env.REPLY_BRAIN_RUNTIME;
+  t.after(() => {
+    clearBrainRuntimeTestHooks();
+    if (originalMode == null) delete process.env.REPLY_BRAIN_RUNTIME;
+    else process.env.REPLY_BRAIN_RUNTIME = originalMode;
+  });
+
+  process.env.REPLY_BRAIN_RUNTIME = "trinity";
+  setBrainRuntimeTestHooks({
+    trinityRuntimeCall: async (command) => {
+      assert.equal(command, "suggest");
+      return {
+        cycle_id: "cycle-imported-1",
+        trace_ref: "/tmp/trinity-imported-trace.json",
+        accepted_artifact_version: {
+          artifact_key: "reply_ranker_policy",
+          version: "reply_ranker_policy.v0",
+          source_project: "trinity",
+        },
+        drafts: [
+          {
+            candidate_id: "candidate-1",
+            draft_text: "Imported knowledge draft",
+            rationale: "Top ranked draft",
+          },
+        ],
+        runtime_diagnostics: {
+          provider: "ollama",
+          pipeline: { total_ms: 777 },
+          imported_runtime_knowledge: {
+            imported_record_count: 4,
+            family_counts: {
+              "runtime-summary-candidate": 2,
+              "runtime-reply-support-candidate": 1,
+              "runtime-memory-candidate": 1,
+            },
+            import_ids: ["runtime-candidate-pack-2026-05-24.1"],
+            artifact_refs: ["runtime-candidate-pack@2026-05-24.1"],
+            top_support: [
+              {
+                record_key: "chunk:train-import:1",
+                family: "runtime-reply-support-candidate",
+                document_title: "Launch Checklist",
+                confidence: 0.84,
+                freshness_bucket: "recent",
+              },
+            ],
+          },
+        },
+      };
+    },
+  });
+
+  const result = await require("../brain-runtime.js").generateReply(
+    "Need the update today.",
+    [],
+    "alice@example.com",
+    [],
+  );
+
+  assert.equal(result.suggestion, "Imported knowledge draft");
+  assert.equal(result.contextMeta.runtimeDiagnostics.importedRuntimeKnowledge.importedRecordCount, 4);
+  assert.equal(
+    result.contextMeta.runtimeDiagnostics.importedRuntimeKnowledge.familyCounts["runtime-summary-candidate"],
+    2,
+  );
+  assert.equal(
+    result.contextMeta.runtimeDiagnostics.importedRuntimeKnowledge.topSupport[0].documentTitle,
+    "Launch Checklist",
+  );
+});
+
+test("generateReply recovers a prepared Trinity draft before falling back local", async (t) => {
+  const originalMode = process.env.REPLY_BRAIN_RUNTIME;
+  t.after(() => {
+    clearBrainRuntimeTestHooks();
+    if (originalMode == null) delete process.env.REPLY_BRAIN_RUNTIME;
+    else process.env.REPLY_BRAIN_RUNTIME = originalMode;
+  });
+
+  process.env.REPLY_BRAIN_RUNTIME = "trinity";
+  setBrainRuntimeTestHooks({
+    trinityRuntimeCall: async (command) => {
+      if (command === "suggest") {
+        throw new Error("Trinity command timed out after 45000ms");
+      }
+      if (command === "get-prepared-draft") {
+        return {
+          prepared_draft_set: {
+            ranked_draft_set: {
+              cycle_id: "cycle-prepared-1",
+              drafts: [
+                {
+                  candidate_id: "candidate-1",
+                  draft_text: "Prepared Trinity draft",
+                  rationale: "Recovered from prepared context",
+                },
+              ],
+              runtime_diagnostics: {
+                provider: "ollama",
+                pipeline: { total_ms: 2222 },
+                stage_timings: { pipeline_ms: 1200, post_process_ms: 40 },
+                imported_runtime_knowledge: {
+                  imported_record_count: 2,
+                  family_counts: {
+                    "runtime-summary-candidate": 1,
+                    "runtime-reply-support-candidate": 1,
+                  },
+                  import_ids: ["runtime-candidate-pack-2026-05-24.1"],
+                  artifact_refs: ["runtime-candidate-pack@2026-05-24.1"],
+                  top_support: [
+                    {
+                      record_key: "summary:train-import:1",
+                      family: "runtime-summary-candidate",
+                      document_title: "Meeting Notes",
+                      freshness_bucket: "fresh",
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        };
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    localGenerateReply: async () => {
+      throw new Error("local fallback should not run when prepared draft exists");
+    },
+  });
+
+  const result = await require("../brain-runtime.js").generateReply(
+    "Need the update today.",
+    [],
+    "alice@example.com",
+    [],
+  );
+
+  assert.equal(result.suggestion, "Prepared Trinity draft");
+  assert.equal(result.explanation, "Recovered from prepared context");
+  assert.equal(result.runtimeMode, "trinity-prepared-fallback");
+  assert.equal(result.contextMeta.runtime, "trinity-prepared-fallback");
+  assert.equal(result.contextMeta.recoveredFromPreparedDraft, true);
+  assert.equal(result.contextMeta.fallbackFrom, "trinity");
+  assert.equal(result.contextMeta.runtimeDiagnostics.provider, "ollama");
+  assert.equal(result.contextMeta.runtimeDiagnostics.totalMs, 2222);
+  assert.equal(result.contextMeta.runtimeDiagnostics.importedRuntimeKnowledge.importedRecordCount, 2);
+  assert.equal(result.rankedDraftSet?.cycle_id, "cycle-prepared-1");
 });

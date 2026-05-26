@@ -152,6 +152,38 @@ make uninstall-service
 
 Use `make doctor` if the repo root moved or the plist points at stale paths.
 
+## Verification Gate
+
+Run the current foundation gate before shipping local runtime changes:
+
+```bash
+cd /Users/Shared/Projects/reply
+make verify-foundation
+```
+
+Equivalent direct command:
+
+```bash
+cd /Users/Shared/Projects/reply/chat
+npm run verify:foundation
+```
+
+Optional Trinity smoke:
+
+```bash
+cd /Users/Shared/Projects/reply/chat
+npm run verify:foundation -- --with-trinity-smoke
+```
+
+The gate currently verifies:
+
+- lint
+- Trinity runtime fallback and prepared-draft recovery tests
+- relation-health contract tests
+- conversation foundation schema tests
+- vector/runtime event safety tests
+- native `swift build` on macOS
+
 ## Runtime Paths
 
 App-owned local paths:
@@ -187,10 +219,12 @@ Bundled native-shell preferred health endpoints:
 ### Drafting runtime
 
 - live drafting is `{trinity}` first
+- if `suggest` fails but a prepared Trinity draft exists, `{reply}` recovers that prepared draft first
 - if `{trinity}` `suggest` fails or times out, `{reply}` falls back to bounded local drafting
 - legacy drafting is not part of the normal operator path except developer shadow comparison
 - developer-only `trinity-shadow` mode exists for comparison logging
 - structured draft outcomes are posted to `/api/trinity/outcome`
+- relation health reads recent Trinity runtime logs and surfaces the last suggest outcome, latency, failure class, and recovery state
 
 ### Channel bridge and LinkedIn runtime
 
@@ -200,6 +234,13 @@ Bundled native-shell preferred health endpoints:
 - when `chat.db` is busy, bridge messages are queued in `channel_bridge_pending.json`
 - queued bridge writes are replayed by the background worker under a dedicated outbox lock
 - bridge replay reconciles against `unified_messages` before retrying, so already-persisted rows are removed from the queue
+- message persistence and post-save maintenance are serialized separately so one busy or slow maintenance cycle does not fan out into concurrent durable writes
+
+### Storage hardening
+
+- LanceDB document writes now run behind a single write queue
+- text-index creation is ensured, not force-recreated on every write
+- legacy annotation schema drift still auto-repairs, but the steady-state path no longer relies on repeated drop/recreate cycles
 
 ### Conversation assembly
 
