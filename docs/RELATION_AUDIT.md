@@ -1,6 +1,6 @@
 # `{reply}` Relation Audit
 
-**Doc freshness:** 2026-05-20  
+**Doc freshness:** 2026-05-21  
 **Purpose:** authoritative inventory of the apps, runtimes, services, and companion surfaces that `{reply}` depends on or references, plus the inverse surfaces that depend on or reference `{reply}`.
 
 This document has two jobs:
@@ -84,7 +84,7 @@ Primary evidence: `chat/channel-bridge.js`.
 
 ## Local Health Audit Snapshot
 
-**Audit date:** 2026-05-20  
+**Audit date:** 2026-05-21  
 **Machine context:** local repo at `/Users/Shared/Projects/reply`
 
 ### Summary
@@ -100,7 +100,7 @@ Primary evidence: `chat/channel-bridge.js`.
 | Python | healthy | Python 3.12+ requirement satisfied |
 | Swift / Xcode | healthy | native toolchain present |
 | `{trinity}` repo presence | healthy | sibling repo exists at `/Users/Shared/Projects/trinity` |
-| `{trinity}` end-to-end verification | degraded but bounded | smoke test now fails fast instead of hanging indefinitely when `suggest` stalls |
+| `{trinity}` end-to-end verification | healthy with automatic provider fallback | smoke is green again, runtime diagnostics are emitted, and this machine now auto-resolves from a misconfigured `mistral-cli` route to an effective Ollama route instead of hanging or collapsing to opaque fallback behavior |
 | `{train}` handoff path | bounded but still dependent on Trinity health | export/proposal contract remains downstream of the Trinity smoke path |
 | Ollama | healthy during latest live probe | current health payload reported `online` |
 | OpenClaw binary | healthy | verify script resolved a valid binary |
@@ -115,6 +115,8 @@ Primary evidence: `chat/channel-bridge.js`.
 | Apple Notes | healthy | up-to-date sync status present |
 | LinkedIn browser bridge | healthy | live bridge replay succeeded and `relations.linkedin_ingest.status` returned `online` |
 | Bridge outbox durability | healthy | pending bridge queue reconciles persisted rows and now drains to `[]` |
+| Relation health matrix | healthy | major relations now report active mode, last success, last failure, failure class, and recovery state |
+| Foundation verification gate | healthy | repo now exposes `make verify-foundation` / `npm run verify:foundation` and CI runs the same core gate |
 
 ### Evidence Collected
 
@@ -131,17 +133,17 @@ Primary evidence: `chat/channel-bridge.js`.
 
 ## Current Weak Spots
 
-### 1. Trinity is bounded but not yet truly healthy
+### 1. Trinity is bounded, diagnosable, and now completes the smoke path, but provider configuration is still not fully aligned
 
-The failure mode is much better now because `suggest` no longer hangs forever, but degraded Trinity latency is still real operational risk. The product survives it; the underlying runtime still needs root-cause work.
+The failure mode is much better now because `suggest` no longer hangs forever, prepared drafts can be recovered before local fallback, the smoke path completes inside the runtime budget, and relation health surfaces recent runtime timing. On this machine, current Trinity runtime diagnostics show that the configured `mistral-cli` route auto-resolves to an effective Ollama route when `MISTRAL_API_KEY` is missing. The service is now self-healing and operator-safe, but the configured-provider story is still not clean until the intended provider is either restored or the runtime configuration is updated to match the healthy effective route.
 
-### 2. WhatsApp / Lance concurrency is still a live hardening target
+### 2. WhatsApp / Lance concurrency risk is reduced, but still the next storage edge to watch
 
-The latest health snapshot showed a retryable Lance create-index conflict on the WhatsApp path. That is separate from the bridge outbox fix and should be treated as the next storage/concurrency hardening pass.
+The write-path hardening now serializes LanceDB writes and stops force-recreating the text index on each mutation. That removes the largest self-inflicted concurrency source. WhatsApp should still stay on the watch list until repeated live sync runs confirm that the remaining Lance conflict no longer recurs in practice.
 
-### 3. Status presentation can lag behind reconciled bridge state
+### 3. Status presentation is much better, but still depends on fresh runtime evidence
 
-The bridge queue now reconciles persisted rows correctly, but human-readable status text may still reflect the earlier queued state until the next status refresh overwrites it. The durability issue is fixed; the presentation path still needs cleanup.
+The bridge queue now reconciles persisted rows correctly and recovered LinkedIn state is no longer forced to show a stale error as the active relation failure. Human-readable status still depends on current runtime evidence, so stale local status files can still mislead until the next successful refresh.
 
 ### 4. Multiple runtime shapes still exist
 
@@ -151,40 +153,31 @@ Session-owned runtime, native app-managed runtime, and LaunchAgent mode are all 
 
 ### Highest priority
 
-1. Make the Trinity smoke test bounded and fail-fast.
-   - Add explicit timeouts around `suggest`, `record-outcome`, `export-trace`, and policy proposal calls in `chat/scripts/verify-trinity-train-integration.js`.
-   - Emit step-by-step timing so hangs identify the failing edge immediately.
+1. Align the configured Trinity provider with the healthy effective route.
+   - `{reply}` now contains failure safely and surfaces recent timing/provider data.
+   - The next step on this machine is to either configure `MISTRAL_API_KEY` for the intended `mistral-cli` route or update the active Trinity runtime config so Ollama is the declared primary route instead of only the automatic recovery path.
 
-2. Fix schema drift in the annotation/vector path.
-   - Treat the `annotation_tags` mismatch as a release-blocking data contract bug.
-   - Add startup schema validation or migration checks before the worker begins annotation runs.
+2. Keep exercising the WhatsApp/Lance path under live sync load.
+   - The largest write/index contention source is now removed.
+   - The next check is repeated live validation, not another speculative storage rewrite.
 
-3. Reduce LinkedIn ingest to one supported path.
-   - Pick one primary relation: extension, userscript, or Playwright sidecar.
-   - Keep the others explicitly marked as dev-only or fallback-only.
-   - Add a health probe that tells the operator which LinkedIn ingest mode is currently configured and alive.
+3. Continue collapsing integrations to one primary runtime path per relation.
+   - LinkedIn now treats `browser_bridge` as the primary relation and sidecar as explicit-only.
+   - Keep the same discipline for any other multi-path channel.
 
 ### Medium priority
 
-4. Add a first-class relation health matrix endpoint.
-   - Expose one API payload that reports each major relation separately:
-     - repo/runtime presence
-     - auth/config present
-     - transport reachable
-     - last successful use
-     - last failure
-   - This is more actionable than the current coarse service/channel mix.
+4. Keep the relation health matrix canonical.
+   - It now exists and reports causal relation state.
+   - New runtime surfaces should extend it instead of inventing ad hoc service flags.
 
-5. Normalize route names and document them once.
-   - Either add `/api/system/health` as an alias or standardize on `/api/system-health` everywhere.
-   - Avoid operational drift between docs, scripts, and habits.
+5. Keep the verification gate as a release requirement.
+   - `make verify-foundation` should stay green before runtime-facing changes ship.
+   - CI now runs the same core gate plus a native macOS build job.
 
-6. Unify runtime mode reporting.
-   - Surface whether the current hub is:
-     - native app-managed
-     - foreground session mode
-     - LaunchAgent mode
-   - This should be explicit in health output.
+6. Keep runtime mode reporting explicit everywhere operators can see health.
+   - Session, native app-managed, and LaunchAgent modes are now part of health truth.
+   - Future docs and UI changes should preserve that explicitness.
 
 ### Lower priority but still worth doing
 

@@ -18,10 +18,15 @@ const { resolveOllamaHttpBase } = require("../ai-runtime-config.js");
 const { execFile } = require("child_process");
 const { getDataHome, dataPath } = require("../app-paths.js");
 const { getModelStorageStatus } = require("../model-paths.js");
+const draftLearningStore = require("../draft-learning-store.js");
 
 const DATA_DIR = getDataHome();
 const CHAT_DIR = path.join(__dirname, "..");
 const LINKEDIN_INGEST_MODES = new Set(["browser_bridge", "sidecar", "disabled"]);
+const TRINITY_SLOW_SUGGEST_MS = Math.max(
+    1000,
+    Math.min(parseInt(process.env.REPLY_TRINITY_SLOW_SUGGEST_MS || "15000", 10) || 15000, 300000)
+);
 
 function readStatus(filename) {
     const p = dataPath(filename);
@@ -271,6 +276,151 @@ function buildRelationStatus({ configured, online, degraded = false, detail = nu
     };
 }
 
+function safeIso(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return null;
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toISOString();
+}
+
+function classifyFailureDetail(detail) {
+    const message = String(detail || "").trim().toLowerCase();
+    if (!message) return null;
+    if (message.includes("timed out") || message.includes("timeout")) return "timeout";
+    if (message.includes("sqlite_busy") || message.includes("database is locked")) return "sqlite_busy";
+    if (message.includes("lance") || message.includes("commit conflict") || message.includes("concurrent")) return "concurrency_conflict";
+    if (message.includes("schema")) return "schema";
+    if (message.includes("index")) return "index_conflict";
+    if (message.includes("unreachable")) return "unreachable";
+    if (message.includes("not configured") || message.includes("not found")) return "not_configured";
+    return "runtime_error";
+}
+
+function getTrinityRuntimeLogPath() {
+    return dataPath("trinity-runtime.log");
+}
+
+function deriveRecoveryState({ online, degraded, lastSuccessAt, lastFailureAt, fallbackActive = false }) {
+    if (fallbackActive) return "degraded_fallback_active";
+    if (online && lastSuccessAt && lastFailureAt) {
+        return Date.parse(lastSuccessAt) >= Date.parse(lastFailureAt) ? "recovered" : "degraded";
+    }
+    if (online) return "steady";
+    if (degraded) return "recovering";
+    return "failed";
+}
+
+function normalizeCausalFields({
+    online,
+    degraded = false,
+    detail = null,
+    activeMode = null,
+    lastSuccessAt = null,
+    lastFailureAt = null,
+    failureClass = null,
+    failureDetail = null,
+    fallbackActive = false,
+}) {
+    const normalizedLastSuccessAt = safeIso(lastSuccessAt);
+    const normalizedLastFailureAt = safeIso(lastFailureAt);
+    const recovered = normalizedLastSuccessAt
+        && normalizedLastFailureAt
+        && Date.parse(normalizedLastSuccessAt) >= Date.parse(normalizedLastFailureAt);
+    return {
+        activeMode: activeMode || null,
+        lastSuccessAt: normalizedLastSuccessAt,
+        lastFailureAt: normalizedLastFailureAt,
+        failureClass: recovered ? null : (failureClass || null),
+        failureDetail: recovered ? null : (failureDetail || null),
+        recoveryState: deriveRecoveryState({
+            online,
+            degraded,
+            lastSuccessAt: normalizedLastSuccessAt,
+            lastFailureAt: normalizedLastFailureAt,
+            fallbackActive,
+        }),
+        detail: recovered && online ? "Recovered after prior failure." : detail,
+    };
+}
+
+function parseRecentTrinityRuntimeHealth() {
+    try {
+        const trinityRuntimeLogPath = getTrinityRuntimeLogPath();
+        if (!fs.existsSync(trinityRuntimeLogPath)) {
+            return null;
+        }
+        const raw = fs.readFileSync(trinityRuntimeLogPath, "utf8");
+        const lines = raw.trim().split("\n").filter(Boolean).slice(-400);
+        let lastSuggest = null;
+        let lastSuggestSuccess = null;
+        let lastSuggestFailure = null;
+        for (const line of lines) {
+            let entry = null;
+            try {
+                entry = JSON.parse(line);
+            } catch {
+                continue;
+            }
+            if (String(entry?.command || "").trim() !== "suggest") continue;
+            const normalized = {
+                at: safeIso(entry.at),
+                kind: String(entry.kind || "").trim(),
+                elapsedMs: Number.isFinite(Number(entry.elapsed_ms)) ? Number(entry.elapsed_ms) : null,
+                detail: String(entry.detail || "").trim() || null,
+                timeoutMs: Number.isFinite(Number(entry.timeout_ms)) ? Number(entry.timeout_ms) : null,
+                runtimeDiagnostics: entry.runtime_diagnostics || null,
+            };
+            lastSuggest = normalized;
+            if (normalized.kind === "success") {
+                lastSuggestSuccess = normalized;
+            }
+            if (normalized.kind === "timeout" || normalized.kind === "error" || normalized.kind === "parse_error") {
+                lastSuggestFailure = normalized;
+            }
+        }
+        if (!lastSuggest && !lastSuggestSuccess && !lastSuggestFailure) {
+            return null;
+        }
+        const pipelineMs = Number(lastSuggestSuccess?.runtimeDiagnostics?.totalMs);
+        const successLatencyMs = Number.isFinite(pipelineMs)
+            ? pipelineMs
+            : (Number.isFinite(Number(lastSuggestSuccess?.elapsedMs)) ? Number(lastSuggestSuccess.elapsedMs) : null);
+        return {
+            lastSuggestAt: lastSuggest?.at || null,
+            lastSuggestStatus: lastSuggest?.kind || null,
+            lastSuggestLatencyMs: successLatencyMs,
+            lastSuccessAt: lastSuggestSuccess?.at || null,
+            lastFailureAt: lastSuggestFailure?.at || null,
+            lastFailureClass: classifyFailureDetail(lastSuggestFailure?.detail || lastSuggestFailure?.kind),
+            lastFailureDetail: lastSuggestFailure?.detail || null,
+            runtimeDiagnostics: lastSuggestSuccess?.runtimeDiagnostics || null,
+            isSlow: Number.isFinite(successLatencyMs) && successLatencyMs >= TRINITY_SLOW_SUGGEST_MS,
+        };
+    } catch {
+        return null;
+    }
+}
+
+function summarizeChannelFailure(status) {
+    const state = String(status?.state || status?.status || "").trim().toLowerCase();
+    const detail = String(status?.message || status?.detail || status?.lastError || "").trim();
+    const lastSuccessAt = safeIso(status?.lastSuccessfulSync || status?.lastSync);
+    const lastFailureAt = state === "error" ? safeIso(status?.lastAttemptedSync || status?.timestamp || status?.lastSync) : null;
+    return {
+        lastSuccessAt,
+        lastFailureAt,
+        failureClass: state === "error" ? classifyFailureDetail(detail) : null,
+        failureDetail: state === "error" ? (detail || null) : null,
+        recoveryState: deriveRecoveryState({
+            online: state !== "error",
+            degraded: state === "running" || state === "idle",
+            lastSuccessAt,
+            lastFailureAt,
+        }),
+    };
+}
+
 function buildRelations({
     settings,
     services,
@@ -282,6 +432,43 @@ function buildRelations({
     mailProvider,
     linkedinIngestMode,
 }) {
+    const trinityRuntimeHealth = parseRecentTrinityRuntimeHealth();
+    const imessageFailure = summarizeChannelFailure(channels?.imessage || {});
+    const whatsappFailure = summarizeChannelFailure(channels?.whatsapp || {});
+    const linkedinFailure = summarizeChannelFailure(channels?.linkedin_messages || {});
+    const linkedinOnline = linkedinIngestMode === "browser_bridge"
+        ? String(channels?.linkedin_messages?.state || "").toLowerCase() !== "error"
+        : String(channels?.linkedin_messages?.state || channels?.linkedin_messages?.status || "").toLowerCase() === "running";
+    const linkedinDegraded = String(channels?.linkedin_messages?.state || "").toLowerCase() === "idle";
+    const linkedinLastSuccessAt = linkedinFailure.lastSuccessAt || safeIso(channels?.linkedin_messages?.lastAt);
+    const linkedinLastFailureAt = linkedinFailure.lastFailureAt;
+    const linkedinRecovered = linkedinLastSuccessAt
+        && linkedinLastFailureAt
+        && Date.parse(linkedinLastSuccessAt) >= Date.parse(linkedinLastFailureAt);
+    const linkedinDetail = (() => {
+        const state = String(channels?.linkedin_messages?.state || "").toLowerCase();
+        if (state === "error" && !linkedinRecovered) return channels?.linkedin_messages?.message || null;
+        if (state === "running") return channels?.linkedin_messages?.message || "Bridge ingest in progress.";
+        if (linkedinIngestMode === "browser_bridge" && (channels?.linkedin_messages?.lastAt || channels?.linkedin_messages?.lastSuccessfulSync)) {
+            return "Browser bridge ready.";
+        }
+        return channels?.linkedin_messages?.message || null;
+    })();
+    const trinityOnline = String(trinityProviderStatus || "").toLowerCase() === "ready" && !(trinityRuntimeHealth?.isSlow);
+    const trinityDegraded = String(trinityProviderStatus || "").trim().length > 0;
+    const trinityCausal = normalizeCausalFields({
+        online: trinityOnline,
+        degraded: trinityDegraded,
+        detail: trinityRuntimeHealth?.isSlow
+            ? `provider_status=${trinityProviderStatus}; recent suggest latency ${trinityRuntimeHealth.lastSuggestLatencyMs}ms`
+            : (trinityProviderStatus ? `provider_status=${trinityProviderStatus}` : "provider status unavailable"),
+        activeMode: trinityRuntimeHealth?.lastSuggestStatus === "timeout" ? "local_fallback" : "trinity_primary",
+        lastSuccessAt: trinityRuntimeHealth?.lastSuccessAt,
+        lastFailureAt: trinityRuntimeHealth?.lastFailureAt,
+        failureClass: trinityRuntimeHealth?.lastFailureClass,
+        failureDetail: trinityRuntimeHealth?.lastFailureDetail,
+        fallbackActive: trinityRuntimeHealth?.lastSuggestStatus === "timeout",
+    });
     return {
         runtime_mode: buildRelationStatus({
             configured: true,
@@ -309,9 +496,23 @@ function buildRelations({
         }),
         trinity_runtime: buildRelationStatus({
             configured: true,
-            online: String(trinityProviderStatus || "").toLowerCase() === "ready",
-            degraded: String(trinityProviderStatus || "").trim().length > 0,
-            detail: trinityProviderStatus ? `provider_status=${trinityProviderStatus}` : "provider status unavailable",
+            online: trinityOnline,
+            degraded: trinityDegraded,
+            detail: trinityCausal.detail,
+            extras: {
+                providerStatus: trinityProviderStatus || null,
+                lastSuggestAt: trinityRuntimeHealth?.lastSuggestAt || null,
+                lastSuggestStatus: trinityRuntimeHealth?.lastSuggestStatus || null,
+                lastSuggestLatencyMs: trinityRuntimeHealth?.lastSuggestLatencyMs || null,
+                lastActivityAt: trinityRuntimeHealth?.lastSuggestAt || null,
+                activeMode: trinityCausal.activeMode,
+                lastSuccessAt: trinityCausal.lastSuccessAt,
+                lastFailureAt: trinityCausal.lastFailureAt,
+                failureClass: trinityCausal.failureClass,
+                failureDetail: trinityCausal.failureDetail,
+                recoveryState: trinityCausal.recoveryState,
+                runtimeDiagnostics: trinityRuntimeHealth?.runtimeDiagnostics || null,
+            },
         }),
         ollama_runtime: buildRelationStatus({
             configured: true,
@@ -339,8 +540,14 @@ function buildRelations({
             degraded: String(channels?.imessage?.state || "").toLowerCase() === "idle",
             detail: channels?.imessage?.message || null,
             extras: {
+                activeMode: "native_mirror",
                 lastSuccessfulSync: channels?.imessage?.lastSuccessfulSync || null,
                 ingestedTotal: Number(channels?.imessage?.ingestedTotal) || 0,
+                lastSuccessAt: imessageFailure.lastSuccessAt,
+                lastFailureAt: imessageFailure.lastFailureAt,
+                failureClass: imessageFailure.failureClass,
+                failureDetail: imessageFailure.failureDetail,
+                recoveryState: imessageFailure.recoveryState,
             },
         }),
         whatsapp_source: buildRelationStatus({
@@ -349,20 +556,34 @@ function buildRelations({
             degraded: String(channels?.whatsapp?.state || "").toLowerCase() === "idle",
             detail: channels?.whatsapp?.message || null,
             extras: {
+                activeMode: "local_db_sync",
                 lastSuccessfulSync: channels?.whatsapp?.lastSuccessfulSync || null,
                 ingestedTotal: Number(channels?.whatsapp?.ingestedTotal) || 0,
+                lastSuccessAt: whatsappFailure.lastSuccessAt,
+                lastFailureAt: whatsappFailure.lastFailureAt,
+                failureClass: whatsappFailure.failureClass,
+                failureDetail: whatsappFailure.failureDetail,
+                recoveryState: whatsappFailure.recoveryState,
             },
         }),
         linkedin_ingest: buildRelationStatus({
             configured: linkedinIngestMode !== "disabled",
-            online: linkedinIngestMode === "browser_bridge"
-                ? String(channels?.linkedin_messages?.state || "").toLowerCase() !== "error"
-                : String(channels?.linkedin_messages?.state || channels?.linkedin_messages?.status || "").toLowerCase() === "running",
-            degraded: String(channels?.linkedin_messages?.state || "").toLowerCase() === "idle",
-            detail: channels?.linkedin_messages?.message || null,
+            online: linkedinOnline,
+            degraded: linkedinDegraded,
+            detail: linkedinDetail,
             extras: {
                 activeMode: linkedinIngestMode,
                 lastSuccessfulSync: channels?.linkedin_messages?.lastAt || null,
+                lastSuccessAt: linkedinLastSuccessAt,
+                lastFailureAt: linkedinLastFailureAt,
+                failureClass: linkedinRecovered ? null : linkedinFailure.failureClass,
+                failureDetail: linkedinRecovered ? null : linkedinFailure.failureDetail,
+                recoveryState: deriveRecoveryState({
+                    online: linkedinOnline,
+                    degraded: linkedinDegraded,
+                    lastSuccessAt: linkedinLastSuccessAt,
+                    lastFailureAt: linkedinLastFailureAt,
+                }),
             },
         }),
     };
@@ -733,6 +954,26 @@ async function serveServiceControl(req, res) {
     }
 }
 
+async function serveImportedRuntimeKnowledgeSummary(req, res, url) {
+    try {
+        const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit")) || 500, 2000));
+        const channel = String(url.searchParams.get("channel") || "").trim();
+        const contactHandle = String(url.searchParams.get("contactHandle") || "").trim();
+        const importedRuntimeKnowledge = await draftLearningStore.summarizeImportedRuntimeKnowledgeUsage({
+            limit,
+            channel,
+            contactHandle,
+        });
+        writeJson(res, 200, {
+            ok: true,
+            importedRuntimeKnowledge,
+        });
+    } catch (e) {
+        console.error("[ImportedRuntimeKnowledgeSummary Error]", e);
+        writeJson(res, 500, { ok: false, error: e.message });
+    }
+}
+
 async function serveOpenClawStatus(req, res) {
     const { resolveOpenClawBinary } = require("../utils/whatsapp-utils");
     const { probeOpenClawGatewayHealth, openclawGatewayResponseOk } = require("../openclaw-gateway-env.js");
@@ -801,6 +1042,7 @@ module.exports = {
     buildRelations,
     attachPreflightToHealth,
     maybeBlockOutboundOnPreflight,
+    serveImportedRuntimeKnowledgeSummary,
     serveServiceControl,
     serveOpenClawStatus,
     serveTriageLog,

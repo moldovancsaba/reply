@@ -74,6 +74,7 @@ Canonical docs:
 This README now reflects the current product state, including:
 
 - live drafting runtime is `{trinity}` first, with bounded local fallback when `suggest` times out or fails
+- if live `suggest` fails but a prepared Trinity draft already exists, `{reply}` now recovers that prepared draft before falling back to local drafting
 - legacy drafting survives only as developer-only shadow comparison behavior
 - structured draft outcomes now go to `/api/trinity/outcome` instead of piggybacking on generic feedback logs
 - runtime failures are operator-safe and no longer expose Docker, Colima, socket, or raw substrate errors in normal UI surfaces
@@ -82,6 +83,11 @@ This README now reflects the current product state, including:
 - message threads now render explicit left/right sent-versus-received rows instead of one undifferentiated feed
 - suggest and drafting routes now consume prepared local snapshot artifacts rather than assembling snippets, history, or fallback inbound context in the request path
 - opening one conversation now forces a Trinity prepared-draft check and immediate refresh so the composer gets a Trinity draft even when the cached draft is missing or stale
+- the visible thread now has a bounded delta lane:
+  - `/api/thread` returns `deltaCursor` / `threadVersion`
+  - `/api/thread-delta` fetches only new rows after the current cursor
+  - send success now patches the visible thread and conversation row first, then background revalidation follows
+- relation health is now causal, not only descriptive: major dependencies expose active mode, last success, last failure, failure class, and recovery state
 - persisted `contact.draft` no longer seeds compose on conversation open; the operator-visible input is now Trinity-owned on the hot path
 - native sync triggers now send the same protected approval payload/header shape as the web app, so per-source sync actions can start background work from the native shell
 - native shell expectations are now first-class: `reply.app` is the operator shell, the hub/runtime sit behind it
@@ -89,6 +95,14 @@ This README now reflects the current product state, including:
 - web and native compose are now capability-safe: the composer only offers channels returned by `conversation_channel_capabilities`, and send routes reject stale or unauthorized conversation/channel combinations
 - native launch is now readiness-gated: the app and `script/build_and_run.sh --verify` wait for a healthy local hub instead of treating a bare process spawn as success
 - Apple source mirror refresh is no longer part of the startup critical path; it runs in the background while the hub comes online
+- `{reply}` can now replay already-synced local Notes, Calendar, Contacts, Contact Intelligence, historical conversation rows, and accepted draft outcomes into the existing Trinity seam through `POST /api/trinity/backfill-sources` or `cd chat && npm run trinity:backfill-sources`
+- durable local writes are now explicitly serialized in the hot paths that were producing the most operational drift:
+  - LanceDB vector writes and text-index creation
+  - `chat.db` message writes and post-save maintenance
+- draft learning now has a stricter reply-owned local substrate:
+  - generation IDs are derived locally
+  - generation, feedback, outcome, and revision events share one local schema
+  - recent learning summaries can be read back for prompt/runtime consumers
 - conversation foundation work is now explicit in the repo and docs:
   - canonical conversation tables exist in `chat.db`
   - immutable participant-membership snapshots are the target model
@@ -123,6 +137,12 @@ Optional native shell:
 make run-app
 ```
 
+Foundation verification:
+
+```bash
+make verify-foundation
+```
+
 Open:
 
 - product UI or embedded hub: `http://127.0.0.1:45311/`
@@ -130,6 +150,13 @@ Open:
 - health alias: `http://127.0.0.1:45311/api/system/health`
 
 When you launch the native shell, the bundled hub prefers ports `45431` through `45446` and the app now waits for `/api/health` readiness instead of only checking whether a `reply` process exists.
+
+The default foundation verification gate runs:
+
+- `npm run lint`
+- targeted runtime and storage hardening tests
+- `swift build` for the native shell on macOS
+- optional Trinity smoke via `cd chat && npm run verify:foundation -- --with-trinity-smoke`
 
 ## Dependencies
 
@@ -340,7 +367,7 @@ Mail-specific checks:
 cat ~/Library/Application\\ Support/reply/mail_sync_status.json
 ```
 
-`npm run verify:trinity-train` is the end-to-end runtime smoke check for the live `{reply} -> {trinity} -> {train}` contract. It verifies one synthetic cycle through `suggest`, `record-outcome`, `export-trace`, and `train-propose-policy`. The check is now bounded and should fail fast with step timing instead of hanging indefinitely.
+`npm run verify:trinity-train` is the end-to-end runtime smoke check for the live `{reply} -> {trinity} -> {train}` contract. It verifies one synthetic cycle through `suggest`, `record-outcome`, `export-trace`, and `train-propose-policy`. The check is now bounded, emits step timing, and should fail fast instead of hanging indefinitely. On this machine, the Trinity runtime can also auto-resolve from a misconfigured `mistral-cli` route to an effective Ollama route, and the smoke output now makes that provider decision explicit.
 
 ## Architecture Notes
 

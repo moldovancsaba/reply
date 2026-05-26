@@ -1216,15 +1216,13 @@ export async function saveProfile(btn = null) {
 
     // Close modal and refresh UI
     closeProfileModal();
+    if (typeof window.patchConversationProfile === 'function') {
+      window.patchConversationProfile(handle, result?.contact || payload);
+    }
     await loadKYCData(handle);
 
-    // Refresh sidebar
-    if (typeof window.loadConversations === 'function') {
-      try {
-        await window.loadConversations(false);
-      } catch (e) {
-        console.warn('Failed to refresh conversations after save:', e);
-      }
+    if (typeof window.scheduleBackgroundConversationRefresh === 'function') {
+      window.scheduleBackgroundConversationRefresh('profile-save');
     }
   } finally {
     if (btn) {

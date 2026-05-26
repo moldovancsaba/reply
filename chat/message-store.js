@@ -16,6 +16,8 @@ const SQLITE_BUSY_RETRY_DELAY_MS = 250;
 const SQLITE_BUSY_TIMEOUT_MS = 20000;
 let conversationIndexReadyPromise = null;
 let storeReadyPromise = null;
+let messageWriteQueue = Promise.resolve();
+let maintenanceQueue = Promise.resolve();
 
 function openMessageStoreDb(mode) {
     const db =
@@ -136,6 +138,18 @@ async function retryBusy(fn, attempts = SQLITE_BUSY_RETRY_ATTEMPTS, delayMs = SQ
 function safeTimestampMs(value) {
     const ms = Date.parse(String(value || ""));
     return Number.isFinite(ms) ? ms : 0;
+}
+
+function enqueueMessageWrite(task) {
+    const run = messageWriteQueue.then(() => task());
+    messageWriteQueue = run.catch(() => null);
+    return run;
+}
+
+function enqueueMaintenance(task) {
+    const run = maintenanceQueue.then(() => task());
+    maintenanceQueue = run.catch(() => null);
+    return run;
 }
 
 function normalizeConversationHandle(value) {
@@ -564,7 +578,7 @@ async function saveMessages(messages, options = {}) {
     if (!messages || messages.length === 0) return;
     await initialize();
 
-    await retryBusy(() => {
+    await enqueueMessageWrite(() => retryBusy(() => {
         const db = openMessageStoreDb();
         return new Promise((resolve, reject) => {
             db.serialize(() => {
@@ -666,17 +680,17 @@ async function saveMessages(messages, options = {}) {
                 runNext();
             });
         });
-    });
+    }));
 
     if (options.deferMaintenance) {
         setImmediate(() => {
-            runPostSaveMaintenance(messages).catch((err) => {
+            enqueueMaintenance(() => runPostSaveMaintenance(messages)).catch((err) => {
                 console.warn("[message-store] deferred post-save maintenance failed:", err.message);
             });
         });
         return;
     }
-    await runPostSaveMaintenance(messages);
+    await enqueueMaintenance(() => runPostSaveMaintenance(messages));
 }
 
 async function emitRuntimeMemoryEventsForMessages(messages) {
@@ -1062,6 +1076,55 @@ async function getMessagesForHandles(handles = [], filter = {}) {
     });
 }
 
+async function getMessagesForHandlesSince(handles = [], filter = {}) {
+    await initialize();
+    const uniqueHandles = Array.from(
+        new Set(
+            (Array.isArray(handles) ? handles : [])
+                .map((h) => String(h || "").trim())
+                .filter(Boolean)
+        )
+    );
+    if (!uniqueHandles.length) return { rows: [], order: "asc" };
+
+    const db = openMessageStoreDb(sqlite3.OPEN_READONLY);
+    db.run("PRAGMA busy_timeout = 5000");
+
+    const limit = Math.max(1, Math.min(Number(filter.limit) || 100, 1000));
+    const afterTimestampMs = Math.max(0, Number(filter.afterTimestampMs) || 0);
+    const afterIso = afterTimestampMs ? new Date(afterTimestampMs).toISOString() : null;
+    const placeholders = uniqueHandles.map(() => '?').join(', ');
+    const clauses = [
+        `handle IN (${placeholders})`,
+        CONVERSATION_SOURCE_SQL,
+    ];
+    const params = [...uniqueHandles];
+    if (afterIso) {
+        clauses.push("timestamp > ?");
+        params.push(afterIso);
+    }
+    params.push(limit);
+
+    const rowsQuery = `
+        SELECT id, text, source, handle, timestamp, path, is_from_me
+        FROM unified_messages
+        WHERE ${clauses.join("\n          AND ")}
+        ORDER BY timestamp ASC
+        LIMIT ?
+    `;
+
+    return new Promise((resolve, reject) => {
+        db.all(rowsQuery, params, (rowsErr, rows) => {
+            db.close();
+            if (rowsErr) return reject(rowsErr);
+            resolve({
+                rows: Array.isArray(rows) ? rows : [],
+                order: "asc",
+            });
+        });
+    });
+}
+
 async function messageExists(messageId) {
     const id = String(messageId || "").trim();
     if (!id) return false;
@@ -1080,12 +1143,14 @@ module.exports = {
     initialize,
     saveMessages,
     messageExists,
+    buildRuntimeMemoryEventsForMessages,
     getMessages,
     getRecentConversations,
     getConversationIndexRows,
     getConversationIndexStats,
     getLatestContextForHandles,
     getMessagesForHandles,
+    getMessagesForHandlesSince,
     rebuildConversationIndex,
     ensureConversationIndexReady,
     waitUntilReady: initialize
