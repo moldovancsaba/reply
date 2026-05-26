@@ -8,15 +8,45 @@ HELPER_NAME="reply-helper"
 BUILD_DIR="$PROJECT_DIR/.build/debug"
 BUNDLE_DIR="$PROJECT_DIR/dist"
 APP_BUNDLE="$BUNDLE_DIR/$APP_NAME.app"
-NODE_BIN="${REPLY_NODE_BIN:-$(command -v node)}"
 RUNTIME_NAME="reply runtime"
 CORE_DIR_NAME="reply-core"
 TRINITY_REPO_ROOT="$(cd "$REPO_ROOT/../trinity" && pwd)"
 TRINITY_RUNTIME_DIR_NAME="trinity-runtime"
-NODE_PREFIX="$(cd "$(dirname "$NODE_BIN")/.." && pwd)"
-LIBNODE_PATH="$(find "$NODE_PREFIX/lib" -maxdepth 1 -name 'libnode*.dylib' | head -n 1 || true)"
 ICON_BUILD_DIR="$PROJECT_DIR/.build/icon-assets"
 ICON_PATH="$ICON_BUILD_DIR/reply.icns"
+
+resolve_node() {
+  if [[ -n "${REPLY_NODE_BIN:-}" && -x "${REPLY_NODE_BIN}" ]]; then
+    printf '%s\n' "${REPLY_NODE_BIN}"
+    return 0
+  fi
+  local found
+  found="$(command -v node 2>/dev/null || true)"
+  if [[ -n "$found" && -x "$found" ]]; then
+    printf '%s\n' "$found"
+    return 0
+  fi
+  for candidate in /opt/homebrew/bin/node /usr/local/bin/node; do
+    if [[ -x "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  local cellar_candidate
+  cellar_candidate="$(find /opt/homebrew/Cellar /usr/local/Cellar -path '*/bin/node' -type f 2>/dev/null | sort -V | tail -n 1 || true)"
+  if [[ -n "$cellar_candidate" && -x "$cellar_candidate" ]]; then
+    printf '%s\n' "$cellar_candidate"
+    return 0
+  fi
+  return 1
+}
+
+NODE_BIN="$(resolve_node)" || {
+  echo "build-bundle.sh: Node.js not found." >&2
+  exit 1
+}
+NODE_PREFIX="$(cd "$(dirname "$NODE_BIN")/.." && pwd)"
+LIBNODE_PATH="$(find "$NODE_PREFIX/lib" -maxdepth 1 -name 'libnode*.dylib' | head -n 1 || true)"
 
 cd "$PROJECT_DIR"
 swift build

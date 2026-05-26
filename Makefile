@@ -33,6 +33,10 @@ doctor:
 	chmod +x ./runbook/doctor.sh
 	./runbook/doctor.sh
 
+.PHONY: verify-foundation
+verify-foundation:
+	cd ./chat && npm run verify:foundation
+
 .PHONY: install-service
 install-service:
 	chmod +x ./tools/scripts/reply_service.sh

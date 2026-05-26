@@ -6,6 +6,7 @@
 const fs = require("fs");
 const path = require("path");
 const draftLearningStore = require("../draft-learning-store.js");
+const threadHotCache = require("../thread-hot-cache.js");
 const {
     allowExperimentalBrainModes,
     buildThreadSnapshot,
@@ -23,6 +24,7 @@ const {
     proposeTrainingPolicy,
     resolveReplyCompanyId,
     sanitizeDraftContext,
+    summarizeTrinityRuntimeDiagnostics,
 } = require("../brain-runtime");
 const {
     safeDateMs,
@@ -37,6 +39,21 @@ const {
     matchesQuery
 } = require("../utils/chat-utils");
 const { presentContactLabel } = require("../utils/contact-labels");
+const { backfillTrinitySources } = require("../trinity-source-backfill.js");
+
+function buildSentMessagePayload({ id, handle, text, channel, source, path: messagePath, date }) {
+    return {
+        id,
+        role: "me",
+        is_from_me: true,
+        text: String(text || ""),
+        date: String(date || new Date().toISOString()),
+        channel: String(channel || "").trim().toLowerCase(),
+        source: source || channel || null,
+        path: messagePath || null,
+        handle: handle || null,
+    };
+}
 
 function conversationSearchHaystack(item) {
     const c = item.contact;
@@ -916,6 +933,16 @@ async function serveThread(req, res, url) {
         }
 
         const latestVisible = allMessages[allMessages.length - 1] || allMessages[0] || null;
+        const cachedThread = threadHotCache.cacheThreadSnapshot(handle, {
+            total: Number(foundationResult?.total || allMessages.length),
+            newestMessages: allMessages,
+            conversationId: foundationResult?.conversationId || null,
+            channels: foundationResult?.channels || [],
+            allowedChannels: foundationResult?.allowedChannels || [],
+            defaultChannel: foundationResult?.defaultChannel || null,
+            conversationKind: foundationResult?.conversationKind || "direct",
+            conversationTitle: foundationResult?.conversationTitle || null,
+        });
         await queueThreadViewedEvent({
             companyId: resolveReplyCompanyId(),
             handle,
@@ -944,9 +971,50 @@ async function serveThread(req, res, url) {
             defaultChannel: foundationResult?.defaultChannel || null,
             conversationKind: foundationResult?.conversationKind || "direct",
             conversationTitle: foundationResult?.conversationTitle || null,
+            deltaCursor: cachedThread?.deltaCursor || null,
+            threadVersion: cachedThread?.threadVersion || null,
         });
     } catch (err) {
         writeJson(res, 500, { error: err.message });
+    }
+}
+
+async function serveThreadDelta(req, res, url) {
+    const handle = String(url.searchParams.get("handle") || "").trim();
+    const after = String(url.searchParams.get("after") || "").trim();
+    if (!handle) {
+        writeJson(res, 400, { error: "Missing handle" });
+        return;
+    }
+    if (!contactStore.isInboxEligible(handle)) {
+        writeJson(res, 404, { error: "Conversation is unavailable in {reply}." });
+        return;
+    }
+    try {
+        const cached = threadHotCache.getThreadDelta(handle, after);
+        const handles = contactStore.getAllHandles(handle);
+        const afterTimestampMs = threadHotCache.parseThreadCursor(after).timestampMs;
+        const dbResult = await messageStore.getMessagesForHandlesSince(handles, {
+            afterTimestampMs,
+            limit: 120,
+        });
+        const dbMessages = normalizeThreadStoreRows(dbResult?.rows || []);
+        const merged = dbMessages.length
+            ? threadHotCache.appendThreadMessages(handle, dbMessages)
+            : threadHotCache.getThreadSnapshot(handle);
+        const deltaMessages = dbMessages.length ? dbMessages : cached.messages;
+        writeJson(res, 200, {
+            messages: deltaMessages,
+            deltaCursor: merged?.deltaCursor || cached.deltaCursor || null,
+            threadVersion: merged?.threadVersion || cached.threadVersion || null,
+            fromCache: !dbMessages.length && cached.fromCache === true,
+            conversationId: merged?.conversationId || null,
+            channels: merged?.channels || [],
+            allowedChannels: merged?.allowedChannels || [],
+            defaultChannel: merged?.defaultChannel || null,
+        });
+    } catch (err) {
+        writeJson(res, 500, { error: err.message || "Failed to load thread delta" });
     }
 }
 
@@ -1061,8 +1129,8 @@ async function serveTrinityPreparedDraft(req, res, url) {
         }
 
         const resolved = await resolveLatestInboundContext(handle);
-        let message = resolved.message;
-        let inferredChannel = resolved.inferredChannel;
+        const message = resolved.message;
+        const inferredChannel = resolved.inferredChannel;
         if (!message) {
             writeJson(res, 422, {
                 error: "No inbound contact message found in index for this handle.",
@@ -1126,6 +1194,11 @@ async function serveTrinityPreparedDraft(req, res, url) {
             stale: prepared.stale === true,
             suggestion: String(top.draft_text || "").trim(),
             explanation: String(top.rationale || "").trim(),
+            contextMeta: {
+                runtime: "trinity-prepared",
+                runtimeDiagnostics: summarizeTrinityRuntimeDiagnostics(rankedDraftSet || {}),
+                companyId: threadSnapshot.company_id,
+            },
             runtimeMode: "trinity-prepared",
             rankedDraftSet,
             preparedDraftSet,
@@ -1176,6 +1249,23 @@ async function serveTrinityMemoryEvent(req, res) {
         writeJson(res, 200, result);
     } catch (e) {
         writeJson(res, 400, { error: e.message || "Failed to queue Trinity memory event" });
+    }
+}
+
+async function serveTrinityBackfillSources(req, res) {
+    try {
+        const payload = await readJsonBody(req);
+        const result = await backfillTrinitySources({
+            sources: Array.isArray(payload?.sources) ? payload.sources : [],
+            documentLimit: payload?.documentLimit,
+            contactLimit: payload?.contactLimit,
+            messageLimit: payload?.messageLimit,
+            outcomeLimit: payload?.outcomeLimit,
+            drain: payload?.drain !== false,
+        });
+        writeJson(res, 200, result);
+    } catch (e) {
+        writeJson(res, 400, { error: e.message || "Failed to backfill Trinity sources" });
     }
 }
 
@@ -1407,6 +1497,20 @@ end run
             path: `imessage://${recipient}`,
             is_from_me: 1
         }]);
+        const sentMessage = buildSentMessagePayload({
+            id: localId,
+            handle: recipient,
+            text,
+            channel: "imessage",
+            source: "iMessage",
+            path: `imessage://${recipient}`,
+            date: sentAt,
+        });
+        const cachedThread = threadHotCache.appendThreadMessages(recipient, [sentMessage], {
+            defaultChannel: "imessage",
+            channels: ["imessage"],
+            allowedChannels: ["imessage"],
+        });
         await addDocuments([{
             id: localId,
             text: `[${sentAt}] Me: ${text}`,
@@ -1421,8 +1525,19 @@ end run
         });
         await contactStore.clearDraft(recipient);
         await autoAnnotateSentMessage("imessage", recipient, text);
-        await finalizeDraftSendOutcome(draftContext, text, "ok");
-        writeJson(res, 200, { status: "ok", sentAt, id: localId, recipient });
+        await finalizeDraftSendOutcome(draftContext, text, "ok", {
+            channel: "imessage",
+            contactHandle: recipient,
+        });
+        writeJson(res, 200, {
+            status: "ok",
+            sentAt,
+            id: localId,
+            recipient,
+            sentMessage,
+            deltaCursor: cachedThread?.deltaCursor || null,
+            threadVersion: cachedThread?.threadVersion || null,
+        });
     });
 }
 
@@ -1440,8 +1555,29 @@ async function handleSendEmail(req, res, recipient, text, draftContext = null) {
             await sendGmail({ to: recipient, subject, text });
             await contactStore.clearDraft(recipient);
             await autoAnnotateSentMessage("email", recipient, text);
-            await finalizeDraftSendOutcome(draftContext, text, "ok");
-            writeJson(res, 200, { status: "ok", provider: "gmail" });
+            await finalizeDraftSendOutcome(draftContext, text, "ok", {
+                channel: "email",
+                contactHandle: recipient,
+            });
+            const sentMessage = buildSentMessagePayload({
+                id: `local-email-out-${Date.now()}`,
+                handle: recipient,
+                text,
+                channel: "email",
+                source: "gmail",
+                path: `mailto:${recipient}`,
+                date: new Date().toISOString(),
+            });
+            threadHotCache.appendThreadMessages(recipient, [sentMessage], {
+                defaultChannel: "email",
+                channels: ["email"],
+                allowedChannels: ["email"],
+            });
+            writeJson(res, 200, {
+                status: "ok",
+                provider: "gmail",
+                sentMessage,
+            });
             return;
         }
     } catch (e) {
@@ -1473,8 +1609,28 @@ end run
             return;
         }
         await contactStore.clearDraft(recipient);
-        await finalizeDraftSendOutcome(draftContext, text, "ok");
-        writeJson(res, 200, { status: "ok" });
+        await finalizeDraftSendOutcome(draftContext, text, "ok", {
+            channel: "email",
+            contactHandle: recipient,
+        });
+        const sentMessage = buildSentMessagePayload({
+            id: `local-email-compose-${Date.now()}`,
+            handle: recipient,
+            text,
+            channel: "email",
+            source: "mail",
+            path: `mailto:${recipient}`,
+            date: new Date().toISOString(),
+        });
+        threadHotCache.appendThreadMessages(recipient, [sentMessage], {
+            defaultChannel: "email",
+            channels: ["email"],
+            allowedChannels: ["email"],
+        });
+        writeJson(res, 200, {
+            status: "ok",
+            sentMessage,
+        });
     });
 }
 
@@ -1489,11 +1645,29 @@ async function handleSendLinkedIn(req, res, recipient, text, draftContext = null
 
         await autoAnnotateSentMessage("linkedin", recipient, text);
         await contactStore.clearDraft(recipient);
-        await finalizeDraftSendOutcome(draftContext, text, "ok");
+        await finalizeDraftSendOutcome(draftContext, text, "ok", {
+            channel: "linkedin",
+            contactHandle: recipient,
+        });
+        const sentMessage = buildSentMessagePayload({
+            id: `local-linkedin-out-${Date.now()}`,
+            handle: recipient,
+            text,
+            channel: "linkedin",
+            source: "linkedin",
+            path: `linkedin://${recipient}`,
+            date: new Date().toISOString(),
+        });
+        threadHotCache.appendThreadMessages(recipient, [sentMessage], {
+            defaultChannel: "linkedin",
+            channels: ["linkedin"],
+            allowedChannels: ["linkedin"],
+        });
         writeJson(res, 200, {
             status: "ok",
             transport: "desktop_clipboard",
-            hint: "Message copied to clipboard. Paste in LinkedIn."
+            hint: "Message copied to clipboard. Paste in LinkedIn.",
+            sentMessage,
         });
     } catch (e) {
         writeJson(res, 500, { error: "Failed to run desktop automation: " + e.message });
@@ -1558,8 +1732,29 @@ async function serveSendWhatsApp(req, res) {
 
         const finishOk = async (resultPayload) => {
             await contactStore.clearDraft(recipientRaw);
-            await finalizeDraftSendOutcome(draftContext, text, "ok");
-            writeJson(res, 200, { status: "ok", ...resultPayload });
+            await finalizeDraftSendOutcome(draftContext, text, "ok", {
+                channel: "whatsapp",
+                contactHandle: recipientRaw,
+            });
+            const sentMessage = buildSentMessagePayload({
+                id: `local-whatsapp-out-${Date.now()}`,
+                handle: recipientRaw,
+                text,
+                channel: "whatsapp",
+                source: "whatsapp",
+                path: `whatsapp://${recipientRaw}`,
+                date: new Date().toISOString(),
+            });
+            threadHotCache.appendThreadMessages(recipientRaw, [sentMessage], {
+                defaultChannel: "whatsapp",
+                channels: ["whatsapp"],
+                allowedChannels: ["whatsapp"],
+            });
+            writeJson(res, 200, {
+                status: "ok",
+                ...resultPayload,
+                sentMessage,
+            });
         };
 
         if (transport === "openclaw_cli") {
@@ -1595,10 +1790,80 @@ async function serveSendWhatsApp(req, res) {
     }
 }
 
-async function finalizeDraftSendOutcome(draftContext, finalText, sendResult) {
-    const sanitizedDraftContext = sanitizeDraftContext(draftContext || null, {
-        expectedChannel: draftContext?.channel || null,
+function normalizeDraftLearningHandle(value) {
+    return String(value || "").trim().toLowerCase();
+}
+
+function recoverDraftContextFromLearningRows(rows, options = {}) {
+    const channel = String(options.channel || "").trim().toLowerCase();
+    const contactHandle = normalizeDraftLearningHandle(options.contactHandle);
+    const finalText = String(options.finalText || "").trim();
+    if (!channel || !contactHandle || !finalText) {
+        return null;
+    }
+    let best = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const row of Array.isArray(rows) ? rows : []) {
+        if (String(row?.event_kind || "").trim().toLowerCase() !== "draft_generated") {
+            continue;
+        }
+        if (String(row?.channel || "").trim().toLowerCase() !== channel) {
+            continue;
+        }
+        if (normalizeDraftLearningHandle(row?.contact_handle) !== contactHandle) {
+            continue;
+        }
+        const cycleId = String(row?.cycle_id || "").trim();
+        const candidateId = String(row?.candidate_id || "").trim();
+        const threadRef = String(row?.thread_ref || "").trim();
+        const suggestionText = String(row?.suggestion_text || "").trim();
+        if (!cycleId || !candidateId || !threadRef || !suggestionText) {
+            continue;
+        }
+        const distance = normalizedEditDistance(suggestionText, finalText);
+        if (distance > 0.45) {
+            continue;
+        }
+        if (distance < bestDistance) {
+            best = {
+                companyId: resolveReplyCompanyId(),
+                cycleId,
+                threadRef,
+                channel,
+                selectedCandidateId: candidateId,
+                selectedDraftText: suggestionText,
+                originalDraftText: suggestionText,
+                recovered: true,
+                recoveredEditDistance: distance,
+                recoveredFrom: "draft_learning_store",
+            };
+            bestDistance = distance;
+        }
+    }
+    return best;
+}
+
+async function recoverDraftContextForSend({ channel, contactHandle, finalText }) {
+    const rows = await draftLearningStore.listLearningEventsByKind("draft_generated", {
+        contactHandle,
+        channel,
+        limit: 50,
+        createdAfter: new Date(Date.now() - (24 * 60 * 60 * 1000)).toISOString(),
+    }).catch(() => []);
+    return recoverDraftContextFromLearningRows(rows, { channel, contactHandle, finalText });
+}
+
+async function finalizeDraftSendOutcome(draftContext, finalText, sendResult, options = {}) {
+    let sanitizedDraftContext = sanitizeDraftContext(draftContext || null, {
+        expectedChannel: draftContext?.channel || options?.channel || null,
     });
+    if (!sanitizedDraftContext || !sanitizedDraftContext.cycleId) {
+        sanitizedDraftContext = await recoverDraftContextForSend({
+            channel: options?.channel || null,
+            contactHandle: options?.contactHandle || null,
+            finalText,
+        });
+    }
     if (!sanitizedDraftContext || !sanitizedDraftContext.cycleId) {
         return;
     }
@@ -1631,7 +1896,7 @@ async function finalizeDraftSendOutcome(draftContext, finalText, sendResult) {
         final_text: normalizedFinal,
         edit_distance: editDistance,
         send_result: sendResult || "ok",
-        notes: "reply_send",
+        notes: sanitizedDraftContext.recovered ? "reply_send_recovered_context" : "reply_send",
     }, { expectedChannel: channel });
     if (!outcomeFact) {
         return;
@@ -1679,12 +1944,14 @@ function normalizedEditDistance(left, right) {
 module.exports = {
     serveConversations,
     serveThread,
+    serveThreadDelta,
     serveSuggest,
     serveRefineReply,
     serveFeedback,
     serveTrinityPreparedDraft,
     serveTrinityRegisterDocument,
     serveTrinityMemoryEvent,
+    serveTrinityBackfillSources,
     serveTrinityOutcome,
     serveTrinityTrainProposePolicy,
     serveSendMessage,
@@ -1711,6 +1978,9 @@ module.exports = {
     deriveWorkspaceAge,
     buildWorkspaceMeta,
     checkConversationCapabilityGate,
+    recoverDraftContextFromLearningRows,
+    finalizeDraftSendOutcome,
+    normalizedEditDistance,
     invalidateConversationsCache: () => {
         conversationsIndexCache.builtAtMs = 0;
         conversationsIndexCache.rawItems = null;

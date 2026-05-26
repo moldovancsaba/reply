@@ -34,6 +34,7 @@ const CONVERSATIONS_CACHE_VERSION = 'v6';
 const WORKSPACE_OWNER_STORAGE_KEY = 'reply.workspaceOwnerIdentity';
 let workspaceMetaCache = null;
 let workspaceOwnerReloadTimer = null;
+let workspaceBackgroundRefreshTimer = null;
 let selectedConversationHandles = new Set();
 let bulkAssignmentInFlight = false;
 
@@ -705,6 +706,96 @@ function ensureWorkspaceOwnerControlsBound() {
     });
 }
 
+function rerenderConversationsFromLocalState() {
+    pruneSelectedConversationHandles();
+    renderConversationsPage(conversations, false);
+    writeCachedConversationPage({
+        contacts: conversations,
+        hasMore: hasMoreContacts,
+        total: conversations.length,
+    });
+}
+
+function upsertConversationPatch(handle, patch = {}) {
+    const normalizedHandle = String(handle || '').trim();
+    if (!normalizedHandle || !Array.isArray(conversations)) return null;
+    const index = conversations.findIndex((entry) =>
+        String(entry?.handle || '') === normalizedHandle ||
+        String(entry?.latestHandle || '') === normalizedHandle
+    );
+    if (index === -1) return null;
+    const current = conversations[index];
+    conversations[index] = { ...current, ...patch };
+    window.conversations = conversations;
+    return conversations[index];
+}
+
+function moveConversationToFront(handle) {
+    const normalizedHandle = String(handle || '').trim();
+    const index = conversations.findIndex((entry) => String(entry?.handle || '') === normalizedHandle);
+    if (index <= 0) return;
+    const [entry] = conversations.splice(index, 1);
+    conversations.unshift(entry);
+    window.conversations = conversations;
+}
+
+export function scheduleBackgroundConversationRefresh(reason = 'background-refresh') {
+    window.clearTimeout(workspaceBackgroundRefreshTimer);
+    workspaceBackgroundRefreshTimer = window.setTimeout(() => {
+        refreshConversationsFromServer(false).catch((error) => {
+            console.error(`[contacts] ${reason} failed:`, error);
+        });
+    }, 150);
+}
+
+export function patchConversationProfile(handle, contactPatch = {}) {
+    const patched = upsertConversationPatch(handle, {
+        displayName: contactPatch.displayName || contactPatch.name || undefined,
+        name: contactPatch.displayName || contactPatch.name || undefined,
+        presentationDisplayName: contactPatch.displayName || contactPatch.name || undefined,
+        profession: contactPatch.profession || undefined,
+        company: contactPatch.company || undefined,
+        relationship: contactPatch.relationship || undefined,
+        owner: contactPatch.owner != null ? contactPatch.owner : undefined,
+    });
+    if (!patched) return;
+    rerenderConversationsFromLocalState();
+    const activeNameEl = document.getElementById('active-contact-name-chat');
+    if (activeNameEl && window.currentHandle && String(window.currentHandle) === String(handle)) {
+        activeNameEl.textContent = formatContactLabel(
+            patched.presentationDisplayName || patched.displayName || patched.name || patched.handle
+        );
+    }
+}
+
+export function patchConversationAfterSend(handle, payload = {}) {
+    const normalizedHandle = String(handle || '').trim();
+    const current = conversations.find((entry) => String(entry?.handle || '') === normalizedHandle);
+    const sentAt = String(payload.sentAt || new Date().toISOString());
+    const text = String(payload.text || '').trim();
+    const channel = String(payload.channel || '').trim().toLowerCase();
+    const patched = upsertConversationPatch(handle, {
+        lastMessage: text,
+        previewDate: sentAt,
+        latestMessageAt: sentAt,
+        latestOutboundAt: sentAt,
+        channel: channel || undefined,
+        lastChannel: channel || undefined,
+        workspace: {
+            ...(current?.workspace || {}),
+            queueKey: 'waiting_on_contact',
+            queueLabel: 'Waiting',
+            latestOutboundAt: sentAt,
+            latestMessageAt: sentAt,
+        },
+    });
+    if (!patched) return;
+    if (conversationsSort === 'newest') {
+        moveConversationToFront(handle);
+    }
+    rerenderConversationsFromLocalState();
+}
+
 function renderWorkspaceFilters(meta = null) {
     workspaceMetaCache = meta || workspaceMetaCache;
     const queueEl = document.getElementById('workspace-queue-filters');
@@ -1117,8 +1208,19 @@ export async function selectContact(handle) {
     }
 
     await messageTask;
+    const currentIndex = conversations.findIndex((entry) => String(entry?.handle || '') === String(handle));
+    const likelyNextHandles = [];
+    if (currentIndex > 0) likelyNextHandles.push(String(conversations[currentIndex - 1]?.handle || '').trim());
+    if (currentIndex >= 0 && currentIndex + 1 < conversations.length) likelyNextHandles.push(String(conversations[currentIndex + 1]?.handle || '').trim());
+    if (currentIndex >= 0 && currentIndex + 2 < conversations.length) likelyNextHandles.push(String(conversations[currentIndex + 2]?.handle || '').trim());
+    if (typeof window.preloadLikelyNextThreads === 'function') {
+        void window.preloadLikelyNextThreads(likelyNextHandles.filter(Boolean));
+    }
 }
 
 // Export to window for onclick handlers
 window.loadConversations = loadConversations;
 window.selectContact = selectContact;
+window.patchConversationAfterSend = patchConversationAfterSend;
+window.patchConversationProfile = patchConversationProfile;
+window.scheduleBackgroundConversationRefresh = scheduleBackgroundConversationRefresh;

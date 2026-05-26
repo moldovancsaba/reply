@@ -10,7 +10,7 @@ UID_NUM="$(id -u)"
 LABEL="gui/${UID_NUM}/com.reply.hub"
 
 echo "=== session hub ==="
-SESSION_PID="$(pgrep -f "node .*server\\.js" | head -1 || true)"
+SESSION_PID="$(pgrep -f "/Users/Shared/Projects/reply/chat/server\\.js|reply\\.app/.*/reply-core/chat/server\\.js" | head -1 || true)"
 if [[ -n "$SESSION_PID" ]]; then
   echo "running (pid ${SESSION_PID})"
   ps -p "$SESSION_PID" -o pid=,ppid=,command= || true

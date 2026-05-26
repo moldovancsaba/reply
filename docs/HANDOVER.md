@@ -17,6 +17,189 @@
 
 ## Latest Documentation Sync
 
+### 2026-05-25 Native Hot Path, Thread Delta, and Reply-local Learning Tightened
+
+`{reply}` now has a stricter implementation of the native hot-path lane instead of relying on broad workspace reloads after small actions.
+
+Implemented changes:
+
+- added `/Users/Shared/Projects/reply/chat/thread-hot-cache.js`
+- `GET /api/thread` now returns:
+  - `deltaCursor`
+  - `threadVersion`
+- added:
+  - `GET /api/thread-delta`
+- send success paths now return a normalized `sentMessage` payload for immediate visible-thread patching
+- `chat/js/messages.js` now:
+  - appends send-confirmed messages into the visible thread immediately
+  - refreshes the selected thread through the delta lane instead of forcing a full thread reload
+  - preloads a bounded likely-next thread set
+- `chat/js/contacts.js` now:
+  - patches the active conversation row locally after send
+  - patches display-name/profile data locally after save
+  - schedules background conversation refresh instead of blocking on broad reload completion
+- `chat/draft-learning-store.js` now:
+  - persists reply-owned `generation_id`
+  - summarizes recent generations/outcomes/revisions for runtime consumers
+- `chat/brain-runtime.js` now includes bounded `recent_learning_summary` in thread snapshot metadata
+
+Validation completed for this tranche:
+
+- `node --test /Users/Shared/Projects/reply/chat/test/draft-learning-store.test.js /Users/Shared/Projects/reply/chat/test/thread-hot-cache.test.js /Users/Shared/Projects/reply/chat/test/brain-runtime.test.js`
+- `node --test /Users/Shared/Projects/reply/chat/test/relation-hardening.test.js /Users/Shared/Projects/reply/chat/test/system-health-shape.test.js /Users/Shared/Projects/reply/chat/test/messaging-draft-context.test.js`
+- `cd /Users/Shared/Projects/reply/chat && npm run verify:trinity-train`
+
+What is true now:
+
+- the selected thread has a real fast lane in both the hub and the client
+- profile save and send no longer require synchronous workspace-wide reload completion before the UI recovers
+- Trinity smoke is currently green again with recent `suggest` latency in the single-digit-second range on this machine
+
+Current limit:
+
+- the delta lane is cursor-based polling, not a full event-stream/subscription model yet
+- conversation-list local patching currently targets the primary hot actions first rather than every possible mutation path
+
+### 2026-05-24 Imported Trinity Runtime Knowledge Reaches Live Drafting
+
+`{reply}` now surfaces adopted `{trinity}` runtime knowledge derived from `{train}` runtime-candidate packs inside the live draft path instead of keeping that support invisible inside the runtime layer.
+
+Implemented changes:
+
+- `chat/brain-runtime.js` now normalizes Trinity `runtime_diagnostics.imported_runtime_knowledge`
+- prepared Trinity draft payloads now preserve runtime diagnostics inside `contextMeta`
+- `chat/routes/messaging.js` now returns imported-runtime diagnostics on the prepared-draft route
+- `chat/js/app.js` now keeps `contextMeta` in cached suggestions so imported support survives UI hydration
+- the live candidate surface now shows:
+  - imported record count
+  - family counts
+  - top supporting imported sources
+- deterministic coverage now exists in:
+  - `chat/test/brain-runtime.test.js`
+
+What is true now:
+
+- `{reply}` still does not ingest the raw Markdown archive directly
+- `{reply}` now consumes the selective runtime subset after `{train}` extraction and `{trinity}` adoption
+- imported support remains bounded and provenance-bearing instead of silently replacing ordinary thread context
+
+Current limit:
+
+- this is visibility and consumption of already-adopted runtime knowledge
+- it does not yet score whether imported support measurably improves operator outcomes
+- it does not replace the need for better accepted-outcome supervision upstream
+
+### 2026-05-25 Imported Runtime Support Persists Into Learning Metadata
+
+`{reply}` now preserves bounded imported-runtime support summaries in draft-learning metadata, so Markdown-derived runtime support can be measured later instead of staying UI-only.
+
+Implemented changes:
+
+- `chat/brain-runtime.js` now normalizes both snake_case and camelCase imported-runtime payloads from `{trinity}`
+- draft-generation learning metadata now persists:
+  - `imported_runtime_knowledge`
+- draft-outcome learning metadata now also persists:
+  - `imported_runtime_knowledge`
+- the persisted summary stays compact and bounded:
+  - imported record count
+  - family counts
+  - trimmed import IDs
+  - trimmed artifact refs
+  - top supporting imported sources
+- deterministic coverage now exists in:
+  - `chat/test/brain-runtime.test.js`
+
+What is true now:
+
+- imported Markdown-derived runtime support can now be analyzed later from learning-event metadata instead of only being shown in the live draft UI
+- `{reply}` still does not ingest the raw Markdown archive directly
+- the persisted support summary remains provenance-bearing and bounded rather than storing raw document payloads in the learning store
+
+Current limit:
+
+- this still does not compute quality impact automatically
+- the next useful step is analysis of whether imported support correlates with better operator outcomes
+
+### 2026-05-25 Imported Runtime Support Summary Route Added
+
+`{reply}` now has the first bounded outcome summary surface for imported runtime support instead of leaving the lane measurement-only in raw SQLite rows.
+
+Implemented changes:
+
+- `chat/draft-learning-store.js` now summarizes imported runtime support usage from persisted learning events
+- new route:
+  - `GET /api/system/imported-runtime-knowledge-summary`
+- the summary currently reports:
+  - generation count
+  - generations with outcomes
+  - outcome disposition counts
+  - revision count total
+  - average imported-record count
+  - family counts
+  - top artifact refs
+  - top supporting document titles
+- deterministic coverage now exists in:
+  - `chat/test/draft-learning-store.test.js`
+
+What is true now:
+
+- imported Markdown-derived runtime support can now be evaluated without hand-inspecting raw learning rows
+- the summary is bounded and derived from persisted learning metadata rather than live UI state
+
+Current limit:
+
+- this is still aggregate measurement, not causal proof
+- the next useful step is to compare imported-support generations against non-imported generations with the same operator outcome vocabulary
+
+### 2026-05-21 Trinity Source Backfill Added
+
+`{reply}` can now replay already-synced local knowledge sources, historical conversation rows, and persisted accepted draft outcomes into the existing `{trinity}` seam instead of forcing a full re-sync or waiting for new writes.
+
+Implemented changes:
+
+- added `/Users/Shared/Projects/reply/chat/trinity-source-backfill.js`
+- new protected product route:
+  - `POST /api/trinity/backfill-sources`
+- new developer script:
+  - `cd /Users/Shared/Projects/reply/chat && npm run trinity:backfill-sources`
+- the replay path queues existing local source material into the same durable outbox contract instead of introducing a second bridge:
+  - `apple-notes` -> Trinity `document_registration`
+  - `apple-calendar` -> Trinity `document_registration`
+  - `mail` / `imessage` / `whatsapp` / `linkedin` rows -> Trinity `memory_event`
+  - `contacts` -> Trinity `memory_event`
+  - `contact-intelligence` / `kyc` -> Trinity `memory_event`
+- the replay path can now also rebuild accepted-outcome supervision from persisted `reply_draft_learning_events`:
+  - `accepted-outcome` -> Trinity `record-outcome`
+- accepted-outcome replay is now intentionally narrower:
+  - only send-grade dispositions replay upstream
+  - `SHOWN`, invalid candidate IDs, missing thread/channel identity, and empty outcome text are rejected during backfill
+  - obviously generic operator-placeholder drafts are also rejected during backfill
+  - `SENT_AS_IS` rows with missing persisted `final_text` are normalized to reuse the original draft text so historical sent-as-is supervision can still be recovered honestly
+- `contact-store.js` now persists `kycAnalysis` into `contacts.db` via `kyc_analysis_json` so contact-intelligence replay is durable across restarts
+- contact runtime memory events are now richer and deterministic:
+  - `profession`
+  - `relationship`
+  - `company`
+  - `linkedin_url`
+  - `intro`
+  - contact notes
+  - pending / rejected suggestions
+  - persisted `kyc_analysis`
+
+Validation completed for this tranche:
+
+- `node --test /Users/Shared/Projects/reply/chat/test/trinity-source-backfill.test.js`
+
+Important boundary:
+
+- this is the first bounded backfill slice for already-synced knowledge inputs
+- it now also covers bounded historical conversation/source replay and accepted-outcome replay
+- it does not replace the live runtime event flow
+- it does not yet synthesize missing Trinity cycles for old local-only drafts; accepted-outcome replay only succeeds for cycles that really exist in `{trinity}`
+- the intended next widening order remains:
+  - deeper memory normalization
+  - broader company/project memory extraction
+
 ### 2026-05-09 Contract Docs Normalized
 
 The product-side live-brain docs were normalized to match implemented code instead of mixing current and target-state contracts.
@@ -254,6 +437,22 @@ Validated during this sync:
 - there are additional in-progress working-tree changes related to policy-loop and runtime-boundary work; they were documented rather than reverted
 - `{trinity}` and `{train}` docs also required updates because the install and runtime story now spans all three repos
 - the native app and the local hub are both valid operator entrypoints, but the product direction remains native-shell first
+- the first supervised portable-pack recovery lane is now live too:
+  - `chat/trinity-source-backfill.js` now replays only send-grade accepted outcomes into `{trinity}`
+  - it rejects `SHOWN`, empty final text, missing identity, and obvious placeholder drafts
+  - it also now recovers trusted final text from actual outbound message history when the stored draft outcome is missing or polluted
+- live send capture is now harder to lose:
+  - `routes/messaging.js` now has a server-side fallback that can recover recent draft context from the draft-learning store when a send arrives without clean UI `draftContext`
+  - this means real future sent replies can still become `draft_outcome` supervision rows even if the client-side draft state is missing or stale
+  - the recovery path is intentionally narrow: same channel, same handle, recent generated draft, and edit distance within the same bounded threshold used for send outcome classification
+- historical recovery is also wider now:
+  - `trinity-source-backfill.js` can infer `draft_outcome` rows from `draft_generated` plus real outbound messages when there is a trustworthy post-generation send match
+  - inferred rows are persisted back into `reply_draft_learning_events` so the store improves instead of acting like a throwaway replay scratchpad
+- the current hard operational limit is now explicit:
+  - local `reply_draft_learning_events` currently contains only `8` `draft_outcome` rows
+  - all `8` are `SENT_AS_IS`
+  - only `2` survive honest generic-placeholder filtering as trustworthy supervision for `{train}`
+  - that is why the live MCS lane is now technically trainable but still not data-rich enough for a serious foundation release
 
 ## Immediate Next Actions
 

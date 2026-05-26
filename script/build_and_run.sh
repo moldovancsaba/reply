@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$ROOT_DIR/app/reply-app"
 APP_BUNDLE="$APP_DIR/dist/reply.app"
 MIRROR_DAEMON="$ROOT_DIR/tools/scripts/imessage_mirror_daemon.sh"
-PREFERRED_PORTS=($(seq 45431 45446))
+PREFERRED_PORTS=($(seq 45311 45326) $(seq 45431 45446))
 
 mkdir -p "$ROOT_DIR/.codex/environments"
 

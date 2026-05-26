@@ -91,7 +91,7 @@ async function serveSuggest(req, res) {
 
     let message = providedMessage;
     let preparedSnippets = [];
-    let goldenExamples = preparedContextStore.readPreparedGoldenExamples();
+    const goldenExamples = preparedContextStore.readPreparedGoldenExamples();
 
     if (!message) {
       const handles = contactStore.getAllHandles(handle);

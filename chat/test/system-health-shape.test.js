@@ -86,5 +86,6 @@ test("message-store retries SQLITE_BUSY in the normal ingest path", () => {
   const src = fs.readFileSync(path.join(__dirname, "../message-store.js"), "utf8");
   assert.ok(src.includes("const SQLITE_BUSY_RETRY_ATTEMPTS = 80"), "message-store should define busy retry attempts");
   assert.ok(src.includes("db.configure(\"busyTimeout\", SQLITE_BUSY_TIMEOUT_MS)"), "message-store should configure a longer busy timeout");
-  assert.ok(src.includes("await retryBusy(() => {"), "message-store saveMessages should retry on SQLITE_BUSY");
+  assert.ok(src.includes("enqueueMessageWrite(() => retryBusy(() => {"), "message-store saveMessages should serialize and retry SQLite writes");
+  assert.ok(src.includes("enqueueMaintenance(() => runPostSaveMaintenance(messages))"), "message-store should serialize post-save maintenance");
 });

@@ -144,7 +144,22 @@ export async function fetchMessages(handle, offset = 0, limit = 20, showLoadingU
         channels: Array.isArray(data.channels) ? data.channels : [],
         allowedChannels: Array.isArray(data.allowedChannels) ? data.allowedChannels : [],
         defaultChannel: data.defaultChannel || null,
+        deltaCursor: data.deltaCursor || null,
+        threadVersion: data.threadVersion || null,
     };
+}
+
+export async function fetchThreadDelta(handle, afterCursor) {
+    const params = new URLSearchParams({
+        handle: String(handle || ''),
+        after: String(afterCursor || ''),
+    });
+    const res = await _request(`${API_BASE}/api/thread-delta?${params.toString()}`, {
+        headers: buildSecurityHeaders(),
+        _silent: true,
+        _showLoading: false,
+    });
+    return res.json();
 }
 
 /**

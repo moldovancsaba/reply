@@ -38,6 +38,19 @@ async function main() {
   const threadRef = `reply:email:${contactHandle}`;
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "reply-trinity-smoke-"));
   const snapshotPath = path.join(tempDir, "thread-snapshot.json");
+  const failureContext = {
+    timeouts: {
+      command_ms: TRINITY_COMMAND_TIMEOUT_MS,
+      async_ms: TRINITY_ASYNC_TIMEOUT_MS,
+    },
+    runtime_status: {
+      adapter: status?.adapter || "reply",
+      provider: status?.provider || null,
+      provider_status: status?.provider_status || null,
+      config_path: status?.config_path || null,
+    },
+    snapshot_path: snapshotPath,
+  };
 
   const threadSnapshot = {
     company_id: companyId,
@@ -70,94 +83,95 @@ async function main() {
   fs.writeFileSync(snapshotPath, `${JSON.stringify(threadSnapshot, null, 2)}\n`, "utf-8");
 
   const stepTimings = [];
-  const suggestResult = await runTimedStep(stepTimings, "trinity_suggest", async () =>
-    runTrinityCommand({
-      pythonBin,
-      trinityRoot,
-      args: ["suggest", "--adapter", "reply", "--input-file", snapshotPath],
-    }),
-  );
-
-  const rankedDraftSet = parseJsonResult(suggestResult.stdout, "suggest");
-  const topDraft = Array.isArray(rankedDraftSet?.drafts) ? rankedDraftSet.drafts[0] : null;
-  if (!rankedDraftSet?.cycle_id || !rankedDraftSet?.trace_ref || !topDraft?.candidate_id || !topDraft?.draft_text) {
-    throw new Error("Trinity suggest returned an incomplete ranked draft set.");
-  }
-
-  const outcome = buildDraftOutcomeEvent({
-    company_id: topDraft.company_id || companyId,
-    cycle_id: rankedDraftSet.cycle_id,
-    thread_ref: rankedDraftSet.thread_ref || threadRef,
-    channel: rankedDraftSet.channel || "email",
-    disposition: "SENT_AS_IS",
-    occurred_at: occurredAt,
-    candidate_id: topDraft.candidate_id,
-    original_draft_text: topDraft.draft_text,
-    final_text: topDraft.draft_text,
-    edit_distance: 0,
-    latency_ms: 5000,
-    send_result: "ok",
-    notes: "verify_trinity_train_integration",
-    contract_version: rankedDraftSet.contract_version || "trinity.reply.v1alpha1",
-  });
-
-  const outcomeResult = await runTimedStep(stepTimings, "record_outcome", () =>
-    withStepTimeout(
-      recordDraftOutcome(outcome),
-      TRINITY_ASYNC_TIMEOUT_MS,
-      "record_outcome",
-    ),
-  );
-  const traceExport = await runTimedStep(stepTimings, "export_trace", () =>
-    withStepTimeout(
-      exportDraftTrace(rankedDraftSet.cycle_id),
-      TRINITY_ASYNC_TIMEOUT_MS,
-      "export_trace",
-    ),
-  );
-  const trainProposal = await runTimedStep(stepTimings, "propose_training_policy", () =>
-    withStepTimeout(
-      proposeTrainingPolicy({
-        learnerKind: "tone",
-        cycleId: rankedDraftSet.cycle_id,
-        transport: "cli",
+  try {
+    const suggestResult = await runTimedStep(stepTimings, "trinity_suggest", async () =>
+      runTrinityCommand({
+        pythonBin,
+        trinityRoot,
+        args: ["suggest", "--adapter", "reply", "--input-file", snapshotPath],
       }),
-      TRINITY_ASYNC_TIMEOUT_MS,
-      "propose_training_policy",
-    ),
-  );
+    );
 
-  const summary = {
-    status: "ok",
-    timeouts: {
-      command_ms: TRINITY_COMMAND_TIMEOUT_MS,
-      async_ms: TRINITY_ASYNC_TIMEOUT_MS,
-    },
-    steps: stepTimings,
-    runtime_status: {
-      adapter: status?.adapter || "reply",
-      provider: status?.provider || null,
-      provider_status: status?.provider_status || null,
-      config_path: status?.config_path || null,
-    },
-    cycle_id: rankedDraftSet.cycle_id,
-    trace_ref: rankedDraftSet.trace_ref,
-    accepted_artifact_version: rankedDraftSet.accepted_artifact_version || null,
-    top_candidate_id: topDraft.candidate_id,
-    record_outcome: outcomeResult,
-    export_trace: traceExport,
-    train_proposal: {
-      adapter: trainProposal?.adapter || null,
-      learner_kind: trainProposal?.learner_kind || null,
-      transport: trainProposal?.transport || null,
-      bundle_files: trainProposal?.bundle_files || [],
-      proposal_version: trainProposal?.train_result?.proposal?.version || null,
-      incumbent_version: trainProposal?.train_result?.eval_report?.incumbent_version || null,
-      replay_ready: trainProposal?.train_result?.eval_report?.replay_ready === true,
-    },
-  };
+    const rankedDraftSet = parseJsonResult(suggestResult.stdout, "suggest");
+    const topDraft = Array.isArray(rankedDraftSet?.drafts) ? rankedDraftSet.drafts[0] : null;
+    if (!rankedDraftSet?.cycle_id || !rankedDraftSet?.trace_ref || !topDraft?.candidate_id || !topDraft?.draft_text) {
+      throw new Error("Trinity suggest returned an incomplete ranked draft set.");
+    }
 
-  console.log(JSON.stringify(summary, null, 2));
+    const outcome = buildDraftOutcomeEvent({
+      company_id: topDraft.company_id || companyId,
+      cycle_id: rankedDraftSet.cycle_id,
+      thread_ref: rankedDraftSet.thread_ref || threadRef,
+      channel: rankedDraftSet.channel || "email",
+      disposition: "SENT_AS_IS",
+      occurred_at: occurredAt,
+      candidate_id: topDraft.candidate_id,
+      original_draft_text: topDraft.draft_text,
+      final_text: topDraft.draft_text,
+      edit_distance: 0,
+      latency_ms: 5000,
+      send_result: "ok",
+      notes: "verify_trinity_train_integration",
+      contract_version: rankedDraftSet.contract_version || "trinity.reply.v1alpha1",
+    });
+
+    const outcomeResult = await runTimedStep(stepTimings, "record_outcome", () =>
+      withStepTimeout(
+        recordDraftOutcome(outcome),
+        TRINITY_ASYNC_TIMEOUT_MS,
+        "record_outcome",
+      ),
+    );
+    const traceExport = await runTimedStep(stepTimings, "export_trace", () =>
+      withStepTimeout(
+        exportDraftTrace(rankedDraftSet.cycle_id),
+        TRINITY_ASYNC_TIMEOUT_MS,
+        "export_trace",
+      ),
+    );
+    const trainProposal = await runTimedStep(stepTimings, "propose_training_policy", () =>
+      withStepTimeout(
+        proposeTrainingPolicy({
+          learnerKind: "tone",
+          cycleId: rankedDraftSet.cycle_id,
+          transport: "cli",
+        }),
+        TRINITY_ASYNC_TIMEOUT_MS,
+        "propose_training_policy",
+      ),
+    );
+
+    const summary = {
+      status: "ok",
+      ...failureContext,
+      steps: stepTimings,
+      cycle_id: rankedDraftSet.cycle_id,
+      trace_ref: rankedDraftSet.trace_ref,
+      accepted_artifact_version: rankedDraftSet.accepted_artifact_version || null,
+      top_candidate_id: topDraft.candidate_id,
+      record_outcome: outcomeResult,
+      export_trace: traceExport,
+      train_proposal: {
+        adapter: trainProposal?.adapter || null,
+        learner_kind: trainProposal?.learner_kind || null,
+        transport: trainProposal?.transport || null,
+        bundle_files: trainProposal?.bundle_files || [],
+        proposal_version: trainProposal?.train_result?.proposal?.version || null,
+        incumbent_version: trainProposal?.train_result?.eval_report?.incumbent_version || null,
+        replay_ready: trainProposal?.train_result?.eval_report?.replay_ready === true,
+      },
+    };
+
+    console.log(JSON.stringify(summary, null, 2));
+  } catch (error) {
+    console.error(JSON.stringify({
+      status: "error",
+      ...failureContext,
+      steps: stepTimings,
+      message: error.message || String(error),
+    }, null, 2));
+    process.exit(1);
+  }
 }
 
 function runTrinityCommand({ pythonBin, trinityRoot, args }) {

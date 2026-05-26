@@ -165,6 +165,7 @@ const server = http.createServer(async (req, res) => {
   // Messaging
   if (pathname === "/api/conversations") return messagingRoutes.serveConversations(req, res, url);
   if (pathname === "/api/thread") return messagingRoutes.serveThread(req, res, url);
+  if (pathname === "/api/thread-delta") return messagingRoutes.serveThreadDelta(req, res, url);
   if (pathname === "/api/suggest") return messagingRoutes.serveSuggest(req, res);
   if (pathname === "/api/trinity/prepared-draft") return messagingRoutes.serveTrinityPreparedDraft(req, res, url);
   if (pathname === "/api/refine-reply" || pathname === "/api/refine") return messagingRoutes.serveRefineReply(req, res);
@@ -178,6 +179,10 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/api/trinity/memory-event") {
     return auth({ route: pathname, action: "trinity-memory-event", requireHumanApproval: false })
       && messagingRoutes.serveTrinityMemoryEvent(req, res);
+  }
+  if (pathname === "/api/trinity/backfill-sources") {
+    return auth({ route: pathname, action: "trinity-backfill-sources", requireHumanApproval: true })
+      && messagingRoutes.serveTrinityBackfillSources(req, res);
   }
   if (pathname === "/api/trinity/train-propose-policy") {
     return auth({ route: pathname, action: "trinity-train-propose-policy", requireHumanApproval: true })
@@ -239,6 +244,7 @@ const server = http.createServer(async (req, res) => {
 
   // System Health
   if (pathname === "/api/health" || pathname === "/api/system-health" || pathname === "/api/system/health" || pathname === "/api/system/services") return systemRoutes.serveSystemHealth(req, res);
+  if (pathname === "/api/system/imported-runtime-knowledge-summary") return systemRoutes.serveImportedRuntimeKnowledgeSummary(req, res, url);
   if (pathname === "/api/preflight") return systemRoutes.servePreflight(req, res);
   if (pathname === "/api/system/service/control") return auth({ route: pathname, action: "service-control" }) && systemRoutes.serveServiceControl(req, res);
   if (pathname === "/api/openclaw/status") return systemRoutes.serveOpenClawStatus(req, res);

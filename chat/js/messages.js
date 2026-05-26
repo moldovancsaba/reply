@@ -3,7 +3,7 @@
  * Handles message thread loading, display, and sending
  */
 
-import { fetchMessages, sendMessage } from './api.js';
+import { fetchMessages, fetchThreadDelta, sendMessage } from './api.js';
 import { APP_DISPLAY_NAME } from './branding.js';
 import { applyIconFallback, setMaterialIcon } from './icon-fallback.js';
 import { UI } from './ui.js';
@@ -19,6 +19,7 @@ let activeThreadLoadToken = 0;
 let sendInFlight = false;
 let gapObserver = null;
 let threadWindowState = null;
+const preloadedThreadHandles = new Set();
 
 function threadCacheKey(handle) {
     return `reply.thread.${THREAD_CACHE_VERSION}.${encodeURIComponent(String(handle || ''))}`;
@@ -69,6 +70,25 @@ function dedupeMessages(messages) {
         out.push(msg);
     }
     return out;
+}
+
+function messageTimestampMs(message) {
+    const raw = message?.date || message?.timestamp || null;
+    const ms = raw ? Date.parse(String(raw)) : 0;
+    return Number.isFinite(ms) ? ms : 0;
+}
+
+function messageKey(message) {
+    const id = String(message?.id || '').trim();
+    if (id) return id;
+    return `${String(message?.handle || '').trim()}|${messageTimestampMs(message)}|${String(message?.text || '').trim()}`;
+}
+
+function buildThreadCursor(messages = []) {
+    const sorted = sortMessagesAscending(dedupeMessages(messages));
+    const latest = sorted[sorted.length - 1] || null;
+    if (!latest) return null;
+    return `${messageTimestampMs(latest)}:${messageKey(latest)}`;
 }
 
 function createMessageBubble(msg) {
@@ -234,10 +254,55 @@ function renderThreadWindow(messagesEl, { scrollToBottom = false } = {}) {
     messagesEl.appendChild(newestFragment);
 
     if (scrollToBottom) {
-        requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
             messagesEl.scrollTop = messagesEl.scrollHeight;
         });
     }
+}
+
+function appendMessagesToCurrentThread(messages = [], options = {}) {
+    if (!threadWindowState || !Array.isArray(messages) || !messages.length) return false;
+    const mergedNewest = dedupeMessages([
+        ...(threadWindowState.newestMessages || []),
+        ...messages,
+    ]).sort(compareMessagesAscending);
+    threadWindowState.newestMessages = mergedNewest;
+    threadWindowState.total = Math.max(Number(threadWindowState.total) || 0, dedupeMessages([
+        ...(threadWindowState.oldestMessages || []),
+        ...mergedNewest,
+    ]).length);
+    threadWindowState.deltaCursor = options.deltaCursor || buildThreadCursor(mergedNewest);
+    threadWindowState.threadVersion = options.threadVersion || threadWindowState.deltaCursor;
+    return true;
+}
+
+async function refreshSelectedThreadDelta(handle, { forceRender = true } = {}) {
+    if (!threadWindowState || String(threadWindowState.handle || '') !== String(handle || '')) return null;
+    const delta = await fetchThreadDelta(handle, threadWindowState.deltaCursor || buildThreadCursor(threadWindowState.newestMessages || []));
+    const messages = dedupeMessages(sortMessagesAscending(delta?.messages || []));
+    if (messages.length) {
+        appendMessagesToCurrentThread(messages, delta);
+        if (forceRender) {
+            const messagesEl = document.getElementById('messages');
+            if (messagesEl) renderThreadWindow(messagesEl, { scrollToBottom: true });
+        }
+        writeCachedThread(handle, {
+            total: threadWindowState.total,
+            oldestMessages: threadWindowState.oldestMessages,
+            newestMessages: threadWindowState.newestMessages,
+            hasGap: threadWindowState.hasGap,
+            conversationId: threadWindowState.conversationId,
+            channels: threadWindowState.channels,
+            allowedChannels: threadWindowState.allowedChannels,
+            defaultChannel: threadWindowState.defaultChannel,
+            deltaCursor: threadWindowState.deltaCursor,
+            threadVersion: threadWindowState.threadVersion,
+        });
+    } else {
+        threadWindowState.deltaCursor = delta?.deltaCursor || threadWindowState.deltaCursor;
+        threadWindowState.threadVersion = delta?.threadVersion || threadWindowState.threadVersion;
+    }
+    return delta;
 }
 
 async function loadThreadGapChunk(messagesEl) {
@@ -520,6 +585,8 @@ export async function loadMessages(handle, append = false) {
                     newestLoadedCount: (cached.newestMessages || cached.messages || []).length,
                     hasGap: Boolean(cached.hasGap),
                     loadingGap: false,
+                    deltaCursor: cached.deltaCursor || buildThreadCursor(cached.newestMessages || cached.messages || []),
+                    threadVersion: cached.threadVersion || null,
                 };
                 renderThreadWindow(messagesEl, { scrollToBottom: true });
             } else if (!messagesEl.children.length) {
@@ -556,6 +623,8 @@ export async function loadMessages(handle, append = false) {
             channels: normalizeChannelList(newestResponse.channels.length ? newestResponse.channels : oldestResponse.channels),
             allowedChannels: normalizeChannelList(newestResponse.allowedChannels.length ? newestResponse.allowedChannels : oldestResponse.allowedChannels),
             defaultChannel: newestResponse.defaultChannel || oldestResponse.defaultChannel || null,
+            deltaCursor: newestResponse.deltaCursor || buildThreadCursor(newestMessages),
+            threadVersion: newestResponse.threadVersion || newestResponse.deltaCursor || null,
         };
 
         renderThreadWindow(messagesEl, { scrollToBottom: true });
@@ -566,6 +635,8 @@ export async function loadMessages(handle, append = false) {
                 newestMessages: threadWindowState.newestMessages,
                 hasGap: threadWindowState.hasGap,
                 messages: newestMessages,
+                deltaCursor: threadWindowState.deltaCursor,
+                threadVersion: threadWindowState.threadVersion,
             });
         }
 
@@ -706,12 +777,24 @@ export async function handleSendMessage() {
         if (typeof window.clearCachedSuggestion === 'function') {
             window.clearCachedSuggestion(currentHandle);
         }
-        // Refresh contact list to move current contact to top
-        if (typeof window.loadConversations === 'function') {
-            await window.loadConversations();
+        if (typeof window.patchConversationAfterSend === 'function') {
+            window.patchConversationAfterSend(currentHandle, {
+                text,
+                sentAt: result?.sentAt || result?.sentMessage?.date || new Date().toISOString(),
+                channel,
+            });
         }
-        // Reload the selected contact thread; the server now resolves aliases/verified handles.
-        await loadMessages(currentHandle);
+        if (result?.sentMessage) {
+            appendMessagesToCurrentThread([result.sentMessage], {
+                deltaCursor: result?.deltaCursor || null,
+                threadVersion: result?.threadVersion || null,
+            });
+            renderThreadWindow(messagesEl, { scrollToBottom: true });
+        }
+        if (typeof window.scheduleBackgroundConversationRefresh === 'function') {
+            window.scheduleBackgroundConversationRefresh('send-hot-path');
+        }
+        await refreshSelectedThreadDelta(currentHandle);
         try { chatInput.dispatchEvent(new Event('input', { bubbles: true })); } catch { }
 
     } catch (error) {
@@ -735,6 +818,28 @@ export async function handleSendMessage() {
 window.loadMessages = loadMessages;
 window.handleSendMessage = handleSendMessage;
 window.seedDraft = seedDraft;
+window.refreshSelectedThreadDelta = refreshSelectedThreadDelta;
+window.preloadLikelyNextThreads = async (handles = []) => {
+    const candidates = Array.isArray(handles) ? handles.slice(0, 3) : [];
+    await Promise.all(candidates.map(async (handle) => {
+        const normalizedHandle = String(handle || '').trim();
+        if (!normalizedHandle || normalizedHandle === String(window.currentHandle || '') || preloadedThreadHandles.has(normalizedHandle)) return;
+        preloadedThreadHandles.add(normalizedHandle);
+        try {
+            const response = await fetchMessages(normalizedHandle, 0, 6, false, 'newest');
+            writeCachedThread(normalizedHandle, {
+                total: response.total,
+                newestMessages: dedupeMessages(sortMessagesAscending(response.messages || [])),
+                oldestMessages: [],
+                hasGap: Number(response.total) > 6,
+                deltaCursor: response.deltaCursor || buildThreadCursor(response.messages || []),
+                threadVersion: response.threadVersion || response.deltaCursor || null,
+            });
+        } catch {
+            preloadedThreadHandles.delete(normalizedHandle);
+        }
+    }));
+};
 window.setSelectedChannel = (channel) => {
     applyComposerChannel(channel);
 };
