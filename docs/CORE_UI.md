@@ -61,9 +61,33 @@ For a state reached by interaction (the 375 px drawer, the service-down alert) u
 - **Row:** a link to `/inbox/:id`. Its accessible name is its visible text (name, relative time, preview, channel, per-channel counts) so the label always matches what is shown; the avatar is decorative. The time is a `<time dateTime title>` with the full date on hover.
 - **States:** loading, empty with no filters ("No conversations yet", link to Sources), empty with filters ("No conversations match", Clear filters), error (message plus the request reference, Try again), load-more in progress and load-more failure. A source that is blocked or in error is named above the list (`SourceNotice`, from `/api/status`) so a short list is not mistaken for "no messages".
 - **Layout:** 1280 px: list (4 columns) and detail (8 columns) side by side; below 62 em only the list, or only the detail with a "Back to conversations" link. The layout switch is a `matchMedia` hook, so exactly one tree is in the DOM.
-- **Detail pane:** a placeholder until the thread screen (#199).
+- **Detail pane:** the thread timeline (next section).
 
 GDS notes found while building it: `GdsSplit` never splits (its inline `grid-template-columns` beats its own media query), so a `GdsColumnGrid` is used; `SemanticButton` takes its text from the `label` prop, not children; `GdsBox` has no `role` prop and `Text` components neither.
+
+## Thread timeline
+
+`ThreadPane` (`src/routes/thread/`) fills the detail pane of `/inbox/:contactId` from `GET /api/contacts/:id` and `/messages` (newest page first, shown oldest to newest). The channel filter is `?thread=imessage|email|whatsapp` (kept apart from the list's own `channel`).
+
+**Composition contract (`src/patterns/TimelineEntry.tsx`)**, built only from GDS primitives, memoised, keyed by message id:
+
+| Part | Rule |
+|---|---|
+| Container | `role="log"` named "Messages with {name}" (a tiny local component, because GDS layout primitives take no `role`) |
+| Entry | `<article>` named "{Channel} from {name}, {full date and time}" or "{Channel} sent by you, ...". Direction: received on the leading side, sent on the trailing side, plus the words "You" / the name |
+| Channel | `GdsBadge` with icon and text, never colour alone |
+| Email | the subject as a label line; "Email summary" when `isSummary` (the text is Mail's stored summary) |
+| Attachments | "Attachment: name, type, size (not downloadable)" |
+| Text | rendered as text only (React escapes it), no auto-linking, so hostile content such as `<img onerror>` stays visible text |
+| Day separators | real headings (`h3`) labelled Today, Yesterday or the full date |
+
+**States:** loading; empty with no messages ("No messages with this person yet"); empty for a filtered channel (with Show all channels); error with the request reference and Try again (loaded messages stay visible when only a refresh fails); Load earlier in progress / failed (alert at the top, content kept); contact merged away or unknown (link to Inbox and, when the API says so, to the contact it was merged into); filtered channel's source blocked (warning with a link to Sources).
+
+**Scroll rules** (no custom scroll container, so it works with whatever scrolls the page): opening a thread (or changing the filter) scrolls to the newest message; **Load earlier messages** keeps the previously first message at the top of the view; every 30 s (tab visible) the newest page is refetched, and new messages are followed only if the reader is at the bottom, otherwise a "N new messages" button appears and is announced politely through an `output` element. Focus is never moved by updates.
+
+**Promotion:** `TimelineEntry` is a candidate GDS pattern (person-to-person, channel-aware message entry); a request in `sovereignsquad/general-design-system` should be opened after delivery.
+
+GDS notes: `GdsInline` with `justify` end/start collapsed the entry to about 8 px at 375 px width, so alignment uses a 12-column `GdsColumnGrid`; `SectionTitle`/`CardTitle` set the heading level with `order`, not `component`; `GdsBox` takes no `id` (a plain wrapper `div` carries the anchor id).
 
 ## Adding a screen
 

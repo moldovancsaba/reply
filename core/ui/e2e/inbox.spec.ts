@@ -99,11 +99,13 @@ test("a blocked source is called out above the list", async ({ page }) => {
 
 test("desktop shows list and detail side by side; phone shows the list, then the detail with a way back", async ({ page }) => {
   await mockContacts(page, () => ({ body: page2 }));
+  await page.route(/\/api\/contacts\/c_4$/, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ...page2.items[0], origin: "auto" }) }));
+  await page.route(/\/api\/contacts\/c_4\/messages\?/, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ items: [{ id: "m1", channel: "email", isFromMe: true, ts: new Date().toISOString(), text: "Hi there", attachments: [], counterpartHandle: "z" }], nextCursor: null, hasMore: false }) }));
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(`${svc.url}/inbox/c_4`);
   await expect(page.getByRole("link", { name: /^Zed Last/ })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByText("The conversation view arrives")).toBeVisible();
-  const [listBox, detailBox] = await Promise.all([page.getByRole("list", { name: "Conversations" }).boundingBox(), page.getByText("The conversation view arrives").boundingBox()]);
+  await expect(page.getByRole("log")).toBeVisible();
+  const [listBox, detailBox] = await Promise.all([page.getByRole("list", { name: "Conversations" }).boundingBox(), page.getByRole("log").boundingBox()]);
   expect(detailBox!.x, "detail sits to the right of the list").toBeGreaterThan(listBox!.x + listBox!.width);
   await page.setViewportSize({ width: 375, height: 800 });
   await expect(page.getByRole("link", { name: "Back to conversations" })).toBeVisible();
