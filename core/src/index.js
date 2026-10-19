@@ -58,7 +58,7 @@ const handoffs = createHandoff({ db: storage.db });
 const read = createReadService({ db: storage.db, replyChannels: (id) => handoffs.channelsFor(id) });
 const drafting = createDrafting({ config, read, logger });
 const status = createStatus({ db: storage.db, config, registry, runner, scheduler, repo, helper: defaultHelperPath() });
-const app = createServer(config, logger, { registry, runner, repo, identity, read, status, handoffs, drafting, logger });
+const app = createServer(config, logger, { registry, runner, repo, identity, read, status, handoffs, drafting, logger, uiDir: config.uiDir });
 
 try {
     await app.listen({ host: HOST, port: config.port });

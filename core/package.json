@@ -16,9 +16,12 @@
     "lint": "eslint . --max-warnings 0",
     "test": "node --test test/*.test.js",
     "verify": "node scripts/verify.js",
-    "fixtures": "node test/fixtures/build.js"
+    "fixtures": "node test/fixtures/build.js",
+    "ui:build": "npm --prefix ui run build",
+    "verify:ui": "npm --prefix ui run verify"
   },
   "dependencies": {
+    "@fastify/static": "^10.1.6",
     "better-sqlite3": "^13.0.3",
     "fastify": "^5.12.7",
     "imapflow": "^2.5.5",
