@@ -5,6 +5,7 @@ import { createServer, gracefulClose } from "./server.js";
 import { createRegistry } from "./connectors/registry.js";
 import { createRunner } from "./connectors/runner.js";
 import { createScheduler } from "./connectors/scheduler.js";
+import { createHandoff } from "./handoff/service.js";
 import { createIdentity } from "./identity/service.js";
 import { createReadService } from "./read/service.js";
 import { defaultHelperPath } from "./helper/index.js";
@@ -48,9 +49,10 @@ const runner = createRunner({ db: storage.db, repo, logger, onContacts: (people)
     },
 });
 const scheduler = createScheduler({ registry, runner, repo, logger, intervals: config.intervals });
-const read = createReadService({ db: storage.db });
+const handoffs = createHandoff({ db: storage.db });
+const read = createReadService({ db: storage.db, replyChannels: (id) => handoffs.channelsFor(id) });
 const status = createStatus({ db: storage.db, config, registry, runner, scheduler, repo, helper: defaultHelperPath() });
-const app = createServer(config, logger, { registry, runner, repo, identity, read, status });
+const app = createServer(config, logger, { registry, runner, repo, identity, read, status, handoffs, logger });
 
 try {
     await app.listen({ host: HOST, port: config.port });

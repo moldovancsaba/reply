@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import Fastify, { LogController } from "fastify";
 import { forbidden, toEnvelope } from "./errors.js";
 import { registerHealth } from "./routes/health.js";
+import { registerHandoff } from "./routes/handoff.js";
 import { registerIdentity } from "./routes/identity.js";
 import { registerRead } from "./routes/read.js";
 import { registerStatus } from "./routes/status.js";
@@ -70,6 +71,7 @@ export function createServer(config, logger, deps = {}) {
     if (deps.identity) registerIdentity(app, deps);
     if (deps.read) registerRead(app, deps);
     if (deps.status) registerStatus(app, deps);
+    if (deps.handoffs) registerHandoff(app, deps);
     // API responses are never cached unless a route opts in (first pages of lists and threads revalidate by ETag)
     app.addHook("onSend", async (req, reply) => {
         if (req.url.startsWith("/api/") && !reply.hasHeader("cache-control")) reply.header("cache-control", "no-store");

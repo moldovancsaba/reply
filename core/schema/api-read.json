@@ -24,7 +24,10 @@
     },
     "Contact": {
       "type": "object", "additionalProperties": false, "required": ["id", "displayName", "origin", "counts", "countTotal", "handles"],
-      "properties": { "id": { "type": "string" }, "displayName": { "type": "string" }, "origin": { "enum": ["auto", "apple_contacts", "manual"] }, "counts": { "$ref": "#/definitions/counts" }, "countTotal": { "type": "integer", "minimum": 0 }, "handles": { "type": "array", "items": { "$ref": "#/definitions/handle" } } }
+      "properties": {
+        "id": { "type": "string" }, "displayName": { "type": "string" }, "origin": { "enum": ["auto", "apple_contacts", "manual"] }, "counts": { "$ref": "#/definitions/counts" }, "countTotal": { "type": "integer", "minimum": 0 }, "handles": { "type": "array", "items": { "$ref": "#/definitions/handle" } },
+        "replyChannels": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["channel", "handles"], "properties": { "channel": { "$ref": "#/definitions/channel" }, "handles": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["value", "label", "default"], "properties": { "value": { "type": "string" }, "label": { "type": "string" }, "default": { "type": "boolean" } } } } } } }
+      }
     },
     "ThreadMessage": {
       "type": "object", "additionalProperties": false, "required": ["id", "channel", "isFromMe", "ts", "text", "attachments", "counterpartHandle"],
