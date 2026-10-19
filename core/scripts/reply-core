@@ -31,7 +31,8 @@ const healthy = async () => (await get("/api/health"))?.status === "ok";
 
 function openUrl(target) {
     const opener = env.REPLY_CORE_OPEN || "open";
-    const r = spawnSync(opener, [target], { stdio: "ignore" });
+    const browser = env.REPLY_CORE_BROWSER ?? "Safari"; // "default" uses whatever browser macOS has as default
+    const r = spawnSync(opener, browser === "default" ? [target] : ["-a", browser, target], { stdio: "ignore" });
     if (r.error || r.status !== 0) say(`Could not open the browser. Open ${target} yourself.`);
 }
 
