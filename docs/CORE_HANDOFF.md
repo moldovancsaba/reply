@@ -67,3 +67,9 @@ Every handoff writes one row to `handoffs` (migration `0006_handoffs.sql`): id, 
 - Whether the message was actually sent: the user may not press send. A sent message appears in Reply Core through the normal connectors after the next sync.
 - That the destination app prefills the text. On the macOS version used to develop this, `sms:` is handled by Messages.app, `mailto:` by Mail.app and `https://wa.me/...` by the browser (which then offers to open WhatsApp). Whether Messages fills in the body from an `sms:` link has to be checked by a person on each macOS release: send yourself a test (owner step). If it does not, switch `imessage` to `copy_and_open` in `core/src/handoff/service.js`.
 - Which mail app opens `mailto:` links: the system default.
+
+## What you see in the app (user-facing)
+
+Under every conversation there is a **Reply** box. Pick the channel (only channels this person has an address for are offered, each with the address), write your message and press **Open in Messages / Mail / WhatsApp**. Reply Core opens that app with your text already in place. **Nothing has been sent at that point and Reply Core never sends anything itself**: you read it there and press send. A message you do send shows up in Reply Core after the next sync.
+
+Very long messages (over 1,500 characters) are copied to the clipboard instead; the app opens empty and the notice tells you to paste. If you have not finished writing, your draft is kept for this browser session and comes back when you return to the conversation.
