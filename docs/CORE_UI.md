@@ -47,11 +47,23 @@ Known, not failing: GDS `StateBlock` renders its title as an `h3`, which axe rep
 
 ## The accessibility gate (how it works, and a trap)
 
-`npm run test:e2e` runs `createGdsA11yTest` from `@sovereignsquad/gds-a11y` on `/inbox`, `/inbox/c_123`, `/search`, `/sources` and an unknown route, in light and dark, plus the keyboard order of the shell (skip link, then the three navigation links), a 375 px phone viewport, a 320 px / reduced-motion check, and the service-down state. Serious and critical findings fail.
+`npm run test:e2e` runs `createGdsA11yTest` from `@sovereignsquad/gds-a11y` on `/inbox` (empty, populated, no match, error, blocked source), `/inbox/c_123`, `/search`, `/sources` and an unknown route, in light and dark, plus the keyboard order of the shell (skip link, then the three navigation links), a 375 px phone viewport, a 320 px / reduced-motion check, and the service-down state. Serious and critical findings fail.
 
 **Trap:** `createGdsA11yTest` navigates to the route itself, which discards any script added before the call, and its scan returns "no violations" when `axe` is not in the page. The GDS documentation example adds axe first and would therefore pass without scanning anything. `e2e/a11y.ts` adds axe as an init script (present after every navigation) and asserts it is in the page, so the gate cannot pass silently.
 
 For a state reached by interaction (the 375 px drawer, the service-down alert) use `expectAccessibleNow`, which scans the page as it is without navigating.
+
+## Inbox (conversation list)
+
+`/inbox` and `/inbox/:contactId` (`src/routes/Inbox.tsx`, `src/routes/inbox/`). One row per contact from `GET /api/contacts`, newest first, 30 per page; **Load more** follows the opaque `nextCursor` (no infinite scroll, so keyboard users are never moved). The list refreshes every 60 s and when the tab regains focus.
+
+- **URL is the state:** `?q=anna&channel=email`. Typing is debounced 250 ms and replaces the history entry; a channel change adds one (Back undoes it). Unknown channels fall back to "All"; the search is capped at 200 characters.
+- **Row:** a link to `/inbox/:id`. Its accessible name is its visible text (name, relative time, preview, channel, per-channel counts) so the label always matches what is shown; the avatar is decorative. The time is a `<time dateTime title>` with the full date on hover.
+- **States:** loading, empty with no filters ("No conversations yet", link to Sources), empty with filters ("No conversations match", Clear filters), error (message plus the request reference, Try again), load-more in progress and load-more failure. A source that is blocked or in error is named above the list (`SourceNotice`, from `/api/status`) so a short list is not mistaken for "no messages".
+- **Layout:** 1280 px: list (4 columns) and detail (8 columns) side by side; below 62 em only the list, or only the detail with a "Back to conversations" link. The layout switch is a `matchMedia` hook, so exactly one tree is in the DOM.
+- **Detail pane:** a placeholder until the thread screen (#199).
+
+GDS notes found while building it: `GdsSplit` never splits (its inline `grid-template-columns` beats its own media query), so a `GdsColumnGrid` is used; `SemanticButton` takes its text from the `label` prop, not children; `GdsBox` has no `role` prop and `Text` components neither.
 
 ## Adding a screen
 
