@@ -1,8 +1,11 @@
+import AppKit
+import Contacts
 import Foundation
 
 // {reply}.app host. macOS attaches Full Disk Access to the program that launches the service, so the service is started
 // from this signed, named bundle: System Settings then lists "{reply}" with its icon instead of a bare "node".
 //   reply --service   run the Reply Core service as a child of this app (what the login agent starts)
+//   reply --consent   ask macOS for Contacts access on behalf of {reply} (the prompt only shows for an app that asks)
 //   reply             (double-click) make sure the service is running and open the UI in Safari
 
 struct Config: Decodable { let node: String; let entry: String; let cwd: String; let launcher: String }
@@ -26,7 +29,24 @@ func spawn(_ args: [String]) -> Process {
     return p
 }
 
-if CommandLine.arguments.dropFirst().first == "--service" {
+if CommandLine.arguments.dropFirst().first == "--consent" {
+    // The request must come from this bundle's own process: only it has NSContactsUsageDescription and the
+    // addressbook entitlement, so only it can make macOS show the prompt (and list {reply} under Contacts).
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory)
+    app.activate(ignoringOtherApps: true)
+    CNContactStore().requestAccess(for: .contacts) { granted, _ in
+        let alert = DispatchQueue.main
+        alert.async {
+            let a = NSAlert()
+            a.messageText = granted ? "{reply} can read your Contacts." : "{reply} cannot read your Contacts."
+            a.informativeText = granted ? "Names in your inbox will now come from your address book." : "Switch {reply} on in System Settings > Privacy & Security > Contacts if you want real names."
+            a.runModal()
+            exit(granted ? 0 : 1)
+        }
+    }
+    app.run()
+} else if CommandLine.arguments.dropFirst().first == "--service" {
     let child = spawn([cfg.entry])
     do { try child.run() } catch { FileHandle.standardError.write(Data("{reply}: cannot start node: \(error)\n".utf8)); exit(1) }
     var sources: [DispatchSourceSignal] = []

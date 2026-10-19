@@ -40,13 +40,14 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>LSUIElement</key><true/>
+  <key>NSContactsUsageDescription</key><string>{reply} reads your address book so conversations show real names and one person's phone numbers and email addresses are grouped. Nothing leaves this Mac.</string>
 </dict>
 </plist>
 PLIST
 
 # A stable signing identity keeps the Full Disk Access grant across rebuilds; ad-hoc is the fallback.
 IDENTITY="${REPLY_CORE_SIGN_IDENTITY:-$(security find-identity -v -p codesigning | sed -n 's/.*"\(Apple Development[^"]*\)".*/\1/p' | head -1)}"
-codesign --force --options runtime --sign "${IDENTITY:--}" "$APP"
+codesign --force --options runtime --entitlements "$HERE/ReplyHost.entitlements" --sign "${IDENTITY:--}" "$APP"
 codesign --verify --strict "$APP"
 touch "$APP"
 echo "Built $APP (signed with ${IDENTITY:-ad-hoc})"
