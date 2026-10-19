@@ -41,7 +41,7 @@ The app uses the GDS default theme with two corrections in `src/theme/replyTheme
 | Dimmed text, dark | dark-2 `#828282` on `#242424` = 4.0:1 | `#9a9a9a` = 5.5:1 |
 | Active navigation label | violet-6 `#7950f2` on its tint = 4.3:1 | primary shade 7 in light mode |
 
-All GDS presets I tried (`high-contrast`, `colorblind-safe`, `royal`, `skyline`, ...) fail the same dimmed-text check, so a request was filed in the GDS repository. Remove the overrides when GDS ships defaults that pass.
+All GDS presets I tried (`high-contrast`, `colorblind-safe`, `royal`, `skyline`, ...) fail the same dimmed-text check, so the findings were filed as [general-design-system#944](https://github.com/sovereignsquad/general-design-system/issues/944) (together with a documentation trap in the accessibility package, below). Remove the overrides when GDS ships defaults that pass.
 
 Known, not failing: GDS `StateBlock` renders its title as an `h3`, which axe reports as a moderate heading-order warning after the page's `h1`. The gate fails on serious and critical findings.
 
