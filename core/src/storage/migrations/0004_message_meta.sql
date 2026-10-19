@@ -1,0 +1,1 @@
+ALTER TABLE messages ADD COLUMN meta_json TEXT NOT NULL DEFAULT '{}';

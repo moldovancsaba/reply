@@ -39,10 +39,10 @@ function validate(m) {
 
 export function createRepo(db, { now = () => Date.now() } = {}) {
     const q = {
-        message: db.prepare("SELECT text, subject, attachments_json, ts_ms FROM messages WHERE id = ?"),
-        insertMessage: db.prepare(`INSERT INTO messages (id, channel, account, provider_message_key, thread_key, handle_norm, is_from_me, ts_ms, subject, text, attachments_json, ingested_at)
-            VALUES (@id, @channel, @account, @provider_message_key, @thread_key, @handle_norm, @is_from_me, @ts_ms, @subject, @text, @attachments_json, @ingested_at)`),
-        updateMessage: db.prepare("UPDATE messages SET text=@text, subject=@subject, attachments_json=@attachments_json, ts_ms=@ts_ms WHERE id=@id"),
+        message: db.prepare("SELECT text, subject, attachments_json, ts_ms, meta_json FROM messages WHERE id = ?"),
+        insertMessage: db.prepare(`INSERT INTO messages (id, channel, account, provider_message_key, thread_key, handle_norm, is_from_me, ts_ms, subject, text, attachments_json, meta_json, ingested_at)
+            VALUES (@id, @channel, @account, @provider_message_key, @thread_key, @handle_norm, @is_from_me, @ts_ms, @subject, @text, @attachments_json, @meta_json, @ingested_at)`),
+        updateMessage: db.prepare("UPDATE messages SET text=@text, subject=@subject, attachments_json=@attachments_json, ts_ms=@ts_ms, meta_json=@meta_json WHERE id=@id"),
         handle: db.prepare("SELECT first_seen_ms, last_seen_ms FROM handles WHERE handle_norm = ?"),
         insertHandle: db.prepare("INSERT INTO handles (handle_norm, kind, first_seen_ms, last_seen_ms) VALUES (?,?,?,?)"),
         widenHandle: db.prepare("UPDATE handles SET first_seen_ms=?, last_seen_ms=? WHERE handle_norm=?"),
@@ -118,7 +118,7 @@ export function createRepo(db, { now = () => Date.now() } = {}) {
                     id, channel: m.channel, account: m.account, provider_message_key: m.providerMessageKey,
                     thread_key: m.threadKey ?? "", handle_norm: m.handle_norm, is_from_me: m.isFromMe ? 1 : 0, ts_ms: Math.trunc(m.tsMs),
                     subject: m.subject ?? null, text: String(m.text ?? "").slice(0, MAX_TEXT),
-                    attachments_json: JSON.stringify(m.attachments ?? []), ingested_at: t,
+                    attachments_json: JSON.stringify(m.attachments ?? []), meta_json: JSON.stringify(m.meta ?? {}), ingested_at: t,
                 };
                 const existing = q.message.get(id);
                 ensureHandle(m.handle_norm, row.ts_ms);
@@ -126,7 +126,7 @@ export function createRepo(db, { now = () => Date.now() } = {}) {
                 if (!existing) {
                     q.insertMessage.run(row);
                     result.inserted++;
-                } else if (existing.text !== row.text || existing.subject !== row.subject || existing.attachments_json !== row.attachments_json || existing.ts_ms !== row.ts_ms) {
+                } else if (existing.text !== row.text || existing.subject !== row.subject || existing.attachments_json !== row.attachments_json || existing.ts_ms !== row.ts_ms || existing.meta_json !== row.meta_json) {
                     q.updateMessage.run(row);
                     result.updated++;
                 } else {
