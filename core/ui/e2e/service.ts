@@ -12,7 +12,7 @@ const freePort = () => new Promise<number>((resolve) => { const s = net.createSe
 export type Service = { url: string; port: number; stop: () => Promise<void>; start: () => Promise<void>; running: () => boolean };
 
 // A real Reply Core service (serving the built UI) on its own port and data folder.
-export async function startService({ seed = false }: { seed?: boolean } = {}): Promise<Service> {
+export async function startService({ seed = false, env = {} }: { seed?: boolean; env?: Record<string, string> } = {}): Promise<Service> {
   const port = await freePort();
   const home = mkdtempSync(path.join(os.tmpdir(), "rc-e2e-"));
   if (seed) {
@@ -22,7 +22,7 @@ export async function startService({ seed = false }: { seed?: boolean } = {}): P
   let child: ChildProcess | null = null;
   const start = async () => {
     child = spawn(process.execPath, [path.join(root, "src", "index.js")], {
-      env: { ...process.env, REPLY_CORE_HOME: home, REPLY_CORE_PORT: String(port), REPLY_CORE_CONNECTORS: "none", REPLY_CORE_LOG_LEVEL: "error" },
+      env: { ...process.env, REPLY_CORE_HOME: home, REPLY_CORE_PORT: String(port), REPLY_CORE_CONNECTORS: "none", REPLY_CORE_LOG_LEVEL: "error", ...env },
       stdio: ["ignore", "pipe", "inherit"],
     });
     await new Promise<void>((resolve, reject) => {
