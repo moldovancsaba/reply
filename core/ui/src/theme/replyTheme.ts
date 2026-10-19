@@ -16,8 +16,8 @@ export const replyTheme = createPublicBrandTheme({
   overrides: {
     primaryShade: { light: 7, dark: 8 },
     colors: {
-      gray: replaceShade(gdsTheme.colors!.gray as Ramp, 6, "#6b7280"),
-      dark: replaceShade(gdsTheme.colors!.dark as Ramp, 2, "#9a9a9a"),
+      gray: replaceShade(gdsTheme.colors!.gray as Ramp, 6, "#4b5563"),
+      dark: replaceShade(gdsTheme.colors!.dark as Ramp, 2, "#c1c2c5"),
     },
   },
 });

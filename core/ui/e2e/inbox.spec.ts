@@ -26,7 +26,7 @@ test("populated list: rows are links with full accessible names, Load more appen
   page.on("console", (m) => logged.push(m.text()));
   await mockContacts(page, (u) => ({ body: u.searchParams.get("cursor") ? page2 : page1 }));
   await page.goto(`${svc.url}/inbox`);
-  const row = page.getByRole("link", { name: /^Person 1 5 minutes ago Hello number 1 iMessage/ });
+  const row = page.getByRole("link", { name: /^Person 1 Hello number 1 iMessage 5 minutes ago/ });
   await expect(row).toBeVisible();
   await expect(row).toHaveAttribute("href", "/inbox/c_1");
   await expect(page.getByText("Showing 3 of 4 conversations")).toBeVisible();
