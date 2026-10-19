@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { ConfigError, loadConfig } from "./config.js";
 import { createLogger } from "./logger.js";
+import { createRotatingStream } from "./logfile.js";
 import { createServer, gracefulClose } from "./server.js";
 import { createRegistry } from "./connectors/registry.js";
 import { createRunner } from "./connectors/runner.js";
@@ -31,7 +32,7 @@ try {
     process.exit(EXIT_CONFIG);
 }
 
-const logger = createLogger(config);
+const logger = createLogger(config, config.logFile ? createRotatingStream({ file: config.logFile, maxBytes: config.logMaxBytes }) : undefined);
 for (const key of config.unknownKeys) logger.info({ key }, "ignoring unknown REPLY_CORE_* setting");
 let storage;
 try {

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Created by `reply-core install-agent`; remove it with `reply-core uninstall-agent`. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.moldovancsaba.reply-core</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/node/bin/node</string>
+    <string>/r/core/src/index.js</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/r/core</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>REPLY_CORE_LOG_FILE</key>
+    <string>/h/Library/Logs/reply-core/service.log</string>
+    <key>REPLY_CORE_PORT</key>
+    <string>45511</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>/h/Library/Logs/reply-core/launchd.log</string>
+  <key>StandardErrorPath</key>
+  <string>/h/Library/Logs/reply-core/launchd.log</string>
+</dict>
+</plist>
