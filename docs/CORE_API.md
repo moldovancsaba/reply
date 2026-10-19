@@ -65,7 +65,7 @@ Query: `q` (required, at least 2 characters, max 200), `channel`, `contactId`, `
   "nextCursor": "…", "hasMore": true }
 ```
 
-The match is marked with the control characters `\u0001` (start) and `\u0002` (end), never HTML, so message content cannot inject markup; the UI maps them to its highlight component. Snippets are at most 160 characters with the marks balanced.
+The match is marked with the control characters `\u0001` (start) and `\u0002` (end), never HTML, so message content cannot inject markup; the UI maps them to `<mark>` elements with `parseSnippet` (see [CORE_UI.md](CORE_UI.md#search)). Snippets are at most 160 characters with the marks balanced.
 
 Ranking: `S = bm25(text weight 1.0, subject weight 2.0)`, lower first, then newest, then id. A subject states the topic of a whole mail, so subject matches count double. The weights live in `core/src/read/service.js` (`TEXT_WEIGHT`, `SUBJECT_WEIGHT`). Search cursors encode `(rank, time, id)`; because bm25 depends on corpus statistics, a heavy ingest between pages can reorder results slightly.
 
