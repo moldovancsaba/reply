@@ -18,7 +18,9 @@
     "verify": "node scripts/verify.js",
     "fixtures": "node test/fixtures/build.js",
     "ui:build": "npm --prefix ui run build",
-    "verify:ui": "npm --prefix ui run verify"
+    "verify:ui": "npm --prefix ui run verify",
+    "verify:release": "node scripts/verify-release.js",
+    "launcher": "node scripts/reply-core"
   },
   "dependencies": {
     "@fastify/static": "^10.1.6",

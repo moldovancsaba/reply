@@ -20,6 +20,14 @@
   <a href="#contributing">Contributing</a>
 </p>
 
+## Reply Core (the lean unified inbox)
+
+`core/` is a lean, local-first unified inbox: one process, one SQLite file, one web UI over iMessage, Apple Mail, Contacts and (opt-in) WhatsApp and IMAP, with replies handed off to your own apps. It is independent of `chat/` and the native app below. Start with [`docs/CORE_FIRST_RUN.md`](docs/CORE_FIRST_RUN.md); the plan is in [`REPLY_CORE_PLAN.md`](REPLY_CORE_PLAN.md) and operations in [`docs/CORE_OPERATIONS.md`](docs/CORE_OPERATIONS.md).
+
+```bash
+cd core && node scripts/reply-core start
+```
+
 ## Open Source Status
 
 This repository is intended to be understandable and operable without private tribal knowledge.

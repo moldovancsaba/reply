@@ -9,9 +9,12 @@ This directory is independent of `chat/` (the legacy hub); it shares nothing wit
 ```bash
 cd core
 npm install
-npm start
-curl -s http://127.0.0.1:45511/api/health
+node scripts/reply-core start       # checks Node, builds the UI if needed, starts the service, opens the browser
+node scripts/reply-core status
+node scripts/reply-core stop
 ```
+
+`npm start` runs only the service in the foreground (logs to stdout). The launcher also offers `logs`, `open`, and an optional start-at-login agent (`install-agent`); see [`../docs/CORE_OPERATIONS.md`](../docs/CORE_OPERATIONS.md). `npm run verify:release` is the release gate.
 
 Requires Node >= 20.17.
 
@@ -33,6 +36,7 @@ Every setting is optional. See [`.env.example`](.env.example). Values are read f
 | `REPLY_CORE_HOME` | `~/Library/Application Support/reply-core` | Data home (created with mode 0700) |
 | `REPLY_CORE_PORT` | `45511` | Loopback port, 1024-65535 |
 | `REPLY_CORE_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
+| `REPLY_CORE_LOG_FILE`, `REPLY_CORE_LOG_MAX_BYTES` | none (stdout), `10485760` | write logs to a file rotated at that size, keeping 5 files (the launcher sets it to `~/Library/Logs/reply-core/service.log`) |
 | `REPLY_CORE_CONNECTORS` | `imessage,contacts,apple-mail` | Connectors to run (comma list, or `none`); see [`../docs/CORE_CONNECTORS.md`](../docs/CORE_CONNECTORS.md) |
 | `REPLY_CORE_IMESSAGE_DB` | `~/Library/Messages/chat.db` | Path to the Messages database |
 | `REPLY_CORE_MAIL_ROOT` | `~/Library/Mail` | Folder holding Mail's `V*` data |
