@@ -191,6 +191,13 @@ final class HelperCoreTests: XCTestCase {
         XCTAssertEqual(report.worstFailure?.exitCode, 11)
     }
 
+    func testDoctorOnlyChecksTheRequestedSource() {
+        let r = doctor(imessageDB: "/nonexistent/chat.db", mailRoot: "/nonexistent/Mail", checkContacts: false, only: "contacts")
+        XCTAssertEqual([r.imessage, r.mail, r.contacts], ["skipped", "skipped", "ok"])
+        XCTAssertNil(r.worstFailure)
+        XCTAssertThrowsError(try CLI.parse(["--only", "calendar"]))
+    }
+
     func testBrokenPipeStopsQuietly() {
         let w = NDJSONWriter { _ in false }
         XCTAssertFalse(w.emit(WarningRecord(code: "x", count: 1)))
@@ -204,6 +211,8 @@ final class HelperCoreTests: XCTestCase {
         XCTAssertEqual(CLI.run([], writer: Capture().writer), 2)
         XCTAssertEqual(CLI.run(["nope"], writer: Capture().writer), 2)
         XCTAssertEqual(CLI.run(["imessage", "--limit", "0"], writer: Capture().writer), 2)
+        XCTAssertNil(try CLI.parse([]).limit, "an omitted limit stays omitted (contacts export everything)")
+        XCTAssertEqual(DoctorReport(imessage: "ok", mail: "ok", contacts: "needs_consent").worstFailure, nil, "needing consent is not a failure")
         XCTAssertEqual(CLI.run(["imessage", "--db", "/nonexistent/x.db"], writer: Capture().writer), 11)
     }
 }

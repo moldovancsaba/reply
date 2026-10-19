@@ -1,9 +1,11 @@
 // Connector ids known to the service, in the default enabled order. Connector issues append here.
+import { createContactsConnector } from "./contacts.js";
 import { createImessageConnector } from "./imessage.js";
 import { createStub } from "./stub.js";
 
 export const AVAILABLE = {
     imessage: (deps) => createImessageConnector(deps),
+    contacts: (deps) => createContactsConnector(deps),
     stub: () => createStub(),
 };
 export const DEFAULT_ENABLED = [];

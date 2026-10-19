@@ -60,13 +60,13 @@ The source contact is kept but hidden (`hidden = 1`, `merged_into = target`) so 
 
 ## Address-book import
 
-`identity.importContacts(people)` (used by the Contacts connector) takes `[{ externalId, displayName, handles: [{ handle_norm, kind }] }]` and returns `{ created, updated, linked, conflicts, protectedByMerge }`:
+`identity.importContacts(people)` (used by the Contacts connector) takes `[{ externalId, displayName, handles: [{ handle_norm, kind }], fingerprint? }]` and returns `{ created, updated, unchanged, linked, conflicts, protectedByMerge }`:
 
 - a person is identified by `externalId` (`contacts.external_id`); a changed name is updated;
 - a handle with no link, or an `auto` link, is linked to the person (`link_origin = apple_contacts`); an emptied `auto` contact is deleted;
 - a handle already linked to a **different** address-book person is reported in `conflicts` and left alone (for example two people sharing a landline);
 - a handle linked by a manual merge is left alone and counted in `protectedByMerge`;
-- importing the same list twice changes nothing.
+- a person whose `fingerprint` (name and handles) is unchanged since the last import is skipped (`unchanged`), so importing the same list twice changes nothing and re-runs are cheap.
 
 ## Recovery
 

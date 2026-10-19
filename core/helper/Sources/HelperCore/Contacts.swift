@@ -6,7 +6,8 @@ public enum ContactsSource {
         switch CNContactStore.authorizationStatus(for: .contacts) {
         case .authorized: return .ok
         case .denied, .restricted: return .permissionDenied
-        default: return .permissionDenied // notDetermined: not usable until the user consents
+        case .notDetermined: return .needsConsent
+        default: return .permissionDenied
         }
     }
 
