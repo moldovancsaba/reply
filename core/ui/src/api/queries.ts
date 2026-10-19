@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { fetchJson, type ApiError, type Result } from "./client";
-import type { ContactList, StatusReport } from "./types.gen";
+import type { Channel, Contact, ContactList, StatusReport, Thread } from "./types.gen";
 
 // react-query wants thrown errors; the client returns Results. This is the bridge.
 export class ApiFailure extends Error {
@@ -48,5 +48,34 @@ export function useStatus() {
     refetchInterval: 30_000,
     retry: false,
     staleTime: 15_000,
+  });
+}
+
+export function useContact(id: string) {
+  return useQuery({
+    queryKey: ["contact", id],
+    queryFn: ({ signal }) => unwrap(fetchJson<Contact>(`/api/contacts/${encodeURIComponent(id)}`, { signal })),
+    retry: retryOnce,
+    retryDelay: 2000,
+  });
+}
+
+export const THREAD_PAGE = 50;
+
+// Newest page first; "before" pages walk back in time. The first page is refetched every 30 s while the tab is visible.
+export function useThread(id: string, channel: Channel | "all") {
+  return useInfiniteQuery({
+    queryKey: ["thread", id, channel],
+    queryFn: ({ pageParam, signal }) => {
+      const p = new URLSearchParams({ limit: String(THREAD_PAGE) });
+      if (channel !== "all") p.set("channel", channel);
+      if (pageParam) p.set("before", pageParam);
+      return unwrap(fetchJson<Thread>(`/api/contacts/${encodeURIComponent(id)}/messages?${p}`, { signal }));
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    refetchInterval: 30_000,
+    retry: retryOnce,
+    retryDelay: 2000,
   });
 }
