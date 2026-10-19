@@ -35,7 +35,7 @@ try {
     process.exit(EXIT_STORAGE);
 }
 const repo = createRepo(storage.db);
-const registry = createRegistry({ enabled: config.connectors });
+const registry = createRegistry({ enabled: config.connectors, deps: { config, logger } });
 for (const id of registry.unknown) logger.warn({ connector: id }, "ignoring unknown connector in REPLY_CORE_CONNECTORS");
 const identity = createIdentity({ db: storage.db, repo });
 const runner = createRunner({ db: storage.db, repo, logger, onContacts: (people) => identity.importContacts(people) });

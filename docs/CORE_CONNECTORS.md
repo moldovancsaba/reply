@@ -69,14 +69,35 @@ A blocked connector is re-checked first; if its preflight now succeeds it is cle
 
 | Variable | Meaning |
 |---|---|
-| `REPLY_CORE_CONNECTORS` | Comma list of connector ids to enable (default: `DEFAULT_ENABLED_IDS`, empty until connector issues land). Empty list stops all syncing; unknown ids are logged and ignored. |
+| `REPLY_CORE_CONNECTORS` | Comma list of connector ids to enable. Unset or empty: the defaults (`DEFAULT_ENABLED_IDS`, currently `imessage`). The single word `none` runs no connectors. Unknown ids are logged and ignored. |
 | `REPLY_CORE_<ID>_INTERVAL_MS` | Interval for one connector (`APPLE_MAIL` for `apple-mail`), integer >= 1000. |
 
 `REPLY_CORE_CONNECTORS=stub` enables a deterministic demo connector (three pages of synthetic messages) for trying the framework without any source app.
 
+## iMessage (`imessage`, issue #191)
+
+Reads Apple Messages through the native helper (`helper imessage`), incrementally by message `ROWID`, every 60 s.
+
+| | |
+|---|---|
+| Source | `~/Library/Messages/chat.db`, or `REPLY_CORE_IMESSAGE_DB` |
+| Cursor | `{ "rowid": n }`; page size 500 |
+| Permission | Full Disk Access for the process that starts Reply Core ([CORE_PERMISSIONS.md](CORE_PERMISSIONS.md)) |
+| Message key | the message `guid`; `account` is empty |
+| Handle | the other party, normalized ([CORE_IDENTITY.md](CORE_IDENTITY.md)); handles stored without `+` or as email ids are normalized the same way |
+| Groups | one thread handle `group:<chat guid>` per group chat; the sender of each received message is in `meta_json.sender`; messages you sent have no sender |
+| Text | plain text, else the decoded `attributedBody`, else `[Attachment: name]` / `[Attachments: n]`; attachments keep name, type and size only |
+| Skipped | reactions and tapbacks (counted in the log as `skippedReactions`), rows whose handle cannot be normalized (`skippedBadHandle`) |
+| Dates | Apple-epoch seconds or nanoseconds are converted; a row with no usable date is quarantined by storage |
+| Preflight | `helper doctor`: `permission_denied`, `source_missing`, `schema_unsupported` become blocked states with a recovery hint; a missing or modified helper is `helper_unavailable` |
+
+Limitations: edits and unsends are not propagated; reactions are not shown; a message whose text cannot be decoded is stored with empty text (the log shows `undecodable`).
+
+Run it: `REPLY_CORE_CONNECTORS=imessage npm start`, then `curl -X POST http://127.0.0.1:45511/api/sync/imessage`. To discard imported iMessage rows and re-ingest: stop the service, `node core/scripts/reset-cursor.js imessage --purge`.
+
 ## Operations
 
-- Stop syncing entirely: `REPLY_CORE_CONNECTORS=` (empty) and restart. The service keeps serving existing data.
+- Stop syncing entirely: `REPLY_CORE_CONNECTORS=none` and restart. The service keeps serving existing data.
 - Force a re-ingest of one connector: stop the service, `node core/scripts/reset-cursor.js <connector>` (add `--purge` to delete the messages it imported first; `apple-mail` and `imap` share the `email` channel, so purging either removes all email rows), start the service.
 - Logs: `sync.run` (outcome, pages, counts, ms), `sync.retry` (code, attempt, delay) at warn, `sync.failed` (code, kind) at error. No message content.
 - Process metrics (runs, failures by code, last duration) are available from `runner.metrics()` and are surfaced by the status API (#190).

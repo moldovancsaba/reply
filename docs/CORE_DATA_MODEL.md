@@ -8,7 +8,7 @@ One SQLite file, `core.db`, in `REPLY_CORE_HOME` (default `~/Library/Application
 
 | Table | Purpose |
 |---|---|
-| `messages` | One row per message from any channel. `id = channel:account:provider_message_key`, so re-ingest is idempotent. `ts_ms` is UTC epoch milliseconds. Text is capped at 256 KB. |
+| `messages` | One row per message from any channel (`meta_json` holds channel-specific details such as the iMessage service or a group message's sender; migration `0004_message_meta.sql`). `id = channel:account:provider_message_key`, so re-ingest is idempotent. `ts_ms` is UTC epoch milliseconds. Text is capped at 256 KB. |
 | `handles` | Every counterpart identifier seen (`handle_norm`), with `kind` (`phone`, `email`, `whatsapp`, `other`) and first/last seen. |
 | `contacts` | A person. `origin` is `auto` (single-handle, created on first sight), `apple_contacts`, or `manual`. `external_id` is the address-book identifier; `merged_into` is set (with `hidden = 1`) when the contact was merged away (migration `0003_identity.sql`). |
 | `contact_handles` | Maps each handle to exactly one contact. `link_origin` is `auto`, `apple_contacts`, or `manual_merge`. |

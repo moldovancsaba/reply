@@ -9,6 +9,7 @@ test("defaults", () => {
     assert.equal(c.logLevel, "info");
     assert.deepEqual(c.allowedOrigins, []);
     assert.equal(c.home, defaultHome());
+    assert.deepEqual(c.connectors, ["imessage"]);
 });
 
 test("overrides", () => {
@@ -50,7 +51,9 @@ test("connectors and per-connector intervals", () => {
     assert.deepEqual(c.connectors, ["imessage", "apple-mail"]);
     assert.deepEqual(c.intervals, { "apple-mail": 5000, imessage: 2000 });
     assert.deepEqual(c.unknownKeys, [], "interval variables are known keys");
-    assert.deepEqual(loadConfig({}).connectors, []);
+    assert.deepEqual(loadConfig({}).connectors, ["imessage"], "default");
+    assert.deepEqual(loadConfig({ REPLY_CORE_CONNECTORS: "none" }).connectors, [], "explicitly none");
+    assert.equal(loadConfig({ REPLY_CORE_IMESSAGE_DB: "/x/chat.db" }).imessageDb, "/x/chat.db");
 });
 
 test("invalid connector list and intervals are rejected", () => {
