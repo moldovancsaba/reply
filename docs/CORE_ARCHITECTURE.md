@@ -23,6 +23,10 @@ process start
 
 `core/src/storage/` owns the single SQLite database: `db.js` (open, pragmas, quick_check), `migrate.js` (forward-only checksummed migrations), `repo.js` (all reads and writes). The service opens storage after config and before listening; a storage failure exits with code 74. See [CORE_DATA_MODEL.md](CORE_DATA_MODEL.md).
 
+## Testing strategy
+
+Unit and integration tests use `node:test`. Connectors are tested against deterministic synthetic copies of the source databases built by `core/test/fixtures` (see its README for the edge cases each source includes). The only checks that need a real Mac profile are the manual real-data comparisons listed in each connector issue.
+
 ## Ownership
 
 | File | Responsibility |

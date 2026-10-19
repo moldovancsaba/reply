@@ -41,6 +41,10 @@ Unknown `REPLY_CORE_*` variables are ignored and reported once at info level.
 
 `core.db` lives in `REPLY_CORE_HOME` (mode 0600; the directory is 0700). Layout and invariants: [`../docs/CORE_DATA_MODEL.md`](../docs/CORE_DATA_MODEL.md). Inspect it with `node scripts/db-inspect.js`.
 
+## Test fixtures
+
+`npm run fixtures -- --seed 42 --out /tmp/rc-fixtures` builds synthetic Messages, Mail, WhatsApp and Contacts sources (see [`test/fixtures/README.md`](test/fixtures/README.md)). Connector tests use these instead of personal data.
+
 ## Verify
 
 ```bash
