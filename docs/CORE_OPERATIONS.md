@@ -6,6 +6,35 @@ Reply Core's database is a cache of your other apps, **except** for one thing it
 
 All commands run from `core/`: `node bin/reply-core.js <command>`. Exit codes: `0` ok, `2` usage, `3` Reply Core is running or another operation is, `4` verification failed, `5` I/O error.
 
+## Start, stop and status
+
+The launcher is `core/scripts/reply-core` (run it as `node scripts/reply-core ...` or `npm run launcher -- ...` from `core/`, or put a symlink to it on your PATH as `reply-core`).
+
+| Command | What it does |
+|---|---|
+| `start [--background] [--no-open]` | checks Node (>= 20.17), builds the web app if `ui/dist` is missing, starts the service, waits up to 30 s for `/api/health`, then opens the browser (on **Sources** when something needs attention, otherwise the inbox). Without `--background` it stays attached (Control+C stops it); with it the service keeps running and the pidfile is used. A second `start` only opens the browser. |
+| `stop` | SIGTERM to the pid in `reply-core.pid`, waits 5 s, then SIGKILL. |
+| `status` | the same data as `GET /api/status` as a short table (storage, helper, each source, backups); exit 1 when overall is `blocked`. |
+| `open` | opens the UI of the running service. |
+| `logs [--lines N] [--no-follow]` | tails the service log. |
+| `install-agent`, `uninstall-agent` | see below. |
+
+Exit codes: `0` ok, `10` Node too old, `11` the web app could not be built (needs network and a `GITHUB_TOKEN`, see `core/ui/README.md`), `12` the service did not become healthy in 30 s, `13` not running (`stop`, `status`, `open`); when the service itself refuses to start the launcher passes its code on and explains it (`75` port in use, `78` invalid configuration, `74` storage). A pidfile whose process is gone is ignored. Single user, single instance: two accounts on one Mac need different `REPLY_CORE_PORT` values.
+
+## Start at login (optional)
+
+`install-agent` writes `~/Library/LaunchAgents/com.moldovancsaba.reply-core.plist` and loads it: `RunAtLoad`, `KeepAlive`, `ThrottleInterval 30`, `ProcessType Background`, running exactly `<this node> core/src/index.js`. Installing again rewrites and reloads it (nothing is duplicated). `uninstall-agent` unloads it and deletes that one file, and only if it carries the marker the installer wrote; a plist it did not create is never touched. Logs and data stay.
+
+**Full Disk Access is attached to the program that starts the service**, here the exact `node` binary named in the plist (the command prints its path and the System Settings steps). Consequences: after a Node upgrade (a new path or binary) the agent loses access, so run `install-agent` again and grant it again; `status` says when the agent was installed for a different Node. The alternative without an agent is to run `start` from a Terminal that already has Full Disk Access. The plist contains paths and the port only, never a secret.
+
+## Logs
+
+The launcher and the agent set `REPLY_CORE_LOG_FILE=~/Library/Logs/reply-core/service.log`. The service rotates it itself at `REPLY_CORE_LOG_MAX_BYTES` (default 10 MB) and keeps 5 files (`service.log`, `.1` ... `.4`), so the total stays under about 50 MB, with no root-owned `newsyslog` file and no blocking (a rotation is a few renames between two small writes). If the file cannot be written the service logs to stderr instead. Two small extra files exist: `startup.log` (output of `start --background`) and `launchd.log` (what launchd captured before the logger was ready, for example an invalid configuration); both only ever hold startup problems. Logs contain ids, counts and error codes, never message text or addresses.
+
+## Release gate
+
+`npm run verify:release` (from `core/`) runs everything that must hold before a build is handed to someone, and prints a table: lint with no warnings, the Swift helper build and tests (skipped with a note if there is no Swift toolchain), the unit and integration tests, an end-to-end smoke of the launcher (start, health, status, app shell, second start, stop, in a temporary HOME), and the UI package's own `verify` (lint, types, unit tests, build, bundle budget, Playwright accessibility). It runs every step even after a failure and exits non-zero on any failure **or any warning** in any step's output. Unlike `npm run verify`, missing UI dependencies are a failure.
+
 ## Backups
 
 ```bash

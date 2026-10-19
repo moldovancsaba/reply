@@ -26,6 +26,10 @@ export function loadConfig(env = process.env) {
         throw new ConfigError(`REPLY_CORE_LOG_LEVEL must be one of ${LEVELS.join(", ")}`);
     }
 
+    const logFile = env.REPLY_CORE_LOG_FILE ? path.resolve(env.REPLY_CORE_LOG_FILE) : null;
+    const logMaxBytes = env.REPLY_CORE_LOG_MAX_BYTES === undefined ? 10 * 1024 * 1024 : Number(env.REPLY_CORE_LOG_MAX_BYTES);
+    if (!Number.isInteger(logMaxBytes) || logMaxBytes < 1024) throw new ConfigError("REPLY_CORE_LOG_MAX_BYTES must be an integer >= 1024");
+
     const allowedOrigins = (env.REPLY_CORE_ALLOWED_ORIGINS || "")
         .split(",")
         .map((s) => s.trim())
@@ -81,13 +85,15 @@ export function loadConfig(env = process.env) {
         (k) => k.startsWith("REPLY_CORE_") && !KNOWN_KEYS.has(k) && !/_INTERVAL_MS$/.test(k),
     );
     // IMAP joins the default connectors once an account has been added (see `reply-core accounts add-imap`)
-    return { home, port, logLevel, allowedOrigins, connectors: rawConnectors === "none" ? [] : connectors.length ? connectors : [...DEFAULT_ENABLED_IDS, ...(hasAccounts(home) ? ["imap"] : [])], llm: { provider: llm, model: ollamaModel, url: ollamaUrl }, imessageDb: env.REPLY_CORE_IMESSAGE_DB || null, mailRoot: env.REPLY_CORE_MAIL_ROOT || null, whatsappDb: env.REPLY_CORE_WHATSAPP_DB || null, uiDir: env.REPLY_CORE_UI_DIR ? path.resolve(env.REPLY_CORE_UI_DIR) : path.resolve(import.meta.dirname, "..", "ui", "dist"), intervals, defaultRegion, unknownKeys };
+    return { home, port, logLevel, logFile, logMaxBytes, allowedOrigins, connectors: rawConnectors === "none" ? [] : connectors.length ? connectors : [...DEFAULT_ENABLED_IDS, ...(hasAccounts(home) ? ["imap"] : [])], llm: { provider: llm, model: ollamaModel, url: ollamaUrl }, imessageDb: env.REPLY_CORE_IMESSAGE_DB || null, mailRoot: env.REPLY_CORE_MAIL_ROOT || null, whatsappDb: env.REPLY_CORE_WHATSAPP_DB || null, uiDir: env.REPLY_CORE_UI_DIR ? path.resolve(env.REPLY_CORE_UI_DIR) : path.resolve(import.meta.dirname, "..", "ui", "dist"), intervals, defaultRegion, unknownKeys };
 }
 
 const KNOWN_KEYS = new Set([
     "REPLY_CORE_HOME",
     "REPLY_CORE_PORT",
     "REPLY_CORE_LOG_LEVEL",
+    "REPLY_CORE_LOG_FILE",
+    "REPLY_CORE_LOG_MAX_BYTES",
     "REPLY_CORE_ALLOWED_ORIGINS",
     "REPLY_CORE_CONNECTORS",
     "REPLY_CORE_DEFAULT_REGION",
