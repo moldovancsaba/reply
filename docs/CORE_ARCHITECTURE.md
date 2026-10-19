@@ -27,6 +27,10 @@ process start
 
 `core/src/connectors/` runs every source on one runtime (runner, scheduler, registry, error classes) and `core/src/routes/sync.js` exposes `POST /api/sync/:connector`. Flow, error codes and operations: [CORE_CONNECTORS.md](CORE_CONNECTORS.md).
 
+## IMAP accounts and secrets
+
+`core/src/imap/` holds the accounts file, the TLS-only IMAP client and the keychain wrapper (secrets go through the native helper on stdin/stdout); `core/src/connectors/imap.js` is the connector and `core/src/cli/accounts.js` + `core/bin/reply-core.js` the `accounts` command. See [CORE_SECURITY.md](CORE_SECURITY.md).
+
 ## Drafting
 
 `core/src/drafting/service.js` builds one bounded prompt from a contact's thread and makes a single call to a local Ollama; `core/src/routes/drafts.js` serves the two endpoints. Off by default. See [CORE_DRAFTING.md](CORE_DRAFTING.md).

@@ -1,8 +1,10 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { setImmediate as yieldToLoop } from "node:timers/promises";
 import { classify } from "./errors.js";
 
 const KEEP_RUNS = 50;
+// An account id can be an email address: logs carry a short stable hash instead.
+export const maskAccount = (a) => (a ? `acct_${createHash("sha1").update(a).digest("hex").slice(0, 8)}` : "");
 
 export const backoffMs = (attempt, random = Math.random) => Math.min(60_000, 1000 * 2 ** (attempt - 1)) * (0.5 + random() / 2);
 
@@ -105,7 +107,7 @@ export function createRunner({ db, repo, logger, onContacts, now = () => Date.no
             outcome = c.kind === "blocked" ? "blocked" : "error";
             setState({ state: c.kind === "blocked" ? "blocked" : "error", last_error_code: c.code, last_error_ms: now() });
             metrics.failuresByCode[c.code] = (metrics.failuresByCode[c.code] ?? 0) + 1;
-            logger?.error({ connector: connector.id, account, code: c.code, kind: c.kind }, "sync.failed");
+            logger?.error({ connector: connector.id, account: maskAccount(account), code: c.code, kind: c.kind }, "sync.failed");
         }
         live.delete(liveKey);
         const ms = now() - t0;
@@ -113,7 +115,7 @@ export function createRunner({ db, repo, logger, onContacts, now = () => Date.no
         metrics.lastDurationMs = ms;
         finishRun.run({ id: runId, ended_ms: now(), outcome, error_code: errorCode, ...state });
         prune.run(connector.id, connector.id, KEEP_RUNS);
-        logger?.info({ connector: connector.id, account, outcome, pages: state.pages, inserted: state.inserted, updated: state.updated, skipped: state.skipped, quarantined: state.quarantined, ms }, "sync.run");
+        logger?.info({ connector: connector.id, account: maskAccount(account), outcome, pages: state.pages, inserted: state.inserted, updated: state.updated, skipped: state.skipped, quarantined: state.quarantined, ms }, "sync.run");
         return { runId, outcome, errorCode, ...state };
     }
 

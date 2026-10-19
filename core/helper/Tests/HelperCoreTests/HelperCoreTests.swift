@@ -1,3 +1,4 @@
+import Security
 import SQLite3
 import XCTest
 @testable import HelperCore
@@ -196,6 +197,25 @@ final class HelperCoreTests: XCTestCase {
         XCTAssertEqual([r.imessage, r.mail, r.contacts], ["skipped", "skipped", "ok"])
         XCTAssertNil(r.worstFailure)
         XCTAssertThrowsError(try CLI.parse(["--only", "calendar"]))
+    }
+
+    func testKeychainCommandValidatesBeforeTouchingTheKeychain() {
+        let w = Capture().writer
+        XCTAssertEqual(CLI.run(["keychain"], writer: w), 2)
+        XCTAssertEqual(CLI.run(["keychain", "wipe"], writer: w), 2)
+        XCTAssertEqual(CLI.run(["keychain", "get", "--account", "a"], writer: w), 2, "service is required")
+        XCTAssertEqual(CLI.run(["keychain", "get", "--service", "login", "--account", "a"], writer: w), 2, "only reply-core.* services are reachable")
+        XCTAssertEqual(CLI.run(["keychain", "get", "--service", "reply-core.imap", "--account", ""], writer: w), 2)
+        XCTAssertThrowsError(try CLI.runKeychain(["set", "--service", "reply-core.x", "--account", "a"], writer: w, readStdin: { Data() })) {
+            XCTAssertEqual(($0 as? HelperFailure)?.exitCode, 2, "an empty secret is refused")
+        }
+    }
+
+    func testKeychainStatusMapping() {
+        XCTAssertEqual(KeychainStore.failure(for: errSecItemNotFound).exitCode, 11)
+        XCTAssertEqual(KeychainStore.failure(for: errSecInteractionNotAllowed).exitCode, 10)
+        XCTAssertEqual(KeychainStore.failure(for: errSecAuthFailed).exitCode, 10)
+        XCTAssertEqual(KeychainStore.failure(for: errSecParam).exitCode, 20)
     }
 
     func testBrokenPipeStopsQuietly() {

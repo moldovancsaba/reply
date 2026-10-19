@@ -17,6 +17,8 @@ core/helper/bin/reply-core-helper doctor
 
 Prints one state per source (`ok`, `permission_denied`, `source_missing`, `source_locked`, `schema_unsupported`) and never reads message content. `permission_denied` means macOS refused: grant the permission to the launching app, restart it, and run `doctor` again. `source_missing` means the app has no data yet (for example no Mail account is configured).
 
+| IMAP passwords | the login keychain (through the helper) | Keychain access | macOS may ask once to let `reply-core-helper` use the saved item; choose Always Allow ([CORE_SECURITY.md](CORE_SECURITY.md)) |
+
 ## Notes
 
 - Reply Core never changes system settings; the grant is always your own action.
