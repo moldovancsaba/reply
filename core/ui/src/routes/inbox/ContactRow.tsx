@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
-import { Anchor, BodyText, GdsBadge, GdsBox, GdsGeneratedAvatar, GdsInline, GdsRelativeTime, GdsStack, MetadataText } from "@sovereignsquad/gds";
+import { AccentPanel, Anchor, BodyText, GdsBadge, GdsBox, GdsColumnGrid, GdsColumnGridItem, GdsGeneratedAvatar, GdsInline, GdsRelativeTime, GdsStack, MetadataText } from "@sovereignsquad/gds";
 import type { Channel, ContactListItem } from "../../api/types.gen";
-import { CHANNEL_LABEL, exactLabel, relativeParts } from "../../lib/time";
+import { CHANNEL_LABEL, exactLabel, readablePreview, relativeParts } from "../../lib/time";
 
 const ICON = { imessage: "Message", email: "Mail", whatsapp: "Phone" } as const;
 
@@ -14,40 +14,47 @@ export function ContactRow({ contact, selected }: { contact: ContactListItem; se
   const navigate = useNavigate();
   const href = `/inbox/${contact.id}`;
   const parts = contact.lastTs ? relativeParts(contact.lastTs) : null;
+  const preview = contact.lastPreview ? `${contact.lastFromMe ? "You: " : ""}${readablePreview(contact.lastPreview)}` : "";
   return (
     <GdsBox component="li">
-      <Anchor
-        href={href}
-        aria-current={selected ? "page" : undefined}
-        onClick={(e: React.MouseEvent) => {
-          if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-          e.preventDefault();
-          navigate(href);
-        }}
-      >
-        <GdsInline gap="md" align="start" wrap="nowrap">
-          <GdsBox aria-hidden="true"><GdsGeneratedAvatar name={contact.displayName} size={40} /></GdsBox>
-          <GdsStack gap="xs" minWidth="zero">
-            <GdsInline justify="between" gap="sm" align="baseline">
-              <BodyText>{contact.displayName}</BodyText>
-              {contact.lastTs && parts ? (
-                <MetadataText>
-                  <time dateTime={contact.lastTs} title={exactLabel(contact.lastTs)}>
-                    <GdsRelativeTime value={parts.value} unit={parts.unit} numeric="auto" />
-                  </time>
-                </MetadataText>
-              ) : null}
-            </GdsInline>
-            {contact.lastPreview ? <MetadataText>{`${contact.lastFromMe ? "You: " : ""}${contact.lastPreview}`}</MetadataText> : null}
-            <GdsInline gap="xs" wrap="wrap">
-              {contact.lastChannel ? <GdsBadge tone="neutral" icon={ICON[contact.lastChannel]} label={CHANNEL_LABEL[contact.lastChannel]} /> : null}
-              {(Object.keys(CHANNEL_LABEL) as Channel[]).filter((c) => contact.counts[c] > 0).map((c) => (
-                <MetadataText key={c}>{`${contact.counts[c].toLocaleString("en-US")} ${CHANNEL_LABEL[c]}`}</MetadataText>
-              ))}
-            </GdsInline>
-          </GdsStack>
-        </GdsInline>
-      </Anchor>
+      <AccentPanel tone={selected ? "violet" : "gray"} variant={selected ? "subtle" : "soft-outline"}>
+        <Anchor
+          href={href}
+          underline="never"
+          c="inherit"
+          aria-current={selected ? "page" : undefined}
+          onClick={(e: React.MouseEvent) => {
+            if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+            e.preventDefault();
+            navigate(href);
+          }}
+        >
+          <GdsColumnGrid columns={12} gap="sm">
+            <GdsColumnGridItem span={2}>
+              <GdsBox aria-hidden="true"><GdsGeneratedAvatar name={contact.displayName} size={40} /></GdsBox>
+            </GdsColumnGridItem>
+            <GdsColumnGridItem span={10} minWidth="zero">
+              <GdsStack gap="xs" minWidth="zero">
+                <BodyText>{contact.displayName}</BodyText>
+                {preview ? <MetadataText>{preview.length > 140 ? `${preview.slice(0, 140)}…` : preview}</MetadataText> : null}
+                <GdsInline gap="xs" wrap="wrap" align="center">
+                  {contact.lastChannel ? <GdsBadge tone="neutral" icon={ICON[contact.lastChannel]} label={CHANNEL_LABEL[contact.lastChannel]} /> : null}
+                  {contact.lastTs && parts ? (
+                    <MetadataText>
+                      <time dateTime={contact.lastTs} title={exactLabel(contact.lastTs)}>
+                        <GdsRelativeTime value={parts.value} unit={parts.unit} numeric="auto" />
+                      </time>
+                    </MetadataText>
+                  ) : null}
+                </GdsInline>
+                <GdsInline gap="xs" wrap="wrap">
+                  <MetadataText>{countsSentence(contact.counts)}</MetadataText>
+                </GdsInline>
+              </GdsStack>
+            </GdsColumnGridItem>
+          </GdsColumnGrid>
+        </Anchor>
+      </AccentPanel>
     </GdsBox>
   );
 }

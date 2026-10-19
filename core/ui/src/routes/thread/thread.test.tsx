@@ -31,7 +31,7 @@ describe("TimelineEntry", () => {
     expect(screen.getByText("<img src=x onerror=alert(1)>")).toBeInTheDocument();
     expect(container.querySelector("img[src='x']")).toBeNull();
     expect(screen.getByText("Email summary")).toBeInTheDocument();
-    expect(screen.getByText("Attachment: a.pdf, 5.0 MB (not downloadable)")).toBeInTheDocument();
+    expect(screen.getByText("Attachment: a.pdf · 5.0 MB (not downloadable)")).toBeInTheDocument();
   });
 
   it("formats sizes", () => expect([sizeLabel(1), sizeLabel(2048), sizeLabel(undefined)]).toEqual(["1 B", "2 KB", ""]));
