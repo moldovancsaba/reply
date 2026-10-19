@@ -30,6 +30,7 @@ Every setting is optional. See [`.env.example`](.env.example). Values are read f
 | `REPLY_CORE_LLM` | `off` | `ollama` turns on optional reply suggestions ([`../docs/CORE_DRAFTING.md`](../docs/CORE_DRAFTING.md)) |
 | `REPLY_CORE_OLLAMA_MODEL`, `REPLY_CORE_OLLAMA_URL` | none, `http://127.0.0.1:11434` | model and address of the local Ollama |
 | `REPLY_CORE_WHATSAPP_DB` | auto-detected | Path to WhatsApp Desktop's `ChatStorage.sqlite` (the connector is opt-in: add `whatsapp` to `REPLY_CORE_CONNECTORS`) |
+| `REPLY_CORE_UI_DIR` | `ui/dist` | Folder with the built web app |
 | `REPLY_CORE_HELPER` | `helper/bin/reply-core-helper` | Path to the native helper binary |
 | `REPLY_CORE_<ID>_INTERVAL_MS` | connector default | Sync interval for one connector, >= 1000 |
 | `REPLY_CORE_DEFAULT_REGION` | `HU` | Country used to read phone numbers written without a country code |
@@ -62,6 +63,10 @@ Enabled connectors run on their own intervals. Trigger one now with `curl -X POS
 ## IMAP accounts
 
 `node bin/reply-core.js accounts add-imap|list|remove` manages mailboxes that are not in Apple Mail; passwords live in the keychain, never in files ([`../docs/CORE_SECURITY.md`](../docs/CORE_SECURITY.md), [`../docs/CORE_CONNECTORS.md`](../docs/CORE_CONNECTORS.md)).
+
+## UI
+
+The web app is in `ui/` (React + TypeScript, GDS only; installing it needs a GitHub token, see [`ui/README.md`](ui/README.md)). Build it with `npm --prefix ui run build`; the service then serves it at `http://127.0.0.1:45511/`. Shell contract, states, theme and the accessibility gate: [`../docs/CORE_UI.md`](../docs/CORE_UI.md).
 
 ## Backups
 
