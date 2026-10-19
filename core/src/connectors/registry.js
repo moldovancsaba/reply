@@ -1,6 +1,7 @@
 // Connector ids known to the service, in the default enabled order. Connector issues append here.
 import { createAppleMailConnector } from "./apple-mail.js";
 import { createContactsConnector } from "./contacts.js";
+import { createImapConnector } from "./imap.js";
 import { createImessageConnector } from "./imessage.js";
 import { createStub } from "./stub.js";
 import { createWhatsAppConnector } from "./whatsapp.js";
@@ -10,6 +11,7 @@ export const AVAILABLE = {
     contacts: (deps) => createContactsConnector(deps),
     "apple-mail": (deps) => createAppleMailConnector(deps),
     whatsapp: (deps) => createWhatsAppConnector(deps),
+    imap: (deps) => createImapConnector(deps),
     stub: () => createStub(),
 };
 export const DEFAULT_ENABLED = [];

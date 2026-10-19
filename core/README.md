@@ -58,6 +58,10 @@ Unknown `REPLY_CORE_*` variables are ignored and reported once at info level.
 
 Enabled connectors run on their own intervals. Trigger one now with `curl -X POST http://127.0.0.1:45511/api/sync/<id>` (202 accepted). Try the framework without any source app with `REPLY_CORE_CONNECTORS=stub npm start`. iMessage needs Full Disk Access for the process that starts the service (see [`../docs/CORE_PERMISSIONS.md`](../docs/CORE_PERMISSIONS.md)). Re-ingest from scratch with `node scripts/reset-cursor.js <id> [--purge]` (service stopped).
 
+## IMAP accounts
+
+`node bin/reply-core.js accounts add-imap|list|remove` manages mailboxes that are not in Apple Mail; passwords live in the keychain, never in files ([`../docs/CORE_SECURITY.md`](../docs/CORE_SECURITY.md), [`../docs/CORE_CONNECTORS.md`](../docs/CORE_CONNECTORS.md)).
+
 ## Native helper
 
 `helper/` is a Swift CLI that exports iMessage, Mail and Contacts as NDJSON. Build it once with `bash helper/build.sh` (`npm run verify` does this on macOS). See [`helper/README.md`](helper/README.md) and [`../docs/CORE_PERMISSIONS.md`](../docs/CORE_PERMISSIONS.md).

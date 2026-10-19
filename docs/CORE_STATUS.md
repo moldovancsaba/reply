@@ -50,6 +50,8 @@ Schema: [`core/schema/api-status.json`](../core/schema/api-status.json) (checked
 | `blocked` | needs the operator; never retried automatically | `code`, `message`, `recovery[]` |
 | `error` | failed, will retry at the next tick | `code`, `message`, `retryAt`, `lastErrorAt` |
 
+`accounts[].account` is the account id (for IMAP an email address like `user@host`; the sync endpoint needs it). Logs never carry it: they use a short hash.
+
 `messagesTotal` is messages imported (people imported, for Contacts). `lastSuccessAt` is clamped to the present, so a clock jump never shows a future time. A source with several accounts reports the worst state on top and lists every account in `accounts[]`.
 
 ### Helper and storage
@@ -76,4 +78,4 @@ Only `blocked` states carry `recovery`; an `error` is automatic and says when it
 
 ## Privacy
 
-The report contains counts, ids, codes and fixed catalog text only: no handles, names, subjects or message text (a test checks this).
+The report contains counts, ids, codes and fixed catalog text only: no contact handles, names, subjects or message text (a test checks this). The one exception is the IMAP account id, which is the address you added yourself.
