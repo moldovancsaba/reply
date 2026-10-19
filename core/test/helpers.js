@@ -17,9 +17,9 @@ export function memoryLogger(config = baseConfig) {
 }
 
 // Starts a server on an ephemeral loopback port. `setup(app)` may register extra routes before listen.
-export async function startServer({ config = baseConfig, setup } = {}) {
+export async function startServer({ config = baseConfig, setup, deps } = {}) {
     const { logger, lines } = memoryLogger(config);
-    const app = createServer(config, logger);
+    const app = createServer(config, logger, deps);
     setup?.(app);
     await app.listen({ host: "127.0.0.1", port: 0 });
     const port = app.server.address().port;
