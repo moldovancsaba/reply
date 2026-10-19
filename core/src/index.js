@@ -5,6 +5,7 @@ import { createServer, gracefulClose } from "./server.js";
 import { createRegistry } from "./connectors/registry.js";
 import { createRunner } from "./connectors/runner.js";
 import { createScheduler } from "./connectors/scheduler.js";
+import { createIdentity } from "./identity/service.js";
 import { openDb } from "./storage/db.js";
 import { createRepo } from "./storage/repo.js";
 
@@ -36,9 +37,10 @@ try {
 const repo = createRepo(storage.db);
 const registry = createRegistry({ enabled: config.connectors });
 for (const id of registry.unknown) logger.warn({ connector: id }, "ignoring unknown connector in REPLY_CORE_CONNECTORS");
-const runner = createRunner({ db: storage.db, repo, logger });
+const identity = createIdentity({ db: storage.db, repo });
+const runner = createRunner({ db: storage.db, repo, logger, onContacts: (people) => identity.importContacts(people) });
 const scheduler = createScheduler({ registry, runner, repo, logger, intervals: config.intervals });
-const app = createServer(config, logger, { registry, runner, repo });
+const app = createServer(config, logger, { registry, runner, repo, identity });
 
 try {
     await app.listen({ host: HOST, port: config.port });

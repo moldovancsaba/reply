@@ -27,6 +27,10 @@ process start
 
 `core/src/connectors/` runs every source on one runtime (runner, scheduler, registry, error classes) and `core/src/routes/sync.js` exposes `POST /api/sync/:connector`. Flow, error codes and operations: [CORE_CONNECTORS.md](CORE_CONNECTORS.md).
 
+## Identity
+
+`core/src/identity/` holds handle normalization (`normalize.js`) and the merge/unmerge/import service (`service.js`); `core/src/routes/identity.js` exposes the merge endpoints. Rules, normalization table and API: [CORE_IDENTITY.md](CORE_IDENTITY.md).
+
 ## Native helper
 
 Apple-private sources are read by `core/helper` (Swift, one binary, NDJSON on stdout, versioned by `schemaVersion`). Node calls it through `core/src/helper`, which verifies the binary's checksum, enforces a 30 s timeout (killing the whole process group), validates `schemaVersion`, and maps exit codes to connector error codes. See [`core/helper/README.md`](../core/helper/README.md) and [CORE_PERMISSIONS.md](CORE_PERMISSIONS.md).
@@ -46,6 +50,7 @@ Unit and integration tests use `node:test`. Connectors are tested against determ
 | `core/src/routes/health.js` | `GET /api/health` |
 | `core/src/storage/*` | Database, migrations, repository (see CORE_DATA_MODEL.md) |
 | `core/src/connectors/*` | Connector runner, scheduler, registry, error classes (see CORE_CONNECTORS.md) |
+| `core/src/identity/*` | Handle normalization, merge/unmerge, address-book import (see CORE_IDENTITY.md) |
 | `core/src/helper/*` | Node wrapper around the native helper (checksum, timeout, error mapping) |
 | `core/helper/` | Swift package: `reply-core-helper` |
 | `core/src/index.js` | Process entry: config, storage, listen, signals, exit codes |
