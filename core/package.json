@@ -12,7 +12,8 @@
     "start": "node src/index.js",
     "lint": "eslint . --max-warnings 0",
     "test": "node --test test/*.test.js",
-    "verify": "node scripts/verify.js"
+    "verify": "node scripts/verify.js",
+    "fixtures": "node test/fixtures/build.js"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
