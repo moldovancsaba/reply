@@ -10,6 +10,8 @@ bin/reply-core-helper doctor        # per-source access state, no content read (
 bin/reply-core-helper imessage --db ~/Library/Messages/chat.db --after 0 --limit 500
 bin/reply-core-helper mail --root ~/Library/Mail --after 0 --limit 500
 bin/reply-core-helper contacts [--after <offset>] [--limit <n>]
+printf '%s' "$PASSWORD" | bin/reply-core-helper keychain set --service reply-core.imap --account me@example.com
+bin/reply-core-helper keychain get|delete --service reply-core.imap --account me@example.com
 ```
 
 Requires macOS 15+ and the Xcode Swift toolchain. `swift test` runs the unit tests.
@@ -23,6 +25,7 @@ stdout is NDJSON only (one object per line); stderr is human diagnostics without
 | `message` | One iMessage or mail message. Common fields: `source`, `providerMessageKey`, `account`, `threadKey`, `counterpartHandle` (raw, unnormalized), `isFromMe`, `tsMs` (UTC epoch ms, `0` = no usable date), `subject?`, `text`, `attachments[]`. iMessage adds `isGroup`, `isReaction`, `service`. Mail adds `sender`, `to[]`, `mailboxKind`, `accountLabel`. |
 | `contact` | `contactId` (Contacts identifier), `displayName`, `phones[]`, `emails[]`. |
 | `cursor` | Always the last line. `cursor` is `{rowid}` (imessage, mail) or `{offset}` (contacts), `exported`, `more`. |
+| `secret` | The answer to `keychain get`: `{ "secret": "..." }`. |
 | `warning` | `undecodable_text` with a count (an `attributedBody` that could not be decoded; the message is still exported with empty text). |
 
 Paging: pass the returned `rowid` as `--after`; repeat while `more` is true. A page with no new rows returns only the cursor and never moves it backwards.
@@ -50,6 +53,10 @@ Paging: pass the returned `rowid` as `--after`; repeat while `more` is true. A p
 - **Contacts**: the Contacts framework has no modification date, so the export is complete on every call (sorted by identifier; with no `--limit`, or `--limit 0`, everything is returned in one call; `--after`/`--limit` page through it) and the service compares fingerprints. The first call from a new host process triggers the macOS consent prompt; `doctor` never prompts.
 - **attributedBody**: decoded by a bounds-checked reader of the typedstream layout, not `NSUnarchiver`, because `NSUnarchiver` raises an uncatchable Objective-C exception on truncated blobs. The unit tests check the reader against bytes produced by the real `NSArchiver` for many strings (up to > 64 KB) and against every truncation point of a blob.
 - **Read-only**: databases are opened with `SQLITE_OPEN_READONLY`. A test asserts the source file hash and directory listing are unchanged after an export.
+
+## Keychain
+
+`keychain set|get|delete --service reply-core.<name> --account <account>` stores IMAP app passwords as generic-password items in the login keychain. `set` reads the secret from stdin (up to the first newline); `get` prints it as a `secret` record; neither ever takes a secret as an argument. Services must start with `reply-core.`, so the helper cannot be used as a general keychain reader. Exit codes: 10 keychain locked or access refused, 11 no such item, 2 usage. macOS may ask once to let `reply-core-helper` use an item after the binary is rebuilt (its code signature changes); choose Always Allow.
 
 ## Integrity and trust
 

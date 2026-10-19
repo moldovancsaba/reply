@@ -42,11 +42,12 @@ export function verifyChecksum(helper = defaultHelperPath()) {
     if (actual !== expected) throw new HelperError("helper_unavailable", "helper checksum mismatch; rebuild with helper/build.sh");
 }
 
-function run(helper, args, { signal, timeoutMs = DEFAULT_TIMEOUT_MS }) {
+function run(helper, args, { signal, timeoutMs = DEFAULT_TIMEOUT_MS, input }) {
     return new Promise((resolve, reject) => {
         if (signal?.aborted) return reject(new HelperError("internal", "aborted"));
         // own process group so a kill also reaches anything the helper started (a stuck grandchild would keep stdout open)
-        const child = spawn(helper, args, { stdio: ["ignore", "pipe", "pipe"], detached: true });
+        const child = spawn(helper, args, { stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"], detached: true });
+        if (input !== undefined) { child.stdin.on("error", () => {}); child.stdin.end(input); } // secrets go on stdin, never in arguments
         let out = "";
         let err = "";
         let settled = false;
@@ -90,9 +91,9 @@ function parseRecords(stdout) {
 }
 
 // Runs a helper command and returns its records. Non-zero exits become HelperError with a connector error code.
-export async function runHelper(args, { helper = defaultHelperPath(), signal, timeoutMs, verify = true } = {}) {
+export async function runHelper(args, { helper = defaultHelperPath(), signal, timeoutMs, verify = true, input } = {}) {
     if (verify) verifyChecksum(helper);
-    const { exitCode, stdout, stderr } = await run(helper, args, { signal, timeoutMs });
+    const { exitCode, stdout, stderr } = await run(helper, args, { signal, timeoutMs, input });
     if (exitCode !== 0) {
         const code = EXIT_CODES[exitCode] ?? "internal";
         const tail = stderr.trim().split("\n").at(-1)?.slice(0, 300) ?? "";
@@ -104,6 +105,7 @@ export async function runHelper(args, { helper = defaultHelperPath(), signal, ti
         messages: records.filter((r) => r.type === "message"),
         contacts: records.filter((r) => r.type === "contact"),
         warnings: records.filter((r) => r.type === "warning"),
+        secret: records.find((r) => r.type === "secret")?.secret ?? null,
         cursor: records.findLast((r) => r.type === "cursor") ?? null,
     };
 }
