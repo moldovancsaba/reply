@@ -70,3 +70,7 @@ The conversation is wrapped in `<messages>` and introduced as data, not instruct
 ## Disabling
 
 `REPLY_CORE_LLM=off` (or unset) turns it off at the next start. No data or schema is involved.
+
+## What you see in the app (user-facing)
+
+Under the **Reply** box there is **Suggest a reply**. If drafting is not set up the button is greyed out and the line next to it says what to do. Press it (optionally after typing what the reply should say, for example "say yes, ask for the address"), wait a few seconds ("Writing a draft with llama3.1:8b..."; you can cancel), and the suggestion appears marked **AI-generated draft. Review before sending.** Then choose **Insert** (if you already wrote something you pick **Replace my text** or **Add below my text**), **Regenerate** or **Discard**. Nothing is put into your reply, saved or sent until you press Insert, and even then you still open the reply in your own app and press send there.
