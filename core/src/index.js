@@ -2,9 +2,11 @@ import { mkdirSync } from "node:fs";
 import { ConfigError, loadConfig } from "./config.js";
 import { createLogger } from "./logger.js";
 import { createServer, gracefulClose } from "./server.js";
+import { openDb } from "./storage/db.js";
 
 const EXIT_CONFIG = 78;
 const EXIT_PORT_IN_USE = 75;
+const EXIT_STORAGE = 74;
 const HOST = "127.0.0.1";
 
 let config;
@@ -19,6 +21,14 @@ try {
 
 const logger = createLogger(config);
 for (const key of config.unknownKeys) logger.info({ key }, "ignoring unknown REPLY_CORE_* setting");
+let storage;
+try {
+    storage = openDb(config.home);
+} catch (err) {
+    logger.error({ code: err.code, err }, err.code ?? "storage_unavailable");
+    console.error(`reply-core: storage error (${err.code ?? "unknown"}): ${err.message}. Restore a backup or delete core.db and re-ingest.`);
+    process.exit(EXIT_STORAGE);
+}
 const app = createServer(config, logger);
 
 try {
@@ -40,6 +50,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
         closing = true;
         logger.info({ signal }, "shutting down");
         const result = await gracefulClose(app, 5000);
+        storage.db.close();
         process.exit(result === "closed" ? 0 : 1);
     });
 }
