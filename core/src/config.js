@@ -3,7 +3,7 @@ import path from "node:path";
 import { isRegion } from "./identity/normalize.js";
 
 // Connectors enabled when REPLY_CORE_CONNECTORS is unset. Connector issues add their ids here.
-export const DEFAULT_ENABLED_IDS = ["imessage", "contacts"];
+export const DEFAULT_ENABLED_IDS = ["imessage", "contacts", "apple-mail"];
 const LEVELS = ["debug", "info", "warn", "error"];
 
 export class ConfigError extends Error {}
@@ -60,7 +60,7 @@ export function loadConfig(env = process.env) {
     const unknownKeys = Object.keys(env).filter(
         (k) => k.startsWith("REPLY_CORE_") && !KNOWN_KEYS.has(k) && !/_INTERVAL_MS$/.test(k),
     );
-    return { home, port, logLevel, allowedOrigins, connectors: rawConnectors === "none" ? [] : connectors.length ? connectors : DEFAULT_ENABLED_IDS, imessageDb: env.REPLY_CORE_IMESSAGE_DB || null, intervals, defaultRegion, unknownKeys };
+    return { home, port, logLevel, allowedOrigins, connectors: rawConnectors === "none" ? [] : connectors.length ? connectors : DEFAULT_ENABLED_IDS, imessageDb: env.REPLY_CORE_IMESSAGE_DB || null, mailRoot: env.REPLY_CORE_MAIL_ROOT || null, intervals, defaultRegion, unknownKeys };
 }
 
 const KNOWN_KEYS = new Set([
@@ -71,5 +71,6 @@ const KNOWN_KEYS = new Set([
     "REPLY_CORE_CONNECTORS",
     "REPLY_CORE_DEFAULT_REGION",
     "REPLY_CORE_IMESSAGE_DB",
+    "REPLY_CORE_MAIL_ROOT",
     "REPLY_CORE_HELPER",
 ]);
