@@ -1,6 +1,6 @@
 # Reply Core Data Model
 
-Status: living document, owned by issue #184. Extended by Identity (#189), Contacts (#192), Apple Mail (#193), Handoff (#203), Backup (#197).
+Status: living document, owned by issue #184. Extended by Identity (#189), Contacts (#192), Apple Mail (#193), Handoff (#203), Backup (#197). Migration numbers are assigned in merge order (`0002` is `sync_runs`).
 
 One SQLite file, `core.db`, in `REPLY_CORE_HOME` (default `~/Library/Application Support/reply-core`). Mode `0600` inside a `0700` directory. WAL mode, `foreign_keys=ON`, `busy_timeout=5000`, `synchronous=NORMAL`. The database is a rebuildable cache of the source apps, except for the user's manual identity decisions (`merge_log`, manual links).
 
@@ -15,6 +15,7 @@ One SQLite file, `core.db`, in `REPLY_CORE_HOME` (default `~/Library/Application
 | `merge_log` | Append-only audit of merges and unmerges (handles only, never message content). |
 | `contact_summary` | Materialized per-contact list row: last message time/channel/preview, counts per channel. Rebuilt in the same transaction as every message batch. |
 | `sync_state` | Per `(connector, account)` cursor, state (`idle`, `running`, `error`, `blocked`), last success/error, message total. |
+| `sync_runs` | Last 50 runs per connector: outcome, attempts, pages, inserted/updated/skipped/quarantined, error code (migration `0002_sync_runs.sql`). |
 | `messages_fts` | FTS5 index over `text` and `subject` (`unicode61 remove_diacritics 2`), kept in sync by triggers. |
 | `schema_migrations` | Applied migrations with SHA-256 checksums. |
 

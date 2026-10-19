@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import Fastify, { LogController } from "fastify";
 import { forbidden, toEnvelope } from "./errors.js";
 import { registerHealth } from "./routes/health.js";
+import { registerSync } from "./routes/sync.js";
 
 const BODY_LIMIT = 1024 * 1024;
 
@@ -24,12 +25,23 @@ export function guards(config) {
     };
 }
 
-export function createServer(config, logger) {
+export function createServer(config, logger, deps = {}) {
     const app = Fastify({
         loggerInstance: logger,
         logController: new LogController({ disableRequestLogging: true }),
         bodyLimit: BODY_LIMIT,
         genReqId: () => `req_${randomUUID().slice(0, 12)}`,
+    });
+
+    // Same as Fastify's default JSON parser except that an empty body is `{}`: clients that send a JSON content type with no body are fine.
+    app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
+        if (body === "") return done(null, {});
+        try {
+            done(null, JSON.parse(body));
+        } catch (err) {
+            err.statusCode = 400;
+            done(err);
+        }
     });
 
     app.addHook("onRequest", guards(config));
@@ -51,6 +63,7 @@ export function createServer(config, logger) {
     });
 
     registerHealth(app, config);
+    if (deps.runner) registerSync(app, deps);
     return app;
 }
 
