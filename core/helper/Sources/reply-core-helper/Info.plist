@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.moldovancsaba.reply-core-helper</string>
+    <key>CFBundleName</key>
+    <string>reply-core-helper</string>
+    <key>CFBundleVersion</key>
+    <string>1.0.0</string>
+    <key>NSContactsUsageDescription</key>
+    <string>Reply Core reads your address book (names, phone numbers and emails) so conversations show real names. Nothing leaves this Mac.</string>
+</dict>
+</plist>

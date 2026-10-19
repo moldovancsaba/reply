@@ -1,0 +1,82 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/moldovancsaba/reply/core/helper/schema/v1.json",
+  "title": "reply-core-helper NDJSON record, schemaVersion 1",
+  "description": "Every stdout line of the imessage, mail and contacts commands validates against this schema.",
+  "definitions": {
+    "attachment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "name": { "type": "string" }, "mimeType": { "type": "string" }, "bytes": { "type": "integer", "minimum": 0 } }
+    },
+    "message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "schemaVersion", "source", "providerMessageKey", "account", "threadKey", "counterpartHandle", "isFromMe", "tsMs", "text", "attachments"],
+      "properties": {
+        "type": { "const": "message" },
+        "schemaVersion": { "const": 1 },
+        "source": { "enum": ["imessage", "mail"] },
+        "providerMessageKey": { "type": "string", "minLength": 1 },
+        "account": { "type": "string" },
+        "threadKey": { "type": "string" },
+        "counterpartHandle": { "type": "string" },
+        "isFromMe": { "type": "boolean" },
+        "tsMs": { "type": "integer", "minimum": 0, "description": "UTC epoch milliseconds; 0 means the source had no usable date" },
+        "subject": { "type": "string" },
+        "text": { "type": "string" },
+        "attachments": { "type": "array", "items": { "$ref": "#/definitions/attachment" } },
+        "isGroup": { "type": "boolean" },
+        "isReaction": { "type": "boolean" },
+        "service": { "type": "string" },
+        "sender": { "type": "string" },
+        "to": { "type": "array", "items": { "type": "string" } },
+        "mailboxKind": { "enum": ["inbox", "sent", "drafts", "junk", "trash", "archive", "other"] },
+        "accountLabel": { "type": "string" }
+      }
+    },
+    "contact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "schemaVersion", "contactId", "displayName", "phones", "emails"],
+      "properties": {
+        "type": { "const": "contact" },
+        "schemaVersion": { "const": 1 },
+        "contactId": { "type": "string", "minLength": 1 },
+        "displayName": { "type": "string" },
+        "phones": { "type": "array", "items": { "type": "string" } },
+        "emails": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "cursor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "schemaVersion", "source", "cursor", "exported", "more"],
+      "properties": {
+        "type": { "const": "cursor" },
+        "schemaVersion": { "const": 1 },
+        "source": { "enum": ["imessage", "mail", "contacts"] },
+        "cursor": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "exported": { "type": "integer", "minimum": 0 },
+        "more": { "type": "boolean" }
+      }
+    },
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "schemaVersion", "code", "count"],
+      "properties": {
+        "type": { "const": "warning" },
+        "schemaVersion": { "const": 1 },
+        "code": { "type": "string" },
+        "count": { "type": "integer", "minimum": 1 }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/definitions/message" },
+    { "$ref": "#/definitions/contact" },
+    { "$ref": "#/definitions/cursor" },
+    { "$ref": "#/definitions/warning" }
+  ]
+}
