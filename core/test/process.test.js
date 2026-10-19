@@ -46,7 +46,7 @@ test("invalid port exits 78 with a one-line message naming the setting", async (
 test("starts, serves health, creates a 0700 home, exits 0 on SIGTERM; a second start exits 75", async () => {
     const home = path.join(mkdtempSync(path.join(os.tmpdir(), "rc-")), "home");
     const port = await freePort();
-    const env = { REPLY_CORE_PORT: String(port), REPLY_CORE_HOME: home, REPLY_CORE_LOG_LEVEL: "error" };
+    const env = { REPLY_CORE_PORT: String(port), REPLY_CORE_HOME: home, REPLY_CORE_LOG_LEVEL: "error", REPLY_CORE_CONNECTORS: "none" };
     const first = run(env);
     try {
         const up = await waitFor(async () => {

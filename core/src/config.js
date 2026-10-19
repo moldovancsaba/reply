@@ -3,7 +3,7 @@ import path from "node:path";
 import { isRegion } from "./identity/normalize.js";
 
 // Connectors enabled when REPLY_CORE_CONNECTORS is unset. Connector issues add their ids here.
-export const DEFAULT_ENABLED_IDS = [];
+export const DEFAULT_ENABLED_IDS = ["imessage"];
 const LEVELS = ["debug", "info", "warn", "error"];
 
 export class ConfigError extends Error {}
@@ -38,10 +38,9 @@ export function loadConfig(env = process.env) {
         }
     }
 
-    const connectors = (env.REPLY_CORE_CONNECTORS ?? "")
-        .split(",")
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean);
+    // unset or empty -> DEFAULT_ENABLED_IDS; the single word `none` -> no connectors at all
+    const rawConnectors = (env.REPLY_CORE_CONNECTORS ?? "").trim().toLowerCase();
+    const connectors = rawConnectors === "none" ? [] : rawConnectors.split(",").map((s) => s.trim()).filter(Boolean);
     if (connectors.some((c) => !/^[a-z0-9-]+$/.test(c))) {
         throw new ConfigError("REPLY_CORE_CONNECTORS must be a comma-separated list of connector ids");
     }
@@ -61,7 +60,7 @@ export function loadConfig(env = process.env) {
     const unknownKeys = Object.keys(env).filter(
         (k) => k.startsWith("REPLY_CORE_") && !KNOWN_KEYS.has(k) && !/_INTERVAL_MS$/.test(k),
     );
-    return { home, port, logLevel, allowedOrigins, connectors: connectors.length ? connectors : DEFAULT_ENABLED_IDS, intervals, defaultRegion, unknownKeys };
+    return { home, port, logLevel, allowedOrigins, connectors: rawConnectors === "none" ? [] : connectors.length ? connectors : DEFAULT_ENABLED_IDS, imessageDb: env.REPLY_CORE_IMESSAGE_DB || null, intervals, defaultRegion, unknownKeys };
 }
 
 const KNOWN_KEYS = new Set([
@@ -71,4 +70,6 @@ const KNOWN_KEYS = new Set([
     "REPLY_CORE_ALLOWED_ORIGINS",
     "REPLY_CORE_CONNECTORS",
     "REPLY_CORE_DEFAULT_REGION",
+    "REPLY_CORE_IMESSAGE_DB",
+    "REPLY_CORE_HELPER",
 ]);
