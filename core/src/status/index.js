@@ -3,6 +3,7 @@ import { statSync } from "node:fs";
 import path from "node:path";
 import { CODES } from "../connectors/errors.js";
 import { HelperError, helperVersion, verifyChecksum } from "../helper/index.js";
+import { backupInfo } from "../ops/backup.js";
 import { describe, LABELS, STATE_MESSAGES, CATALOG } from "./recovery.js";
 
 const STORAGE_TTL = 60_000;
@@ -95,7 +96,7 @@ export function createStatus({ db, config, registry, runner, scheduler, repo, he
         const connectors = registry.list().map(connectorStatus);
         const overall = storage.state === "error" || helperState.state !== "ok" || connectors.some((c) => c.state === "blocked") ? "blocked"
             : connectors.some((c) => c.state === "error") ? "degraded" : "ok";
-        const value = { overall, storage, helper: helperState, connectors, metrics: runner.metrics(), generatedAt: new Date(now()).toISOString() };
+        const value = { overall, storage, helper: helperState, connectors, backups: backupInfo(config.home), metrics: runner.metrics(), generatedAt: new Date(now()).toISOString() };
         cache.report = { at: now(), value };
         return value;
     }

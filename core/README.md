@@ -42,6 +42,7 @@ Unknown `REPLY_CORE_*` variables are ignored and reported once at info level.
 | Code | Meaning |
 |---|---|
 | 0 | Clean shutdown |
+| 3 | (backup/restore/rebuild commands) Reply Core is running or another operation is |
 | 75 | Port already in use (is Reply Core already running?) |
 | 74 | Storage could not be opened, is corrupt, or a migration failed |
 | 78 | Invalid configuration (the message names the setting) |
@@ -61,6 +62,10 @@ Enabled connectors run on their own intervals. Trigger one now with `curl -X POS
 ## IMAP accounts
 
 `node bin/reply-core.js accounts add-imap|list|remove` manages mailboxes that are not in Apple Mail; passwords live in the keychain, never in files ([`../docs/CORE_SECURITY.md`](../docs/CORE_SECURITY.md), [`../docs/CORE_CONNECTORS.md`](../docs/CORE_CONNECTORS.md)).
+
+## Backups
+
+`node bin/reply-core.js backup | backups list | restore <file> | rebuild`: one automatic backup per day, verified restores, and a rebuild that keeps your manual merges ([`../docs/CORE_OPERATIONS.md`](../docs/CORE_OPERATIONS.md)).
 
 ## Native helper
 
