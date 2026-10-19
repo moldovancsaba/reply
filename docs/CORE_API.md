@@ -11,6 +11,7 @@ Response schemas for the read endpoints are in [`core/schema/api-read.json`](../
 | Endpoint | Purpose |
 |---|---|
 | `GET /api/health` | liveness: `{ status, version, uptimeSeconds, home, time }` |
+| `GET /api/status`, `POST /api/status/recheck` | health of storage, helper and every source, with recovery steps; see [CORE_STATUS.md](CORE_STATUS.md) |
 | `POST /api/sync/:connector` | start a sync (`202`, `409`, `423`, `404`); see [CORE_CONNECTORS.md](CORE_CONNECTORS.md) |
 | `POST /api/contacts/:id/merge`, `POST /api/contacts/:id/unmerge`, `GET /api/contacts/:id/merges` | explicit identity changes; see [CORE_IDENTITY.md](CORE_IDENTITY.md) |
 

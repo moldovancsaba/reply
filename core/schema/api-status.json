@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/moldovancsaba/reply/core/schema/api-status.json",
+  "title": "Reply Core status API response",
+  "definitions": {
+    "RecoveryStep": { "type": "object", "additionalProperties": false, "required": ["order", "text"], "properties": { "order": { "type": "integer", "minimum": 1 }, "text": { "type": "string", "minLength": 1 }, "deepLink": { "type": "string", "pattern": "^x-apple\\.systempreferences:" } } },
+    "SourceState": { "enum": ["never_synced", "syncing", "ok", "blocked", "error"] },
+    "AccountStatus": {
+      "type": "object", "additionalProperties": false, "required": ["account", "state", "message", "messagesTotal"],
+      "properties": {
+        "account": { "type": "string" }, "state": { "$ref": "#/definitions/SourceState" }, "code": { "type": "string" }, "message": { "type": "string" },
+        "recovery": { "type": "array", "items": { "$ref": "#/definitions/RecoveryStep" } }, "retryAt": { "type": "string", "format": "date-time" },
+        "messagesTotal": { "type": "integer", "minimum": 0 }, "messagesThisRun": { "type": "integer", "minimum": 0 },
+        "lastSuccessAt": { "type": "string", "format": "date-time" }, "lastErrorAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ConnectorStatus": {
+      "type": "object", "additionalProperties": false, "required": ["id", "label", "state", "message", "messagesTotal"],
+      "properties": {
+        "id": { "type": "string" }, "label": { "type": "string" }, "state": { "$ref": "#/definitions/SourceState" }, "code": { "type": "string" }, "message": { "type": "string" },
+        "recovery": { "type": "array", "items": { "$ref": "#/definitions/RecoveryStep" } }, "retryAt": { "type": "string", "format": "date-time" },
+        "messagesTotal": { "type": "integer", "minimum": 0 }, "messagesThisRun": { "type": "integer", "minimum": 0 },
+        "lastSuccessAt": { "type": "string", "format": "date-time" }, "lastErrorAt": { "type": "string", "format": "date-time" },
+        "nextRunAt": { "type": "string", "format": "date-time" }, "accounts": { "type": "array", "items": { "$ref": "#/definitions/AccountStatus" } }
+      }
+    },
+    "StatusReport": {
+      "type": "object", "additionalProperties": false, "required": ["overall", "storage", "helper", "connectors", "metrics", "generatedAt"],
+      "properties": {
+        "overall": { "enum": ["ok", "degraded", "blocked"] },
+        "storage": {
+          "type": "object", "additionalProperties": false, "required": ["state", "version", "dbBytes"],
+          "properties": { "state": { "enum": ["ok", "error"] }, "version": { "type": "integer" }, "dbBytes": { "type": "integer" }, "code": { "type": "string" }, "message": { "type": "string" }, "recovery": { "type": "array", "items": { "$ref": "#/definitions/RecoveryStep" } } }
+        },
+        "helper": { "type": "object", "additionalProperties": false, "required": ["state"], "properties": { "state": { "enum": ["ok", "missing", "checksum_mismatch"] }, "version": { "type": "string" } } },
+        "connectors": { "type": "array", "items": { "$ref": "#/definitions/ConnectorStatus" } },
+        "metrics": { "type": "object", "additionalProperties": false, "required": ["runs", "failuresByCode", "lastDurationMs"], "properties": { "runs": { "type": "integer" }, "failuresByCode": { "type": "object", "additionalProperties": { "type": "integer" } }, "lastDurationMs": { "type": ["integer", "null"] } } },
+        "generatedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

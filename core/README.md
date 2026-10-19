@@ -49,7 +49,7 @@ Unknown `REPLY_CORE_*` variables are ignored and reported once at info level.
 
 ## API
 
-`GET /api/contacts`, `/api/contacts/:id`, `/api/contacts/:id/messages` and `/api/search` read the unified inbox; see [`../docs/CORE_API.md`](../docs/CORE_API.md).
+`GET /api/status` reports whether storage, the helper and each source are working and how to fix what is not ([`../docs/CORE_STATUS.md`](../docs/CORE_STATUS.md)). `GET /api/contacts`, `/api/contacts/:id`, `/api/contacts/:id/messages` and `/api/search` read the unified inbox; see [`../docs/CORE_API.md`](../docs/CORE_API.md).
 
 ## Syncing
 
