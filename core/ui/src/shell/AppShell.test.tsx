@@ -14,7 +14,7 @@ beforeEach(() => {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     if (!healthy) throw new TypeError("down");
     if (String(input).startsWith("/api/contacts")) return new Response(JSON.stringify({ items: [], nextCursor: null, hasMore: false, total: 0 }), { status: 200 });
-    if (String(input).startsWith("/api/status")) return new Response(JSON.stringify({ connectors: [] }), { status: 200 });
+    if (String(input).startsWith("/api/status")) return new Response(JSON.stringify({ overall: "ok", storage: { state: "ok", version: 7, dbBytes: 0 }, helper: { state: "ok" }, connectors: [], backups: { count: 0, totalBytes: 0 }, metrics: { runs: 0, failuresByCode: {}, lastDurationMs: null }, generatedAt: "t" }), { status: 200 });
     return new Response(JSON.stringify({ status: "ok", version: "0.1.0", uptimeSeconds: 1, home: "/h", time: "t" }), { status: 200 });
   });
 });
