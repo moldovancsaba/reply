@@ -1,6 +1,6 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { fetchJson, type ApiError, type Result } from "./client";
-import type { Channel, Contact, ContactList, StatusReport, Thread } from "./types.gen";
+import type { Channel, Contact, ContactList, SearchResult, StatusReport, Thread } from "./types.gen";
 
 // react-query wants thrown errors; the client returns Results. This is the bridge.
 export class ApiFailure extends Error {
@@ -110,4 +110,30 @@ export function mergeErrorText(e: ApiError): string {
     case "merge_not_found": return "That merge is no longer in the history.";
     default: return e.message;
   }
+}
+
+export type SearchQuery = { q: string; channel: "all" | Channel; contactId: string | null };
+
+export function searchUrl(query: SearchQuery, cursor: string | null): string {
+  const p = new URLSearchParams({ q: query.q, limit: String(PAGE_SIZE) });
+  if (query.channel !== "all") p.set("channel", query.channel);
+  if (query.contactId) p.set("contactId", query.contactId);
+  if (cursor) p.set("cursor", cursor);
+  return `/api/search?${p}`;
+}
+
+// Changing the query cancels the request in flight (react-query aborts through the signal) and ignores late answers;
+// the previous results stay on screen until the new ones arrive.
+export function useSearch(query: SearchQuery, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: ["search", query],
+    queryFn: ({ pageParam, signal }) => unwrap(fetchJson<SearchResult>(searchUrl(query, pageParam), { signal })),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    enabled,
+    placeholderData: keepPreviousData,
+    retry: retryOnce,
+    retryDelay: 2000,
+    staleTime: 30_000,
+  });
 }

@@ -18,3 +18,8 @@ export function exactLabel(iso: string, locale?: string): string {
 }
 
 export const CHANNEL_LABEL = { imessage: "iMessage", email: "Email", whatsapp: "WhatsApp" } as const;
+
+// ["iMessage"] -> "iMessage"; two -> "iMessage and Email"; three -> "iMessage, Email and WhatsApp".
+export function listOf(items: string[]): string {
+  return items.length < 2 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}

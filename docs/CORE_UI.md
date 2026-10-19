@@ -102,6 +102,16 @@ Local components added because GDS lacks them (or has a defect, see below): `src
 
 GDS findings: `ConfirmDialog` renders an unnamed close button (axe `button-name`, critical) and cannot relabel its confirm button, so `GdsDialog` is used; `GdsDialog` needs an `OverlayManagerProvider` (without it the screen crashes); `SearchableSelect`'s `ariaLabel` must contain its visible text (axe `label-content-name-mismatch`), so none is set and the placeholder is descriptive; dialogs fade in, so contrast checks must wait for the transition.
 
+## Search
+
+`/search?q=&channel=&contactId=` (`src/routes/Search.tsx`, `src/routes/search/`). Everything is in the URL, so a search can be reloaded, bookmarked and stepped back through.
+
+- **Input:** a labelled field inside a `search` landmark. Enter searches from 2 characters; typing searches by itself after 3 characters (300 ms pause, replaces the history entry). Under 2 characters shows plain helper text, never an alert. Channel filter chips ("Only Email" ...) and a removable "In conversation with {name}" tag when `contactId` is set.
+- **Results:** a flat list in the service's ranking, each a link to `/inbox/:contactId` (name, channel badge with icon, relative time with the exact date on hover, snippet). Cursor **Load more**. A count is announced politely (`output`) and "Searched iMessage, Email and WhatsApp" always names what was searched.
+- **Snippets:** the service marks matches with `\u0001` and `\u0002` (never HTML). `parseSnippet` (`src/lib/snippet.ts`) is total (a stray or unterminated mark is dropped or plain text) and the highlight is a native `<mark>` element built from text segments, so message content can never become markup. GDS has no highlight component; `<mark>` carries the semantics, not just colour.
+- **States:** initial guidance (info, not an error), too short, loading ("Searching ..."), results, no results ("No results for 'x' in iMessage and Email.", with Clear filters when filtered), error with request reference and Try again (earlier results stay with a warning when only a refresh fails), load-more failure, and per-channel notices: "{Channel} is not connected, so it was not searched." (never synced, no messages) and "{Channel} is not syncing, so recent messages may be missing." (blocked or error), each linking to Sources.
+- **Stale answers:** the query is part of the react-query key, so changing it cancels the request in flight (abort signal) and a late answer can never replace a newer one; previous results stay (marked busy) until the new ones arrive.
+
 ## Adding a screen
 
 1. Replace the route's `Placeholder` with the screen (a lazy module in `src/routes/`), composed from GDS only.
