@@ -7,7 +7,7 @@ import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, re
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_PORT, EXIT, FDA_STEPS, firstPath, isOurPlist, launcherPaths, nodeOk, plistFor, readPidfile, statusLines } from "../src/launcher/lib.js";
+import { DEFAULT_PORT, EXIT, FDA_STEPS, FDA_STEPS_APP, firstPath, isOurPlist, launcherPaths, nodeOk, plistFor, readPidfile, statusLines } from "../src/launcher/lib.js";
 
 const coreDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const env = process.env;
@@ -136,8 +136,12 @@ function installAgent() {
     mkdirSync(paths.logDir, { recursive: true, mode: 0o700 });
     mkdirSync(paths.agentsDir, { recursive: true });
     const node = realpathSync(process.execPath);
+    // Prefer the signed, named {reply}.app as the program launchd starts, so Full Disk Access is granted to "{reply}".
+    if (!env.REPLY_CORE_NO_APP && !existsSync(paths.appExe) && spawnSync("which", ["swiftc"], { stdio: "ignore" }).status === 0) buildApp();
+    const useApp = !env.REPLY_CORE_NO_APP && existsSync(paths.appExe);
     const text = plistFor({
         node,
+        program: useApp ? [paths.appExe, "--service"] : undefined,
         entry: path.join(coreDir, "src", "index.js"),
         workingDirectory: coreDir,
         launchdLog: paths.launchdLog,
@@ -154,7 +158,13 @@ function installAgent() {
     say(`Agent file: ${paths.plist}`);
     say(`Logs: ${paths.logFile}`);
     say();
-    for (const line of FDA_STEPS(node)) say(line);
+    for (const line of useApp ? FDA_STEPS_APP(path.dirname(paths.app)) : FDA_STEPS(node)) say(line);
+}
+
+function buildApp() {
+    const r = spawnSync("bash", [path.join(coreDir, "app", "build-app.sh")], { cwd: coreDir, stdio: "inherit", env: { ...env, REPLY_CORE_NODE: env.REPLY_CORE_NODE || realpathSync(process.execPath) } });
+    if (r.status !== 0) say("Could not build {reply}.app; the agent will run node directly instead.");
+    return r.status === 0;
 }
 
 function uninstallAgent() {
@@ -167,9 +177,9 @@ function uninstallAgent() {
 }
 
 const [cmd = "help", ...args] = process.argv.slice(2);
-const commands = { start, stop, status, open: async () => { if (!(await healthy())) die(EXIT.notRunning, `Reply Core is not running. Start it with \`reply-core start\`. [exit ${EXIT.notRunning}]`); openUrl(`${url}${firstPath(await get("/api/status"))}`); }, logs, "install-agent": installAgent, "uninstall-agent": uninstallAgent };
+const commands = { start, stop, status, open: async () => { if (!(await healthy())) die(EXIT.notRunning, `Reply Core is not running. Start it with \`reply-core start\`. [exit ${EXIT.notRunning}]`); openUrl(`${url}${firstPath(await get("/api/status"))}`); }, logs, "install-agent": installAgent, "build-app": () => process.exit(buildApp() ? 0 : 1), "uninstall-agent": uninstallAgent };
 if (!commands[cmd]) {
-    say("Usage: reply-core start [--background] [--no-open] | stop | status | open | logs [--lines N] [--no-follow] | install-agent | uninstall-agent");
+    say("Usage: reply-core start [--background] [--no-open] | stop | status | open | logs [--lines N] [--no-follow] | install-agent | uninstall-agent | build-app");
     process.exit(cmd === "help" || cmd === "--help" ? 0 : 2);
 }
 await commands[cmd](args);
