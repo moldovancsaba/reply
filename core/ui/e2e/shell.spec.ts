@@ -17,7 +17,8 @@ test("the service serves the app with a strict content security policy", async (
 
 test("every route renders in the shell with the right heading and active destination", async ({ page }) => {
   const errors: string[] = [];
-  page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+  // an unknown contact (/inbox/c_123) is a deliberate 404
+  page.on("console", (m) => { if (m.type() === "error" && !/status of 404/.test(m.text())) errors.push(m.text()); });
   await page.goto(`${svc.url}/`);
   await expect(page).toHaveURL(/\/inbox$/);
   for (const [path, heading, nav] of [["/inbox", "Inbox", "Inbox"], ["/inbox/c_123", "Inbox", "Inbox"], ["/search", "Search", "Search"], ["/sources", "Sources", "Sources"]] as const) {

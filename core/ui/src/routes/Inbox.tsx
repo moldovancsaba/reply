@@ -2,6 +2,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Anchor, ChoiceChip, DataToolbar, GdsColumnGrid, GdsColumnGridItem, GdsInline, GdsStack, PageHeader, SemanticButton, StateBlock, TextInput } from "@sovereignsquad/gds";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import { CHANNEL_LABEL } from "../lib/time";
+import { ThreadPane } from "./thread/ThreadPane";
 import { ConversationList } from "./inbox/ConversationList";
 import { SourceNotice } from "./inbox/SourceNotice";
 import { CHANNELS, useInboxQuery } from "./inbox/inboxQuery";
@@ -33,7 +34,7 @@ export default function Inbox() {
     </GdsStack>
   );
   const detail = contactId ? (
-    <StateBlock variant="info" title="Conversation" description="The conversation view arrives with issue 199." />
+    <ThreadPane key={contactId} contactId={contactId} />
   ) : (
     <StateBlock variant="empty" title="Pick a conversation" description="Choose someone from the list to read your messages with them." />
   );
