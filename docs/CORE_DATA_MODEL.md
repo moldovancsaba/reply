@@ -1,6 +1,6 @@
 # Reply Core Data Model
 
-Status: living document, owned by issue #184. Extended by Identity (#189), Contacts (#192), Apple Mail (#193), Handoff (#203), Backup (#197). Migration numbers are assigned in merge order (`0002` is `sync_runs`).
+Status: living document, owned by issue #184. Extended by Identity (#189, migration `0003`), Contacts (#192), Apple Mail (#193), Handoff (#203), Backup (#197). Migration numbers are assigned in merge order (`0002` is `sync_runs`).
 
 One SQLite file, `core.db`, in `REPLY_CORE_HOME` (default `~/Library/Application Support/reply-core`). Mode `0600` inside a `0700` directory. WAL mode, `foreign_keys=ON`, `busy_timeout=5000`, `synchronous=NORMAL`. The database is a rebuildable cache of the source apps, except for the user's manual identity decisions (`merge_log`, manual links).
 
@@ -10,9 +10,9 @@ One SQLite file, `core.db`, in `REPLY_CORE_HOME` (default `~/Library/Application
 |---|---|
 | `messages` | One row per message from any channel. `id = channel:account:provider_message_key`, so re-ingest is idempotent. `ts_ms` is UTC epoch milliseconds. Text is capped at 256 KB. |
 | `handles` | Every counterpart identifier seen (`handle_norm`), with `kind` (`phone`, `email`, `whatsapp`, `other`) and first/last seen. |
-| `contacts` | A person. `origin` is `auto` (single-handle, created on first sight), `apple_contacts`, or `manual`. |
+| `contacts` | A person. `origin` is `auto` (single-handle, created on first sight), `apple_contacts`, or `manual`. `external_id` is the address-book identifier; `merged_into` is set (with `hidden = 1`) when the contact was merged away (migration `0003_identity.sql`). |
 | `contact_handles` | Maps each handle to exactly one contact. `link_origin` is `auto`, `apple_contacts`, or `manual_merge`. |
-| `merge_log` | Append-only audit of merges and unmerges (handles only, never message content). |
+| `merge_log` | Append-only audit of merges and unmerges (never message content). `handles_json` is `[{ handle_norm, prior_origin }]`; an undone merge carries `reverted_by`. See [CORE_IDENTITY.md](CORE_IDENTITY.md). |
 | `contact_summary` | Materialized per-contact list row: last message time/channel/preview, counts per channel. Rebuilt in the same transaction as every message batch. |
 | `sync_state` | Per `(connector, account)` cursor, state (`idle`, `running`, `error`, `blocked`), last success/error, message total. |
 | `sync_runs` | Last 50 runs per connector: outcome, attempts, pages, inserted/updated/skipped/quarantined, error code (migration `0002_sync_runs.sql`). |
