@@ -6,6 +6,7 @@ import { createRegistry } from "./connectors/registry.js";
 import { createRunner } from "./connectors/runner.js";
 import { createScheduler } from "./connectors/scheduler.js";
 import { createIdentity } from "./identity/service.js";
+import { createReadService } from "./read/service.js";
 import { openDb } from "./storage/db.js";
 import { createRepo } from "./storage/repo.js";
 
@@ -45,7 +46,8 @@ const runner = createRunner({ db: storage.db, repo, logger, onContacts: (people)
     },
 });
 const scheduler = createScheduler({ registry, runner, repo, logger, intervals: config.intervals });
-const app = createServer(config, logger, { registry, runner, repo, identity });
+const read = createReadService({ db: storage.db });
+const app = createServer(config, logger, { registry, runner, repo, identity, read });
 
 try {
     await app.listen({ host: HOST, port: config.port });
