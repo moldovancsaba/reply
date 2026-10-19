@@ -61,6 +61,12 @@
         "more": { "type": "boolean" }
       }
     },
+    "secret": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "schemaVersion", "secret"],
+      "properties": { "type": { "const": "secret" }, "schemaVersion": { "const": 1 }, "secret": { "type": "string" } }
+    },
     "warning": {
       "type": "object",
       "additionalProperties": false,
@@ -77,6 +83,7 @@
     { "$ref": "#/definitions/message" },
     { "$ref": "#/definitions/contact" },
     { "$ref": "#/definitions/cursor" },
+    { "$ref": "#/definitions/secret" },
     { "$ref": "#/definitions/warning" }
   ]
 }

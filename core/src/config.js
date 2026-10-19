@@ -1,6 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 import { isRegion } from "./identity/normalize.js";
+import { hasAccounts } from "./imap/accounts.js";
 
 // Connectors enabled when REPLY_CORE_CONNECTORS is unset. Connector issues add their ids here.
 export const DEFAULT_ENABLED_IDS = ["imessage", "contacts", "apple-mail"];
@@ -79,7 +80,8 @@ export function loadConfig(env = process.env) {
     const unknownKeys = Object.keys(env).filter(
         (k) => k.startsWith("REPLY_CORE_") && !KNOWN_KEYS.has(k) && !/_INTERVAL_MS$/.test(k),
     );
-    return { home, port, logLevel, allowedOrigins, connectors: rawConnectors === "none" ? [] : connectors.length ? connectors : DEFAULT_ENABLED_IDS, llm: { provider: llm, model: ollamaModel, url: ollamaUrl }, imessageDb: env.REPLY_CORE_IMESSAGE_DB || null, mailRoot: env.REPLY_CORE_MAIL_ROOT || null, whatsappDb: env.REPLY_CORE_WHATSAPP_DB || null, intervals, defaultRegion, unknownKeys };
+    // IMAP joins the default connectors once an account has been added (see `reply-core accounts add-imap`)
+    return { home, port, logLevel, allowedOrigins, connectors: rawConnectors === "none" ? [] : connectors.length ? connectors : [...DEFAULT_ENABLED_IDS, ...(hasAccounts(home) ? ["imap"] : [])], llm: { provider: llm, model: ollamaModel, url: ollamaUrl }, imessageDb: env.REPLY_CORE_IMESSAGE_DB || null, mailRoot: env.REPLY_CORE_MAIL_ROOT || null, whatsappDb: env.REPLY_CORE_WHATSAPP_DB || null, intervals, defaultRegion, unknownKeys };
 }
 
 const KNOWN_KEYS = new Set([

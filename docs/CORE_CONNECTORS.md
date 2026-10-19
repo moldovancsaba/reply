@@ -69,7 +69,7 @@ A blocked connector is re-checked first; if its preflight now succeeds it is cle
 
 | Variable | Meaning |
 |---|---|
-| `REPLY_CORE_CONNECTORS` | Comma list of connector ids to enable. Unset or empty: the defaults (`DEFAULT_ENABLED_IDS`, currently `imessage`, `contacts`, `apple-mail`). The single word `none` runs no connectors. Unknown ids are logged and ignored. |
+| `REPLY_CORE_CONNECTORS` | Comma list of connector ids to enable. Unset or empty: the defaults (`DEFAULT_ENABLED_IDS`, currently `imessage`, `contacts`, `apple-mail`, plus `imap` once an account exists). The single word `none` runs no connectors. Unknown ids are logged and ignored. |
 | `REPLY_CORE_<ID>_INTERVAL_MS` | Interval for one connector (`APPLE_MAIL` for `apple-mail`), integer >= 1000. |
 
 `REPLY_CORE_CONNECTORS=stub` enables a deterministic demo connector (three pages of synthetic messages) for trying the framework without any source app.
@@ -154,6 +154,34 @@ Access is probed by a short-lived child process (`dd`) killed after 8 s, never b
 A WhatsApp number and the same number on iMessage are **different handles** (`+e164@wa` vs `+e164`); they share a contact only through the address book (the Contacts connector links both forms) or an explicit merge.
 
 Limitations: unofficial and may break with any WhatsApp update; no media; deleted or revoked messages are skipped if empty and otherwise not propagated; if the app's database is replaced (reinstall) the cursor notices the new identity and re-imports from the start, so run `node core/scripts/reset-cursor.js whatsapp --purge` first for a clean result.
+
+## IMAP (`imap`, issue #196)
+
+For mailboxes that are **not** in Apple Mail. Fetches the inbox and the sent folder over IMAP and stores the **full text** of each message (Apple Mail's connector stores a summary). Interval 5 minutes per account. The connector joins the default list automatically once an account has been added.
+
+Add an account (the password is asked for with a hidden prompt, or read from stdin with `--password-stdin`; there is no password argument):
+
+```bash
+cd core
+node bin/reply-core.js accounts add-imap --host imap.gmail.com --user me@gmail.com --label Personal
+node bin/reply-core.js accounts list
+node bin/reply-core.js accounts remove me@gmail.com@imap.gmail.com [--purge]
+```
+
+`add-imap` connects, checks the login, finds the sent folder (the `\Sent` special-use folder, else a well-known name), saves the password in the keychain and the account (no secret) in `imap-accounts.json`. Exit codes: 0 ok, 2 usage, 3 login refused, 4 network or untrusted certificate, 5 keychain. Restart Reply Core afterwards.
+
+For Gmail or iCloud create an **app password** first (an ordinary account password is refused). A walkthrough: Google Account > Security > 2-Step Verification > App passwords; Apple ID > Sign-In and Security > App-Specific Passwords.
+
+| | |
+|---|---|
+| Cursor | per mailbox `{ "<mailbox>": { "uidValidity": n, "lastUid": n } }`; page size 500 messages across inbox then sent |
+| UIDVALIDITY | if the server renumbers a mailbox, it is read again from the start; because the key is the `Message-ID`, nothing duplicates |
+| Key / account | the `Message-ID` header (fallback `uid:<mailbox>:<uid>`) / the account id `user@host` |
+| Counterpart / direction | received: sender; sent folder, or mail from one of your addresses: the first recipient |
+| Text | plain-text part, else the HTML part reduced to text (nothing is fetched or run); capped at 256 KB (the source is truncated at 256 KB). `meta_json.isSummary` is false. |
+| Errors | refused login or no saved password: `auth_failed` (blocked, "create a new app password and add the account again"); connection problems, throttling and an untrusted certificate: `network_unavailable` (retried, then error); slow server: `timeout` |
+
+Limitations: no OAuth, no sending, no attachments, no folders other than inbox and sent, a message deleted at the server stays in Reply Core.
 
 ## Operations
 
