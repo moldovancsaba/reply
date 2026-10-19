@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { createRotatingStream } from "../src/logfile.js";
-import { EXIT, firstPath, isOurPlist, launcherPaths, nodeOk, parsePidfile, plistFor, readPidfile, statusLines } from "../src/launcher/lib.js";
+import { EXIT, FDA_STEPS_APP, firstPath, isOurPlist, launcherPaths, nodeOk, parsePidfile, plistFor, readPidfile, statusLines } from "../src/launcher/lib.js";
 
 const launcher = path.resolve(import.meta.dirname, "..", "scripts", "reply-core");
 const golden = path.resolve(import.meta.dirname, "fixtures", "launchd.golden.plist");
@@ -77,7 +77,7 @@ async function sandbox() {
     writeFileSync(path.join(bin, "open"), `#!/bin/sh\necho "$@" >> "${opened}"\n`); chmodSync(path.join(bin, "open"), 0o755);
     writeFileSync(path.join(bin, "launchctl"), `#!/bin/sh\necho "$@" >> "${launchctlLog}"\n`); chmodSync(path.join(bin, "launchctl"), 0o755);
     const port = await freePort();
-    const env = { PATH: process.env.PATH, HOME: home, REPLY_CORE_PORT: String(port), REPLY_CORE_UI_DIR: ui, REPLY_CORE_CONNECTORS: "none", REPLY_CORE_OPEN: path.join(bin, "open"), REPLY_CORE_LAUNCHCTL: path.join(bin, "launchctl") };
+    const env = { PATH: process.env.PATH, HOME: home, REPLY_CORE_NO_APP: "1", REPLY_CORE_PORT: String(port), REPLY_CORE_UI_DIR: ui, REPLY_CORE_CONNECTORS: "none", REPLY_CORE_OPEN: path.join(bin, "open"), REPLY_CORE_LAUNCHCTL: path.join(bin, "launchctl") };
     const read = (f) => (existsSync(f) ? readFileSync(f, "utf8") : "");
     return { home, port, env, opened: () => read(opened), launchctl: () => read(launchctlLog), paths: launcherPaths({ home, env }) };
 }
@@ -204,4 +204,12 @@ test("foreground start stays attached, opens the UI, and Control+C stops the ser
     const code = await new Promise((r) => c.on("exit", r));
     assert.equal(code, 0);
     assert.equal(readPidfile(s.paths.dataHome), null, "the pidfile is removed on a clean stop");
+});
+
+test("the agent can run the signed {reply}.app host instead of node, and the steps name {reply}", () => {
+    const text = plistFor({ node: "/n", entry: "/e", program: ["/Users/x/Applications/{reply}.app/Contents/MacOS/reply", "--service"], workingDirectory: "/w", launchdLog: "/l" });
+    assert.match(text, /<string>\/Users\/x\/Applications\/\{reply\}\.app\/Contents\/MacOS\/reply<\/string>\s*<string>--service<\/string>/);
+    assert.doesNotMatch(text, /<string>\/n<\/string>/);
+    assert.ok(FDA_STEPS_APP("/Users/x/Applications").join("\n").includes("{reply}"));
+    assert.equal(launcherPaths({ home: "/h" }).appExe, "/h/Applications/{reply}.app/Contents/MacOS/reply");
 });

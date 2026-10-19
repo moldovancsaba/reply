@@ -30,6 +30,8 @@ export function launcherPaths({ home = os.homedir(), env = process.env } = {}) {
         launchdLog: path.join(logDir, "launchd.log"),
         agentsDir: path.join(home, "Library", "LaunchAgents"),
         plist: path.join(home, "Library", "LaunchAgents", `${LABEL}.plist`),
+        app: path.join(home, "Applications", "{reply}.app"),
+        appExe: path.join(home, "Applications", "{reply}.app", "Contents", "MacOS", "reply"),
     };
 }
 
@@ -60,7 +62,8 @@ export function readPidfile(dataHome) {
 const xml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 // A launchd agent for the exact node binary and service entry. No secrets: only paths, the port and the log file.
-export function plistFor({ node, entry, workingDirectory, launchdLog, env = {} }) {
+export function plistFor({ node, entry, program, workingDirectory, launchdLog, env = {} }) {
+    const args = (program ?? [node, entry]).map((a) => `    <string>${xml(a)}</string>`).join("\n");
     const envEntries = Object.entries(env).map(([k, v]) => `    <key>${xml(k)}</key>\n    <string>${xml(v)}</string>`).join("\n");
     return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -71,8 +74,7 @@ export function plistFor({ node, entry, workingDirectory, launchdLog, env = {} }
   <string>${LABEL}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${xml(node)}</string>
-    <string>${xml(entry)}</string>
+${args}
   </array>
   <key>WorkingDirectory</key>
   <string>${xml(workingDirectory)}</string>
@@ -117,6 +119,15 @@ export function statusLines(status, { url, pid }) {
     lines.push(`${pad("Backups", 22)}${b.count} kept${b.lastBackupAt ? `, last ${b.lastBackupAt}` : ""}${b.lastBackupError ? `, last error: ${b.lastBackupError}` : ""}`);
     return lines;
 }
+
+export const FDA_STEPS_APP = (app) => [
+    "Full Disk Access is needed to read Messages and Mail. Give it to the app named {reply}:",
+    "  1. Open System Settings > Privacy & Security > Full Disk Access.",
+    "  2. Click +, press Command+Shift+G, paste this folder, then choose {reply}:",
+    `       ${app}`,
+    "  3. Switch {reply} on, then run: reply-core status",
+    "{reply} is signed, so the permission survives rebuilds and Node upgrades.",
+];
 
 export const FDA_STEPS = (node) => [
     "Full Disk Access is needed to read Messages and Mail. Give it to this exact program:",
