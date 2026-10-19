@@ -1,0 +1,174 @@
+#!/usr/bin/env node
+// Reply Core launcher: start | stop | status | open | logs | install-agent | uninstall-agent
+// Exit codes: 0 ok, 10 Node too old, 11 UI build failed, 12 service did not become healthy, 13 not running (stop/status);
+// when the service itself refuses to start, its own code (75 port in use, 78 bad configuration, 74 storage).
+import { spawn, spawnSync } from "node:child_process";
+import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { DEFAULT_PORT, EXIT, FDA_STEPS, firstPath, isOurPlist, launcherPaths, nodeOk, plistFor, readPidfile, statusLines } from "../src/launcher/lib.js";
+
+const coreDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const env = process.env;
+const paths = launcherPaths({ env });
+const port = Number(env.REPLY_CORE_PORT || DEFAULT_PORT);
+const url = `http://127.0.0.1:${port}`;
+const uiDir = env.REPLY_CORE_UI_DIR ? path.resolve(env.REPLY_CORE_UI_DIR) : path.join(coreDir, "ui", "dist");
+const say = (s = "") => console.log(s);
+const die = (code, msg) => { console.error(msg); process.exit(code); };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function get(p, ms = 1500) {
+    try {
+        const res = await fetch(`${url}${p}`, { signal: AbortSignal.timeout(ms) });
+        return res.ok ? await res.json() : null;
+    } catch {
+        return null;
+    }
+}
+const healthy = async () => (await get("/api/health"))?.status === "ok";
+
+function openUrl(target) {
+    const opener = env.REPLY_CORE_OPEN || "open";
+    const r = spawnSync(opener, [target], { stdio: "ignore" });
+    if (r.error || r.status !== 0) say(`Could not open the browser. Open ${target} yourself.`);
+}
+
+function ensureNode() {
+    if (!nodeOk()) die(EXIT.nodeTooOld, `Reply Core needs Node 20.17 or newer; this is ${process.versions.node}. Install a current Node (https://nodejs.org) and run this again. [exit ${EXIT.nodeTooOld}]`);
+}
+
+function ensureUi() {
+    if (existsSync(path.join(uiDir, "index.html"))) return;
+    say("Building the web app (first run only)...");
+    const opts = { cwd: coreDir, stdio: "inherit" };
+    const install = spawnSync("npm", ["--prefix", "ui", "ci"], opts);
+    const build = install.status === 0 ? spawnSync("npm", ["--prefix", "ui", "run", "build"], opts) : install;
+    if (build.status !== 0) die(EXIT.buildFailed, `Could not build the web app. It needs a network connection and a GITHUB_TOKEN with read:packages for the design system (see core/ui/README.md). [exit ${EXIT.buildFailed}]`);
+}
+
+const REASONS = { 75: `port ${port} is used by another program (is Reply Core already running under another user?)`, 78: "the configuration is not valid (see the line above or the startup log)", 74: "the database could not be opened (see docs/CORE_OPERATIONS.md, restore a backup)" };
+
+async function start(args) {
+    ensureNode();
+    ensureUi();
+    if (await healthy()) {
+        say(`Reply Core is already running at ${url}.`);
+        const status = await get("/api/status");
+        if (!args.includes("--no-open")) openUrl(`${url}${firstPath(status)}`);
+        return;
+    }
+    mkdirSync(paths.logDir, { recursive: true, mode: 0o700 });
+    const background = args.includes("--background");
+    const childEnv = { ...env, REPLY_CORE_LOG_FILE: env.REPLY_CORE_LOG_FILE || paths.logFile };
+    const fd = background ? openSync(paths.startupLog, "a", 0o600) : null;
+    const child = spawn(process.execPath, [path.join(coreDir, "src", "index.js")], {
+        cwd: coreDir,
+        env: childEnv,
+        stdio: background ? ["ignore", fd, fd] : ["ignore", "inherit", "inherit"],
+        detached: background,
+    });
+    if (fd !== null) closeSync(fd);
+    let exited = null;
+    child.on("exit", (code) => { exited = code ?? 1; });
+    for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => child.kill(signal));
+
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline && exited === null && !(await healthy())) await sleep(200);
+    if (exited !== null) die(exited, `Reply Core stopped right after starting: ${REASONS[exited] ?? `exit code ${exited}`}. Details: ${background ? paths.startupLog : "the output above"} and ${paths.logFile}. [exit ${exited}]`);
+    if (!(await healthy())) { child.kill("SIGTERM"); die(EXIT.healthTimeout, `Reply Core did not answer within 30 seconds. Look at ${paths.logFile}. [exit ${EXIT.healthTimeout}]`); }
+
+    const pid = readPidfile(paths.dataHome)?.pid ?? child.pid;
+    const status = await get("/api/status");
+    say(`Reply Core is running at ${url}/ (pid ${pid}).`);
+    for (const c of status?.connectors ?? []) if (c.state === "blocked") say(`  ${c.label}: needs your attention (${c.message})`);
+    const target = `${url}${firstPath(status)}`;
+    say(`Opening ${target}`);
+    if (!args.includes("--no-open")) openUrl(target);
+    if (background) { child.unref(); return; }
+    say("Press Control+C to stop it.");
+    await new Promise((resolve) => child.on("exit", resolve));
+    process.exit(exited ?? 0);
+}
+
+async function stop() {
+    const pid = readPidfile(paths.dataHome)?.pid;
+    if (!pid) die(EXIT.notRunning, `Reply Core is not running. [exit ${EXIT.notRunning}]`);
+    process.kill(pid, "SIGTERM");
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline && readPidfile(paths.dataHome)) await sleep(100);
+    if (readPidfile(paths.dataHome)) { try { process.kill(pid, "SIGKILL"); } catch { /* gone */ } say("Reply Core did not stop in 5 seconds and was killed."); rmSync(path.join(paths.dataHome, "reply-core.pid"), { force: true }); }
+    else say("Reply Core stopped.");
+    if (existsSync(paths.plist)) say("The login agent is installed and will start it again. Run `reply-core uninstall-agent` to stop that.");
+}
+
+async function status() {
+    const health = await get("/api/health");
+    if (health?.status !== "ok") {
+        const pid = readPidfile(paths.dataHome);
+        die(EXIT.notRunning, `Reply Core is not running at ${url}.${pid ? ` (pid ${pid.pid} exists but does not answer; see ${paths.logFile})` : ""}${existsSync(paths.plist) ? "\nThe login agent is installed; if Node was upgraded, run `reply-core install-agent` again." : ""} [exit ${EXIT.notRunning}]`);
+    }
+    const s = await get("/api/status", 5000);
+    if (!s) die(1, "Reply Core answers but its status is unavailable.");
+    for (const line of statusLines(s, { url, pid: readPidfile(paths.dataHome)?.pid })) say(line);
+    if (existsSync(paths.plist)) {
+        const text = readFileSync(paths.plist, "utf8");
+        say(`${"Login agent".padEnd(22)}installed${text.includes(realpathSync(process.execPath)) ? "" : " (for a different Node than this one: run `reply-core install-agent` again)"}`);
+    }
+    process.exit(s.overall === "blocked" ? 1 : 0);
+}
+
+function logs(args) {
+    if (!existsSync(paths.logFile)) die(1, `No log file yet (${paths.logFile}). Start Reply Core with \`reply-core start\` first.`);
+    const n = args.includes("--lines") ? args[args.indexOf("--lines") + 1] : "100";
+    const tail = spawnSync("tail", ["-n", n, ...(args.includes("--no-follow") ? [] : ["-f"]), paths.logFile], { stdio: "inherit" });
+    process.exit(tail.status ?? 0);
+}
+
+const launchctl = (...a) => spawnSync(env.REPLY_CORE_LAUNCHCTL || "launchctl", a, { encoding: "utf8" });
+const domain = () => `gui/${process.getuid?.() ?? os.userInfo().uid}`;
+
+function installAgent() {
+    ensureNode();
+    ensureUi();
+    mkdirSync(paths.logDir, { recursive: true, mode: 0o700 });
+    mkdirSync(paths.agentsDir, { recursive: true });
+    const node = realpathSync(process.execPath);
+    const text = plistFor({
+        node,
+        entry: path.join(coreDir, "src", "index.js"),
+        workingDirectory: coreDir,
+        launchdLog: paths.launchdLog,
+        env: { REPLY_CORE_LOG_FILE: paths.logFile, ...(env.REPLY_CORE_HOME ? { REPLY_CORE_HOME: paths.dataHome } : {}), ...(env.REPLY_CORE_PORT ? { REPLY_CORE_PORT: String(port) } : {}) },
+    });
+    const existing = existsSync(paths.plist) ? readFileSync(paths.plist, "utf8") : null;
+    if (existing !== null && !isOurPlist(existing)) die(1, `${paths.plist} exists and was not created by reply-core; not touching it.`);
+    if (existing !== text) writeFileSync(paths.plist, text, { mode: 0o644 });
+    chmodSync(paths.plist, 0o644);
+    launchctl("bootout", `${domain()}/com.moldovancsaba.reply-core`); // ignore: it may not be loaded yet
+    const r = launchctl("bootstrap", domain(), paths.plist);
+    if (r.status !== 0) say(`launchctl said: ${(r.stderr || r.stdout || "").trim() || `exit ${r.status}`}. It will load at your next login.`);
+    say(existing === text ? "The login agent was already installed; it has been reloaded." : "Reply Core will now start at login and restart if it stops.");
+    say(`Agent file: ${paths.plist}`);
+    say(`Logs: ${paths.logFile}`);
+    say();
+    for (const line of FDA_STEPS(node)) say(line);
+}
+
+function uninstallAgent() {
+    if (!existsSync(paths.plist)) { say("The login agent is not installed."); return; }
+    const text = readFileSync(paths.plist, "utf8");
+    if (!isOurPlist(text)) die(1, `${paths.plist} was not created by reply-core; not removing it.`);
+    launchctl("bootout", `${domain()}/com.moldovancsaba.reply-core`);
+    rmSync(paths.plist, { force: true });
+    say("The login agent was removed. A running Reply Core keeps running until you stop it (`reply-core stop`). Logs were left in place.");
+}
+
+const [cmd = "help", ...args] = process.argv.slice(2);
+const commands = { start, stop, status, open: async () => { if (!(await healthy())) die(EXIT.notRunning, `Reply Core is not running. Start it with \`reply-core start\`. [exit ${EXIT.notRunning}]`); openUrl(`${url}${firstPath(await get("/api/status"))}`); }, logs, "install-agent": installAgent, "uninstall-agent": uninstallAgent };
+if (!commands[cmd]) {
+    say("Usage: reply-core start [--background] [--no-open] | stop | status | open | logs [--lines N] [--no-follow] | install-agent | uninstall-agent");
+    process.exit(cmd === "help" || cmd === "--help" ? 0 : 2);
+}
+await commands[cmd](args);
