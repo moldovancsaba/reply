@@ -7,7 +7,7 @@ Reply Core reads other apps' data. macOS grants access to the **process that sta
 | iMessage | `~/Library/Messages/chat.db` | Full Disk Access | System Settings > Privacy & Security > Full Disk Access |
 | Apple Mail | `~/Library/Mail/V*/MailData/Envelope Index` | Full Disk Access | same |
 | Contacts | the address book (Contacts framework) | Contacts | prompted on first use (`doctor` shows `needs_consent` until then); System Settings > Privacy & Security > Contacts |
-| WhatsApp Desktop | `ChatStorage.sqlite` in its container | Full Disk Access | same (connector: issue #195) |
+| WhatsApp Desktop | `ChatStorage.sqlite` in its container | Full Disk Access | same (connector: `whatsapp`, opt-in; macOS may also ask once whether Reply Core can access data from other apps) |
 
 ## Checking
 

@@ -51,6 +51,7 @@ export function createScheduler({ registry, runner, repo, logger, intervals = {}
             controller.abort();
             for (const h of handles.values()) timers.clearTimeout(h);
             await runner.waitIdle();
+            for (const c of registry.list()) c.close?.(); // lets a connector remove temporary files
         },
         intervalFor,
         nextRunAt: (id) => nextAt.get(id) ?? null,

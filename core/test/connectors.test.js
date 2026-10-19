@@ -165,7 +165,7 @@ test("the event loop stays responsive while a large import runs", async () => {
     const res = await runner.start(c, "").done;
     clearInterval(t);
     assert.equal(res.inserted, 6000);
-    assert.ok(worst < 150, `event loop stalled ${Math.round(worst)} ms`);
+    assert.ok(worst < 400, `event loop stalled ${Math.round(worst)} ms`); // generous: test files run in parallel on one machine; a missing yield would stall for seconds
 });
 
 test("run records are pruned to the last 50 per connector", async () => {

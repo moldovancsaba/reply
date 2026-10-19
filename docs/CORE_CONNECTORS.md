@@ -131,6 +131,30 @@ Limitations: summaries only; no attachments; no HTML rendering; edits and deleti
 
 To discard imported email and re-ingest: stop the service, `node core/scripts/reset-cursor.js apple-mail --purge` (this removes **all** email rows, since the `email` channel is shared with the IMAP connector).
 
+## WhatsApp (`whatsapp`, issue #195)
+
+Reads WhatsApp Desktop's local `ChatStorage.sqlite` directly (no helper, no OpenClaw), incrementally by primary key, every 2 minutes. **Best-effort**: the file is an undocumented, app-private format, so the connector checks the layout first and stops rather than guess when WhatsApp changes it. It only reads; it never sends.
+
+| | |
+|---|---|
+| Enable | Not on by default (its data may not exist, and macOS may hide it): `REPLY_CORE_CONNECTORS=imessage,contacts,apple-mail,whatsapp` |
+| Source | `REPLY_CORE_WHATSAPP_DB`, else the first of four known locations that exists (Group Containers `group.net.whatsapp.WhatsApp.shared` first) |
+| Permission | Full Disk Access for the process that starts Reply Core. The first access can also make macOS show a dialog asking whether Reply Core may access data from other apps; until someone answers it the connector reports `permission_denied` ("macOS may be asking ... Look for a permission dialog, allow it, then recheck"). |
+| Cursor | `{ "pk": n, "db": "<Z_METADATA uuid>" }`; page size 500 |
+| Layout check | `ZWAMESSAGE` (`Z_PK, ZTEXT, ZMESSAGEDATE, ZISFROMME, ZFROMJID, ZTOJID, ZCHATSESSION, ZMEDIAITEM, ZMESSAGETYPE`), `ZWACHATSESSION` (`Z_PK, ZCONTACTJID, ZPARTNERNAME`), `Z_METADATA` (`Z_UUID`). Anything missing is `schema_unsupported` (blocked) and nothing is written. |
+| Live database | Opened read-only in place. If SQLite cannot (a live WAL database), a temporary copy of the database, `-wal` and `-shm` is read instead (`0700` directory under the system temp folder, reused across the pages of one run, removed when the run ends, on failure, on shutdown, and after an hour if a crash left one). |
+| Handle | a 1:1 chat is `+e164@wa` (`<number>@s.whatsapp.net`); a group chat is `group:<jid>` with the sender of each received message in `meta_json.sender`; opaque `@lid` ids are `other:<id>` |
+| Text | the message text, `[Media attachment]` for media without text; media itself is not read |
+| Skipped | system rows (`ZMESSAGETYPE = 10`), status/broadcast chats, and rows with neither text nor media (counted in the log) |
+| Dates | Core Data seconds since 2001-01-01 converted to UTC |
+| Preflight | `source_missing` ("WhatsApp Desktop has no data on this Mac"), `permission_denied`, `schema_unsupported` ("WhatsApp changed its data format ... Check for a Reply Core update") |
+
+Access is probed by a short-lived child process (`dd`) killed after 8 s, never by a blocking `open()` in the service: a blocked open would freeze a worker thread (and even the service's exit) while a macOS dialog waits for an answer. One probe per file runs at a time.
+
+A WhatsApp number and the same number on iMessage are **different handles** (`+e164@wa` vs `+e164`); they share a contact only through the address book (the Contacts connector links both forms) or an explicit merge.
+
+Limitations: unofficial and may break with any WhatsApp update; no media; deleted or revoked messages are skipped if empty and otherwise not propagated; if the app's database is replaced (reinstall) the cursor notices the new identity and re-imports from the start, so run `node core/scripts/reset-cursor.js whatsapp --purge` first for a clean result.
+
 ## Operations
 
 - Stop syncing entirely: `REPLY_CORE_CONNECTORS=none` and restart. The service keeps serving existing data.
