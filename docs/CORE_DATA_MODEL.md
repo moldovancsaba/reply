@@ -54,3 +54,11 @@ Prints schema version, `quick_check`, row counts and per-channel counts (read-on
 
 - Deletions at the source are not propagated.
 - No encryption at rest beyond FileVault.
+
+## Profile tables (migration 0008)
+
+| Table | Holds | Rebuilt from sources? |
+|---|---|---|
+| `contact_details` | address-book fields as JSON per contact (organization, job title, birthday, ...), replaced on every Contacts import | yes, by the next import |
+| `contact_profile` | what the user wrote: profession, company, relationship, LinkedIn address, intro | **no** (user data, kept by backup and by `rebuild`) |
+| `contact_notes` | the user's notes per contact | **no** (user data, kept by backup and by `rebuild`) |

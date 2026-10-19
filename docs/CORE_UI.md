@@ -89,12 +89,25 @@ GDS notes found while building it: `GdsSplit` never splits (its inline `grid-tem
 
 GDS notes: `GdsInline` with `justify` end/start collapsed the entry to about 8 px at 375 px width, so alignment uses a 12-column `GdsColumnGrid`; `SectionTitle`/`CardTitle` set the heading level with `order`, not `component`; `GdsBox` takes no `id` (a plain wrapper `div` carries the anchor id).
 
-## Contact profile and merge
+## Contact profile
 
-`/inbox/:contactId/profile` (`src/routes/profile/ProfilePane.tsx`), reached from "Profile and merge" in the thread header. It is a page in the detail pane on every width (the issue allowed a drawer on desktop; a page keeps one code path and works at 375 px).
+On a wide window the profile is a third column (list | conversation | profile); "Hide profile" / "Show profile" in the conversation header toggles it and the choice is remembered. On a narrow window the conversation header has a **Profile** link to `/inbox/:contactId/profile`, a page with "Back to conversation". Data comes from `GET /api/contacts/:id/profile` ([CORE_API.md](CORE_API.md#profile)).
 
-- **Profile:** display name, where the contact came from (address book / created automatically / created by you), per-channel message counts, handles grouped by channel in labelled lists with the handle kind.
-- **Merge:** a searchable picker (`SearchableSelect`, loads `GET /api/contacts?q=&includeEmpty=true`, excludes the current contact, "No contacts match") opens a confirmation that restates both names and counts: "Move 1 handle and 2 messages from {source} into {this contact}?". Nothing is sent before the confirmation. The Merge button is loading and disabled while the request runs (one request even on a double click), the dialog stays open on failure with a plain explanation (`mergeErrorText`: `cannot_merge_self`, `contact_not_found`, `handle_conflict` with the blocking handles, `merge_already_reverted`), and there is no optimistic update. On success contacts, contact, thread and history queries are refreshed, a notice with **Undo** shows for 15 s and the app opens the kept contact's conversation.
+| Section | What it shows |
+|---|---|
+| Header | name, "{job title or profession} at {organization or company}", relationship badge, where the contact came from, "Also known as ..." for merged-in names |
+| Address book | read-only: name parts, nickname, organization, job title, department, birthday, web addresses (only `http(s)` become links, opened with `noopener`), postal addresses; or a sentence saying there is nothing (yet) |
+| How to reach them | every phone number, email address and WhatsApp number with its message count and last message, and the LinkedIn link |
+| Activity | messages (received / sent), in touch since, last message, last heard from them, last wrote to them, last 30 days, and a per-channel breakdown |
+| Details you add | profession, company, relationship, LinkedIn address, intro; saved on this Mac with Save (disabled until something changed) |
+| Notes | add, newest first, delete only after a confirmation (permanent) |
+| Merge | the merge flow below |
+
+Everything you write stays on this Mac, is validated by the service (lengths, a LinkedIn address must be a web address), and is kept when the database is rebuilt ([CORE_OPERATIONS.md](CORE_OPERATIONS.md)).
+
+### Merge and undo
+
+- **Merge:** a searchable picker (`SearchableSelect`, loads `GET /api/contacts?q=&includeEmpty=true`, excludes the current contact, "No contacts match") opens a confirmation that restates both names and counts: "Move 1 handle and 2 messages from {source} into {this contact}?". Nothing is sent before the confirmation. The Merge button is loading and disabled while the request runs (one request even on a double click), the dialog stays open on failure with a plain explanation (`mergeErrorText`: `cannot_merge_self`, `contact_not_found`, `handle_conflict` with the blocking handles, `merge_already_reverted`), and there is no optimistic update. On success contacts, contact, thread, profile and history queries are refreshed, a notice with **Undo** shows for 15 s and the app opens the kept contact's conversation.
 - **Undo:** from the notice (it opens the profile with `?undo=<merge id>`, which opens the undo confirmation) and from **Merge history** (newest first; merges not yet undone have an Undo button; undone ones say "undone"). Undo always asks first, naming both people. A conflict (an earlier merge must be undone first) is explained in the dialog.
 - **Empty history:** "No merges yet." is plain text, not an error.
 

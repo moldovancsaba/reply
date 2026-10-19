@@ -8,6 +8,7 @@ import { registerHealth } from "./routes/health.js";
 import { registerDrafts } from "./routes/drafts.js";
 import { registerHandoff } from "./routes/handoff.js";
 import { registerIdentity } from "./routes/identity.js";
+import { registerProfile } from "./routes/profile.js";
 import { registerRead } from "./routes/read.js";
 import { registerStatus } from "./routes/status.js";
 import { registerSync } from "./routes/sync.js";
@@ -93,6 +94,7 @@ export function createServer(config, logger, deps = {}) {
     if (deps.runner) registerSync(app, deps);
     if (deps.identity) registerIdentity(app, deps);
     if (deps.read) registerRead(app, deps);
+    if (deps.profile) registerProfile(app, deps);
     if (deps.status) registerStatus(app, deps);
     if (deps.handoffs) registerHandoff(app, deps);
     if (deps.drafting) registerDrafts(app, deps);

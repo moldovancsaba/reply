@@ -11,6 +11,16 @@ public enum ContactsSource {
         }
     }
 
+    static func nonEmpty(_ s: String) -> String? { s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : s }
+
+    /// "1985-03-09", or "--03-09" when the year is unknown.
+    static func birthdayString(_ c: DateComponents) -> String? {
+        guard let m = c.month, let d = c.day else { return nil }
+        let md = String(format: "%02d-%02d", m, d)
+        if let y = c.year, y > 0 { return String(format: "%04d-", y) + md }
+        return "--" + md
+    }
+
     public static func displayName(formatted: String?, organization: String?, firstHandle: String?) -> String {
         for c in [formatted, organization, firstHandle] {
             let t = (c ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -39,6 +49,14 @@ public enum ContactsSource {
             CNContactOrganizationNameKey as CNKeyDescriptor,
             CNContactEmailAddressesKey as CNKeyDescriptor,
             CNContactPhoneNumbersKey as CNKeyDescriptor,
+            CNContactGivenNameKey as CNKeyDescriptor,
+            CNContactFamilyNameKey as CNKeyDescriptor,
+            CNContactNicknameKey as CNKeyDescriptor,
+            CNContactJobTitleKey as CNKeyDescriptor,
+            CNContactDepartmentNameKey as CNKeyDescriptor,
+            CNContactBirthdayKey as CNKeyDescriptor,
+            CNContactUrlAddressesKey as CNKeyDescriptor,
+            CNContactPostalAddressesKey as CNKeyDescriptor,
         ]
         let request = CNContactFetchRequest(keysToFetch: keys)
         request.unifyResults = true
@@ -48,7 +66,14 @@ public enum ContactsSource {
                 let phones = c.phoneNumbers.map { $0.value.stringValue }.filter { !$0.isEmpty }
                 let emails = c.emailAddresses.map { String($0.value) }.filter { !$0.isEmpty }
                 let name = displayName(formatted: CNContactFormatter.string(from: c, style: .fullName), organization: c.organizationName, firstHandle: phones.first ?? emails.first)
-                records.append(ContactRecord(contactId: c.identifier, displayName: name, phones: phones, emails: emails))
+                records.append(ContactRecord(
+                    contactId: c.identifier, displayName: name, phones: phones, emails: emails,
+                    givenName: nonEmpty(c.givenName), familyName: nonEmpty(c.familyName), nickname: nonEmpty(c.nickname),
+                    organization: nonEmpty(c.organizationName), jobTitle: nonEmpty(c.jobTitle), department: nonEmpty(c.departmentName),
+                    birthday: c.birthday.flatMap(birthdayString),
+                    urls: c.urlAddresses.isEmpty ? nil : c.urlAddresses.map { String($0.value) }.filter { !$0.isEmpty },
+                    addresses: c.postalAddresses.isEmpty ? nil : c.postalAddresses.map { CNPostalAddressFormatter.string(from: $0.value, style: .mailingAddress).replacingOccurrences(of: "\n", with: ", ") }.filter { !$0.isEmpty }
+                ))
             }
         } catch {
             throw HelperFailure.internalError("Contacts enumeration failed: \(error.localizedDescription)")

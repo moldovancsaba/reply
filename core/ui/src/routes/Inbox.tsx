@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Anchor, ChoiceChip, DataToolbar, GdsBox, GdsColumnGrid, GdsColumnGridItem, GdsInline, GdsStack, OverflowContainer, PageHeader, SemanticButton, StateBlock, TextInput } from "@sovereignsquad/gds";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import { CHANNEL_LABEL } from "../lib/time";
+import { useProfile } from "../api/queries";
 import { ProfilePane } from "./profile/ProfilePane";
 import { ThreadPane } from "./thread/ThreadPane";
 import { ConversationList } from "./inbox/ConversationList";
@@ -37,11 +39,19 @@ export default function Inbox() {
       <ConversationList query={query} selectedId={contactId} active={active} onClear={clear} />
     </GdsStack>
   );
-  const detail = contactId ? (
-    section === "profile" ? <ProfilePane key={contactId} contactId={contactId} /> : <ThreadPane key={contactId} contactId={contactId} />
-  ) : (
+  // Wide: list | conversation | profile (the profile column can be hidden and the choice is remembered). Narrow: the
+  // conversation, or the profile page (/inbox/:id/profile), one at a time.
+  const [profileShown, setProfileShown] = useState(() => { try { return window.localStorage.getItem("rc.profile.shown") !== "0"; } catch { return true; } });
+  const toggleProfile = () => setProfileShown((v) => { try { window.localStorage.setItem("rc.profile.shown", v ? "0" : "1"); } catch { /* the choice is just not remembered */ } return !v; });
+  const profileData = useProfile(contactId ?? "", contactId !== undefined); // shared with the column; an unknown contact gets no column
+  const showProfileColumn = wide && contactId !== undefined && !profileData.isError && (profileShown || section === "profile");
+  const profileLink = contactId ? `/inbox/${contactId}/profile` : "";
+
+  const thread = contactId ? <ThreadPane key={contactId} contactId={contactId} profile={wide ? { shown: showProfileColumn, toggle: toggleProfile } : { href: profileLink, open: () => navigate(profileLink) }} /> : (
     <StateBlock variant="empty" title="Pick a conversation" description="Choose someone from the list to read your messages with them." />
   );
+  const profile = contactId ? <ProfilePane key={contactId} contactId={contactId} onBack={wide ? undefined : () => navigate(`/inbox/${contactId}`)} /> : null;
+  const detail = section === "profile" && !wide ? profile : thread;
 
   // GdsSplit's inline grid-template-columns beats its own media query, so it never splits; a 12-column grid does.
   return (
@@ -56,12 +66,17 @@ export default function Inbox() {
         ) : list
       ) : (
         <GdsColumnGrid columns={12} gap="lg">
-          <GdsColumnGridItem span={4}>
+          <GdsColumnGridItem span={showProfileColumn ? 3 : 4}>
             <OverflowContainer maxHeight={PANE_HEIGHT} label="Conversations"><GdsBox padding="xs">{list}</GdsBox></OverflowContainer>
           </GdsColumnGridItem>
-          <GdsColumnGridItem span={8}>
-            <OverflowContainer maxHeight={PANE_HEIGHT} label="Conversation"><GdsBox padding="xs">{detail}</GdsBox></OverflowContainer>
+          <GdsColumnGridItem span={showProfileColumn ? 5 : 8}>
+            <OverflowContainer maxHeight={PANE_HEIGHT} label="Conversation"><GdsBox padding="xs">{thread}</GdsBox></OverflowContainer>
           </GdsColumnGridItem>
+          {showProfileColumn ? (
+            <GdsColumnGridItem span={4}>
+              <OverflowContainer maxHeight={PANE_HEIGHT} label="Profile"><GdsBox padding="xs">{profile}</GdsBox></OverflowContainer>
+            </GdsColumnGridItem>
+          ) : null}
         </GdsColumnGrid>
       )}
     </>

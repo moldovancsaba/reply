@@ -16,6 +16,7 @@ export interface ReadResponses {
   Contact: Contact;
   Thread: Thread;
   SearchResult: SearchResult;
+  Profile: Profile;
   Error: Error;
 }
 /**
@@ -140,6 +141,91 @@ export interface SearchHit {
   channel: Channel;
   ts: string;
   snippet: string;
+}
+/**
+ * This interface was referenced by `ReadResponses`'s JSON-Schema
+ * via the `definition` "Profile".
+ */
+export interface Profile {
+  id: string;
+  displayName: string;
+  origin: "auto" | "apple_contacts" | "manual";
+  card: {
+    givenName?: string;
+    familyName?: string;
+    nickname?: string;
+    organization?: string;
+    jobTitle?: string;
+    department?: string;
+    birthday?: string;
+    urls?: string[];
+    addresses?: string[];
+  };
+  profile: ProfileFields;
+  notes: Note[];
+  handles: {
+    value: string;
+    label: string;
+    kind: "phone" | "email" | "whatsapp" | "other";
+    origin: "auto" | "apple_contacts" | "manual_merge";
+    messages: number;
+    lastTs: string | null;
+  }[];
+  stats: {
+    total: number;
+    sent: number;
+    received: number;
+    firstTs: string | null;
+    lastTs: string | null;
+    lastSentTs: string | null;
+    lastReceivedTs: string | null;
+    last30Days: number;
+    byChannel: {
+      imessage: {
+        total: number;
+        sent: number;
+        received: number;
+        firstTs: string | null;
+        lastTs: string | null;
+      };
+      email: {
+        total: number;
+        sent: number;
+        received: number;
+        firstTs: string | null;
+        lastTs: string | null;
+      };
+      whatsapp: {
+        total: number;
+        sent: number;
+        received: number;
+        firstTs: string | null;
+        lastTs: string | null;
+      };
+    };
+  };
+  mergedFrom: string[];
+}
+/**
+ * This interface was referenced by `ReadResponses`'s JSON-Schema
+ * via the `definition` "ProfileFields".
+ */
+export interface ProfileFields {
+  profession: string;
+  company: string;
+  relationship: string;
+  linkedinUrl: string;
+  intro: string;
+  updatedAt: string | null;
+}
+/**
+ * This interface was referenced by `ReadResponses`'s JSON-Schema
+ * via the `definition` "Note".
+ */
+export interface Note {
+  id: string;
+  text: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `ReadResponses`'s JSON-Schema

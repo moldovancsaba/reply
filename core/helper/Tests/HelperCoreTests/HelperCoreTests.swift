@@ -133,10 +133,18 @@ final class HelperCoreTests: XCTestCase {
         XCTAssertEqual(probe(path: f.path), .permissionDenied)
     }
 
-    func testContactDisplayNameFallback() {
+    func testContactDisplayNameFallback() throws {
         XCTAssertEqual(ContactsSource.displayName(formatted: " Anna K ", organization: "Org", firstHandle: "+1"), "Anna K")
         XCTAssertEqual(ContactsSource.displayName(formatted: "", organization: "Org", firstHandle: "+1"), "Org")
         XCTAssertEqual(ContactsSource.displayName(formatted: nil, organization: nil, firstHandle: "+1"), "+1")
+        XCTAssertEqual(ContactsSource.birthdayString(DateComponents(year: 1985, month: 3, day: 9)), "1985-03-09")
+        XCTAssertEqual(ContactsSource.birthdayString(DateComponents(month: 12, day: 24)), "--12-24")
+        XCTAssertNil(ContactsSource.birthdayString(DateComponents(year: 1985)))
+        XCTAssertNil(ContactsSource.nonEmpty("  "))
+        let r = ContactRecord(contactId: "1", displayName: "A", phones: [], emails: [], organization: "Org", jobTitle: "CTO")
+        let json = String(data: try JSONEncoder().encode(r), encoding: .utf8)!
+        XCTAssertTrue(json.contains("\"organization\":\"Org\"") && json.contains("\"jobTitle\":\"CTO\""))
+        XCTAssertFalse(json.contains("nickname"), "empty details are left out of the JSON")
         XCTAssertEqual(ContactsSource.displayName(formatted: nil, organization: nil, firstHandle: nil), "")
     }
 
