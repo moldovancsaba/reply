@@ -15,6 +15,7 @@ One SQLite file, `core.db`, in `REPLY_CORE_HOME` (default `~/Library/Application
 | `merge_log` | Append-only audit of merges and unmerges (never message content). `handles_json` is `[{ handle_norm, prior_origin }]`; an undone merge carries `reverted_by`. See [CORE_IDENTITY.md](CORE_IDENTITY.md). |
 | `contact_summary` | Materialized per-contact list row: last message time/channel/preview, counts per channel. Rebuilt in the same transaction as every message batch. |
 | `sync_state` | Per `(connector, account)` cursor, state (`idle`, `running`, `error`, `blocked`), last success/error, message total. |
+| `handoffs` | One row per reply handed off to another app: time, contact, channel, kind of address, text length. Never the text (migration `0006_handoffs.sql`). |
 | `sync_runs` | Last 50 runs per connector: outcome, attempts, pages, inserted/updated/skipped/quarantined, error code (migration `0002_sync_runs.sql`). |
 | `messages_fts` | FTS5 index over `text` and `subject` (`unicode61 remove_diacritics 2`), kept in sync by triggers. |
 | `schema_migrations` | Applied migrations with SHA-256 checksums. |
