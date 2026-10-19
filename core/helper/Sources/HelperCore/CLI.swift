@@ -6,7 +6,7 @@ public enum CLI {
           imessage [--db <path>] [--after <rowid>] [--limit <n>]
           mail     [--root <path>] [--after <rowid>] [--limit <n>]
           contacts [--after <offset>] [--limit <n>]
-          doctor   [--db <path>] [--root <path>] [--skip-contacts]
+          doctor   [--db <path>] [--root <path>] [--skip-contacts] [--only imessage|mail|contacts]
           --version
         Exit codes: 0 ok, 2 usage, 10 permission_denied, 11 source_missing, 12 source_locked, 13 schema_unsupported, 20 internal
         """
@@ -15,8 +15,9 @@ public enum CLI {
         var db = IMessage.defaultDBPath
         var root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Mail").path
         var after: Int64 = 0
-        var limit = 500
+        var limit: Int?
         var skipContacts = false
+        var only: String?
     }
 
     static func parse(_ args: [String]) throws -> Options {
@@ -38,6 +39,10 @@ public enum CLI {
                 guard let v = Int(try value()), v >= 0 else { throw HelperFailure.usage("--limit must be a non-negative integer") }
                 o.limit = v
             case "--skip-contacts": o.skipContacts = true
+            case "--only":
+                let v = try value()
+                guard ["imessage", "mail", "contacts"].contains(v) else { throw HelperFailure.usage("--only must be imessage, mail or contacts") }
+                o.only = v
             default: throw HelperFailure.usage("Unknown argument: \(args[i])")
             }
             i += 1
@@ -55,15 +60,17 @@ public enum CLI {
             let o = try parse(args)
             switch command {
             case "imessage":
-                guard o.limit > 0 else { throw HelperFailure.usage("--limit must be positive") }
-                try IMessage.export(dbPath: o.db, afterRowID: o.after, limit: o.limit, writer: writer)
+                let limit = o.limit ?? 500
+                guard limit > 0 else { throw HelperFailure.usage("--limit must be positive") }
+                try IMessage.export(dbPath: o.db, afterRowID: o.after, limit: limit, writer: writer)
             case "mail":
-                guard o.limit > 0 else { throw HelperFailure.usage("--limit must be positive") }
-                try Mail.export(root: o.root, afterRowID: o.after, limit: o.limit, writer: writer)
+                let limit = o.limit ?? 500
+                guard limit > 0 else { throw HelperFailure.usage("--limit must be positive") }
+                try Mail.export(root: o.root, afterRowID: o.after, limit: limit, writer: writer)
             case "contacts":
-                try ContactsSource.export(after: Int(o.after), limit: o.limit == 500 ? 0 : o.limit, writer: writer)
+                try ContactsSource.export(after: Int(o.after), limit: o.limit ?? 0, writer: writer) // omitted or 0 = everything
             case "doctor":
-                let report = doctor(imessageDB: o.db, mailRoot: o.root, checkContacts: !o.skipContacts)
+                let report = doctor(imessageDB: o.db, mailRoot: o.root, checkContacts: !o.skipContacts, only: o.only)
                 writer.emit(report)
                 if let f = report.worstFailure {
                     fputs("reply-core-helper: \(f.message) Run doctor again after fixing it.\n", stderr)

@@ -38,7 +38,8 @@ export function createRunner({ db, repo, logger, onContacts, now = () => Date.no
             const cur = repo.getSyncState(connector.id, account);
             repo.setSyncState(connector.id, account, {
                 cursor_json: JSON.stringify(page.nextCursor ?? {}),
-                messages_total: (cur?.messages_total ?? 0) + res.inserted,
+                // connectors that count something other than messages (people) report an absolute `total`
+                messages_total: page.total ?? (cur?.messages_total ?? 0) + res.inserted,
             });
             return res;
         })();
