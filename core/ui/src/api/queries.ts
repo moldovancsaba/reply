@@ -79,3 +79,35 @@ export function useThread(id: string, channel: Channel | "all") {
     retryDelay: 2000,
   });
 }
+
+export type MergeResult = { mergeLogId: string; movedHandles: string[]; movedMessages: number; targetContactId: string };
+export type MergeHistoryItem = { id: string; ts: string; action: "merge" | "unmerge"; fromName: string; toName: string; handlesCount: number; revertedBy?: string };
+
+export function useMerges(id: string) {
+  return useQuery({
+    queryKey: ["merges", id],
+    queryFn: ({ signal }) => unwrap(fetchJson<{ items: MergeHistoryItem[] }>(`/api/contacts/${encodeURIComponent(id)}/merges`, { signal })),
+    retry: retryOnce,
+    retryDelay: 2000,
+  });
+}
+
+// Merge and unmerge wait for the server (no optimistic update) and refresh everything that shows the affected people.
+export const mergeContacts = (targetId: string, sourceContactId: string) =>
+  fetchJson<MergeResult>(`/api/contacts/${encodeURIComponent(targetId)}/merge`, { method: "POST", body: { sourceContactId }, timeoutMs: 30_000 });
+export const unmergeContacts = (contactId: string, mergeLogId: string) =>
+  fetchJson<{ restoredContactId: string; restoredHandles: string[] }>(`/api/contacts/${encodeURIComponent(contactId)}/unmerge`, { method: "POST", body: { mergeLogId }, timeoutMs: 30_000 });
+
+export function mergeErrorText(e: ApiError): string {
+  switch (e.code) {
+    case "cannot_merge_self": return "Choose a different contact.";
+    case "contact_not_found": return "That contact no longer exists. It may already have been merged.";
+    case "handle_conflict": {
+      const handles = Array.isArray(e.details?.handles) ? (e.details.handles as unknown[]).map(String).join(", ") : "";
+      return `A handle was moved elsewhere since this merge${handles ? ` (${handles})` : ""}. Undo the later merge first, then try again.`;
+    }
+    case "merge_already_reverted": return "This merge was already undone.";
+    case "merge_not_found": return "That merge is no longer in the history.";
+    default: return e.message;
+  }
+}

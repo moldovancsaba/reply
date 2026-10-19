@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -12,9 +12,13 @@ const freePort = () => new Promise<number>((resolve) => { const s = net.createSe
 export type Service = { url: string; port: number; stop: () => Promise<void>; start: () => Promise<void>; running: () => boolean };
 
 // A real Reply Core service (serving the built UI) on its own port and data folder.
-export async function startService(): Promise<Service> {
+export async function startService({ seed = false }: { seed?: boolean } = {}): Promise<Service> {
   const port = await freePort();
   const home = mkdtempSync(path.join(os.tmpdir(), "rc-e2e-"));
+  if (seed) {
+    const r = spawnSync(process.execPath, [path.join(root, "ui", "e2e", "seed.mjs"), home], { encoding: "utf8" });
+    if (r.status !== 0) throw new Error(`seed failed: ${r.stderr}`);
+  }
   let child: ChildProcess | null = null;
   const start = async () => {
     child = spawn(process.execPath, [path.join(root, "src", "index.js")], {
