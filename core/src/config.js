@@ -56,11 +56,30 @@ export function loadConfig(env = process.env) {
     const defaultRegion = (env.REPLY_CORE_DEFAULT_REGION || "HU").toUpperCase();
     if (!isRegion(defaultRegion)) throw new ConfigError("REPLY_CORE_DEFAULT_REGION must be a two-letter country code such as HU or US");
 
+    // Drafting is off unless asked for, and the only provider is a local Ollama. A non-loopback URL needs an explicit opt-in.
+    const llm = (env.REPLY_CORE_LLM || "off").toLowerCase();
+    if (!["off", "ollama"].includes(llm)) throw new ConfigError("REPLY_CORE_LLM must be off or ollama");
+    const ollamaUrl = (env.REPLY_CORE_OLLAMA_URL || "http://127.0.0.1:11434").replace(/\/+$/, "");
+    let ollamaHost;
+    try {
+        const u = new URL(ollamaUrl);
+        if (!/^https?:$/.test(u.protocol)) throw new Error("scheme");
+        ollamaHost = u.hostname.replace(/^\[|\]$/g, "");
+    } catch {
+        throw new ConfigError("REPLY_CORE_OLLAMA_URL must be an http(s) URL");
+    }
+    const allowRemoteLlm = env.REPLY_CORE_ALLOW_REMOTE_LLM === "1";
+    if (llm === "ollama" && !["127.0.0.1", "localhost", "::1"].includes(ollamaHost) && !allowRemoteLlm) {
+        throw new ConfigError("REPLY_CORE_OLLAMA_URL is not on this machine: conversation text would leave it. Set REPLY_CORE_ALLOW_REMOTE_LLM=1 only if you mean that");
+    }
+    const ollamaModel = env.REPLY_CORE_OLLAMA_MODEL || null;
+    if (llm === "ollama" && !ollamaModel) throw new ConfigError("REPLY_CORE_OLLAMA_MODEL must be set when REPLY_CORE_LLM=ollama");
+
     const home = env.REPLY_CORE_HOME ? path.resolve(env.REPLY_CORE_HOME) : defaultHome();
     const unknownKeys = Object.keys(env).filter(
         (k) => k.startsWith("REPLY_CORE_") && !KNOWN_KEYS.has(k) && !/_INTERVAL_MS$/.test(k),
     );
-    return { home, port, logLevel, allowedOrigins, connectors: rawConnectors === "none" ? [] : connectors.length ? connectors : DEFAULT_ENABLED_IDS, imessageDb: env.REPLY_CORE_IMESSAGE_DB || null, mailRoot: env.REPLY_CORE_MAIL_ROOT || null, intervals, defaultRegion, unknownKeys };
+    return { home, port, logLevel, allowedOrigins, connectors: rawConnectors === "none" ? [] : connectors.length ? connectors : DEFAULT_ENABLED_IDS, llm: { provider: llm, model: ollamaModel, url: ollamaUrl }, imessageDb: env.REPLY_CORE_IMESSAGE_DB || null, mailRoot: env.REPLY_CORE_MAIL_ROOT || null, intervals, defaultRegion, unknownKeys };
 }
 
 const KNOWN_KEYS = new Set([
@@ -73,4 +92,8 @@ const KNOWN_KEYS = new Set([
     "REPLY_CORE_IMESSAGE_DB",
     "REPLY_CORE_MAIL_ROOT",
     "REPLY_CORE_HELPER",
+    "REPLY_CORE_LLM",
+    "REPLY_CORE_OLLAMA_MODEL",
+    "REPLY_CORE_OLLAMA_URL",
+    "REPLY_CORE_ALLOW_REMOTE_LLM",
 ]);
