@@ -3,6 +3,7 @@ import Fastify, { LogController } from "fastify";
 import { forbidden, toEnvelope } from "./errors.js";
 import { registerHealth } from "./routes/health.js";
 import { registerIdentity } from "./routes/identity.js";
+import { registerRead } from "./routes/read.js";
 import { registerSync } from "./routes/sync.js";
 
 const BODY_LIMIT = 1024 * 1024;
@@ -66,6 +67,11 @@ export function createServer(config, logger, deps = {}) {
     registerHealth(app, config);
     if (deps.runner) registerSync(app, deps);
     if (deps.identity) registerIdentity(app, deps);
+    if (deps.read) registerRead(app, deps);
+    // API responses are never cached unless a route opts in (first pages of lists and threads revalidate by ETag)
+    app.addHook("onSend", async (req, reply) => {
+        if (req.url.startsWith("/api/") && !reply.hasHeader("cache-control")) reply.header("cache-control", "no-store");
+    });
     return app;
 }
 
