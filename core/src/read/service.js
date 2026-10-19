@@ -38,7 +38,7 @@ export function limitSnippet(s) {
     return `${cut}…`;
 }
 
-export function createReadService({ db }) {
+export function createReadService({ db, replyChannels }) {
     const q = {
         contact: db.prepare("SELECT id, display_name, origin, merged_into FROM contacts WHERE id = ?"),
         summary: db.prepare("SELECT count_total, counts_json FROM contact_summary WHERE contact_id = ?"),
@@ -121,6 +121,7 @@ export function createReadService({ db }) {
             id: c.id, displayName: c.display_name, origin: c.origin,
             counts: s ? JSON.parse(s.counts_json) : emptyCounts(), countTotal: s?.count_total ?? 0,
             handles: handlesFor([id]).get(id) ?? [],
+            ...(replyChannels ? { replyChannels: replyChannels(id) } : {}),
         };
     }
 
