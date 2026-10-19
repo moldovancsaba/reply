@@ -27,6 +27,10 @@ process start
 
 `core/src/connectors/` runs every source on one runtime (runner, scheduler, registry, error classes) and `core/src/routes/sync.js` exposes `POST /api/sync/:connector`. Flow, error codes and operations: [CORE_CONNECTORS.md](CORE_CONNECTORS.md).
 
+## Drafting
+
+`core/src/drafting/service.js` builds one bounded prompt from a contact's thread and makes a single call to a local Ollama; `core/src/routes/drafts.js` serves the two endpoints. Off by default. See [CORE_DRAFTING.md](CORE_DRAFTING.md).
+
 ## Handoff
 
 `core/src/handoff/service.js` validates the recipient from the contact's own handles, builds the link per channel and writes the audit row; `core/src/routes/handoff.js` serves `POST /api/handoff`. Reply Core never sends. See [CORE_HANDOFF.md](CORE_HANDOFF.md).
@@ -62,6 +66,7 @@ Unit and integration tests use `node:test`. Connectors are tested against determ
 | `core/src/routes/health.js` | `GET /api/health` |
 | `core/src/storage/*` | Database, migrations, repository (see CORE_DATA_MODEL.md) |
 | `core/src/connectors/*` | Connector runner, scheduler, registry, error classes (see CORE_CONNECTORS.md) |
+| `core/src/drafting/*`, `core/src/routes/drafts.js` | Optional local-model reply suggestion (see CORE_DRAFTING.md) |
 | `core/src/handoff/*`, `core/src/routes/handoff.js` | Reply handoff links and audit (see CORE_HANDOFF.md) |
 | `core/src/status/*`, `core/src/routes/status.js` | Status report and recovery catalog (see CORE_STATUS.md) |
 | `core/src/read/*`, `core/src/routes/read.js` | Read model and HTTP read endpoints (see CORE_API.md) |

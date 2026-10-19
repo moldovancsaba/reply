@@ -27,6 +27,8 @@ Every setting is optional. See [`.env.example`](.env.example). Values are read f
 | `REPLY_CORE_CONNECTORS` | `imessage,contacts,apple-mail` | Connectors to run (comma list, or `none`); see [`../docs/CORE_CONNECTORS.md`](../docs/CORE_CONNECTORS.md) |
 | `REPLY_CORE_IMESSAGE_DB` | `~/Library/Messages/chat.db` | Path to the Messages database |
 | `REPLY_CORE_MAIL_ROOT` | `~/Library/Mail` | Folder holding Mail's `V*` data |
+| `REPLY_CORE_LLM` | `off` | `ollama` turns on optional reply suggestions ([`../docs/CORE_DRAFTING.md`](../docs/CORE_DRAFTING.md)) |
+| `REPLY_CORE_OLLAMA_MODEL`, `REPLY_CORE_OLLAMA_URL` | none, `http://127.0.0.1:11434` | model and address of the local Ollama |
 | `REPLY_CORE_HELPER` | `helper/bin/reply-core-helper` | Path to the native helper binary |
 | `REPLY_CORE_<ID>_INTERVAL_MS` | connector default | Sync interval for one connector, >= 1000 |
 | `REPLY_CORE_DEFAULT_REGION` | `HU` | Country used to read phone numbers written without a country code |

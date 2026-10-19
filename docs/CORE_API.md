@@ -12,6 +12,7 @@ Response schemas for the read endpoints are in [`core/schema/api-read.json`](../
 |---|---|
 | `GET /api/health` | liveness: `{ status, version, uptimeSeconds, home, time }` |
 | `GET /api/status`, `POST /api/status/recheck` | health of storage, helper and every source, with recovery steps; see [CORE_STATUS.md](CORE_STATUS.md) |
+| `GET /api/drafts/capabilities`, `POST /api/drafts/suggest` | optional local-model reply suggestion; see [CORE_DRAFTING.md](CORE_DRAFTING.md) |
 | `POST /api/handoff` | open Messages, Mail or WhatsApp with a prefilled reply (never sends); see [CORE_HANDOFF.md](CORE_HANDOFF.md) |
 | `POST /api/sync/:connector` | start a sync (`202`, `409`, `423`, `404`); see [CORE_CONNECTORS.md](CORE_CONNECTORS.md) |
 | `POST /api/contacts/:id/merge`, `POST /api/contacts/:id/unmerge`, `GET /api/contacts/:id/merges` | explicit identity changes; see [CORE_IDENTITY.md](CORE_IDENTITY.md) |
