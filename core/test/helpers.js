@@ -39,7 +39,7 @@ export function request(port, { method = "GET", path = "/", headers = {}, body }
                 } catch {
                     json = undefined;
                 }
-                resolve({ status: res.statusCode, json, text: data });
+                resolve({ status: res.statusCode, json, text: data, headers: res.headers });
             });
         });
         req.on("error", reject);

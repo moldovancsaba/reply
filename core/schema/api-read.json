@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/moldovancsaba/reply/core/schema/api-read.json",
+  "title": "Reply Core read API responses",
+  "definitions": {
+    "channel": { "enum": ["imessage", "email", "whatsapp"] },
+    "counts": { "type": "object", "additionalProperties": false, "required": ["imessage", "email", "whatsapp"], "properties": { "imessage": { "type": "integer", "minimum": 0 }, "email": { "type": "integer", "minimum": 0 }, "whatsapp": { "type": "integer", "minimum": 0 } } },
+    "handle": { "type": "object", "additionalProperties": false, "required": ["value", "label", "kind"], "properties": { "value": { "type": "string" }, "label": { "type": "string" }, "kind": { "enum": ["phone", "email", "whatsapp", "other"] } } },
+    "cursor": { "type": ["string", "null"] },
+    "ContactListItem": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "displayName", "lastTs", "lastChannel", "lastPreview", "lastFromMe", "counts", "countTotal", "handles"],
+      "properties": {
+        "id": { "type": "string" }, "displayName": { "type": "string" },
+        "lastTs": { "type": ["string", "null"], "format": "date-time" }, "lastChannel": { "anyOf": [{ "$ref": "#/definitions/channel" }, { "type": "null" }] },
+        "lastPreview": { "type": "string", "maxLength": 140 }, "lastFromMe": { "type": "boolean" },
+        "counts": { "$ref": "#/definitions/counts" }, "countTotal": { "type": "integer", "minimum": 0 },
+        "handles": { "type": "array", "items": { "$ref": "#/definitions/handle" } }
+      }
+    },
+    "ContactList": {
+      "type": "object", "additionalProperties": false, "required": ["items", "nextCursor", "hasMore", "total"],
+      "properties": { "items": { "type": "array", "items": { "$ref": "#/definitions/ContactListItem" } }, "nextCursor": { "$ref": "#/definitions/cursor" }, "hasMore": { "type": "boolean" }, "total": { "type": "integer", "minimum": 0 } }
+    },
+    "Contact": {
+      "type": "object", "additionalProperties": false, "required": ["id", "displayName", "origin", "counts", "countTotal", "handles"],
+      "properties": { "id": { "type": "string" }, "displayName": { "type": "string" }, "origin": { "enum": ["auto", "apple_contacts", "manual"] }, "counts": { "$ref": "#/definitions/counts" }, "countTotal": { "type": "integer", "minimum": 0 }, "handles": { "type": "array", "items": { "$ref": "#/definitions/handle" } } }
+    },
+    "ThreadMessage": {
+      "type": "object", "additionalProperties": false, "required": ["id", "channel", "isFromMe", "ts", "text", "attachments", "counterpartHandle"],
+      "properties": {
+        "id": { "type": "string" }, "channel": { "$ref": "#/definitions/channel" }, "isFromMe": { "type": "boolean" }, "ts": { "type": "string", "format": "date-time" },
+        "subject": { "type": "string" }, "text": { "type": "string" }, "isSummary": { "const": true },
+        "attachments": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "name": { "type": "string" }, "mimeType": { "type": "string" }, "bytes": { "type": "integer" } } } },
+        "counterpartHandle": { "type": "string" }, "sender": { "type": "string" }
+      }
+    },
+    "Thread": {
+      "type": "object", "additionalProperties": false, "required": ["items", "nextCursor", "hasMore"],
+      "properties": { "items": { "type": "array", "items": { "$ref": "#/definitions/ThreadMessage" } }, "nextCursor": { "$ref": "#/definitions/cursor" }, "hasMore": { "type": "boolean" } }
+    },
+    "SearchHit": {
+      "type": "object", "additionalProperties": false, "required": ["messageId", "contactId", "contactName", "channel", "ts", "snippet"],
+      "properties": { "messageId": { "type": "string" }, "contactId": { "type": "string" }, "contactName": { "type": "string" }, "channel": { "$ref": "#/definitions/channel" }, "ts": { "type": "string", "format": "date-time" }, "snippet": { "type": "string", "maxLength": 170 } }
+    },
+    "SearchResult": {
+      "type": "object", "additionalProperties": false, "required": ["items", "nextCursor", "hasMore"],
+      "properties": { "items": { "type": "array", "items": { "$ref": "#/definitions/SearchHit" } }, "nextCursor": { "$ref": "#/definitions/cursor" }, "hasMore": { "type": "boolean" } }
+    },
+    "Error": {
+      "type": "object", "additionalProperties": false, "required": ["error"],
+      "properties": { "error": { "type": "object", "additionalProperties": false, "required": ["code", "message", "requestId", "retryable"], "properties": { "code": { "type": "string" }, "message": { "type": "string" }, "requestId": { "type": "string" }, "retryable": { "type": "boolean" }, "details": { "type": "object" } } } }
+    }
+  }
+}
