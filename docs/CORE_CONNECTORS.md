@@ -69,7 +69,7 @@ A blocked connector is re-checked first; if its preflight now succeeds it is cle
 
 | Variable | Meaning |
 |---|---|
-| `REPLY_CORE_CONNECTORS` | Comma list of connector ids to enable. Unset or empty: the defaults (`DEFAULT_ENABLED_IDS`, currently `imessage`, `contacts`). The single word `none` runs no connectors. Unknown ids are logged and ignored. |
+| `REPLY_CORE_CONNECTORS` | Comma list of connector ids to enable. Unset or empty: the defaults (`DEFAULT_ENABLED_IDS`, currently `imessage`, `contacts`, `apple-mail`). The single word `none` runs no connectors. Unknown ids are logged and ignored. |
 | `REPLY_CORE_<ID>_INTERVAL_MS` | Interval for one connector (`APPLE_MAIL` for `apple-mail`), integer >= 1000. |
 
 `REPLY_CORE_CONNECTORS=stub` enables a deterministic demo connector (three pages of synthetic messages) for trying the framework without any source app.
@@ -109,6 +109,27 @@ Imports people from the macOS address book through the native helper so conversa
 | Count | `messages_total` for this connector is the number of people imported. |
 
 Limitations: a person removed from the address book stays in Reply Core (with their handles); old handles removed from a person stay linked until `identity-reset.js --to-auto`.
+
+## Apple Mail (`apple-mail`, issue #193)
+
+Reads the local Mail index through the native helper, so every account already set up in Mail (Gmail, iCloud, Exchange, IMAP) appears without storing any email credentials. Interval 2 minutes.
+
+| | |
+|---|---|
+| Source | the newest `~/Library/Mail/V*/MailData/Envelope Index`, or `REPLY_CORE_MAIL_ROOT` |
+| Cursor | `{ "rowid": n }`; page size 500 |
+| Permission | Full Disk Access for the process that starts Reply Core |
+| Included / excluded | inbox, sent, archive/All Mail and other folders are included; drafts, junk and trash are not; rows Mail marked deleted are not exported |
+| Message key / account | the `Message-ID` (fallback `row:<rowid>`) / the Mail account id |
+| Counterpart | received mail: the sender's address; sent mail: the first recipient. Mail sent only to undisclosed recipients has no counterpart and is quarantined. A mailing-list message has the list address as counterpart (merge or hide it as you like). |
+| Direction | mail in a sent mailbox, or from an address that sends from a sent mailbox |
+| Text | the subject, a blank line, and Mail's stored **summary** (the first lines of the body), not the full body. Mail without a subject keeps only the summary; HTML-only mail with no summary keeps only the subject. |
+| `meta_json` | `{ isSummary: true, recipients: [...], accountLabel }`. `isSummary` lets the UI say that email text is a summary. The mailbox is not stored, so a copy of the same message arriving later from another mailbox (Gmail's All Mail) is a no-op. |
+| Preflight | `source_missing` (no account in Mail) with the hint "Add an account in the Mail app", `permission_denied`, `schema_unsupported`, `helper_unavailable` |
+
+Limitations: summaries only; no attachments; no HTML rendering; edits and deletions at the source are not propagated.
+
+To discard imported email and re-ingest: stop the service, `node core/scripts/reset-cursor.js apple-mail --purge` (this removes **all** email rows, since the `email` channel is shared with the IMAP connector).
 
 ## Operations
 
