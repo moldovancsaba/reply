@@ -1,16 +1,28 @@
-import { Suspense } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AsyncSurface, DiscoveryShell, InlineAlert, GdsBadge, GdsIcon, GdsInline, SemanticButton, SidebarNav, SidebarNavItem, SidebarNavSection, BodyText } from "@sovereignsquad/gds";
 import { Notices } from "./Notices";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { SkipLink } from "../components/SkipLink";
+import { useStatus } from "../api/queries";
 import { useHealth } from "../hooks/useHealth";
+import { isFirstRun } from "../routes/sources/viewModel";
 import { DESTINATIONS } from "./nav";
 
 export function AppShell() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { state, health, retryNow } = useHealth();
+
+  // First run: when no source works yet, opening the app at /inbox leads to /sources once (never again after that, so
+  // the user can still look at the empty inbox).
+  const status = useStatus();
+  const checkedFirstRun = useRef(false);
+  useEffect(() => {
+    if (checkedFirstRun.current || !status.data) return;
+    checkedFirstRun.current = true;
+    if (pathname === "/inbox" && isFirstRun(status.data.connectors)) navigate("/sources", { replace: true });
+  }, [status.data, pathname, navigate]);
 
   return (
     <>

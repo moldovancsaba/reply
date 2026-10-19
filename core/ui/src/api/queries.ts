@@ -41,15 +41,21 @@ export function useContactList(query: InboxQuery) {
   });
 }
 
+// Fast while a source is importing, relaxed otherwise; react-query pauses it while the tab is hidden.
+export const pollInterval = (status: StatusReport | undefined): number => (status?.connectors.some((c) => c.state === "syncing") ? 3000 : 30_000);
+
 export function useStatus() {
   return useQuery({
     queryKey: ["status"],
     queryFn: ({ signal }) => unwrap(fetchJson<StatusReport>("/api/status", { signal })),
-    refetchInterval: 30_000,
+    refetchInterval: (q) => pollInterval(q.state.data),
     retry: false,
-    staleTime: 15_000,
+    staleTime: 2000,
   });
 }
+
+export const syncConnector = (id: string) => fetchJson<{ accepted: boolean; runId: string; state: string }>(`/api/sync/${encodeURIComponent(id)}`, { method: "POST", body: {}, timeoutMs: 15_000 });
+export const recheckSources = () => fetchJson<StatusReport>("/api/status/recheck", { method: "POST", body: {}, timeoutMs: 30_000 });
 
 export function useContact(id: string) {
   return useQuery({
