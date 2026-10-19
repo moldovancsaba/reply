@@ -24,8 +24,9 @@ Every setting is optional. See [`.env.example`](.env.example). Values are read f
 | `REPLY_CORE_HOME` | `~/Library/Application Support/reply-core` | Data home (created with mode 0700) |
 | `REPLY_CORE_PORT` | `45511` | Loopback port, 1024-65535 |
 | `REPLY_CORE_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
-| `REPLY_CORE_CONNECTORS` | `imessage,contacts` | Connectors to run (comma list, or `none`); see [`../docs/CORE_CONNECTORS.md`](../docs/CORE_CONNECTORS.md) |
+| `REPLY_CORE_CONNECTORS` | `imessage,contacts,apple-mail` | Connectors to run (comma list, or `none`); see [`../docs/CORE_CONNECTORS.md`](../docs/CORE_CONNECTORS.md) |
 | `REPLY_CORE_IMESSAGE_DB` | `~/Library/Messages/chat.db` | Path to the Messages database |
+| `REPLY_CORE_MAIL_ROOT` | `~/Library/Mail` | Folder holding Mail's `V*` data |
 | `REPLY_CORE_HELPER` | `helper/bin/reply-core-helper` | Path to the native helper binary |
 | `REPLY_CORE_<ID>_INTERVAL_MS` | connector default | Sync interval for one connector, >= 1000 |
 | `REPLY_CORE_DEFAULT_REGION` | `HU` | Country used to read phone numbers written without a country code |
