@@ -47,6 +47,10 @@ Unknown `REPLY_CORE_*` variables are ignored and reported once at info level.
 
 `core.db` lives in `REPLY_CORE_HOME` (mode 0600; the directory is 0700). Layout and invariants: [`../docs/CORE_DATA_MODEL.md`](../docs/CORE_DATA_MODEL.md). Inspect it with `node scripts/db-inspect.js`.
 
+## API
+
+`GET /api/contacts`, `/api/contacts/:id`, `/api/contacts/:id/messages` and `/api/search` read the unified inbox; see [`../docs/CORE_API.md`](../docs/CORE_API.md).
+
 ## Syncing
 
 Enabled connectors run on their own intervals. Trigger one now with `curl -X POST http://127.0.0.1:45511/api/sync/<id>` (202 accepted). Try the framework without any source app with `REPLY_CORE_CONNECTORS=stub npm start`. iMessage needs Full Disk Access for the process that starts the service (see [`../docs/CORE_PERMISSIONS.md`](../docs/CORE_PERMISSIONS.md)). Re-ingest from scratch with `node scripts/reset-cursor.js <id> [--purge]` (service stopped).

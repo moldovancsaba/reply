@@ -27,6 +27,10 @@ process start
 
 `core/src/connectors/` runs every source on one runtime (runner, scheduler, registry, error classes) and `core/src/routes/sync.js` exposes `POST /api/sync/:connector`. Flow, error codes and operations: [CORE_CONNECTORS.md](CORE_CONNECTORS.md).
 
+## Read path
+
+`core/src/read/service.js` serves the UI: a contact-centric list (from `contact_summary`), a merged thread per contact (from `messages`), and full-text search (`messages_fts`). `core/src/routes/read.js` validates parameters, adds ETags to first pages and keeps everything else `no-store`. Endpoints, cursors and ranking: [CORE_API.md](CORE_API.md).
+
 ## Identity
 
 `core/src/identity/` holds handle normalization (`normalize.js`) and the merge/unmerge/import service (`service.js`); `core/src/routes/identity.js` exposes the merge endpoints. Rules, normalization table and API: [CORE_IDENTITY.md](CORE_IDENTITY.md).
@@ -50,6 +54,7 @@ Unit and integration tests use `node:test`. Connectors are tested against determ
 | `core/src/routes/health.js` | `GET /api/health` |
 | `core/src/storage/*` | Database, migrations, repository (see CORE_DATA_MODEL.md) |
 | `core/src/connectors/*` | Connector runner, scheduler, registry, error classes (see CORE_CONNECTORS.md) |
+| `core/src/read/*`, `core/src/routes/read.js` | Read model and HTTP read endpoints (see CORE_API.md) |
 | `core/src/identity/*` | Handle normalization, merge/unmerge, address-book import (see CORE_IDENTITY.md) |
 | `core/src/helper/*` | Node wrapper around the native helper (checksum, timeout, error mapping) |
 | `core/helper/` | Swift package: `reply-core-helper` |
