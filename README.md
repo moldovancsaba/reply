@@ -69,6 +69,10 @@ Canonical docs:
 - [docs/NATIVE_WORKSPACE_HOT_PATH_SSOT.md](/Users/Shared/Projects/reply/docs/NATIVE_WORKSPACE_HOT_PATH_SSOT.md)
 - [CONTRIBUTING.md](/Users/Shared/Projects/reply/CONTRIBUTING.md)
 
+## Reply Core
+
+`core/` is a lean, local-first rewrite of the unified inbox path (one Node process, one SQLite file, read-only connectors). See [REPLY_CORE_PLAN.md](REPLY_CORE_PLAN.md) and [core/README.md](core/README.md). It is independent of `chat/` and the native shell below.
+
 ## What Changed Recently
 
 This README now reflects the current product state, including:
