@@ -8,6 +8,8 @@ import { createScheduler } from "./connectors/scheduler.js";
 import { createDrafting } from "./drafting/service.js";
 import { createHandoff } from "./handoff/service.js";
 import { createIdentity } from "./identity/service.js";
+import { createBackupSchedule } from "./ops/auto.js";
+import { removePidfile, writePidfile } from "./ops/guard.js";
 import { createReadService } from "./read/service.js";
 import { defaultHelperPath } from "./helper/index.js";
 import { createStatus } from "./status/index.js";
@@ -43,8 +45,10 @@ const repo = createRepo(storage.db);
 const registry = createRegistry({ enabled: config.connectors, deps: { config, logger } });
 for (const id of registry.unknown) logger.warn({ connector: id }, "ignoring unknown connector in REPLY_CORE_CONNECTORS");
 const identity = createIdentity({ db: storage.db, repo });
+repo.setAfterBatch(() => identity.applyPendingMerges());
 const runner = createRunner({ db: storage.db, repo, logger, onContacts: (people) => {
         const r = identity.importContacts(people);
+        identity.applyPendingMerges();
         logger.info({ connector: "contacts", created: r.created, updated: r.updated, unchanged: r.unchanged, linked: r.linked, conflicts: r.conflicts.length, protectedByMerge: r.protectedByMerge }, "identity.import");
         return r;
     },
@@ -67,6 +71,9 @@ try {
     process.exit(1);
 }
 scheduler.start();
+const backups = createBackupSchedule({ home: config.home, db: storage.db, logger });
+backups.start();
+writePidfile(config.home, config.port);
 console.log(`reply-core listening on http://${HOST}:${config.port} (home=${config.home})`);
 
 let closing = false;
@@ -76,6 +83,8 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
         closing = true;
         logger.info({ signal }, "shutting down");
         await scheduler.stop();
+        backups.stop();
+        removePidfile(config.home);
         const result = await gracefulClose(app, 5000);
         storage.db.close();
         process.exit(result === "closed" ? 0 : 1);

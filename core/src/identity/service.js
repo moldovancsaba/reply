@@ -12,7 +12,7 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
         relink: db.prepare("UPDATE contact_handles SET contact_id = ?, link_origin = ?, linked_ms = ? WHERE handle_norm = ?"),
         hide: db.prepare("UPDATE contacts SET hidden = 1, merged_into = ? WHERE id = ?"),
         unhide: db.prepare("UPDATE contacts SET hidden = 0, merged_into = NULL WHERE id = ?"),
-        insertLog: db.prepare("INSERT INTO merge_log (id, ts_ms, action, from_contact_id, to_contact_id, handles_json, reverted_by) VALUES (?,?,?,?,?,?,NULL)"),
+        insertLog: db.prepare("INSERT INTO merge_log (id, ts_ms, action, from_contact_id, to_contact_id, handles_json, reverted_by, anchor_handle) VALUES (?,?,?,?,?,?,NULL,?)"),
         markReverted: db.prepare("UPDATE merge_log SET reverted_by = ? WHERE id = ?"),
         log: db.prepare("SELECT * FROM merge_log WHERE id = ?"),
         owner: db.prepare("SELECT contact_id, link_origin FROM contact_handles WHERE handle_norm = ?"),
@@ -51,9 +51,11 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
             const owned = q.handlesOf.all(sourceId);
             const handles = owned.map((h) => h.handle_norm);
             const moved = messageCount(handles);
+            // a handle the target owned BEFORE the move: lets a rebuild find the target again (after the move it could pick a moved handle)
+            const anchor = q.handlesOf.all(targetId).map((h) => h.handle_norm).sort()[0] ?? null;
             for (const h of handles) q.relink.run(targetId, "manual_merge", now(), h);
             const logId = `m_${randomUUID().slice(0, 12)}`;
-            q.insertLog.run(logId, now(), "merge", sourceId, targetId, JSON.stringify(owned.map((h) => ({ handle_norm: h.handle_norm, prior_origin: h.link_origin }))), );
+            q.insertLog.run(logId, now(), "merge", sourceId, targetId, JSON.stringify(owned.map((h) => ({ handle_norm: h.handle_norm, prior_origin: h.link_origin }))), anchor);
             q.hide.run(targetId, sourceId);
             repo.rebuildSummary(targetId);
             q.deleteSummary.run(sourceId);
@@ -79,7 +81,7 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
             repo.rebuildSummary(log.from_contact_id);
             repo.rebuildSummary(log.to_contact_id);
             const undoId = `m_${randomUUID().slice(0, 12)}`;
-            q.insertLog.run(undoId, now(), "unmerge", log.from_contact_id, log.to_contact_id, log.handles_json);
+            q.insertLog.run(undoId, now(), "unmerge", log.from_contact_id, log.to_contact_id, log.handles_json, null);
             q.markReverted.run(undoId, logId);
             return { mergeLogId: undoId, restoredContactId: log.from_contact_id, restoredHandles: entries.map((e) => e.handle_norm) };
         })();
@@ -174,5 +176,47 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
         })();
     }
 
-    return { merge, unmerge, history, importContacts, resetToAuto };
+    // --- rebuild support: merges whose handles are not (all) known yet wait in `pending_merges` and are applied when they appear
+    const pend = {
+        insert: db.prepare("INSERT INTO pending_merges (id, ts_ms, moved_handles_json, anchor_handle) VALUES (?,?,?,?)"),
+        all: db.prepare("SELECT * FROM pending_merges ORDER BY ts_ms ASC, rowid ASC"),
+        del: db.prepare("DELETE FROM pending_merges WHERE id = ?"),
+        count: db.prepare("SELECT COUNT(*) n FROM pending_merges"),
+    };
+
+    // Replays a manual merge by handle sets: every owner of a moved handle is merged into the owner of the anchor.
+    // Returns "applied", "already" (nothing to do) or "pending" (some handle is not known yet; remembered).
+    function replayMerge({ movedHandles, anchor }) {
+        return db.transaction(() => {
+            const owner = (h) => q.owner.get(h)?.contact_id ?? null;
+            const target = owner(anchor);
+            const owners = movedHandles.map(owner);
+            if (!target || owners.some((o) => !o)) {
+                pend.insert.run(`p_${randomUUID().slice(0, 12)}`, now(), JSON.stringify(movedHandles), anchor);
+                return "pending";
+            }
+            let did = false;
+            for (const o of new Set(owners)) {
+                if (o === target) continue;
+                if (q.contact.get(o)?.merged_into) continue;
+                merge(o, target);
+                did = true;
+            }
+            return did ? "applied" : "already";
+        })();
+    }
+
+    function applyPendingMerges() {
+        if (pend.count.get().n === 0) return 0;
+        let applied = 0;
+        for (const p of pend.all.all()) {
+            const moved = JSON.parse(p.moved_handles_json);
+            if (![...moved, p.anchor_handle].every((h) => q.owner.get(h))) continue;
+            pend.del.run(p.id);
+            if (replayMerge({ movedHandles: moved, anchor: p.anchor_handle }) === "applied") applied++;
+        }
+        return applied;
+    }
+
+    return { merge, unmerge, history, importContacts, resetToAuto, replayMerge, applyPendingMerges, pendingCount: () => pend.count.get().n };
 }

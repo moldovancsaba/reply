@@ -12,9 +12,9 @@ export class StorageError extends Error {
 
 // Opens (creating if needed) core.db in `home`, applies pragmas and migrations, runs quick_check.
 // Throws StorageError with code storage_unavailable | storage_corrupt | storage_migration_failed.
-export function openDb(home, { migrationsDir } = {}) {
+export function openDb(home, { migrationsDir, fileName = "core.db" } = {}) {
     mkdirSync(home, { recursive: true, mode: 0o700 });
-    const file = path.join(home, "core.db");
+    const file = path.join(home, fileName);
     let db;
     try {
         db = new Database(file);

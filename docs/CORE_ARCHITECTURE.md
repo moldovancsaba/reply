@@ -27,6 +27,10 @@ process start
 
 `core/src/connectors/` runs every source on one runtime (runner, scheduler, registry, error classes) and `core/src/routes/sync.js` exposes `POST /api/sync/:connector`. Flow, error codes and operations: [CORE_CONNECTORS.md](CORE_CONNECTORS.md).
 
+## Operations
+
+`core/src/ops/` implements backup (online snapshot, verification, retention), restore, rebuild (keeps only the manual merges), the daily backup schedule, the service pidfile and the operation lock; `core/src/cli/ops.js` is the command line. See [CORE_OPERATIONS.md](CORE_OPERATIONS.md).
+
 ## IMAP accounts and secrets
 
 `core/src/imap/` holds the accounts file, the TLS-only IMAP client and the keychain wrapper (secrets go through the native helper on stdin/stdout); `core/src/connectors/imap.js` is the connector and `core/src/cli/accounts.js` + `core/bin/reply-core.js` the `accounts` command. See [CORE_SECURITY.md](CORE_SECURITY.md).
@@ -72,6 +76,7 @@ Unit and integration tests use `node:test`. Connectors are tested against determ
 | `core/src/connectors/*` | Connector runner, scheduler, registry, error classes (see CORE_CONNECTORS.md) |
 | `core/src/drafting/*`, `core/src/routes/drafts.js` | Optional local-model reply suggestion (see CORE_DRAFTING.md) |
 | `core/src/handoff/*`, `core/src/routes/handoff.js` | Reply handoff links and audit (see CORE_HANDOFF.md) |
+| `core/src/ops/*`, `core/src/cli/ops.js` | Backup, restore, rebuild, daily backup, pidfile (see CORE_OPERATIONS.md) |
 | `core/src/status/*`, `core/src/routes/status.js` | Status report and recovery catalog (see CORE_STATUS.md) |
 | `core/src/read/*`, `core/src/routes/read.js` | Read model and HTTP read endpoints (see CORE_API.md) |
 | `core/src/identity/*` | Handle normalization, merge/unmerge, address-book import (see CORE_IDENTITY.md) |

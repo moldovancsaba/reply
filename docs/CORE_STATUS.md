@@ -27,6 +27,7 @@ If the report itself cannot be built the answer is `500 status_unavailable` (ret
         { "order": 2, "text": "Turn on the app that starts Reply Core, so it can read your Messages." },
         { "order": 3, "text": "Quit and reopen that app, then choose Recheck." } ] }
   ],
+  "backups": { "count": 9, "totalBytes": 188743680, "lastBackupAt": "2026-10-19T03:00:11.000Z" },
   "metrics": { "runs": 12, "failuresByCode": { "permission_denied": 1 }, "lastDurationMs": 240 },
   "generatedAt": "2026-10-19T08:00:00.000Z"
 }
@@ -53,6 +54,10 @@ Schema: [`core/schema/api-status.json`](../core/schema/api-status.json) (checked
 `accounts[].account` is the account id (for IMAP an email address like `user@host`; the sync endpoint needs it). Logs never carry it: they use a short hash.
 
 `messagesTotal` is messages imported (people imported, for Contacts). `lastSuccessAt` is clamped to the present, so a clock jump never shows a future time. A source with several accounts reports the worst state on top and lists every account in `accounts[]`.
+
+### Backups
+
+`backups.count` and `totalBytes` describe the snapshots in `backups/`; `lastBackupAt` is the newest; `lastBackupError` appears when the most recent attempt failed (it clears after the next success). See [CORE_OPERATIONS.md](CORE_OPERATIONS.md).
 
 ### Helper and storage
 
