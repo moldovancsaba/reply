@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AsyncSurface, DiscoveryShell, InlineAlert, GdsBadge, GdsIcon, GdsInline, SemanticButton, SidebarNav, SidebarNavItem, SidebarNavSection, BodyText } from "@sovereignsquad/gds";
+import { Notices } from "./Notices";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { SkipLink } from "../components/SkipLink";
 import { useHealth } from "../hooks/useHealth";
@@ -54,6 +55,7 @@ export function AppShell() {
             action={<SemanticButton action="refresh" label="Retry now" onClick={retryNow} />}
           />
         ) : null}
+        <Notices />
         <div id="main-content" tabIndex={-1} data-gds-main-content>
           <ErrorBoundary resetKey={pathname}>
             <Suspense fallback={<AsyncSurface state="loading" loadingTitle="Loading" loadingDescription="Loading this screen." />}>

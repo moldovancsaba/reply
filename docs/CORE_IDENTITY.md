@@ -79,3 +79,9 @@ A rebuild keeps only manual merges ([CORE_OPERATIONS.md](CORE_OPERATIONS.md)). E
 ## Data
 
 Migration `0003_identity.sql` adds `contacts.external_id` (unique when set) and `contacts.merged_into`. `merge_log.handles_json` is a JSON array of `{ handle_norm, prior_origin }`. See [CORE_DATA_MODEL.md](CORE_DATA_MODEL.md).
+
+## How merging works (for the person using the app)
+
+Reply Core never decides that two entries are the same person. If you see the same person twice (for example a phone number and an email address), open one of them, choose **Profile and merge**, search for the other and confirm. The confirmation tells you exactly what moves: how many numbers or addresses, and how many messages will appear in the kept conversation. Nothing changes until you confirm.
+
+After a merge the other entry disappears from the list and its messages show up in the kept contact's conversation, each still marked with its own channel. Your original messages are never changed or deleted. You can undo a merge right away from the notice, or later from **Merge history** on the kept contact's profile; undoing gives the other entry back with exactly the numbers and addresses it had. If you merged in several steps, undo them in reverse order (the last merge first), otherwise Reply Core explains which merge is in the way.

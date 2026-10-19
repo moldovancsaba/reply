@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type HTMLAttributes } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Anchor, CardTitle, ChoiceChip, GdsBox, GdsInline, GdsStack, InlineAlert, MetadataText, SectionTitle, SemanticButton, StateBlock } from "@sovereignsquad/gds";
 import { ApiFailure, useContact, useStatus, useThread } from "../../api/queries";
 import type { Channel } from "../../api/types.gen";
@@ -19,6 +19,7 @@ const LogRegion = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(fun
 const timeOf = (iso: string) => new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(new Date(iso));
 
 export function ThreadPane({ contactId }: { contactId: string }) {
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const raw = params.get("thread");
   const filter: Filter = raw && (CHANNELS as readonly string[]).includes(raw) ? (raw as Filter) : "all";
@@ -144,7 +145,10 @@ export function ThreadPane({ contactId }: { contactId: string }) {
   return (
     <GdsStack gap="md">
       <GdsStack gap="xs">
-        <SectionTitle>{name}</SectionTitle>
+        <GdsInline gap="md" align="center" justify="between">
+          <SectionTitle>{name}</SectionTitle>
+          <Anchor href={`/inbox/${contactId}/profile`} onClick={(e: React.MouseEvent) => { if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); navigate(`/inbox/${contactId}/profile`); }}>Profile and merge</Anchor>
+        </GdsInline>
         {c ? <MetadataText>{`${c.countTotal.toLocaleString("en-US")} ${c.countTotal === 1 ? "message" : "messages"}${(["imessage", "email", "whatsapp"] as const).filter((x) => c.counts[x] > 0).map((x) => ` · ${CHANNEL_LABEL[x]} ${c.counts[x].toLocaleString("en-US")}`).join("")}`}</MetadataText> : null}
         <GdsInline gap="xs">
           {CHANNELS.map((f) => <ChoiceChip key={f} label={f === "all" ? "All channels" : `Only ${CHANNEL_LABEL[f]}`} active={filter === f} onClick={() => setFilter(f)} />)}
