@@ -34,7 +34,12 @@ Unknown `REPLY_CORE_*` variables are ignored and reported once at info level.
 |---|---|
 | 0 | Clean shutdown |
 | 75 | Port already in use (is Reply Core already running?) |
+| 74 | Storage could not be opened, is corrupt, or a migration failed |
 | 78 | Invalid configuration (the message names the setting) |
+
+## Data
+
+`core.db` lives in `REPLY_CORE_HOME` (mode 0600; the directory is 0700). Layout and invariants: [`../docs/CORE_DATA_MODEL.md`](../docs/CORE_DATA_MODEL.md). Inspect it with `node scripts/db-inspect.js`.
 
 ## Verify
 

@@ -15,6 +15,7 @@
     "verify": "node scripts/verify.js"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "fastify": "^5.12.7",
     "pino": "^10.4.0"
   },
