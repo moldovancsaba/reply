@@ -79,7 +79,7 @@ export function loadConfig(env = process.env) {
     const unknownKeys = Object.keys(env).filter(
         (k) => k.startsWith("REPLY_CORE_") && !KNOWN_KEYS.has(k) && !/_INTERVAL_MS$/.test(k),
     );
-    return { home, port, logLevel, allowedOrigins, connectors: rawConnectors === "none" ? [] : connectors.length ? connectors : DEFAULT_ENABLED_IDS, llm: { provider: llm, model: ollamaModel, url: ollamaUrl }, imessageDb: env.REPLY_CORE_IMESSAGE_DB || null, mailRoot: env.REPLY_CORE_MAIL_ROOT || null, intervals, defaultRegion, unknownKeys };
+    return { home, port, logLevel, allowedOrigins, connectors: rawConnectors === "none" ? [] : connectors.length ? connectors : DEFAULT_ENABLED_IDS, llm: { provider: llm, model: ollamaModel, url: ollamaUrl }, imessageDb: env.REPLY_CORE_IMESSAGE_DB || null, mailRoot: env.REPLY_CORE_MAIL_ROOT || null, whatsappDb: env.REPLY_CORE_WHATSAPP_DB || null, intervals, defaultRegion, unknownKeys };
 }
 
 const KNOWN_KEYS = new Set([
@@ -91,6 +91,7 @@ const KNOWN_KEYS = new Set([
     "REPLY_CORE_DEFAULT_REGION",
     "REPLY_CORE_IMESSAGE_DB",
     "REPLY_CORE_MAIL_ROOT",
+    "REPLY_CORE_WHATSAPP_DB",
     "REPLY_CORE_HELPER",
     "REPLY_CORE_LLM",
     "REPLY_CORE_OLLAMA_MODEL",
