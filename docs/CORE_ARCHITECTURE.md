@@ -23,6 +23,10 @@ process start
 
 `core/src/storage/` owns the single SQLite database: `db.js` (open, pragmas, quick_check), `migrate.js` (forward-only checksummed migrations), `repo.js` (all reads and writes). The service opens storage after config and before listening; a storage failure exits with code 74. See [CORE_DATA_MODEL.md](CORE_DATA_MODEL.md).
 
+## Native helper
+
+Apple-private sources are read by `core/helper` (Swift, one binary, NDJSON on stdout, versioned by `schemaVersion`). Node calls it through `core/src/helper`, which verifies the binary's checksum, enforces a 30 s timeout (killing the whole process group), validates `schemaVersion`, and maps exit codes to connector error codes. See [`core/helper/README.md`](../core/helper/README.md) and [CORE_PERMISSIONS.md](CORE_PERMISSIONS.md).
+
 ## Testing strategy
 
 Unit and integration tests use `node:test`. Connectors are tested against deterministic synthetic copies of the source databases built by `core/test/fixtures` (see its README for the edge cases each source includes). The only checks that need a real Mac profile are the manual real-data comparisons listed in each connector issue.
@@ -37,6 +41,8 @@ Unit and integration tests use `node:test`. Connectors are tested against determ
 | `core/src/server.js` | Fastify instance, guards, error handlers, `gracefulClose` |
 | `core/src/routes/health.js` | `GET /api/health` |
 | `core/src/storage/*` | Database, migrations, repository (see CORE_DATA_MODEL.md) |
+| `core/src/helper/*` | Node wrapper around the native helper (checksum, timeout, error mapping) |
+| `core/helper/` | Swift package: `reply-core-helper` |
 | `core/src/index.js` | Process entry: config, storage, listen, signals, exit codes |
 
 Later issues add routes and services and register them in `server.js`. They must not change the conventions above (config, error envelope, logging redaction, guards) without updating this document.
