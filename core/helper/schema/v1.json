@@ -45,7 +45,16 @@
         "contactId": { "type": "string", "minLength": 1 },
         "displayName": { "type": "string" },
         "phones": { "type": "array", "items": { "type": "string" } },
-        "emails": { "type": "array", "items": { "type": "string" } }
+        "emails": { "type": "array", "items": { "type": "string" } },
+        "givenName": { "type": "string" },
+        "familyName": { "type": "string" },
+        "nickname": { "type": "string" },
+        "organization": { "type": "string" },
+        "jobTitle": { "type": "string" },
+        "department": { "type": "string" },
+        "birthday": { "type": "string", "pattern": "^(\\d{4}|-)-\\d{2}-\\d{2}$" },
+        "urls": { "type": "array", "items": { "type": "string" } },
+        "addresses": { "type": "array", "items": { "type": "string" } }
       }
     },
     "cursor": {

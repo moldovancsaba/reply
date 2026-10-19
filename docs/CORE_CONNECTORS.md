@@ -97,6 +97,8 @@ Run it: `REPLY_CORE_CONNECTORS=imessage npm start`, then `curl -X POST http://12
 
 ## Apple Contacts (`contacts`, issue #192)
 
+Besides names, phone numbers and email addresses the helper now exports given and family name, nickname, organization, job title, department, birthday (`--MM-DD` without a year), web addresses and postal addresses. They are stored as `contact_details` (the Contacts framework's notes field is not available to apps without a special Apple entitlement, so notes are not imported) and shown read-only on the profile. A change in any of them is picked up, because they are part of the fingerprint.
+
 Imports people from the macOS address book through the native helper so conversations show real names and one person's channels share a contact. Interval 15 minutes.
 
 | | |

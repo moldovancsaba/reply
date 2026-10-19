@@ -2,7 +2,7 @@
 // screens render the error through GDS state components instead of crashing.
 export type ApiError = { code: string; message: string; requestId: string; retryable: boolean; status: number; details?: Record<string, unknown> };
 export type Result<T> = { ok: true; data: T } | { ok: false; error: ApiError };
-export type FetchOptions = { signal?: AbortSignal; timeoutMs?: number; method?: "GET" | "POST"; body?: unknown };
+export type FetchOptions = { signal?: AbortSignal; timeoutMs?: number; method?: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown };
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
