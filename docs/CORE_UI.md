@@ -37,8 +37,8 @@ The app uses the GDS default theme with two corrections in `src/theme/replyTheme
 
 | What | Default | Reply theme |
 |---|---|---|
-| Dimmed text (PageHeader and StateBlock descriptions), light | gray-6 `#868e96` on white = 3.3:1 | `#6b7280` = 4.8:1 |
-| Dimmed text, dark | dark-2 `#828282` on `#242424` = 4.0:1 | `#9a9a9a` = 5.5:1 |
+| Dimmed text (PageHeader and StateBlock descriptions), light | gray-6 `#868e96` on white = 3.3:1 | `#4b5563` = 7.6:1 (also passes on the tinted message panels) |
+| Dimmed text, dark | dark-2 `#828282` on `#242424` = 4.0:1 | `#c1c2c5` (passes on the tinted panels) |
 | Active navigation label | violet-6 `#7950f2` on its tint = 4.3:1 | primary shade 7 in light mode |
 
 All GDS presets I tried (`high-contrast`, `colorblind-safe`, `royal`, `skyline`, ...) fail the same dimmed-text check, so the findings were filed as [general-design-system#944](https://github.com/sovereignsquad/general-design-system/issues/944) (together with a documentation trap in the accessibility package, below). Remove the overrides when GDS ships defaults that pass.
@@ -60,7 +60,7 @@ For a state reached by interaction (the 375 px drawer, the service-down alert) u
 - **URL is the state:** `?q=anna&channel=email`. Typing is debounced 250 ms and replaces the history entry; a channel change adds one (Back undoes it). Unknown channels fall back to "All"; the search is capped at 200 characters.
 - **Row:** a link to `/inbox/:id`. Its accessible name is its visible text (name, relative time, preview, channel, per-channel counts) so the label always matches what is shown; the avatar is decorative. The time is a `<time dateTime title>` with the full date on hover.
 - **States:** loading, empty with no filters ("No conversations yet", link to Sources), empty with filters ("No conversations match", Clear filters), error (message plus the request reference, Try again), load-more in progress and load-more failure. A source that is blocked or in error is named above the list (`SourceNotice`, from `/api/status`) so a short list is not mistaken for "no messages".
-- **Layout:** 1280 px: list (4 columns) and detail (8 columns) side by side; below 62 em only the list, or only the detail with a "Back to conversations" link. The layout switch is a `matchMedia` hook, so exactly one tree is in the DOM.
+- **Layout:** 1280 px: list (4 columns) and detail (8 columns) side by side, each in its own scrolling pane (`OverflowContainer`), so the list stays in view while a long conversation is read; each conversation is a bordered card (selected = tinted) and each message an `AccentPanel` (received grey, sent violet); below 62 em only the list, or only the detail with a "Back to conversations" link. The layout switch is a `matchMedia` hook, so exactly one tree is in the DOM.
 - **Detail pane:** the thread timeline (next section).
 
 GDS notes found while building it: `GdsSplit` never splits (its inline `grid-template-columns` beats its own media query), so a `GdsColumnGrid` is used; `SemanticButton` takes its text from the `label` prop, not children; `GdsBox` has no `role` prop and `Text` components neither.

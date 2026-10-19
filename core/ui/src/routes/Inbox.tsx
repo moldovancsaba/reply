@@ -1,5 +1,5 @@
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Anchor, ChoiceChip, DataToolbar, GdsColumnGrid, GdsColumnGridItem, GdsInline, GdsStack, PageHeader, SemanticButton, StateBlock, TextInput } from "@sovereignsquad/gds";
+import { Anchor, ChoiceChip, DataToolbar, GdsBox, GdsColumnGrid, GdsColumnGridItem, GdsInline, GdsStack, OverflowContainer, PageHeader, SemanticButton, StateBlock, TextInput } from "@sovereignsquad/gds";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import { CHANNEL_LABEL } from "../lib/time";
 import { ProfilePane } from "./profile/ProfilePane";
@@ -7,6 +7,9 @@ import { ThreadPane } from "./thread/ThreadPane";
 import { ConversationList } from "./inbox/ConversationList";
 import { SourceNotice } from "./inbox/SourceNotice";
 import { CHANNELS, useInboxQuery } from "./inbox/inboxQuery";
+
+// Side by side, each pane scrolls on its own so the list stays in view while a long conversation is read.
+const PANE_HEIGHT = "calc(100dvh - 12rem)";
 
 export default function Inbox() {
   const { contactId, section } = useParams();
@@ -53,8 +56,12 @@ export default function Inbox() {
         ) : list
       ) : (
         <GdsColumnGrid columns={12} gap="lg">
-          <GdsColumnGridItem span={4}>{list}</GdsColumnGridItem>
-          <GdsColumnGridItem span={8}>{detail}</GdsColumnGridItem>
+          <GdsColumnGridItem span={4}>
+            <OverflowContainer maxHeight={PANE_HEIGHT} label="Conversations"><GdsBox padding="xs">{list}</GdsBox></OverflowContainer>
+          </GdsColumnGridItem>
+          <GdsColumnGridItem span={8}>
+            <OverflowContainer maxHeight={PANE_HEIGHT} label="Conversation"><GdsBox padding="xs">{detail}</GdsBox></OverflowContainer>
+          </GdsColumnGridItem>
         </GdsColumnGrid>
       )}
     </>

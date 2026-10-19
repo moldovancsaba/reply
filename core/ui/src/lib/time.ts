@@ -23,3 +23,11 @@ export const CHANNEL_LABEL = { imessage: "iMessage", email: "Email", whatsapp: "
 export function listOf(items: string[]): string {
   return items.length < 2 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
+
+// iMessage stores attachments as "[Attachment: name]" / "[Attachments: 2]" text; say it in words instead.
+export function readablePreview(text: string): string {
+  const m = /^\[Attachments?: (.*)\]$/.exec(text.trim());
+  if (!m) return text;
+  return /^\d+$/.test(m[1]) ? `${m[1]} attachments` : `Attachment: ${m[1]}`;
+}
+export const isAttachmentOnly = (text: string) => /^\[Attachments?: .*\]$/.test(text.trim());
