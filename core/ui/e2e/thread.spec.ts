@@ -41,7 +41,7 @@ test("timeline: log landmark, chronological order, day headings, direction, chan
   await expect(articles.nth(2)).toHaveAccessibleName(/^Email sent by you|^Email from Anna Kovacs/);
   await expect(log.getByRole("heading", { level: 3 }).first()).toBeVisible();
   await expect(log.getByText("Email summary")).toBeVisible();
-  await expect(log.getByText("Attachment: a.pdf, application/pdf, 2 KB (not downloadable)")).toBeVisible();
+  await expect(log.getByText("Attachment: a.pdf · 2 KB (not downloadable)")).toBeVisible();
   await expect(log.getByText("<img src=x onerror=alert(1)>", { exact: false })).toBeVisible();
   expect(await log.locator("img[src='x'], script").count()).toBe(0);
   expect(dialogs).toEqual([]);
