@@ -89,6 +89,19 @@ GDS notes found while building it: `GdsSplit` never splits (its inline `grid-tem
 
 GDS notes: `GdsInline` with `justify` end/start collapsed the entry to about 8 px at 375 px width, so alignment uses a 12-column `GdsColumnGrid`; `SectionTitle`/`CardTitle` set the heading level with `order`, not `component`; `GdsBox` takes no `id` (a plain wrapper `div` carries the anchor id).
 
+## Contact profile and merge
+
+`/inbox/:contactId/profile` (`src/routes/profile/ProfilePane.tsx`), reached from "Profile and merge" in the thread header. It is a page in the detail pane on every width (the issue allowed a drawer on desktop; a page keeps one code path and works at 375 px).
+
+- **Profile:** display name, where the contact came from (address book / created automatically / created by you), per-channel message counts, handles grouped by channel in labelled lists with the handle kind.
+- **Merge:** a searchable picker (`SearchableSelect`, loads `GET /api/contacts?q=&includeEmpty=true`, excludes the current contact, "No contacts match") opens a confirmation that restates both names and counts: "Move 1 handle and 2 messages from {source} into {this contact}?". Nothing is sent before the confirmation. The Merge button is loading and disabled while the request runs (one request even on a double click), the dialog stays open on failure with a plain explanation (`mergeErrorText`: `cannot_merge_self`, `contact_not_found`, `handle_conflict` with the blocking handles, `merge_already_reverted`), and there is no optimistic update. On success contacts, contact, thread and history queries are refreshed, a notice with **Undo** shows for 15 s and the app opens the kept contact's conversation.
+- **Undo:** from the notice (it opens the profile with `?undo=<merge id>`, which opens the undo confirmation) and from **Merge history** (newest first; merges not yet undone have an Undo button; undone ones say "undone"). Undo always asks first, naming both people. A conflict (an earlier merge must be undone first) is explained in the dialog.
+- **Empty history:** "No merges yet." is plain text, not an error.
+
+Local components added because GDS lacks them (or has a defect, see below): `src/components/ConfirmPanel.tsx` (a `GdsDialog` with Cancel and a labelled confirm button) and `src/shell/Notices.tsx` (shows the GDS notification provider's active notices as inline alerts: success is a polite status, errors are alerts; GDS only ships a full "Notifications" panel). `App.tsx` wraps the routes in `GdsToastProvider` and `OverlayManagerProvider`.
+
+GDS findings: `ConfirmDialog` renders an unnamed close button (axe `button-name`, critical) and cannot relabel its confirm button, so `GdsDialog` is used; `GdsDialog` needs an `OverlayManagerProvider` (without it the screen crashes); `SearchableSelect`'s `ariaLabel` must contain its visible text (axe `label-content-name-mismatch`), so none is set and the placeholder is descriptive; dialogs fade in, so contrast checks must wait for the transition.
+
 ## Adding a screen
 
 1. Replace the route's `Placeholder` with the screen (a lazy module in `src/routes/`), composed from GDS only.
