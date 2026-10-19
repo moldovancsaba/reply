@@ -1,0 +1,26 @@
+{
+  "name": "reply-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reply Core: lean local-first unified inbox service",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20.17.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "lint": "eslint . --max-warnings 0",
+    "test": "node --test test/*.test.js",
+    "verify": "node scripts/verify.js"
+  },
+  "dependencies": {
+    "fastify": "^5.12.7",
+    "pino": "^10.4.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0"
+  }
+}
