@@ -2,13 +2,14 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Anchor, ChoiceChip, DataToolbar, GdsColumnGrid, GdsColumnGridItem, GdsInline, GdsStack, PageHeader, SemanticButton, StateBlock, TextInput } from "@sovereignsquad/gds";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import { CHANNEL_LABEL } from "../lib/time";
+import { ProfilePane } from "./profile/ProfilePane";
 import { ThreadPane } from "./thread/ThreadPane";
 import { ConversationList } from "./inbox/ConversationList";
 import { SourceNotice } from "./inbox/SourceNotice";
 import { CHANNELS, useInboxQuery } from "./inbox/inboxQuery";
 
 export default function Inbox() {
-  const { contactId } = useParams();
+  const { contactId, section } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const wide = useMediaQuery("(min-width: 62em)");
@@ -34,7 +35,7 @@ export default function Inbox() {
     </GdsStack>
   );
   const detail = contactId ? (
-    <ThreadPane key={contactId} contactId={contactId} />
+    section === "profile" ? <ProfilePane key={contactId} contactId={contactId} /> : <ThreadPane key={contactId} contactId={contactId} />
   ) : (
     <StateBlock variant="empty" title="Pick a conversation" description="Choose someone from the list to read your messages with them." />
   );

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { createGdsA11yReport, createGdsA11yTest, formatGdsA11yReport, runGdsAxeScan, runGdsContrastGate } from "@sovereignsquad/gds-a11y";
+import { createGdsA11yReport, createGdsA11yTest, expectGdsFocusTrap, formatGdsA11yReport, runGdsAxeScan, runGdsContrastGate } from "@sovereignsquad/gds-a11y";
 import { expect, type Page } from "@playwright/test";
 
 const axeSource = readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8");
@@ -32,4 +32,10 @@ export async function expectAccessibleNow(page: Page, label: string) {
   const report = createGdsA11yReport({ ...config, findings });
   expect(report.findings.filter((f) => f.status === "failure"), formatGdsA11yReport(report)).toEqual([]);
   return report;
+}
+
+// An open dialog must trap focus (Tab never leaves it) while Escape still closes it; the GDS check.
+export async function expectFocusTrapped(page: Page, containerSelector: string, label: string) {
+  const result = await expectGdsFocusTrap(gds(page), containerSelector, { route: label });
+  expect(result.findings.filter((f) => f.status === "failure"), JSON.stringify(result.findings)).toEqual([]);
 }
