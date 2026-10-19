@@ -72,6 +72,10 @@ The source contact is kept but hidden (`hidden = 1`, `merged_into = target`) so 
 
 With the service stopped: `node core/scripts/identity-reset.js --to-auto` undoes every manual merge. Handles go back to the address-book person they came from, or to fresh `auto` contacts. Messages and the merge log are untouched.
 
+## Rebuild
+
+A rebuild keeps only manual merges ([CORE_OPERATIONS.md](CORE_OPERATIONS.md)). Each merge is exported as the handles it moved plus an *anchor* handle of the target, and replayed in order; merges that cannot be applied yet wait in `pending_merges` until all of their handles exist.
+
 ## Data
 
 Migration `0003_identity.sql` adds `contacts.external_id` (unique when set) and `contacts.merged_into`. `merge_log.handles_json` is a JSON array of `{ handle_norm, prior_origin }`. See [CORE_DATA_MODEL.md](CORE_DATA_MODEL.md).

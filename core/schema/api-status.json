@@ -25,7 +25,7 @@
       }
     },
     "StatusReport": {
-      "type": "object", "additionalProperties": false, "required": ["overall", "storage", "helper", "connectors", "metrics", "generatedAt"],
+      "type": "object", "additionalProperties": false, "required": ["overall", "storage", "helper", "connectors", "backups", "metrics", "generatedAt"],
       "properties": {
         "overall": { "enum": ["ok", "degraded", "blocked"] },
         "storage": {
@@ -34,6 +34,7 @@
         },
         "helper": { "type": "object", "additionalProperties": false, "required": ["state"], "properties": { "state": { "enum": ["ok", "missing", "checksum_mismatch"] }, "version": { "type": "string" } } },
         "connectors": { "type": "array", "items": { "$ref": "#/definitions/ConnectorStatus" } },
+        "backups": { "type": "object", "additionalProperties": false, "required": ["count", "totalBytes"], "properties": { "count": { "type": "integer", "minimum": 0 }, "totalBytes": { "type": "integer", "minimum": 0 }, "lastBackupAt": { "type": "string", "format": "date-time" }, "lastBackupError": { "type": "string" } } },
         "metrics": { "type": "object", "additionalProperties": false, "required": ["runs", "failuresByCode", "lastDurationMs"], "properties": { "runs": { "type": "integer" }, "failuresByCode": { "type": "object", "additionalProperties": { "type": "integer" } }, "lastDurationMs": { "type": ["integer", "null"] } } },
         "generatedAt": { "type": "string", "format": "date-time" }
       }

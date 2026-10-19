@@ -37,7 +37,8 @@ function validate(m) {
     if (!Number.isFinite(m.tsMs)) throw new ValidationError("tsMs must be a number");
 }
 
-export function createRepo(db, { now = () => Date.now() } = {}) {
+export function createRepo(db, { now = () => Date.now(), afterBatch = null } = {}) {
+    let afterHook = afterBatch;
     const q = {
         message: db.prepare("SELECT text, subject, attachments_json, ts_ms, meta_json FROM messages WHERE id = ?"),
         insertMessage: db.prepare(`INSERT INTO messages (id, channel, account, provider_message_key, thread_key, handle_norm, is_from_me, ts_ms, subject, text, attachments_json, meta_json, ingested_at)
@@ -103,6 +104,12 @@ export function createRepo(db, { now = () => Date.now() } = {}) {
 
     // One transaction per batch: a structurally invalid row rolls the whole batch back.
     function upsertMessages(batch) {
+        const result = upsertInTransaction(batch);
+        afterHook?.(result); // e.g. merges waiting for handles that have just appeared
+        return result;
+    }
+
+    function upsertInTransaction(batch) {
         return db.transaction(() => {
             const result = { inserted: 0, updated: 0, skipped: 0, quarantined: 0 };
             const touched = new Set();
@@ -195,5 +202,5 @@ export function createRepo(db, { now = () => Date.now() } = {}) {
         return getSyncState(connector, account);
     }
 
-    return { upsertMessages, getThread, listContacts, search, getSyncState, setSyncState, rebuildSummary, ensureContactForHandle, handlesOf: (id) => q.handlesOf.all(id).map((r) => r.handle_norm) };
+    return { setAfterBatch: (fn) => { afterHook = fn; }, upsertMessages, getThread, listContacts, search, getSyncState, setSyncState, rebuildSummary, ensureContactForHandle, handlesOf: (id) => q.handlesOf.all(id).map((r) => r.handle_norm) };
 }
