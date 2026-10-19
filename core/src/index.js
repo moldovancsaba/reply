@@ -38,7 +38,12 @@ const repo = createRepo(storage.db);
 const registry = createRegistry({ enabled: config.connectors, deps: { config, logger } });
 for (const id of registry.unknown) logger.warn({ connector: id }, "ignoring unknown connector in REPLY_CORE_CONNECTORS");
 const identity = createIdentity({ db: storage.db, repo });
-const runner = createRunner({ db: storage.db, repo, logger, onContacts: (people) => identity.importContacts(people) });
+const runner = createRunner({ db: storage.db, repo, logger, onContacts: (people) => {
+        const r = identity.importContacts(people);
+        logger.info({ connector: "contacts", created: r.created, updated: r.updated, unchanged: r.unchanged, linked: r.linked, conflicts: r.conflicts.length, protectedByMerge: r.protectedByMerge }, "identity.import");
+        return r;
+    },
+});
 const scheduler = createScheduler({ registry, runner, repo, logger, intervals: config.intervals });
 const app = createServer(config, logger, { registry, runner, repo, identity });
 

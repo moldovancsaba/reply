@@ -6,7 +6,7 @@ Standalone Swift command-line helper that exports iMessage, Apple Mail and Apple
 cd core/helper
 bash build.sh                       # swift build -c release, copies bin/reply-core-helper, records bin/reply-core-helper.sha256
 bin/reply-core-helper --version     # 1.0.0 schema=1
-bin/reply-core-helper doctor        # per-source access state, no content read
+bin/reply-core-helper doctor        # per-source access state, no content read (--only imessage|mail|contacts checks one)
 bin/reply-core-helper imessage --db ~/Library/Messages/chat.db --after 0 --limit 500
 bin/reply-core-helper mail --root ~/Library/Mail --after 0 --limit 500
 bin/reply-core-helper contacts [--after <offset>] [--limit <n>]
@@ -39,7 +39,7 @@ Paging: pass the returned `rowid` as `--after`; repeat while `more` is true. A p
 | 13 | `schema_unsupported` | required tables/columns are missing |
 | 20 | `internal` | anything else |
 
-`doctor` prints `{"contacts":..,"imessage":..,"mail":..}` with values `ok`, `permission_denied`, `source_missing`, `source_locked`, `schema_unsupported`, and exits with the code of the first problem.
+`doctor` prints `{"contacts":..,"imessage":..,"mail":..}` with values `ok`, `permission_denied`, `source_missing`, `source_locked`, `schema_unsupported` and, for contacts only, `needs_consent` (the user has not been asked yet; the first `contacts` export shows the macOS prompt, so this is not a failure). It exits with the code of the first problem.
 
 ## Behaviour worth knowing
 
@@ -47,7 +47,7 @@ Paging: pass the returned `rowid` as `--after`; repeat while `more` is true. A p
 - **Group chats** (`chat.style = 43`): `isGroup: true`, `threadKey` is the chat guid, `counterpartHandle` is the sender (empty for messages you sent).
 - **Attachments**: metadata only. When there is no text, `text` is `[Attachment: name]` / `[Attachments: n]`.
 - **Mail**: reads the Envelope Index of the highest `V*` folder. `text` is Mail's stored *summary*, not the full body. Deleted rows are not exported; drafts, junk and trash are exported with their `mailboxKind` so the connector can exclude them. Direction: sent mailbox or a sender that sends from a sent mailbox.
-- **Contacts**: the Contacts framework has no modification date, so the export is complete on every call (sorted by identifier; `--after`/`--limit` page through it) and the service compares fingerprints. The first call from a new host process triggers the macOS consent prompt; `doctor` never prompts.
+- **Contacts**: the Contacts framework has no modification date, so the export is complete on every call (sorted by identifier; with no `--limit`, or `--limit 0`, everything is returned in one call; `--after`/`--limit` page through it) and the service compares fingerprints. The first call from a new host process triggers the macOS consent prompt; `doctor` never prompts.
 - **attributedBody**: decoded by a bounds-checked reader of the typedstream layout, not `NSUnarchiver`, because `NSUnarchiver` raises an uncatchable Objective-C exception on truncated blobs. The unit tests check the reader against bytes produced by the real `NSArchiver` for many strings (up to > 64 KB) and against every truncation point of a blob.
 - **Read-only**: databases are opened with `SQLITE_OPEN_READONLY`. A test asserts the source file hash and directory listing are unchanged after an export.
 

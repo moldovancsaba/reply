@@ -40,7 +40,7 @@ export function createImessageConnector({ config = {}, logger, helper = defaultH
         accounts: async () => [""],
         async preflight() {
             try {
-                const { report } = await helperDoctor(["--db", dbPath, "--skip-contacts"], { helper, timeoutMs: 10_000 });
+                const { report } = await helperDoctor(["--db", dbPath, "--only", "imessage"], { helper, timeoutMs: 10_000 });
                 if (report.imessage === "ok") return { ok: true };
                 return { ok: false, code: report.imessage, hint: HINTS[report.imessage] };
             } catch (e) {

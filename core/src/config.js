@@ -3,7 +3,7 @@ import path from "node:path";
 import { isRegion } from "./identity/normalize.js";
 
 // Connectors enabled when REPLY_CORE_CONNECTORS is unset. Connector issues add their ids here.
-export const DEFAULT_ENABLED_IDS = ["imessage"];
+export const DEFAULT_ENABLED_IDS = ["imessage", "contacts"];
 const LEVELS = ["debug", "info", "warn", "error"];
 
 export class ConfigError extends Error {}
