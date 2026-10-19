@@ -17,7 +17,8 @@ export function toEnvelope(err, requestId) {
     const code = known ? err.code : codeFor(status, err);
     const message = known ? err.message : messageFor(status);
     const retryable = known ? err.retryable : status >= 500;
-    return { status, body: { error: { code, message, requestId, retryable } } };
+    const details = known && err.details ? { details: err.details } : {};
+    return { status, body: { error: { code, message, requestId, retryable, ...details } } };
 }
 
 function statusOf(err) {

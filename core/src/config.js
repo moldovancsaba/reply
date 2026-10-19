@@ -1,5 +1,6 @@
 import os from "node:os";
 import path from "node:path";
+import { isRegion } from "./identity/normalize.js";
 
 // Connectors enabled when REPLY_CORE_CONNECTORS is unset. Connector issues add their ids here.
 export const DEFAULT_ENABLED_IDS = [];
@@ -53,11 +54,14 @@ export function loadConfig(env = process.env) {
         intervals[m[1].toLowerCase().replace(/_/g, "-")] = ms;
     }
 
+    const defaultRegion = (env.REPLY_CORE_DEFAULT_REGION || "HU").toUpperCase();
+    if (!isRegion(defaultRegion)) throw new ConfigError("REPLY_CORE_DEFAULT_REGION must be a two-letter country code such as HU or US");
+
     const home = env.REPLY_CORE_HOME ? path.resolve(env.REPLY_CORE_HOME) : defaultHome();
     const unknownKeys = Object.keys(env).filter(
         (k) => k.startsWith("REPLY_CORE_") && !KNOWN_KEYS.has(k) && !/_INTERVAL_MS$/.test(k),
     );
-    return { home, port, logLevel, allowedOrigins, connectors: connectors.length ? connectors : DEFAULT_ENABLED_IDS, intervals, unknownKeys };
+    return { home, port, logLevel, allowedOrigins, connectors: connectors.length ? connectors : DEFAULT_ENABLED_IDS, intervals, defaultRegion, unknownKeys };
 }
 
 const KNOWN_KEYS = new Set([
@@ -66,4 +70,5 @@ const KNOWN_KEYS = new Set([
     "REPLY_CORE_LOG_LEVEL",
     "REPLY_CORE_ALLOWED_ORIGINS",
     "REPLY_CORE_CONNECTORS",
+    "REPLY_CORE_DEFAULT_REGION",
 ]);

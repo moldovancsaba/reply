@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import Fastify, { LogController } from "fastify";
 import { forbidden, toEnvelope } from "./errors.js";
 import { registerHealth } from "./routes/health.js";
+import { registerIdentity } from "./routes/identity.js";
 import { registerSync } from "./routes/sync.js";
 
 const BODY_LIMIT = 1024 * 1024;
@@ -64,6 +65,7 @@ export function createServer(config, logger, deps = {}) {
 
     registerHealth(app, config);
     if (deps.runner) registerSync(app, deps);
+    if (deps.identity) registerIdentity(app, deps);
     return app;
 }
 
