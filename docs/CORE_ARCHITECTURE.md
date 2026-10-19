@@ -19,6 +19,10 @@ process start
   -> SIGINT/SIGTERM -> gracefulClose(5 s)  stop accepting, finish in-flight, close idle keep-alive, then exit
 ```
 
+## Storage
+
+`core/src/storage/` owns the single SQLite database: `db.js` (open, pragmas, quick_check), `migrate.js` (forward-only checksummed migrations), `repo.js` (all reads and writes). The service opens storage after config and before listening; a storage failure exits with code 74. See [CORE_DATA_MODEL.md](CORE_DATA_MODEL.md).
+
 ## Ownership
 
 | File | Responsibility |
@@ -28,7 +32,8 @@ process start
 | `core/src/errors.js` | `AppError` and the error envelope |
 | `core/src/server.js` | Fastify instance, guards, error handlers, `gracefulClose` |
 | `core/src/routes/health.js` | `GET /api/health` |
-| `core/src/index.js` | Process entry: config, listen, signals, exit codes |
+| `core/src/storage/*` | Database, migrations, repository (see CORE_DATA_MODEL.md) |
+| `core/src/index.js` | Process entry: config, storage, listen, signals, exit codes |
 
 Later issues add routes and services and register them in `server.js`. They must not change the conventions above (config, error envelope, logging redaction, guards) without updating this document.
 
