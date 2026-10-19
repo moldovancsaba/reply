@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEventLib from "@testing-library/user-event";
 import { GdsProvider } from "@sovereignsquad/gds";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
@@ -10,14 +11,16 @@ let healthy = true;
 
 beforeEach(() => {
   healthy = true;
-  vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     if (!healthy) throw new TypeError("down");
+    if (String(input).startsWith("/api/contacts")) return new Response(JSON.stringify({ items: [], nextCursor: null, hasMore: false, total: 0 }), { status: 200 });
+    if (String(input).startsWith("/api/status")) return new Response(JSON.stringify({ connectors: [] }), { status: 200 });
     return new Response(JSON.stringify({ status: "ok", version: "0.1.0", uptimeSeconds: 1, home: "/h", time: "t" }), { status: 200 });
   });
 });
 afterEach(() => vi.restoreAllMocks());
 
-const renderAt = (path: string) => render(<GdsProvider><MemoryRouter initialEntries={[path]}><App /></MemoryRouter></GdsProvider>);
+const renderAt = (path: string) => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><GdsProvider><MemoryRouter initialEntries={[path]}><App /></MemoryRouter></GdsProvider></QueryClientProvider>);
 
 describe("app shell", () => {
   it("redirects / to the inbox and marks the active destination", async () => {
