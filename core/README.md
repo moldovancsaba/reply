@@ -24,6 +24,8 @@ Every setting is optional. See [`.env.example`](.env.example). Values are read f
 | `REPLY_CORE_HOME` | `~/Library/Application Support/reply-core` | Data home (created with mode 0700) |
 | `REPLY_CORE_PORT` | `45511` | Loopback port, 1024-65535 |
 | `REPLY_CORE_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
+| `REPLY_CORE_CONNECTORS` | empty | Connectors to run (comma list); see [`../docs/CORE_CONNECTORS.md`](../docs/CORE_CONNECTORS.md) |
+| `REPLY_CORE_<ID>_INTERVAL_MS` | connector default | Sync interval for one connector, >= 1000 |
 | `REPLY_CORE_ALLOWED_ORIGINS` | empty | Extra browser origins allowed to call the API (for example a UI dev server). The service's own origin is always allowed. |
 
 Unknown `REPLY_CORE_*` variables are ignored and reported once at info level.
@@ -40,6 +42,10 @@ Unknown `REPLY_CORE_*` variables are ignored and reported once at info level.
 ## Data
 
 `core.db` lives in `REPLY_CORE_HOME` (mode 0600; the directory is 0700). Layout and invariants: [`../docs/CORE_DATA_MODEL.md`](../docs/CORE_DATA_MODEL.md). Inspect it with `node scripts/db-inspect.js`.
+
+## Syncing
+
+Enabled connectors run on their own intervals. Trigger one now with `curl -X POST http://127.0.0.1:45511/api/sync/<id>` (202 accepted). Try the framework with `REPLY_CORE_CONNECTORS=stub npm start`. Re-ingest from scratch with `node scripts/reset-cursor.js <id> [--purge]` (service stopped).
 
 ## Native helper
 
