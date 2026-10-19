@@ -84,3 +84,17 @@ Only `blocked` states carry `recovery`; an `error` is automatic and says when it
 ## Privacy
 
 The report contains counts, ids, codes and fixed catalog text only: no contact handles, names, subjects or message text (a test checks this). The one exception is the IMAP account id, which is the address you added yourself.
+
+## How the UI shows it
+
+| API | Sources screen |
+|---|---|
+| `connectors[].state` `ok` / `syncing` / `never_synced` / `error` / `blocked` | Connected / Syncing / Not synced yet / Problem, will retry / Needs your attention (text and icon, never colour alone) |
+| `connectors[].message`, `recovery[]` | the sentence, then the ordered steps; a `deepLink` becomes a link only if it starts with `x-apple.systempreferences:` |
+| `messagesThisRun` | "Imported N messages so far" while syncing |
+| `lastSuccessAt`, `nextRunAt`, `retryAt` | "Last success", "Next check", "Next attempt" |
+| `accounts[]` | one line per account under the connector |
+| `storage.state = error`, `helper.state != ok` | an error alert above the panels, with `storage.recovery` |
+| `POST /api/status/recheck` | the **Recheck** buttons; the report it returns replaces the cached status |
+
+See [CORE_UI.md](CORE_UI.md#sources).

@@ -112,6 +112,27 @@ GDS findings: `ConfirmDialog` renders an unnamed close button (axe `button-name`
 - **States:** initial guidance (info, not an error), too short, loading ("Searching ..."), results, no results ("No results for 'x' in iMessage and Email.", with Clear filters when filtered), error with request reference and Try again (earlier results stay with a warning when only a refresh fails), load-more failure, and per-channel notices: "{Channel} is not connected, so it was not searched." (never synced, no messages) and "{Channel} is not syncing, so recent messages may be missing." (blocked or error), each linking to Sources.
 - **Stale answers:** the query is part of the react-query key, so changing it cancels the request in flight (abort signal) and a late answer can never replace a newer one; previous results stay (marked busy) until the new ones arrive.
 
+## Sources
+
+`/sources` (`src/routes/Sources.tsx`, pure mapping in `src/routes/sources/viewModel.ts`). One `SectionPanel` per connector from `GET /api/status`; the page subtitle says "All sources are connected", "2 of 5 sources need attention" or "Your sources are getting ready".
+
+| State | Badge (text + icon) | Sentence | Recommended action |
+|---|---|---|---|
+| `ok` | Connected (success) | Messages are up to date. | Sync now |
+| `syncing` | Syncing (info) | Importing messages now. "Imported N messages so far" (live region, at most one update per 5 s) | none (button shows "Syncing...", disabled) |
+| `never_synced` | Not synced yet (neutral) | Nothing has been imported from this source yet. | Sync now |
+| `error` | Problem, will retry (warning) | the service's message; "Next attempt ..." | Sync now |
+| `blocked` | Needs your attention (danger) | the service's message, then the **ordered** recovery steps | Recheck |
+
+Each panel also shows the message count, "Last success ...", the next check and, for IMAP, one line per account. **Recheck all** and the per-panel **Recheck** call `POST /api/status/recheck`; a source that was blocked or failing and is now ok is announced once ("iMessage is connected.").
+
+- **Deep links:** a recovery step's link is rendered only if it starts with `x-apple.systempreferences:` (anything else, such as `javascript:`, is shown as plain step text), with a descriptive name ("Open Full Disk Access settings").
+- **Sync now:** disabled while a run is in flight or the source is syncing; `409 already_running` counts as success (no error); other errors (for example `423 blocked`) appear as an error notice.
+- **Polling:** `GET /api/status` every 3 s while any source is syncing, every 30 s otherwise, paused while the tab is hidden.
+- **Infrastructure:** a storage error or a missing/modified helper is an error alert above the panels, with the storage recovery steps.
+- **First run:** when at least one source exists and none is `ok` with no messages imported, the first visit to `/inbox` in a page load redirects to `/sources` (replace) and the page shows "Connect a source to get started". It never redirects again in that page load, and the banner is gone as soon as one source is ok.
+- **Other states:** loading ("Checking your sources"), status unreachable (error with Try again; the shell banner covers the service itself being down), no sources enabled (guidance).
+
 ## Adding a screen
 
 1. Replace the route's `Placeholder` with the screen (a lazy module in `src/routes/`), composed from GDS only.

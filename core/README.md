@@ -15,6 +15,15 @@ curl -s http://127.0.0.1:45511/api/health
 
 Requires Node >= 20.17.
 
+## First run
+
+1. Start the service and open <http://127.0.0.1:45511>. With no working source the app opens on **Sources**.
+2. For each source marked **Needs your attention**, follow the numbered steps (most are macOS permissions: Full Disk Access for the process that started Reply Core, and Contacts). The links open the right System Settings pane.
+3. Press **Recheck**. When a source works it turns **Connected**, starts importing and the page tells you ("iMessage is connected.").
+4. Open **Inbox**. People appear as soon as their messages are imported; the first import of a large history can take a while ("Imported N messages so far").
+
+Details: [`../docs/CORE_PERMISSIONS.md`](../docs/CORE_PERMISSIONS.md) and [`../docs/CORE_UI.md`](../docs/CORE_UI.md#sources).
+
 ## Configuration
 
 Every setting is optional. See [`.env.example`](.env.example). Values are read from the process environment once at start; invalid values stop the service immediately.
