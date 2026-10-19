@@ -23,6 +23,10 @@ process start
 
 `core/src/storage/` owns the single SQLite database: `db.js` (open, pragmas, quick_check), `migrate.js` (forward-only checksummed migrations), `repo.js` (all reads and writes). The service opens storage after config and before listening; a storage failure exits with code 74. See [CORE_DATA_MODEL.md](CORE_DATA_MODEL.md).
 
+## Connector framework
+
+`core/src/connectors/` runs every source on one runtime (runner, scheduler, registry, error classes) and `core/src/routes/sync.js` exposes `POST /api/sync/:connector`. Flow, error codes and operations: [CORE_CONNECTORS.md](CORE_CONNECTORS.md).
+
 ## Native helper
 
 Apple-private sources are read by `core/helper` (Swift, one binary, NDJSON on stdout, versioned by `schemaVersion`). Node calls it through `core/src/helper`, which verifies the binary's checksum, enforces a 30 s timeout (killing the whole process group), validates `schemaVersion`, and maps exit codes to connector error codes. See [`core/helper/README.md`](../core/helper/README.md) and [CORE_PERMISSIONS.md](CORE_PERMISSIONS.md).
@@ -41,6 +45,7 @@ Unit and integration tests use `node:test`. Connectors are tested against determ
 | `core/src/server.js` | Fastify instance, guards, error handlers, `gracefulClose` |
 | `core/src/routes/health.js` | `GET /api/health` |
 | `core/src/storage/*` | Database, migrations, repository (see CORE_DATA_MODEL.md) |
+| `core/src/connectors/*` | Connector runner, scheduler, registry, error classes (see CORE_CONNECTORS.md) |
 | `core/src/helper/*` | Node wrapper around the native helper (checksum, timeout, error mapping) |
 | `core/helper/` | Swift package: `reply-core-helper` |
 | `core/src/index.js` | Process entry: config, storage, listen, signals, exit codes |

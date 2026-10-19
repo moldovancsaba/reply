@@ -44,3 +44,17 @@ test("unknown REPLY_CORE_ keys are reported, others ignored", () => {
     const c = loadConfig({ REPLY_CORE_TYPO: "1", PATH: "/bin" });
     assert.deepEqual(c.unknownKeys, ["REPLY_CORE_TYPO"]);
 });
+
+test("connectors and per-connector intervals", () => {
+    const c = loadConfig({ REPLY_CORE_CONNECTORS: "imessage, Apple-Mail", REPLY_CORE_APPLE_MAIL_INTERVAL_MS: "5000", REPLY_CORE_IMESSAGE_INTERVAL_MS: "2000" });
+    assert.deepEqual(c.connectors, ["imessage", "apple-mail"]);
+    assert.deepEqual(c.intervals, { "apple-mail": 5000, imessage: 2000 });
+    assert.deepEqual(c.unknownKeys, [], "interval variables are known keys");
+    assert.deepEqual(loadConfig({}).connectors, []);
+});
+
+test("invalid connector list and intervals are rejected", () => {
+    assert.throws(() => loadConfig({ REPLY_CORE_CONNECTORS: "ok,bad id" }), /REPLY_CORE_CONNECTORS/);
+    assert.throws(() => loadConfig({ REPLY_CORE_IMESSAGE_INTERVAL_MS: "500" }), /REPLY_CORE_IMESSAGE_INTERVAL_MS must be an integer of at least 1000/);
+    assert.throws(() => loadConfig({ REPLY_CORE_IMESSAGE_INTERVAL_MS: "soon" }), /INTERVAL_MS/);
+});
