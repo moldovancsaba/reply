@@ -1,16 +1,19 @@
 // Single local gate: lint (no warnings) + tests. Fails on any non-zero exit or any Node warning in the output.
 import { spawnSync } from "node:child_process";
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 
 const testFiles = readdirSync("test").filter((f) => f.endsWith(".test.js")).map((f) => `test/${f}`);
 
 const hasSwift = spawnSync("swift", ["--version"]).status === 0;
+const hasUi = existsSync("ui/node_modules");
+if (!hasUi) console.log("verify: ui skipped (core/ui dependencies not installed; see core/ui/README.md for the GITHUB_TOKEN setup)");
 const steps = [
     ["lint", ["npx", "eslint", ".", "--max-warnings", "0"]],
     ...(hasSwift
         ? [["helper-build", ["bash", "helper/build.sh"]], ["helper-test", ["swift", "test", "--package-path", "helper"]]]
         : []),
     ["test", [process.execPath, "--throw-deprecation", "--test", ...testFiles]],
+    ...(hasUi ? [["ui", ["npm", "--prefix", "ui", "run", "verify"]]] : []),
 ];
 
 let failed = false;

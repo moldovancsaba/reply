@@ -27,6 +27,10 @@ process start
 
 `core/src/connectors/` runs every source on one runtime (runner, scheduler, registry, error classes) and `core/src/routes/sync.js` exposes `POST /api/sync/:connector`. Flow, error codes and operations: [CORE_CONNECTORS.md](CORE_CONNECTORS.md).
 
+## UI
+
+`core/ui` is a separate React + TypeScript package built only from the design system; the service hosts its build (`core/src/server.js`: static files, client-route fallback, CSP). See [CORE_UI.md](CORE_UI.md).
+
 ## Operations
 
 `core/src/ops/` implements backup (online snapshot, verification, retention), restore, rebuild (keeps only the manual merges), the daily backup schedule, the service pidfile and the operation lock; `core/src/cli/ops.js` is the command line. See [CORE_OPERATIONS.md](CORE_OPERATIONS.md).
@@ -76,6 +80,7 @@ Unit and integration tests use `node:test`. Connectors are tested against determ
 | `core/src/connectors/*` | Connector runner, scheduler, registry, error classes (see CORE_CONNECTORS.md) |
 | `core/src/drafting/*`, `core/src/routes/drafts.js` | Optional local-model reply suggestion (see CORE_DRAFTING.md) |
 | `core/src/handoff/*`, `core/src/routes/handoff.js` | Reply handoff links and audit (see CORE_HANDOFF.md) |
+| `core/ui/` | The web app (GDS only): shell, routes, API client; built to `core/ui/dist` |
 | `core/src/ops/*`, `core/src/cli/ops.js` | Backup, restore, rebuild, daily backup, pidfile (see CORE_OPERATIONS.md) |
 | `core/src/status/*`, `core/src/routes/status.js` | Status report and recovery catalog (see CORE_STATUS.md) |
 | `core/src/read/*`, `core/src/routes/read.js` | Read model and HTTP read endpoints (see CORE_API.md) |

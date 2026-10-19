@@ -28,6 +28,7 @@ function statusOf(err) {
 
 function codeFor(status, err) {
     if (err?.validation || status === 400) return "invalid_request";
+    if (status === 403) return "forbidden";
     if (status === 404) return "not_found";
     if (status === 413) return "payload_too_large";
     return "internal_error";
@@ -35,6 +36,7 @@ function codeFor(status, err) {
 
 function messageFor(status) {
     if (status === 400) return "The request could not be understood.";
+    if (status === 403) return "That is not allowed.";
     if (status === 404) return "Not found.";
     if (status === 413) return "The request is too large.";
     return "Something went wrong. See the service log for the request id.";

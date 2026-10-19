@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
+import { existsSync } from "node:fs";
+import fastifyStatic from "@fastify/static";
 import Fastify, { LogController } from "fastify";
 import { forbidden, toEnvelope } from "./errors.js";
 import { registerHealth } from "./routes/health.js";
@@ -10,6 +13,9 @@ import { registerStatus } from "./routes/status.js";
 import { registerSync } from "./routes/sync.js";
 
 const BODY_LIMIT = 1024 * 1024;
+// The app is one same-origin page: no inline or remote scripts, no remote connections. Inline styles are allowed because the
+// GDS component library sets style attributes at runtime.
+const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
 // Blocks DNS-rebinding (foreign Host) and drive-by browser requests (foreign Origin).
 // The allowed values are derived from the port the socket really listens on, so ephemeral ports work in tests.
@@ -62,9 +68,25 @@ export function createServer(config, logger, deps = {}) {
         if (status >= 500) req.log.error({ requestId: req.id, err }, "request failed");
         reply.status(status).send(body);
     });
+    const uiDir = deps.uiDir && existsSync(path.join(deps.uiDir, "index.html")) ? deps.uiDir : null;
     app.setNotFoundHandler((req, reply) => {
+        // client-side routes (/inbox/123) are answered with the app; unknown API paths and non-page requests stay JSON 404s
+        if (uiDir && req.method === "GET" && !req.url.startsWith("/api/") && String(req.headers.accept ?? "").includes("text/html")) return reply.sendFile("index.html");
         const { status, body } = toEnvelope({ statusCode: 404 }, req.id);
         reply.status(status).send(body);
+    });
+    if (uiDir) {
+        app.register(fastifyStatic, {
+            root: uiDir, prefix: "/", index: "index.html", cacheControl: false,
+        });
+    }
+    app.addHook("onSend", async (_req, reply, payload) => {
+        if (String(reply.getHeader("content-type") ?? "").startsWith("text/html")) {
+            reply.header("content-security-policy", CSP);
+            reply.header("x-content-type-options", "nosniff");
+            reply.header("referrer-policy", "no-referrer");
+        }
+        return payload;
     });
 
     registerHealth(app, config);
@@ -76,7 +98,11 @@ export function createServer(config, logger, deps = {}) {
     if (deps.drafting) registerDrafts(app, deps);
     // API responses are never cached unless a route opts in (first pages of lists and threads revalidate by ETag)
     app.addHook("onSend", async (req, reply) => {
-        if (req.url.startsWith("/api/") && !reply.hasHeader("cache-control")) reply.header("cache-control", "no-store");
+        if (reply.hasHeader("cache-control")) return;
+        // API answers are never cached unless a route opts in; hashed build files never change; the page itself is always revalidated
+        if (req.url.startsWith("/api/")) reply.header("cache-control", "no-store");
+        else if (req.url.startsWith("/assets/") && reply.statusCode === 200) reply.header("cache-control", "public, max-age=31536000, immutable");
+        else if (String(reply.getHeader("content-type") ?? "").startsWith("text/html")) reply.header("cache-control", "no-cache");
     });
     return app;
 }
