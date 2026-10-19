@@ -68,7 +68,7 @@ node bin/reply-core.js rebuild
 
 Starts a **new** database that contains only your manual merges. Everything else (messages, contacts) is imported again from your sources the next time Reply Core runs. Use it when the database is damaged beyond a restore, or to start clean without losing your merges.
 
-What happens, in order: the merges are exported by handle sets (not row ids) → a `pre-rebuild` backup and the `user-state` JSON are written → a new database is built next to the old one and the merges are put in → the old file is renamed `core.db.replaced-<time>` and the new one becomes `core.db`. The old database is never deleted. An interrupted rebuild leaves the original usable; the half-built file is removed.
+What happens, in order: the merges, profile fields and notes are exported by handle sets (not row ids; a note about a person whose messages are not back yet gets an automatic contact for that handle) → a `pre-rebuild` backup and the `user-state` JSON are written → a new database is built next to the old one and the merges are put in → the old file is renamed `core.db.replaced-<time>` and the new one becomes `core.db`. The old database is never deleted. An interrupted rebuild leaves the original usable; the half-built file is removed.
 
 Merges whose people have not been imported yet (a source is blocked, for example) wait in `pending_merges` and are applied automatically as soon as **all** of their handles appear. Undone merges are not carried over.
 

@@ -8,7 +8,7 @@ test.afterEach(async () => { await svc.stop(); });
 
 const rows = (p: import("@playwright/test").Page) => p.getByRole("list", { name: "Conversations" }).getByRole("link");
 
-test("profile shows handles by channel; merge needs a confirmation, sends one request, joins the timelines; undo restores", async ({ page }) => {
+test("profile column lists handles; merge needs a confirmation, sends one request, joins the timelines; undo restores", async ({ page }) => {
   const posts: string[] = [];
   page.on("request", (r) => { if (r.method() === "POST") posts.push(r.url().replace(svc.url, "")); });
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -16,9 +16,7 @@ test("profile shows handles by channel; merge needs a confirmation, sends one re
   await expect(rows(page)).toHaveCount(2);
   await rows(page).filter({ hasText: "+36301234567" }).click();
   await expect(page.getByRole("log").getByRole("article")).toHaveCount(3);
-  await page.getByRole("link", { name: "Profile and merge" }).click();
-  await expect(page).toHaveURL(/\/profile$/);
-  await expect(page.getByRole("list", { name: "iMessage handles" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Phone numbers and addresses" })).toBeVisible(); // the profile column is open by default on a wide window
   await expect(page.getByText("No merges yet.")).toBeVisible();
   await expectAccessibleNow(page, "profile");
 
@@ -37,10 +35,10 @@ test("profile shows handles by channel; merge needs a confirmation, sends one re
   expect(posts.filter((u) => u.endsWith("/merge"))).toHaveLength(1);
   await expect(page).toHaveURL(/\/inbox\/[^/]+$/);
   await expect(rows(page)).toHaveCount(1);
-  await expect(page.getByText(/Merged anna@example.com into/)).toBeVisible();
+  await expect(page.getByText("Merged anna@example.com into +36301234567.")).toBeVisible();
 
   // undo from the toast: it leads to its own confirmation
-  await page.getByRole("button", { name: "Undo" }).click();
+  await page.getByRole("button", { name: "Undo" }).first().click(); // the notice comes before the page content
   await expect(page).toHaveURL(/profile\?undo=/);
   await expect(page.getByRole("dialog")).toContainText("Make anna@example.com a separate contact again");
   await page.getByRole("dialog").getByRole("button", { name: "Undo merge" }).click();
@@ -57,7 +55,6 @@ test("a failed merge stays in the dialog with a plain explanation", async ({ pag
   await page.route(/\/merge$/, (r) => r.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ error: { code: "handle_conflict", message: "x", requestId: "r", retryable: false, details: { handles: ["anna@example.com"] } } }) }));
   await page.goto(`${svc.url}/inbox`);
   await rows(page).first().click();
-  await page.getByRole("link", { name: "Profile and merge" }).click();
   await page.getByRole("button", { name: /^Search for a contact to merge/ }).click();
   await page.getByRole("option").first().click();
   await page.getByRole("dialog").getByRole("button", { name: "Merge" }).click();
@@ -71,7 +68,6 @@ test("a failed merge stays in the dialog with a plain explanation", async ({ pag
 test("picker with no match says so", async ({ page }) => {
   await page.goto(`${svc.url}/inbox`);
   await rows(page).first().click();
-  await page.getByRole("link", { name: "Profile and merge" }).click();
   await page.getByRole("button", { name: /^Search for a contact to merge/ }).click();
   await page.getByRole("textbox", { name: "Search for a contact to merge" }).fill("zzzzzz");
   await expect(page.getByText("No contacts match")).toBeVisible();

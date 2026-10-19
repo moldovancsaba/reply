@@ -97,7 +97,19 @@ public struct ContactRecord: Encodable, Equatable {
     public let displayName: String
     public let phones: [String]
     public let emails: [String]
-    public init(contactId: String, displayName: String, phones: [String], emails: [String]) {
+    // Address-book details shown on the profile; nil/empty ones are left out of the JSON.
+    public let givenName: String?
+    public let familyName: String?
+    public let nickname: String?
+    public let organization: String?
+    public let jobTitle: String?
+    public let department: String?
+    public let birthday: String?
+    public let urls: [String]?
+    public let addresses: [String]?
+    public init(contactId: String, displayName: String, phones: [String], emails: [String], givenName: String? = nil, familyName: String? = nil, nickname: String? = nil, organization: String? = nil, jobTitle: String? = nil, department: String? = nil, birthday: String? = nil, urls: [String]? = nil, addresses: [String]? = nil) {
         self.contactId = contactId; self.displayName = displayName; self.phones = phones; self.emails = emails
+        self.givenName = givenName; self.familyName = familyName; self.nickname = nickname; self.organization = organization
+        self.jobTitle = jobTitle; self.department = department; self.birthday = birthday; self.urls = urls; self.addresses = addresses
     }
 }

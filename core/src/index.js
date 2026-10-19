@@ -11,6 +11,7 @@ import { createHandoff } from "./handoff/service.js";
 import { createIdentity } from "./identity/service.js";
 import { createBackupSchedule } from "./ops/auto.js";
 import { removePidfile, writePidfile } from "./ops/guard.js";
+import { createProfile } from "./profile/service.js";
 import { createReadService } from "./read/service.js";
 import { defaultHelperPath } from "./helper/index.js";
 import { createStatus } from "./status/index.js";
@@ -58,8 +59,9 @@ const scheduler = createScheduler({ registry, runner, repo, logger, intervals: c
 const handoffs = createHandoff({ db: storage.db });
 const read = createReadService({ db: storage.db, replyChannels: (id) => handoffs.channelsFor(id) });
 const drafting = createDrafting({ config, read, logger });
+const profile = createProfile({ db: storage.db });
 const status = createStatus({ db: storage.db, config, registry, runner, scheduler, repo, helper: defaultHelperPath() });
-const app = createServer(config, logger, { registry, runner, repo, identity, read, status, handoffs, drafting, logger, uiDir: config.uiDir });
+const app = createServer(config, logger, { registry, runner, repo, identity, read, profile, status, handoffs, drafting, logger, uiDir: config.uiDir });
 
 try {
     await app.listen({ host: HOST, port: config.port });
