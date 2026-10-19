@@ -12,7 +12,7 @@ The launcher is `core/scripts/reply-core` (run it as `node scripts/reply-core ..
 
 | Command | What it does |
 |---|---|
-| `start [--background] [--no-open]` | checks Node (>= 20.17), builds the web app if `ui/dist` is missing, starts the service, waits up to 30 s for `/api/health`, then opens the browser (on **Sources** when something needs attention, otherwise the inbox). Without `--background` it stays attached (Control+C stops it); with it the service keeps running and the pidfile is used. A second `start` only opens the browser. |
+| `start [--background] [--no-open]` | checks Node (>= 20.17), builds the web app if `ui/dist` is missing, starts the service, waits up to 30 s for `/api/health`, then opens **Safari** (set `REPLY_CORE_BROWSER` to another app name, or `default` for the system default browser; on **Sources** when something needs attention, otherwise the inbox). Without `--background` it stays attached (Control+C stops it); with it the service keeps running and the pidfile is used. A second `start` only opens the browser. |
 | `stop` | SIGTERM to the pid in `reply-core.pid`, waits 5 s, then SIGKILL. |
 | `status` | the same data as `GET /api/status` as a short table (storage, helper, each source, backups); exit 1 when overall is `blocked`. |
 | `open` | opens the UI of the running service. |

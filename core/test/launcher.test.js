@@ -87,7 +87,7 @@ test("start --background, status, a second start only opens the UI, stop; logs a
     const first = run(["start", "--background"], s.env);
     assert.equal(first.status, 0, first.stderr + first.stdout);
     assert.match(first.stdout, new RegExp(`Reply Core is running at http://127\\.0\\.0\\.1:${s.port}/ \\(pid \\d+\\)`));
-    assert.match(s.opened(), new RegExp(`http://127\\.0\\.0\\.1:${s.port}/(inbox|sources)`));
+    assert.match(s.opened(), new RegExp(`^-a Safari http://127\\.0\\.0\\.1:${s.port}/(inbox|sources)`), "opens Safari by default");
     const pid = readPidfile(s.paths.dataHome).pid;
 
     const st = run(["status"], s.env);
