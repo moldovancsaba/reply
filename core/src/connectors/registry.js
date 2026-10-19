@@ -3,11 +3,13 @@ import { createAppleMailConnector } from "./apple-mail.js";
 import { createContactsConnector } from "./contacts.js";
 import { createImessageConnector } from "./imessage.js";
 import { createStub } from "./stub.js";
+import { createWhatsAppConnector } from "./whatsapp.js";
 
 export const AVAILABLE = {
     imessage: (deps) => createImessageConnector(deps),
     contacts: (deps) => createContactsConnector(deps),
     "apple-mail": (deps) => createAppleMailConnector(deps),
+    whatsapp: (deps) => createWhatsAppConnector(deps),
     stub: () => createStub(),
 };
 export const DEFAULT_ENABLED = [];
