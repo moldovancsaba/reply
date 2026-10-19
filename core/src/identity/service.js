@@ -6,6 +6,13 @@ import { kindOf } from "../storage/repo.js";
 // (2) the user's own address book, (3) explicit merges. Nothing here ever infers a link from names, domains or resemblance between numbers.
 export function createIdentity({ db, repo, now = () => Date.now() }) {
     const q = {
+        moveNotes: db.prepare("UPDATE contact_notes SET contact_id = ? WHERE contact_id = ?"),
+        deleteNotes: db.prepare("DELETE FROM contact_notes WHERE contact_id = ?"),
+        profileOf: db.prepare("SELECT * FROM contact_profile WHERE contact_id = ?"),
+        moveProfile: db.prepare("UPDATE contact_profile SET contact_id = ? WHERE contact_id = ?"),
+        deleteProfile: db.prepare("DELETE FROM contact_profile WHERE contact_id = ?"),
+        upsertDetails: db.prepare("INSERT INTO contact_details (contact_id, json, updated_ms) VALUES (?, ?, ?) ON CONFLICT(contact_id) DO UPDATE SET json = excluded.json, updated_ms = excluded.updated_ms"),
+        deleteDetails: db.prepare("DELETE FROM contact_details WHERE contact_id = ?"),
         contact: db.prepare("SELECT * FROM contacts WHERE id = ?"),
         handlesOf: db.prepare("SELECT handle_norm, link_origin FROM contact_handles WHERE contact_id = ?"),
         countMsgs: (n) => db.prepare(`SELECT COUNT(*) n FROM messages WHERE handle_norm IN (${new Array(n).fill("?").join(",")})`),
@@ -98,10 +105,25 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
     // people: [{ externalId, displayName, handles: [{ handle_norm, kind }], fingerprint? }] from the user's own address book.
     // Precedence: a manual merge is never overridden; an `auto` link yields to the address book; two address-book
     // people claiming one handle is reported, never silently resolved.
+    // Removes an emptied automatic contact. What the user wrote on it (notes, profile fields) moves to `heirId` (the contact
+    // that took its handles) instead of being lost; the imported address-book details belong to the import and just go.
+    function dropContact(id, heirId) {
+        q.deleteDetails.run(id);
+        if (heirId && heirId !== id && q.contact.get(heirId)) {
+            q.moveNotes.run(heirId, id);
+            if (q.profileOf.get(id) && !q.profileOf.get(heirId)) q.moveProfile.run(heirId, id);
+        }
+        q.deleteNotes.run(id);
+        q.deleteProfile.run(id);
+        q.deleteSummary.run(id);
+        q.deleteContact.run(id);
+    }
+
     function importContacts(people) {
         return db.transaction(() => {
             const r = { created: 0, updated: 0, unchanged: 0, linked: 0, conflicts: [], protectedByMerge: 0 };
             const touched = new Set();
+            const heir = new Map(); // emptied contact -> the contact that took its handles
             for (const p of people) {
                 let c = q.byExternal.get(p.externalId);
                 if (c && p.fingerprint && c.fingerprint === p.fingerprint) {
@@ -121,6 +143,8 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
                     if (p.fingerprint) q.setFingerprint.run(p.fingerprint, c.id);
                 }
                 touched.add(c.id);
+                if (p.details && Object.keys(p.details).length) q.upsertDetails.run(c.id, JSON.stringify(p.details), now());
+                else q.deleteDetails.run(c.id);
                 for (const h of p.handles) {
                     if (!q.handleRow.get(h.handle_norm)) q.insertHandle.run(h.handle_norm, h.kind ?? kindOf(h.handle_norm), now(), now());
                     const link = q.owner.get(h.handle_norm);
@@ -133,6 +157,7 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
                         q.relink.run(c.id, "apple_contacts", now(), h.handle_norm);
                         r.linked++;
                         touched.add(link.contact_id);
+                        heir.set(link.contact_id, c.id);
                     } else if (link.link_origin === "apple_contacts") {
                         r.conflicts.push({ handle_norm: h.handle_norm, keptContactId: link.contact_id, skippedExternalId: p.externalId });
                     } else {
@@ -141,10 +166,8 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
                 }
             }
             for (const id of touched) {
-                if (q.handlesOf.all(id).length === 0 && q.contact.get(id)?.origin === "auto") {
-                    q.deleteSummary.run(id);
-                    q.deleteContact.run(id);
-                } else repo.rebuildSummary(id);
+                if (q.handlesOf.all(id).length === 0 && q.contact.get(id)?.origin === "auto") dropContact(id, heir.get(id));
+                else repo.rebuildSummary(id);
             }
             return r;
         })();
@@ -170,7 +193,7 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
             for (const { id } of q.allContacts.all()) {
                 if (q.handlesOf.all(id).length) q.unhide.run(id);
             }
-            for (const { id } of q.emptyAuto.all()) { q.deleteSummary.run(id); q.deleteContact.run(id); }
+            for (const { id } of q.emptyAuto.all()) dropContact(id, q.contact.get(id)?.merged_into);
             for (const { id } of q.allContacts.all()) repo.rebuildSummary(id);
             return { relinked };
         })();

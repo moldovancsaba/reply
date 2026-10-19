@@ -8,6 +8,15 @@ const HINTS = {
     helper_unavailable: "The native helper is not built. Run core/helper/build.sh.",
 };
 
+// The address-book fields shown on the profile; empty ones are left out so the stored JSON (and the fingerprint) is stable.
+export function detailsOf(rec) {
+    const text = (v) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 300) : undefined);
+    const list = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 500)).slice(0, 20) : []);
+    const d = { givenName: text(rec.givenName), familyName: text(rec.familyName), nickname: text(rec.nickname), organization: text(rec.organization), jobTitle: text(rec.jobTitle), department: text(rec.department), birthday: text(rec.birthday), urls: list(rec.urls), addresses: list(rec.addresses) };
+    for (const k of Object.keys(d)) if (d[k] === undefined || (Array.isArray(d[k]) && d[k].length === 0)) delete d[k];
+    return d;
+}
+
 // One person from the helper -> an import entry (handles linked by the user's own address book), or why it is skipped.
 // Every phone also gets its WhatsApp twin `<e164>@wa`, so one person's iMessage and WhatsApp share a contact.
 export function toImport(rec, region) {
@@ -27,8 +36,9 @@ export function toImport(rec, region) {
     }
     if (!handles.size) return { skip: "no_handles", skippedHandles };
     const list = [...handles.values()].sort((a, b) => a.handle_norm.localeCompare(b.handle_norm));
-    const fingerprint = createHash("sha256").update(JSON.stringify([rec.displayName, list.map((h) => h.handle_norm)])).digest("hex").slice(0, 32);
-    return { person: { externalId: rec.contactId, displayName: rec.displayName || list[0].handle_norm, handles: list, fingerprint }, skippedHandles };
+    const details = detailsOf(rec);
+    const fingerprint = createHash("sha256").update(JSON.stringify([rec.displayName, list.map((h) => h.handle_norm), details])).digest("hex").slice(0, 32);
+    return { person: { externalId: rec.contactId, displayName: rec.displayName || list[0].handle_norm, handles: list, details, fingerprint }, skippedHandles };
 }
 
 export function createContactsConnector({ config = {}, logger, helper = defaultHelperPath() } = {}) {

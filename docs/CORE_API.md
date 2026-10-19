@@ -55,6 +55,29 @@ Query: `before` (cursor), `limit`, `channel`. One merged thread across all of th
 
 `isSummary: true` marks email text that is Mail's stored summary, not the full body. Group-chat messages carry `sender`. Pages never overlap or skip, even while new messages arrive: the cursor is the `(time, id)` position, so newer messages only appear when the first page is fetched again.
 
+### Profile
+
+`GET /api/contacts/:id/profile` is everything known about one person (`404 contact_not_found`, with `details.mergedInto` for a merged-away contact). It is computed from the stored data on each call:
+
+```json
+{ "id": "c_1", "displayName": "Anna Kovacs", "origin": "apple_contacts",
+  "card": { "givenName": "Anna", "familyName": "Kovacs", "organization": "Acme", "jobTitle": "CFO", "birthday": "1985-03-09", "urls": ["https://acme.example"], "addresses": ["1 Main St, Budapest"] },
+  "profile": { "profession": "", "company": "", "relationship": "Client", "linkedinUrl": "", "intro": "", "updatedAt": "2026-10-19T08:00:00.000Z" },
+  "notes": [ { "id": "n_...", "text": "Prefers email", "createdAt": "..." } ],
+  "handles": [ { "value": "+36301234567", "label": "+36 30 123 4567", "kind": "phone", "origin": "apple_contacts", "messages": 230, "lastTs": "..." } ],
+  "stats": { "total": 237, "sent": 100, "received": 137, "firstTs": "...", "lastTs": "...", "lastSentTs": "...", "lastReceivedTs": "...", "last30Days": 12,
+             "byChannel": { "imessage": { "total": 230, "sent": 99, "received": 131, "firstTs": "...", "lastTs": "..." }, "email": { }, "whatsapp": { } } },
+  "mergedFrom": ["anna@example.com"] }
+```
+
+`card` is the address book as last imported (a birthday without a year is `--MM-DD`); it is replaced on every import and is read-only. `profile` and `notes` are what the user wrote.
+
+- `PUT /api/contacts/:id/profile` with any of `profession` (200 characters), `company` (200), `relationship` (100), `linkedinUrl` (300, must be an `http(s)` address), `intro` (2,000). Missing fields keep their value, an empty string clears one, any other key is `400 invalid_request`. Returns the profile fields.
+- `POST /api/contacts/:id/notes` with `{ "text": "..." }` (1 to 4,000 characters, at most 200 notes per contact, else `409 too_many_notes`) answers `201` with the note.
+- `DELETE /api/contacts/:id/notes/:noteId` answers `{ "deleted": true }` or `404 note_not_found`.
+
+Notes and profile fields are never logged. They follow the person: when an automatic contact is replaced by an address-book contact, or two contacts are merged and later split, nothing is lost (see [CORE_IDENTITY.md](CORE_IDENTITY.md)).
+
 ### `GET /api/search`
 
 Query: `q` (required, at least 2 characters, max 200), `channel`, `contactId`, `limit`, `cursor`. Full-text search (FTS5, accent-insensitive, prefix match, every term must match). Terms are quoted before they reach SQLite, so operators and punctuation in the query are plain text.

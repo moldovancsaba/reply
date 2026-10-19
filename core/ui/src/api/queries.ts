@@ -1,6 +1,6 @@
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { fetchJson, type ApiError, type Result } from "./client";
-import type { Channel, Contact, ContactList, SearchResult, StatusReport, Thread } from "./types.gen";
+import type { Channel, Contact, ContactList, Note, Profile, ProfileFields, SearchResult, StatusReport, Thread } from "./types.gen";
 
 // react-query wants thrown errors; the client returns Results. This is the bridge.
 export class ApiFailure extends Error {
@@ -160,3 +160,18 @@ export function useDraftCapabilities() {
 
 export const suggestDraft = (body: { contactId: string; channel: Channel; instruction?: string }, signal: AbortSignal) =>
   fetchJson<DraftSuggestion>("/api/drafts/suggest", { method: "POST", body, signal, timeoutMs: 35_000 });
+
+export function useProfile(id: string, enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: ["profile", id],
+    queryFn: ({ signal }) => unwrap(fetchJson<Profile>(`/api/contacts/${encodeURIComponent(id)}/profile`, { signal })),
+    retry: retryOnce,
+    retryDelay: 2000,
+  });
+}
+
+export type ProfileEdit = Partial<Pick<ProfileFields, "profession" | "company" | "relationship" | "linkedinUrl" | "intro">>;
+export const saveProfile = (id: string, body: ProfileEdit) => fetchJson<ProfileFields>(`/api/contacts/${encodeURIComponent(id)}/profile`, { method: "PUT", body });
+export const addNote = (id: string, text: string) => fetchJson<Note>(`/api/contacts/${encodeURIComponent(id)}/notes`, { method: "POST", body: { text } });
+export const deleteNote = (id: string, noteId: string) => fetchJson<{ deleted: boolean }>(`/api/contacts/${encodeURIComponent(id)}/notes/${encodeURIComponent(noteId)}`, { method: "DELETE" });
