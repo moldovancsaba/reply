@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Anchor, CardTitle, ChoiceChip, GdsBox, GdsInline, GdsStack, InlineAlert, MetadataText, SectionTitle, SemanticButton, StateBlock } from "@sovereignsquad/gds";
 import { ApiFailure, useContact, useStatus, useThread } from "../../api/queries";
 import type { Channel } from "../../api/types.gen";
+import { Composer } from "./Composer";
 import { TimelineEntry } from "../../patterns/TimelineEntry";
 import { CHANNEL_LABEL, exactLabel } from "../../lib/time";
 import { groupByDay } from "./groupByDay";
@@ -156,6 +157,7 @@ export function ThreadPane({ contactId }: { contactId: string }) {
       </GdsStack>
       {blocked.map((b) => <InlineAlert key={b.id} severity="warning" title={`${b.label} is not syncing`} message={`${b.message} Newer messages may be missing.`} action={<Anchor href="/sources">Open Sources</Anchor>} />)}
       {body}
+      {c ? <Composer contact={c} lastChannel={ascending[ascending.length - 1]?.channel ?? null} /> : null}
     </GdsStack>
   );
 }

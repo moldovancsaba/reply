@@ -133,6 +133,18 @@ Each panel also shows the message count, "Last success ...", the next check and,
 - **First run:** when at least one source exists and none is `ok` with no messages imported, the first visit to `/inbox` in a page load redirects to `/sources` (replace) and the page shows "Connect a source to get started". It never redirects again in that page load, and the banner is gone as soon as one source is ok.
 - **Other states:** loading ("Checking your sources"), status unreachable (error with Try again; the shell banner covers the service itself being down), no sources enabled (guidance).
 
+## Composer (reply handoff)
+
+`src/routes/thread/Composer.tsx`, under the timeline of `/inbox/:contactId`. **Reply Core never sends**: the composer asks the service for a link ([CORE_HANDOFF.md](CORE_HANDOFF.md)) and opens it from the click, so Messages, Mail or WhatsApp opens with the text ready and the person presses send there.
+
+- **Recipient and app are always visible before the action:** "To {name} through {channel} ({address}). Reply Core opens {App} with your text; you press send there. Reply Core never sends anything itself." and the primary button is named for the app ("Open in Messages / Mail / WhatsApp").
+- **Channel:** a labelled radio group (arrow keys move between options) listing only the channels in `replyChannels`, each with its address. The default is the channel of the newest message (until the person or a saved draft chooses); a contact with several addresses on one channel gets an address select.
+- **Text:** a labelled multi-line field with a character count described by `aria-describedby`; over 1,500 characters the hint becomes "Long messages will be copied to the clipboard instead of prefilled." (not an error). The field is read-only while the request runs, so the text cannot change after it was sent to the service. Secondary action: **Copy text**.
+- **Opening:** `openFromGesture` clicks a temporary `rel="noopener noreferrer"` anchor inside the click handler (a user gesture); web links open in a new tab, `sms:` and `mailto:` hand over to the app. `copy_and_open` copies the text first and says so (or says it could not copy). The notice carries the service's exact note and a "Click here to open {App} again" link as the fallback when the browser blocks the link.
+- **States:** idle; no channels ("No way to reach this person from here yet", link to the profile); submitting (loading, disabled); error (an alert with plain wording, focus moves to it, the text is kept, Try again when retryable); success (notice, text cleared, draft removed, focus back in the field); over limit.
+- **Drafts:** saved per contact in `sessionStorage` (`rc.draft.<contactId>`, 400 ms after typing, "Draft saved" shown), restored after navigation or reload within the session, removed after a handoff. Storage that is missing or throws just means no draft is kept. Leaving the thread never shows a dialog; the saved draft makes it unnecessary.
+- **Privacy:** the text only goes to the loopback API in the request body; it is never logged by the UI.
+
 ## Adding a screen
 
 1. Replace the route's `Placeholder` with the screen (a lazy module in `src/routes/`), composed from GDS only.
