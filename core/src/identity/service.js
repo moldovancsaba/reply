@@ -18,7 +18,8 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
         owner: db.prepare("SELECT contact_id, link_origin FROM contact_handles WHERE handle_norm = ?"),
         deleteSummary: db.prepare("DELETE FROM contact_summary WHERE contact_id = ?"),
         byExternal: db.prepare("SELECT * FROM contacts WHERE external_id = ?"),
-        insertContact: db.prepare("INSERT INTO contacts (id, display_name, origin, hidden, created_ms, external_id) VALUES (?,?,?,0,?,?)"),
+        insertContact: db.prepare("INSERT INTO contacts (id, display_name, origin, hidden, created_ms, external_id, fingerprint) VALUES (?,?,?,0,?,?,?)"),
+        setFingerprint: db.prepare("UPDATE contacts SET fingerprint = ? WHERE id = ?"),
         rename: db.prepare("UPDATE contacts SET display_name = ? WHERE id = ?"),
         handleRow: db.prepare("SELECT 1 FROM handles WHERE handle_norm = ?"),
         insertHandle: db.prepare("INSERT INTO handles (handle_norm, kind, first_seen_ms, last_seen_ms) VALUES (?,?,?,?)"),
@@ -92,23 +93,30 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
         }));
     }
 
-    // people: [{ externalId, displayName, handles: [{ handle_norm, kind }] }] from the user's own address book.
+    // people: [{ externalId, displayName, handles: [{ handle_norm, kind }], fingerprint? }] from the user's own address book.
     // Precedence: a manual merge is never overridden; an `auto` link yields to the address book; two address-book
     // people claiming one handle is reported, never silently resolved.
     function importContacts(people) {
         return db.transaction(() => {
-            const r = { created: 0, updated: 0, linked: 0, conflicts: [], protectedByMerge: 0 };
+            const r = { created: 0, updated: 0, unchanged: 0, linked: 0, conflicts: [], protectedByMerge: 0 };
             const touched = new Set();
             for (const p of people) {
                 let c = q.byExternal.get(p.externalId);
+                if (c && p.fingerprint && c.fingerprint === p.fingerprint) {
+                    r.unchanged++; // same name and handles as last time: nothing to do
+                    continue;
+                }
                 if (!c) {
                     const id = randomUUID();
-                    q.insertContact.run(id, p.displayName, "apple_contacts", now(), p.externalId);
+                    q.insertContact.run(id, p.displayName, "apple_contacts", now(), p.externalId, p.fingerprint ?? null);
                     c = q.contact.get(id);
                     r.created++;
-                } else if (c.display_name !== p.displayName) {
-                    q.rename.run(p.displayName, c.id);
-                    r.updated++;
+                } else {
+                    if (c.display_name !== p.displayName) {
+                        q.rename.run(p.displayName, c.id);
+                        r.updated++;
+                    }
+                    if (p.fingerprint) q.setFingerprint.run(p.fingerprint, c.id);
                 }
                 touched.add(c.id);
                 for (const h of p.handles) {
@@ -152,7 +160,7 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
                 if (o && o.prior === "apple_contacts" && q.contact.get(o.from)) q.relink.run(o.from, "apple_contacts", now(), h);
                 else {
                     const id = randomUUID();
-                    q.insertContact.run(id, h, "auto", now(), null);
+                    q.insertContact.run(id, h, "auto", now(), null, null);
                     q.relink.run(id, "auto", now(), h);
                 }
                 relinked++;

@@ -7,6 +7,8 @@ public enum SourceAccess: String, Equatable {
     case sourceMissing = "source_missing"
     case sourceLocked = "source_locked"
     case schemaUnsupported = "schema_unsupported"
+    /// Contacts only: the user has not been asked yet. The first `contacts` export triggers the macOS prompt.
+    case needsConsent = "needs_consent"
 }
 
 /// Distinguishes "no such file" from "macOS refused" by errno (FileManager.fileExists cannot tell them apart).
@@ -27,6 +29,7 @@ public func failure(for access: SourceAccess, what: String) -> HelperFailure? {
     case .sourceMissing: return .sourceMissing("\(what) was not found.")
     case .sourceLocked: return .sourceLocked("\(what) is busy.")
     case .schemaUnsupported: return .schemaUnsupported("\(what) has an unsupported layout.")
+    case .needsConsent: return nil
     }
 }
 

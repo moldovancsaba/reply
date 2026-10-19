@@ -69,7 +69,7 @@ A blocked connector is re-checked first; if its preflight now succeeds it is cle
 
 | Variable | Meaning |
 |---|---|
-| `REPLY_CORE_CONNECTORS` | Comma list of connector ids to enable. Unset or empty: the defaults (`DEFAULT_ENABLED_IDS`, currently `imessage`). The single word `none` runs no connectors. Unknown ids are logged and ignored. |
+| `REPLY_CORE_CONNECTORS` | Comma list of connector ids to enable. Unset or empty: the defaults (`DEFAULT_ENABLED_IDS`, currently `imessage`, `contacts`). The single word `none` runs no connectors. Unknown ids are logged and ignored. |
 | `REPLY_CORE_<ID>_INTERVAL_MS` | Interval for one connector (`APPLE_MAIL` for `apple-mail`), integer >= 1000. |
 
 `REPLY_CORE_CONNECTORS=stub` enables a deterministic demo connector (three pages of synthetic messages) for trying the framework without any source app.
@@ -94,6 +94,21 @@ Reads Apple Messages through the native helper (`helper imessage`), incrementall
 Limitations: edits and unsends are not propagated; reactions are not shown; a message whose text cannot be decoded is stored with empty text (the log shows `undecodable`).
 
 Run it: `REPLY_CORE_CONNECTORS=imessage npm start`, then `curl -X POST http://127.0.0.1:45511/api/sync/imessage`. To discard imported iMessage rows and re-ingest: stop the service, `node core/scripts/reset-cursor.js imessage --purge`.
+
+## Apple Contacts (`contacts`, issue #192)
+
+Imports people from the macOS address book through the native helper so conversations show real names and one person's channels share a contact. Interval 15 minutes.
+
+| | |
+|---|---|
+| Permission | Contacts consent for the process that starts Reply Core. `doctor` reports `needs_consent` until the user has been asked; that is not a block, because the first export shows the macOS prompt. Denial blocks the connector with a recovery hint. |
+| Export | Everyone in one call (the Contacts framework has no modification date). Unchanged people are skipped by fingerprint (a hash of the name and normalized handles) inside the identity import, so a re-run is cheap. |
+| People | A person is identified by the Contacts identifier (`contacts.external_id`). People with no phone or email are not imported. A person with no name gets their first handle as the display name. |
+| Handles | Every phone is linked as `+e164` **and** as its WhatsApp twin `+e164@wa`; every email as a lowercase address. Phones that cannot be normalized are counted in the log (`badHandles`), not imported. |
+| Rules | The import follows [CORE_IDENTITY.md](CORE_IDENTITY.md): an auto contact yields to the address book and is deleted if it ends up empty; a manual merge is never overridden; a handle claimed by two address-book people stays with the first and the second is reported as a conflict (the `identity.import` log line shows `conflicts` and `protectedByMerge`). |
+| Count | `messages_total` for this connector is the number of people imported. |
+
+Limitations: a person removed from the address book stays in Reply Core (with their handles); old handles removed from a person stay linked until `identity-reset.js --to-auto`.
 
 ## Operations
 
