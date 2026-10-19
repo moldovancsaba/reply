@@ -3,6 +3,7 @@ import Foundation
 // {reply}.app host. macOS attaches Full Disk Access to the program that launches the service, so the service is started
 // from this signed, named bundle: System Settings then lists "{reply}" with its icon instead of a bare "node".
 //   reply --service   run the Reply Core service as a child of this app (what the login agent starts)
+//   reply --consent   ask macOS for Contacts access on behalf of {reply} (the prompt only shows for an app that asks)
 //   reply             (double-click) make sure the service is running and open the UI in Safari
 
 struct Config: Decodable { let node: String; let entry: String; let cwd: String; let launcher: String }
@@ -26,7 +27,13 @@ func spawn(_ args: [String]) -> Process {
     return p
 }
 
-if CommandLine.arguments.dropFirst().first == "--service" {
+if CommandLine.arguments.dropFirst().first == "--consent" {
+    let helper = Process()
+    helper.executableURL = URL(fileURLWithPath: cfg.cwd + "/helper/bin/reply-core-helper")
+    helper.arguments = ["contacts"]
+    helper.standardOutput = FileHandle.nullDevice
+    do { try helper.run(); helper.waitUntilExit(); exit(helper.terminationStatus) } catch { exit(1) }
+} else if CommandLine.arguments.dropFirst().first == "--service" {
     let child = spawn([cfg.entry])
     do { try child.run() } catch { FileHandle.standardError.write(Data("{reply}: cannot start node: \(error)\n".utf8)); exit(1) }
     var sources: [DispatchSourceSignal] = []
