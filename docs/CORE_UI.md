@@ -85,7 +85,7 @@ GDS notes found while building it: `GdsSplit` never splits (its inline `grid-tem
 
 **Scroll rules** (no custom scroll container, so it works with whatever scrolls the page): opening a thread (or changing the filter) scrolls to the newest message; **Load earlier messages** keeps the previously first message at the top of the view; every 30 s (tab visible) the newest page is refetched, and new messages are followed only if the reader is at the bottom, otherwise a "N new messages" button appears and is announced politely through an `output` element. Focus is never moved by updates.
 
-**Promotion:** `TimelineEntry` is a candidate GDS pattern (person-to-person, channel-aware message entry); a request in `sovereignsquad/general-design-system` should be opened after delivery.
+**Promotion:** `TimelineEntry` is a candidate GDS pattern (person-to-person, channel-aware message entry); requested in [general-design-system#945](https://github.com/sovereignsquad/general-design-system/issues/945) (item 11), together with the GDS defects found while building these screens (items 1 to 10: `GdsSplit`, `ConfirmDialog`, toast renderer, `SearchableSelect`, ...).
 
 GDS notes: `GdsInline` with `justify` end/start collapsed the entry to about 8 px at 375 px width, so alignment uses a 12-column `GdsColumnGrid`; `SectionTitle`/`CardTitle` set the heading level with `order`, not `component`; `GdsBox` takes no `id` (a plain wrapper `div` carries the anchor id).
 
