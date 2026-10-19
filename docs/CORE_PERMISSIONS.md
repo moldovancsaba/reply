@@ -22,4 +22,4 @@ Prints one state per source (`ok`, `permission_denied`, `source_missing`, `sourc
 - Reply Core never changes system settings; the grant is always your own action.
 - Revoking a permission later turns that source `blocked`; data already imported stays readable.
 - The helper opens every source read-only and has no network code.
-- The status API and the Sources screen (issues #190 and #202) show these states with the same recovery steps.
+- `GET /api/status` ([CORE_STATUS.md](CORE_STATUS.md)) and the Sources screen (#202) show these states with the same recovery steps, from one catalog.

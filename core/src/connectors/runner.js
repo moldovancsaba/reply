@@ -21,6 +21,7 @@ function withTimeout(promise, ms, controller) {
 // Connectors only fetch and normalize.
 export function createRunner({ db, repo, logger, onContacts, now = () => Date.now(), sleep = (ms) => new Promise((r) => setTimeout(r, ms)), random = Math.random, fetchTimeoutMs = 30_000, maxAttempts = 5, pageLimit = 500 }) {
     const running = new Map();
+    const live = new Map(); // key -> counters of the run in progress, for the status API
     const metrics = { runs: 0, failuresByCode: {}, lastDurationMs: null };
     const key = (id, account) => `${id}\u0000${account}`;
     const insertRun = db.prepare("INSERT INTO sync_runs (id, connector, account, started_ms, outcome) VALUES (?,?,?,?, 'running')");
@@ -49,6 +50,8 @@ export function createRunner({ db, repo, logger, onContacts, now = () => Date.no
         const state = { attempts: 0, pages: 0, inserted: 0, updated: 0, skipped: 0, quarantined: 0 };
         const setState = (patch) => repo.setSyncState(connector.id, account, patch);
         const t0 = now();
+        const liveKey = key(connector.id, account);
+        live.set(liveKey, state);
         let outcome = "ok";
         let errorCode = null;
         setState({ state: "running" });
@@ -104,6 +107,7 @@ export function createRunner({ db, repo, logger, onContacts, now = () => Date.no
             metrics.failuresByCode[c.code] = (metrics.failuresByCode[c.code] ?? 0) + 1;
             logger?.error({ connector: connector.id, account, code: c.code, kind: c.kind }, "sync.failed");
         }
+        live.delete(liveKey);
         const ms = now() - t0;
         metrics.runs++;
         metrics.lastDurationMs = ms;
@@ -128,5 +132,7 @@ export function createRunner({ db, repo, logger, onContacts, now = () => Date.no
         await Promise.allSettled([...running.values()]);
     }
 
-    return { start, isRunning, waitIdle, metrics: () => ({ ...metrics, failuresByCode: { ...metrics.failuresByCode } }) };
+    // counters of the run in progress (pages, inserted, updated, skipped, quarantined, attempts) or null
+    const progress = (id, account = "") => (live.has(key(id, account)) ? { ...live.get(key(id, account)) } : null);
+    return { start, isRunning, progress, waitIdle, metrics: () => ({ ...metrics, failuresByCode: { ...metrics.failuresByCode } }) };
 }

@@ -1,6 +1,7 @@
 // Runs each enabled connector on its interval. Blocked connectors are skipped until an operator-triggered run clears them.
 export function createScheduler({ registry, runner, repo, logger, intervals = {}, initialDelayMs = 1000, timers = { setTimeout, clearTimeout } }) {
     const handles = new Map();
+    const nextAt = new Map();
     const controller = new AbortController();
     let stopped = false;
 
@@ -31,13 +32,19 @@ export function createScheduler({ registry, runner, repo, logger, intervals = {}
         } catch (err) {
             logger?.error({ connector: c.id, err }, "sync.tick failed");
         }
-        if (!stopped) handles.set(c.id, timers.setTimeout(() => tick(c), intervalFor(c)));
+        if (!stopped) {
+            handles.set(c.id, timers.setTimeout(() => tick(c), intervalFor(c)));
+            nextAt.set(c.id, Date.now() + intervalFor(c));
+        }
     }
 
     return {
         start() {
             resetRunning();
-            for (const c of registry.list()) handles.set(c.id, timers.setTimeout(() => tick(c), initialDelayMs));
+            for (const c of registry.list()) {
+                handles.set(c.id, timers.setTimeout(() => tick(c), initialDelayMs));
+                nextAt.set(c.id, Date.now() + initialDelayMs);
+            }
         },
         async stop() {
             stopped = true;
@@ -46,5 +53,6 @@ export function createScheduler({ registry, runner, repo, logger, intervals = {}
             await runner.waitIdle();
         },
         intervalFor,
+        nextRunAt: (id) => nextAt.get(id) ?? null,
     };
 }

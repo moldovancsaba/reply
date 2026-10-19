@@ -7,6 +7,8 @@ import { createRunner } from "./connectors/runner.js";
 import { createScheduler } from "./connectors/scheduler.js";
 import { createIdentity } from "./identity/service.js";
 import { createReadService } from "./read/service.js";
+import { defaultHelperPath } from "./helper/index.js";
+import { createStatus } from "./status/index.js";
 import { openDb } from "./storage/db.js";
 import { createRepo } from "./storage/repo.js";
 
@@ -47,7 +49,8 @@ const runner = createRunner({ db: storage.db, repo, logger, onContacts: (people)
 });
 const scheduler = createScheduler({ registry, runner, repo, logger, intervals: config.intervals });
 const read = createReadService({ db: storage.db });
-const app = createServer(config, logger, { registry, runner, repo, identity, read });
+const status = createStatus({ db: storage.db, config, registry, runner, scheduler, repo, helper: defaultHelperPath() });
+const app = createServer(config, logger, { registry, runner, repo, identity, read, status });
 
 try {
     await app.listen({ host: HOST, port: config.port });
