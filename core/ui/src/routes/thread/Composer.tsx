@@ -4,6 +4,7 @@ import { fetchJson, type ApiError } from "../../api/client";
 import type { Channel, Contact } from "../../api/types.gen";
 import { CHANNEL_LABEL } from "../../lib/time";
 import { clearDraft, loadDraft, saveDraft } from "./draftStore";
+import { DraftPanel } from "./DraftPanel";
 import { openFromGesture } from "./openLink";
 
 export const APP_LABEL = { imessage: "Messages", email: "Mail", whatsapp: "WhatsApp" } as const;
@@ -125,6 +126,7 @@ export function Composer({ contact, lastChannel }: { contact: Contact; lastChann
         onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setText(e.currentTarget.value)}
       />
       <MetadataText>{saved ? "Draft saved" : " "}</MetadataText>
+      <DraftPanel contactId={contact.id} channel={channel} composerText={text} onInsert={(t) => { setText(t); window.setTimeout(() => area.current?.focus(), 0); }} />
       {error ? (
         <div ref={alert} tabIndex={-1}>
           <InlineAlert severity="error" title="Nothing was opened" message={errorText(error as ApiError)} action={status === "error" && error.code !== "text_empty" && (error as ApiError).retryable ? <SemanticButton action="refresh" label="Try again" onClick={() => void open()} /> : undefined} />

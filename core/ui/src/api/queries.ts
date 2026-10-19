@@ -143,3 +143,20 @@ export function useSearch(query: SearchQuery, enabled: boolean) {
     staleTime: 30_000,
   });
 }
+
+export type DraftCapabilities = { enabled: boolean; provider: string; model?: string; reason?: "not_configured" | "model_missing" | "unreachable" };
+export type DraftSuggestion = { draft: string; provider: string; model: string; contextMessages: number; truncated: boolean };
+
+// Asked once per session and again whenever the window regains focus ("always" overrides the stale time).
+export function useDraftCapabilities() {
+  return useQuery({
+    queryKey: ["draft-capabilities"],
+    queryFn: ({ signal }) => unwrap(fetchJson<DraftCapabilities>("/api/drafts/capabilities", { signal })),
+    staleTime: Infinity,
+    refetchOnWindowFocus: "always",
+    retry: false,
+  });
+}
+
+export const suggestDraft = (body: { contactId: string; channel: Channel; instruction?: string }, signal: AbortSignal) =>
+  fetchJson<DraftSuggestion>("/api/drafts/suggest", { method: "POST", body, signal, timeoutMs: 35_000 });

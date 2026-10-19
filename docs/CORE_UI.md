@@ -145,6 +145,18 @@ Each panel also shows the message count, "Last success ...", the next check and,
 - **Drafts:** saved per contact in `sessionStorage` (`rc.draft.<contactId>`, 400 ms after typing, "Draft saved" shown), restored after navigation or reload within the session, removed after a handoff. Storage that is missing or throws just means no draft is kept. Leaving the thread never shows a dialog; the saved draft makes it unnecessary.
 - **Privacy:** the text only goes to the loopback API in the request body; it is never logged by the UI.
 
+## Draft panel (suggested reply)
+
+`src/routes/thread/DraftPanel.tsx`, inside the composer. Optional: the service is off by default ([CORE_DRAFTING.md](CORE_DRAFTING.md)). **Nothing is ever inserted or sent automatically.**
+
+- **Capabilities:** `GET /api/drafts/capabilities` once per session and again whenever the window regains focus. When drafting is off the button is **disabled, not hidden**, with a sentence next to it (not set up and how, model not installed with the `ollama pull` command, or Ollama not reachable), and never an error.
+- **Ask:** an optional one-line instruction (max 300 characters) and **Suggest a reply** (the GDS `outline-accent` AI-identity treatment, with the text label). Loading says "Writing a draft with {model}..." in a polite live region with **Cancel**; the rest of the composer stays usable.
+- **Review:** the draft appears as plain text in a region named "Suggested reply (AI-generated). Review before sending." with the visible text "AI-generated draft. Review before sending." and the model name; focus moves to it. Actions: **Insert**, **Regenerate**, **Discard**.
+- **Insert:** into an empty composer it just fills it and returns focus to the composer. If there is text, a dialog asks **Replace my text**, **Add below my text** or Cancel (focus trapped, restored on close); the only overwriting action is Replace and it is asked for.
+- **Errors:** every service code has plain copy (`ERROR_COPY` in the component; a missing model keeps the service's `ollama pull` message) in an alert with Try again; the composer text is untouched.
+- **Abort:** Discard, Cancel, leaving the thread or the page, and starting a newer request all abort the in-flight call (the service then cancels the model). Client timeout 35 s (the service stops at 30 s).
+- **Privacy:** the draft lives in component state only (a test scans `sessionStorage` and `localStorage`).
+
 ## Adding a screen
 
 1. Replace the route's `Placeholder` with the screen (a lazy module in `src/routes/`), composed from GDS only.
