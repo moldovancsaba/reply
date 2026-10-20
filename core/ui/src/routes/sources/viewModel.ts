@@ -4,9 +4,9 @@ export type Tone = "success" | "info" | "neutral" | "warning" | "danger";
 export type SourceView = { label: string; tone: Tone; sentence: string; action: "sync" | "recheck" | "none" };
 
 // state -> words, tone and the one recommended action. The tone is always shown together with the text and an icon.
-export function sourceView(c: Pick<ConnectorStatus, "state" | "message">): SourceView {
+export function sourceView(c: Pick<ConnectorStatus, "state" | "message"> & { id?: string }): SourceView {
   const views: Record<SourceState, SourceView> = {
-    ok: { label: "Connected", tone: "success", sentence: "Messages are up to date.", action: "sync" },
+    ok: { label: "Connected", tone: "success", sentence: c.id === "contacts" ? "Your address book is up to date." : "Messages are up to date.", action: "sync" },
     syncing: { label: "Syncing", tone: "info", sentence: "Importing messages now.", action: "none" },
     never_synced: { label: "Not synced yet", tone: "neutral", sentence: "Nothing has been imported from this source yet.", action: "sync" },
     error: { label: "Problem, will retry", tone: "warning", sentence: c.message || "The last attempt failed.", action: "sync" },

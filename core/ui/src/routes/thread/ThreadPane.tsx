@@ -130,7 +130,7 @@ export function ThreadPane({ contactId, profile }: { contactId: string; profile:
                   text={it.message.text}
                   isSummary={it.message.isSummary}
                   attachments={it.message.attachments}
-                  counterpartLabel={it.message.sender ?? name}
+                  counterpartLabel={it.message.senderName ?? it.message.sender ?? name}
                 />
               </div>
             ),
