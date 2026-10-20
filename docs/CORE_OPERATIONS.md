@@ -25,7 +25,7 @@ Exit codes: `0` ok, `10` Node too old, `11` the web app could not be built (need
 
 `install-agent` writes `~/Library/LaunchAgents/com.moldovancsaba.reply-core.plist` and loads it: `RunAtLoad`, `KeepAlive`, `ThrottleInterval 30`, `ProcessType Background`, running exactly `<this node> core/src/index.js`. Installing again rewrites and reloads it (nothing is duplicated). `uninstall-agent` unloads it and deletes that one file, and only if it carries the marker the installer wrote; a plist it did not create is never touched. Logs and data stay.
 
-**Full Disk Access is attached to the program that starts the service**, here the exact `node` binary named in the plist (the command prints its path and the System Settings steps). Consequences: after a Node upgrade (a new path or binary) the agent loses access, so run `install-agent` again and grant it again; `status` says when the agent was installed for a different Node. The alternative without an agent is to run `start` from a Terminal that already has Full Disk Access. The plist contains paths and the port only, never a secret.
+**Full Disk Access is attached to the program that starts the service**, here the exact `node` binary named in the plist (the command prints its path and the System Settings steps). Consequences: after a Node upgrade (a new path or binary) the agent loses access, so run `install-agent` again and grant it again; `status` says when the agent was installed for a different Node. The alternative without an agent is to run `start` from a Terminal that already has Full Disk Access. The plist contains paths, the port and the list of enabled connectors (`REPLY_CORE_CONNECTORS`, if it was set when you ran `install-agent`, for example to switch WhatsApp on), never a secret.
 
 ## Logs
 
