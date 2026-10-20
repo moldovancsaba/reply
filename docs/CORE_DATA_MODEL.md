@@ -62,3 +62,4 @@ Prints schema version, `quick_check`, row counts and per-channel counts (read-on
 | `contact_details` | address-book fields as JSON per contact (organization, job title, birthday, ...), replaced on every Contacts import | yes, by the next import |
 | `contact_profile` | what the user wrote: profession, company, relationship, LinkedIn address, intro | **no** (user data, kept by backup and by `rebuild`) |
 | `contact_notes` | the user's notes per contact | **no** (user data, kept by backup and by `rebuild`) |
+| `group_members` (migration 0009) | members of group chats: group handle, member handle, WhatsApp's name for them, admin flag; replaced for a group each time the source is read | yes, by the next WhatsApp sync |

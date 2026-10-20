@@ -479,7 +479,8 @@
         "notes",
         "handles",
         "stats",
-        "mergedFrom"
+        "mergedFrom",
+        "members"
       ],
       "properties": {
         "id": {
@@ -774,6 +775,41 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "handle",
+              "name",
+              "admin",
+              "messages",
+              "contactId"
+            ],
+            "properties": {
+              "handle": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "admin": {
+                "type": "boolean"
+              },
+              "messages": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "contactId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
           }
         }
       }

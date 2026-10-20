@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Anchor, BodyText, GdsBadge, GdsBox, GdsGeneratedAvatar, GdsInline, GdsRelativeTime, GdsStack, InlineAlert, MetadataText, SectionPanel, SectionTitle, SemanticButton, StateBlock, Textarea, TextInput, useGdsToasts } from "@sovereignsquad/gds";
 import { addNote, ApiFailure, deleteNote, saveProfile, useProfile } from "../../api/queries";
@@ -111,6 +112,25 @@ function AddressBook({ p }: { p: Profile }) {
   for (const [i, a] of (c.addresses ?? []).entries()) rows.push([i === 0 ? "Address" : `Address ${i + 1}`, a]);
   if (rows.length === 0) return <BodyText>{p.origin === "apple_contacts" ? "Your address book has no further details for this person." : "This person is not in your address book (or it has not been imported yet)."}</BodyText>;
   return <Facts rows={rows} label="Address book details" />;
+}
+
+function Members({ p }: { p: Profile }) {
+  const navigate = useNavigate();
+  return (
+    <GdsStack component="ul" gap="sm" aria-label="Group members">
+      {p.members.map((m) => (
+        <GdsBox component="li" key={m.handle}>
+          <GdsInline gap="sm" align="center" wrap="wrap">
+            {m.contactId ? (
+              <Anchor href={`/inbox/${m.contactId}`} onClick={(e: React.MouseEvent) => { if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); navigate(`/inbox/${m.contactId}`); }}>{m.name}</Anchor>
+            ) : <BodyText>{m.name}</BodyText>}
+            {m.admin ? <GdsBadge tone="neutral" label="Admin" /> : null}
+            <MetadataText>{plural(m.messages, "message", "messages") + " in this group"}</MetadataText>
+          </GdsInline>
+        </GdsBox>
+      ))}
+    </GdsStack>
+  );
 }
 
 function Channels({ p }: { p: Profile }) {
@@ -238,8 +258,14 @@ export function ProfilePane({ contactId, onBack }: { contactId: string; onBack?:
       {onBack ? <Anchor href={`/inbox/${contactId}`} onClick={(e: React.MouseEvent) => { e.preventDefault(); onBack(); }}>Back to conversation</Anchor> : null}
       <Header p={p} />
       {p.mergedFrom.length > 0 ? <MetadataText>{`Also known as: ${p.mergedFrom.join(", ")} (merged in)`}</MetadataText> : null}
-      <SectionPanel title="Address book"><AddressBook p={p} /></SectionPanel>
-      <SectionPanel title="How to reach them"><Channels p={p} /></SectionPanel>
+      {p.members.length > 0 ? (
+        <SectionPanel title={`Members (${p.members.length})`}><Members p={p} /></SectionPanel>
+      ) : (
+        <>
+          <SectionPanel title="Address book"><AddressBook p={p} /></SectionPanel>
+          <SectionPanel title="How to reach them"><Channels p={p} /></SectionPanel>
+        </>
+      )}
       <SectionPanel title="Activity"><Activity p={p} /></SectionPanel>
       <SectionPanel title="Details you add"><DetailsForm p={p} /></SectionPanel>
       <SectionPanel title="Notes"><Notes p={p} /></SectionPanel>

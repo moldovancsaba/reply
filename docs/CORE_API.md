@@ -67,8 +67,11 @@ Query: `before` (cursor), `limit`, `channel`. One merged thread across all of th
   "handles": [ { "value": "+36301234567", "label": "+36 30 123 4567", "kind": "phone", "origin": "apple_contacts", "messages": 230, "lastTs": "..." } ],
   "stats": { "total": 237, "sent": 100, "received": 137, "firstTs": "...", "lastTs": "...", "lastSentTs": "...", "lastReceivedTs": "...", "last30Days": 12,
              "byChannel": { "imessage": { "total": 230, "sent": 99, "received": 131, "firstTs": "...", "lastTs": "..." }, "email": { }, "whatsapp": { } } },
-  "mergedFrom": ["anna@example.com"] }
+  "mergedFrom": ["anna@example.com"],
+  "members": [] }
 ```
+
+`members` is filled only for a group chat: `[{ "handle", "name", "admin", "messages", "contactId" }]`, admins first, then by how much each member wrote in the group. `name` is your contact's name, else the name WhatsApp knows, else the number; `contactId` is set when that person also has a conversation of their own.
 
 `card` is the address book as last imported (a birthday without a year is `--MM-DD`); it is replaced on every import and is read-only. `profile` and `notes` are what the user wrote.
 

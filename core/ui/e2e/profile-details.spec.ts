@@ -138,3 +138,25 @@ test("a11y gate: the profile with address-book data in light and dark, and at 37
   await expectAccessible(page, `${svc.url}${href}/profile`);
   await expectAccessibleNow(page, "profile narrow");
 });
+
+test("a group shows its members (admin first, with how much each wrote) instead of an address book", async ({ page }) => {
+  await page.route(/\/api\/contacts\/[^/]+\/profile$/, async (r) => {
+    if (r.request().method() !== "GET") return r.fallback();
+    const body = await (await r.fetch()).json();
+    body.members = [
+      { handle: "+36301234567@wa", name: "Anna Kovacs", admin: true, messages: 12, contactId: "c_anna" },
+      { handle: "5562066571432@lid", name: "Mihály", admin: false, messages: 3, contactId: null },
+    ];
+    return json(r, body);
+  });
+  await open(page);
+  const members = page.getByRole("list", { name: "Group members" });
+  await expect(profile(page).getByRole("heading", { name: "Members (2)" })).toBeVisible();
+  await expect(members.getByRole("listitem").first()).toContainText("Anna Kovacs");
+  await expect(members.getByRole("listitem").first()).toContainText("Admin");
+  await expect(members.getByRole("listitem").first()).toContainText("12 messages in this group");
+  await expect(members.getByRole("link", { name: "Anna Kovacs" })).toHaveAttribute("href", "/inbox/c_anna");
+  await expect(members.getByRole("link", { name: "Mihály" })).toHaveCount(0);
+  await expect(profile(page).getByRole("heading", { name: "Address book" })).toHaveCount(0);
+  await expectAccessibleNow(page, "group members");
+});
