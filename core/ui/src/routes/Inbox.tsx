@@ -11,7 +11,7 @@ import { SourceNotice } from "./inbox/SourceNotice";
 import { CHANNELS, useInboxQuery } from "./inbox/inboxQuery";
 
 // Side by side, each pane scrolls on its own so the list stays in view while a long conversation is read.
-const PANE_HEIGHT = "calc(100dvh - 12rem)";
+const PANE_HEIGHT = "calc(100dvh - 9.5rem)";
 
 export default function Inbox() {
   const { contactId, section } = useParams();
@@ -56,7 +56,7 @@ export default function Inbox() {
   // GdsSplit's inline grid-template-columns beats its own media query, so it never splits; a 12-column grid does.
   return (
     <>
-      <PageHeader title="Inbox" description="Everyone you talk to, across every channel." />
+      <PageHeader title="Inbox" />
       {!wide ? (
         contactId ? (
           <GdsStack gap="md">
