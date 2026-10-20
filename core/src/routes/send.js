@@ -1,9 +1,11 @@
 import { execFile } from "node:child_process";
 import { AppError } from "../errors.js";
 
-const KEYS = ["contactId", "channel", "handle", "text", "subject", "clientId"];
+import { MAX_FILE_BYTES } from "../send/uploads.js";
 
-export function registerSend(app, { sender, appPath }) {
+const KEYS = ["contactId", "channel", "handle", "text", "subject", "clientId", "attachmentIds"];
+
+export function registerSend(app, { sender, uploads, appPath }) {
     app.post("/api/send", async (req, reply) => {
         const b = req.body ?? {};
         if (typeof b !== "object" || Array.isArray(b) || Object.keys(b).some((k) => !KEYS.includes(k))) throw new AppError(400, "invalid_request", `Body may only contain ${KEYS.join(", ")}.`);
@@ -12,6 +14,17 @@ export function registerSend(app, { sender, appPath }) {
         const r = await sender.send(b);
         return reply.header("cache-control", "no-store").send(r);
     });
+
+    // A file picked in the Reply box: the raw bytes of the body, the name in ?name=. It waits in <home>/outbox until it is sent,
+    // removed or an hour has passed.
+    if (uploads) {
+        app.post("/api/uploads", { bodyLimit: MAX_FILE_BYTES + 1024 }, async (req, reply) => {
+            if (Object.keys(req.query).some((k) => k !== "name")) throw new AppError(400, "invalid_request", "Only ?name= is allowed.");
+            if (!Buffer.isBuffer(req.body)) throw new AppError(415, "unsupported_media_type", "Send the file as application/octet-stream.");
+            return reply.status(201).header("cache-control", "no-store").send(uploads.add(req.query.name, req.body));
+        });
+        app.delete("/api/uploads/:id", async (req, reply) => { uploads.remove(req.params.id); return reply.send({ removed: true }); });
+    }
 
     // Opens the {reply} app in a permission mode so macOS shows its prompts for it: "sending" asks for Automation
     // (Messages, Mail, System Events) and Accessibility, "contacts" for the address book. /api/send/consent stays

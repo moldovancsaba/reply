@@ -15,7 +15,7 @@ Response schemas for the read endpoints are in [`core/schema/api-read.json`](../
 | `GET /api/drafts/capabilities`, `POST /api/drafts/suggest` | optional local-model reply suggestion; see [CORE_DRAFTING.md](CORE_DRAFTING.md) |
 | `POST /api/contacts/:id/read`, `GET`/`PUT /api/contacts/:id/profile`, `POST /api/contacts/:id/notes`, `DELETE /api/contacts/:id/notes/:noteId` | mark seen, the contact profile, notes; see "Seen and new" and "Profile" below |
 | `POST /api/handoff` | open Messages, Mail or WhatsApp with a prefilled reply (does not send); see [CORE_HANDOFF.md](CORE_HANDOFF.md) |
-| `POST /api/send`, `POST /api/consent` (`{"kind":"sending"|"contacts"}`; `POST /api/send/consent` is the older name for `sending`) | send a message through Messages, Mail or WhatsApp, and open {reply} to ask macOS for the permissions; see [CORE_SENDING.md](CORE_SENDING.md) |
+| `POST /api/uploads`, `DELETE /api/uploads/:id` (files for a message, see [CORE_SENDING.md](CORE_SENDING.md#attachments)), `POST /api/send`, `POST /api/consent` (`{"kind":"sending"|"contacts"}`; `POST /api/send/consent` is the older name for `sending`) | send a message through Messages, Mail or WhatsApp, and open {reply} to ask macOS for the permissions; see [CORE_SENDING.md](CORE_SENDING.md) |
 | `POST /api/sync/:connector` | start a sync (`202`, `409`, `423`, `404`); see [CORE_CONNECTORS.md](CORE_CONNECTORS.md) |
 | `POST /api/contacts/:id/merge`, `POST /api/contacts/:id/unmerge`, `GET /api/contacts/:id/merges`, `GET /api/contacts/:id/duplicates`, `POST /api/contacts/:id/duplicates/dismiss` | explicit identity changes and merge suggestions; see [CORE_IDENTITY.md](CORE_IDENTITY.md) |
 

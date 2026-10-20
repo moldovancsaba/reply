@@ -9,6 +9,7 @@ import { recoverySteps } from "../sources/viewModel";
 import { clearDraft, loadDraft, saveDraft } from "./draftStore";
 import { DraftPanel } from "./DraftPanel";
 import { openFromGesture } from "./openLink";
+import { Attachments, sizeLabel, type Attached } from "./Attachments";
 
 export const APP_LABEL = { imessage: "Messages", email: "Mail", whatsapp: "WhatsApp" } as const;
 export const PREFILL_LIMIT = 1500; // above this the service answers copy_and_open (see CORE_HANDOFF.md)
@@ -40,6 +41,7 @@ export function Composer({ contact, lastChannel, lastEmailSubject }: { contact: 
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<ApiError | null>(null);
+  const [files, setFiles] = useState<Attached[]>([]);
   const attempt = useRef<string | null>(null); // one id per message, so a double click or a retry after a lost answer never sends twice
   const channels = contact.replyChannels ?? [];
   const draft = useRef(loadDraft(contact.id)).current;
@@ -110,9 +112,11 @@ export function Composer({ contact, lastChannel, lastEmailSubject }: { contact: 
   };
 
   const canSend = current.send.available;
+  const canAttach = canSend && channel !== "whatsapp"; // WhatsApp is driven by key presses and cannot take a file
+  const blockedByFiles = files.length > 0 && !canAttach;
 
   const askToSend = () => {
-    if (!text.trim()) { setStatus("error"); setError({ code: "text_empty", message: ERROR_TEXT.text_empty }); return; }
+    if (!text.trim() && files.length === 0) { setStatus("error"); setError({ code: "text_empty", message: canAttach ? "Write a message first, or attach a file." : ERROR_TEXT.text_empty }); return; }
     setSendError(null);
     if (confirmBefore) setConfirming(true); else void doSend();
   };
@@ -124,7 +128,7 @@ export function Composer({ contact, lastChannel, lastEmailSubject }: { contact: 
     setSendError(null);
     const r = await fetchJson<Sent>("/api/send", {
       method: "POST", timeoutMs: 75_000, // the app's own 45 s plus up to 15 s of looking for the WhatsApp message
-      body: { contactId: contact.id, channel, text, clientId: attempt.current, ...(current.handles.length > 1 ? { handle: target.value } : {}), ...(channel === "email" ? { subject } : {}) },
+      body: { contactId: contact.id, channel, text, clientId: attempt.current, ...(files.length > 0 ? { attachmentIds: files.map((f) => f.id) } : {}), ...(current.handles.length > 1 ? { handle: target.value } : {}), ...(channel === "email" ? { subject } : {}) },
     });
     setSending(false);
     setConfirming(false);
@@ -135,6 +139,7 @@ export function Composer({ contact, lastChannel, lastEmailSubject }: { contact: 
       return;
     }
     attempt.current = null;
+    setFiles([]); // sent: the service has released them
     if (r.data.confirmed === false) toasts.notifySuccess({ title: r.data.note, message: `Check the ${CHANNEL_LABEL[channel]} chat with ${contact.displayName} before you rely on it.`, autoCloseMs: 15000 });
     else toasts.notifySuccess({ title: `${r.data.note.replace(/\.$/, "")} to ${contact.displayName}.`, message: "It appears in the conversation after the next sync, in a few seconds.", autoCloseMs: 8000 });
     clearDraft(contact.id);
@@ -186,6 +191,8 @@ export function Composer({ contact, lastChannel, lastEmailSubject }: { contact: 
         maxRows={12}
         onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setText(e.currentTarget.value)}
       />
+      {canAttach ? <Attachments files={files} onChange={setFiles} disabled={sending} /> : null}
+      {blockedByFiles ? <InlineAlert severity="warning" title="Files cannot go through this channel" message={`${CHANNEL_LABEL[channel]} cannot be given files from here. Pick iMessage or Email, remove the files, or use "Open in ${app} instead" and attach them there.`} /> : null}
       <MetadataText>{saved ? "Draft saved" : " "}</MetadataText>
       <DraftPanel contactId={contact.id} channel={channel} composerText={text} onInsert={(t) => { setText(t); window.setTimeout(() => area.current?.focus(), 0); }} />
       {error ? (
@@ -224,7 +231,7 @@ export function Composer({ contact, lastChannel, lastEmailSubject }: { contact: 
           : `To ${contact.displayName} through ${CHANNEL_LABEL[channel]} (${target.label}). ${current.send.reason ?? ""} Reply Core opens ${app} with your text; you press send there.`}
       </BodyText>
       <GdsInline gap="sm" align="center" wrap="wrap">
-        {canSend ? <SemanticButton action="send" label="Send" loading={sending} disabled={sending || confirming} onClick={askToSend} /> : null}
+        {canSend ? <SemanticButton action="send" label="Send" loading={sending} disabled={sending || confirming || blockedByFiles} onClick={askToSend} /> : null}
         <SemanticButton action={canSend ? "message" : "send"} label={canSend ? `Open in ${app} instead` : `Open in ${app}`} variant={canSend ? "default" : undefined} loading={status === "submitting"} disabled={status === "submitting"} onClick={() => void open()} />
         <SemanticButton action="copy" label="Copy text" variant="default" disabled={text.trim() === ""} onClick={() => void copy()} />
       </GdsInline>
@@ -234,6 +241,7 @@ export function Composer({ contact, lastChannel, lastEmailSubject }: { contact: 
           <BodyText>{`To ${contact.displayName} through ${CHANNEL_LABEL[channel]} (${target.label})`}</BodyText>
           {channel === "email" && subject ? <BodyText>{`Subject: ${subject}`}</BodyText> : null}
           <GdsStack gap="xs" aria-label="The message">{text.split("\n").filter((l) => l.trim()).map((l, i) => <BodyText key={i}>{l}</BodyText>)}</GdsStack>
+          {files.length > 0 ? <GdsStack component="ul" gap="xs" aria-label="Files that will be sent">{files.map((f) => <li key={f.id}><BodyText>{`${f.name} (${sizeLabel(f.size)})`}</BodyText></li>)}</GdsStack> : null}
           <MetadataText>It is sent now and cannot be taken back.</MetadataText>
         </GdsStack>
       </ConfirmPanel>

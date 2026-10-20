@@ -10,7 +10,7 @@ Press **Send** in the Reply box and the message leaves this Mac through the app 
 | Email | AppleScript tells **Mail** to make and send a message from your default Mail account (subject starts as "Re: ..." of the last mail) | Automation: {reply} may control Mail | good |
 | WhatsApp | opens the chat with the text typed in (`whatsapp://send`), waits until WhatsApp Desktop is in front, then presses Return (key code 36, after a 2.5 s wait for the chat to load) through System Events | Automation: System Events, and **Accessibility** for {reply} | least reliable: it depends on WhatsApp Desktop's window; if WhatsApp does not come to the front, or loses the focus before the key press, nothing is sent. The message must then show up in WhatsApp's database, in that chat, within 15 s (see "Confirming WhatsApp") |
 
-Group chats and people without a phone number or address cannot be a recipient (the Reply box offers only what the contact really has). Attachments cannot be sent; use "Open in {App} instead".
+Group chats and people without a phone number or address cannot be a recipient (the Reply box offers only what the contact really has). Files can be sent through iMessage and Mail only (see "Attachments"); for WhatsApp use "Open in WhatsApp instead".
 
 ## Safety rules
 
@@ -22,6 +22,19 @@ Group chats and people without a phone number or address cannot be a recipient (
 - **Rate limit:** one send at a time and at most 10 a minute (`send_rate_limited`).
 - **Audit without content:** one row per attempt in `sends` (time, contact id, channel, kind of address, text length, outcome). Never the text, the subject or the address; the log lines carry the channel, length and outcome only.
 - **Off switch:** `REPLY_CORE_SENDING=off` removes the Send button (the reason is shown) and the API refuses (`sending_disabled`). `install-agent` stores the setting in the agent if it is set when you run it.
+
+## Attachments
+
+**Attach files** in the Reply box (iMessage and Email) uploads each picked file to the service with `POST /api/uploads?name=<file name>` (the raw bytes as `application/octet-stream`; answer `201 { id, name, size }`). It waits in `<home>/outbox/<id>/` (owner only) until it is sent, removed (`DELETE /api/uploads/:id`) or an hour has passed; the outbox is emptied when the service starts. `POST /api/send` then names the files by id in `attachmentIds`; a request can never name a path, so it cannot make the service read another file. A file alone is enough (the text may be empty).
+
+| Limit | Value |
+|---|---|
+| per file | 20 MB (`file_too_large` 413) |
+| files per message | 5 (`too_many_attachments` 413) |
+| together | 25 MB (`attachments_too_large` 413) |
+| waiting in the outbox | 20 files (`too_many_uploads` 429) |
+
+How they leave: Messages sends each file first and then the text as separate messages (`send POSIX file ... to buddy`); Mail attaches them to the one message (`make new attachment`), with a blank line between the text and the files. WhatsApp cannot take files (`attachments_not_supported` 422; the Send button is disabled while files are attached to a WhatsApp reply). A sent message releases its files; a failed one keeps them for the retry. If the script fails part way with files, the outcome is `unknown` (`send_failed_partial`): some of it may have been sent. The audit row and the log record the number of characters, never the text, names or content of files.
 
 ## Permissions, step by step
 
@@ -56,6 +69,7 @@ The sent message reaches the source app's database a moment later. Reply Core re
 | `send_unconfirmed` (504) | the message did not show up in WhatsApp's database in 15 s | "The message may have been sent" |
 | `app_not_running` (502) | the app could not be opened | nothing was sent |
 | `send_failed` (502) | the app refused the message | nothing was sent |
+| `attachment_not_found` (422), `attachments_not_supported` (422), `file_too_large`, `too_many_attachments`, `attachments_too_large` (413), `send_failed_partial` (502, outcome unknown) | see "Attachments" | the message says what to change |
 | `send_timeout` (504) | no answer in 45 s | the message may have been sent |
 | `send_rate_limited` (429) | too many or one in flight | wait a moment |
 | `send_in_progress` (409) | the same message is still being sent | wait |
