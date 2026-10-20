@@ -32,7 +32,7 @@ The first release you can live in: profiles, sending, new-message counts, a sign
 - Several accessibility findings: unnamed dialog close button, label-in-name mismatches, contrast of dimmed text on tinted panels.
 
 ### Security
-- Removed personal data (contacts database, message exports, vector stores, built app bundle with a message database) from the repository and its whole history (rewritten 2026-10-20), revoked the leaked Google API key, and added ignore rules and an audit that fails on tracked databases, personal files and secrets. Old pull-request refs may stay cached on GitHub until Support purges them (see [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)).
+- Removed personal data (contacts database, message exports, vector stores, built app bundle with a message database) from the repository and the history of every branch (rewritten 2026-10-20), revoked the leaked Google API key, and added ignore rules and an audit that fails on tracked databases, personal files and secrets. GitHub still keeps the old pull-request objects, so the removed files stay fetchable by commit SHA (accepted residual exposure, see [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)).
 
 ## [0.1.0] - 2026-10-19
 
