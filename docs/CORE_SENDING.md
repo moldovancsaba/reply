@@ -29,7 +29,7 @@ macOS lists an app under Automation or Accessibility only after the app asks. Th
 
 ## Confirming WhatsApp
 
-A key press cannot tell whether WhatsApp sent anything, so after it Reply Core looks in WhatsApp's own database (the WhatsApp connector, read-only) once a second for up to 15 seconds for a message of yours with exactly this text, newer than the send, in the chat of that number:
+A key press cannot tell whether WhatsApp sent anything, so after it Reply Core looks in WhatsApp's own database (the WhatsApp connector, read-only) once a second for up to 15 seconds for a message of yours with exactly this text, newer than the send, in the chat of that person (WhatsApp files a chat under the phone number or under its own `@lid` id: the person's phone numbers and `@lid` handles all count):
 
 | Found | Result |
 |---|---|
