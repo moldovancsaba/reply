@@ -189,3 +189,22 @@ test("HTTP: profile read, edit, notes; uniform errors; no logging of what the us
     assert.equal((await call("GET", `/api/contacts/${id}/profile?x=1`)).status, 400);
     assert.doesNotMatch(lines.join("\n"), /SECRET-/);
 });
+
+test("unread: messages received since you last saw the conversation, nothing for what was there before the baseline", () => {
+    const { db, read } = setup();
+    const repo = createRepo(db); // the real clock: this test needs messages newer than the migration
+    assert.ok(Number(db.prepare("SELECT value FROM app_settings WHERE key = 'unread_baseline_ms'").get().value) > 0, "the migration recorded a baseline");
+    const base = Date.now() - 60_000; // pretend the baseline was a minute ago
+    db.prepare("UPDATE app_settings SET value = ? WHERE key = 'unread_baseline_ms'").run(String(base));
+    repo.upsertMessages([msg(1, "+36301234567"), msg(2, "+36301234567")]); // NOW is in the past: before the baseline
+    const id = owner(db, "+36301234567");
+    assert.equal(read.listContacts({ limit: 10 }).items[0].unread, 0);
+    const later = (n, extra = {}) => ({ ...msg(n, "+36301234567", extra), tsMs: base + 10_000 + n * 10 });
+    repo.upsertMessages([later(10, { isFromMe: false }), later(11, { isFromMe: false }), later(12, { isFromMe: true })]);
+    assert.equal(read.listContacts({ limit: 10 }).items.find((i) => i.id === id).unread, 2, "only received messages count");
+    assert.deepEqual(read.markRead(id), { unread: 0 });
+    assert.equal(read.listContacts({ limit: 10 }).items.find((i) => i.id === id).unread, 0);
+    repo.upsertMessages([{ ...later(20, { isFromMe: false }), tsMs: Date.now() + 1 }]);
+    assert.equal(read.listContacts({ limit: 10 }).items.find((i) => i.id === id).unread, 1, "new after reading");
+    assert.throws(() => read.markRead("nope"), (e) => e.status === 404);
+});

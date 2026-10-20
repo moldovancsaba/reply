@@ -76,7 +76,8 @@
         "lastFromMe",
         "counts",
         "countTotal",
-        "handles"
+        "handles",
+        "unread"
       ],
       "properties": {
         "id": {
@@ -121,6 +122,10 @@
           "items": {
             "$ref": "#/definitions/handle"
           }
+        },
+        "unread": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },

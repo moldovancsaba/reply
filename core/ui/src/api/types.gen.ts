@@ -43,6 +43,7 @@ export interface ContactListItem {
   counts: Counts;
   countTotal: number;
   handles: Handle[];
+  unread: number;
 }
 /**
  * This interface was referenced by `ReadResponses`'s JSON-Schema
