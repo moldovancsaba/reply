@@ -1,5 +1,7 @@
 import Contacts
 import Foundation
+import ImageIO
+import UniformTypeIdentifiers
 
 public enum ContactsSource {
     public static func authorization() -> SourceAccess {
@@ -9,6 +11,25 @@ public enum ContactsSource {
         case .notDetermined: return .needsConsent
         default: return .permissionDenied
         }
+    }
+
+    /// The address book's thumbnails are large (often 80 to 160 KB); the profile shows 64 px, so the picture is shrunk to at
+    /// most 256 px first. PNG is kept when it has transparency (memoji), JPEG otherwise.
+    static func shrunk(_ data: Data, maxPixels: Int = 256) -> Data? {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let opts: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceThumbnailMaxPixelSize: maxPixels]
+        guard let img = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }
+        let hasAlpha = ![CGImageAlphaInfo.none, .noneSkipFirst, .noneSkipLast].contains(img.alphaInfo)
+        let out = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(out, (hasAlpha ? UTType.png : UTType.jpeg).identifier as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, img, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
+        return CGImageDestinationFinalize(dest) ? out as Data : nil
+    }
+
+    /// Shrinks further (160, then 96 px) when the result is still over the cap, as a transparent PNG can be.
+    static func fitted(_ data: Data) -> Data? {
+        for px in [256, 160, 96] { if let d = shrunk(data, maxPixels: px), d.count <= photoCap { return d } }
+        return nil
     }
 
     /// The address-book thumbnail, base64, or nil when there is none or it is over the cap (keeps the database and the NDJSON small).
@@ -81,7 +102,7 @@ public enum ContactsSource {
                     birthday: c.birthday.flatMap(birthdayString),
                     urls: c.urlAddresses.isEmpty ? nil : c.urlAddresses.map { String($0.value) }.filter { !$0.isEmpty },
                     addresses: c.postalAddresses.isEmpty ? nil : c.postalAddresses.map { CNPostalAddressFormatter.string(from: $0.value, style: .mailingAddress).replacingOccurrences(of: "\n", with: ", ") }.filter { !$0.isEmpty },
-                    photo: photoString(c.thumbnailImageData)
+                    photo: photoString(c.thumbnailImageData.flatMap { fitted($0) })
                 ))
             }
         } catch {

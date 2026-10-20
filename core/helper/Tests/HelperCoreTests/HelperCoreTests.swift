@@ -1,3 +1,6 @@
+import ImageIO
+import UniformTypeIdentifiers
+
 import Security
 import SQLite3
 import XCTest
@@ -141,6 +144,18 @@ final class HelperCoreTests: XCTestCase {
         XCTAssertEqual(ContactsSource.birthdayString(DateComponents(month: 12, day: 24)), "--12-24")
         XCTAssertNil(ContactsSource.birthdayString(DateComponents(year: 1985)))
         XCTAssertEqual(ContactsSource.photoString(Data([0xFF, 0xD8, 0xFF])), "/9j/")
+        // a large picture is shrunk to at most 256 px and stays a decodable image
+        let ctx = CGContext(data: nil, width: 800, height: 600, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+        ctx.setFillColor(CGColor(red: 0.2, green: 0.4, blue: 0.8, alpha: 1)); ctx.fill(CGRect(x: 0, y: 0, width: 800, height: 600))
+        let big = NSMutableData()
+        let d = CGImageDestinationCreateWithData(big, UTType.png.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(d, ctx.makeImage()!, nil); XCTAssertTrue(CGImageDestinationFinalize(d))
+        let small = ContactsSource.shrunk(big as Data)
+        XCTAssertNotNil(small)
+        let check = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithData(small! as CFData, nil)!, 0, nil)!
+        XCTAssertEqual(max(check.width, check.height), 256)
+        XCTAssertLessThan(small!.count, ContactsSource.photoCap)
+        XCTAssertNil(ContactsSource.shrunk(Data([1, 2, 3])), "not an image")
         XCTAssertNil(ContactsSource.photoString(nil))
         XCTAssertNil(ContactsSource.photoString(Data()))
         XCTAssertNil(ContactsSource.photoString(Data(count: ContactsSource.photoCap + 1)), "over the cap is left out")
