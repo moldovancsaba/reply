@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Anchor, BannerNotice, BodyText, GdsBox, GdsInline, GdsRelativeTime, GdsStack, InlineAlert, MetadataText, PageHeader, SectionPanel, SemanticButton, StateBlock, StatusBadge, useGdsToasts } from "@sovereignsquad/gds";
-import { ApiFailure, recheckSources, syncConnector, useStatus } from "../api/queries";
+import { ApiFailure, askConsent, recheckSources, syncConnector, useStatus } from "../api/queries";
 import type { ConnectorStatus, RecoveryStep } from "../api/types.gen";
 import { exactLabel, relativeParts } from "../lib/time";
 import { useThrottled } from "../lib/useThrottled";
@@ -25,6 +25,24 @@ function Steps({ steps }: { steps: RecoveryStep[] | undefined }) {
       ))}
     </GdsStack>
   );
+}
+
+const CONSENT_TEXT = {
+  sending: "It asks whether {reply} may control Messages, Mail and System Events, and for Accessibility. Choose Allow in each window.",
+  contacts: "It asks whether {reply} may read your Contacts. Choose Allow, then press Recheck.",
+};
+
+function AllowButton({ kind, label }: { kind: "sending" | "contacts"; label: string }) {
+  const toasts = useGdsToasts();
+  const [busy, setBusy] = useState(false);
+  const ask = async () => {
+    setBusy(true);
+    const r = await askConsent(kind);
+    if (r.ok) toasts.notifySuccess({ title: "Look for a macOS window.", message: CONSENT_TEXT[kind], autoCloseMs: 12000 });
+    else toasts.notifyError({ title: "Could not ask macOS", message: r.error.message });
+    setBusy(false);
+  };
+  return <SemanticButton action="refresh" label={label} loading={busy} disabled={busy} onClick={() => void ask()} />;
 }
 
 function SourcePanel({ c, busy, onSync, onRecheck, rechecking }: { c: ConnectorStatus; busy: boolean; onSync: () => void; onRecheck: () => void; rechecking: boolean }) {
@@ -58,6 +76,7 @@ function SourcePanel({ c, busy, onSync, onRecheck, rechecking }: { c: ConnectorS
           </GdsStack>
         ) : null}
         <GdsInline gap="sm">
+          {c.id === "contacts" && (c.state === "blocked" || c.state === "error") ? <AllowButton kind="contacts" label="Allow {reply} to read Contacts" /> : null}
           {v.action === "recheck" ? <SemanticButton action="refresh" label="Recheck" loading={rechecking} disabled={rechecking} onClick={onRecheck} /> : null}
           {v.action !== "recheck" ? <SemanticButton action="refresh" label={c.state === "syncing" ? "Syncing…" : "Sync now"} loading={busy} disabled={busy || c.state === "syncing"} onClick={onSync} /> : null}
         </GdsInline>
@@ -121,6 +140,12 @@ export default function Sources() {
           <>
             <GdsInline><SemanticButton action="refresh" label="Recheck all" loading={rechecking} disabled={rechecking} onClick={() => void recheck()} /></GdsInline>
             {status.isError ? <InlineAlert severity="warning" title="Could not refresh the status" message="Showing what was loaded before." /> : null}
+            <SectionPanel title="Sending">
+              <GdsStack gap="sm">
+                <BodyText>To send from the Reply box, macOS must let {"{reply}"} control Messages, Mail and System Events (and Accessibility for WhatsApp). macOS lists {"{reply}"} in those settings only after it has asked.</BodyText>
+                <GdsInline><AllowButton kind="sending" label="Allow {reply} to send" /></GdsInline>
+              </GdsStack>
+            </SectionPanel>
             {connectors.map((c) => <SourcePanel key={c.id} c={c} busy={busy.has(c.id)} rechecking={rechecking} onSync={() => void sync(c.id, c.label)} onRecheck={() => void recheck()} />)}
           </>
         )}

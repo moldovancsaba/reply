@@ -55,6 +55,7 @@ export function useStatus() {
 }
 
 export const syncConnector = (id: string) => fetchJson<{ accepted: boolean; runId: string; state: string }>(`/api/sync/${encodeURIComponent(id)}`, { method: "POST", body: {}, timeoutMs: 15_000 });
+export const askConsent = (kind: "sending" | "contacts") => fetchJson<{ opened: boolean }>("/api/consent", { method: "POST", body: { kind } });
 export const recheckSources = () => fetchJson<StatusReport>("/api/status/recheck", { method: "POST", body: {}, timeoutMs: 30_000 });
 
 export function useContact(id: string) {

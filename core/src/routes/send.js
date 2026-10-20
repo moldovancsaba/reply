@@ -13,10 +13,16 @@ export function registerSend(app, { sender, appPath }) {
         return reply.header("cache-control", "no-store").send(r);
     });
 
-    // Opens the {reply} app in its "ask for permission" mode so macOS shows its Automation (and Accessibility) prompts for it.
-    app.post("/api/send/consent", async (req, reply) => {
+    // Opens the {reply} app in a permission mode so macOS shows its prompts for it: "sending" asks for Automation
+    // (Messages, Mail, System Events) and Accessibility, "contacts" for the address book. /api/send/consent stays
+    // as the older name for kind "sending".
+    const FLAGS = { sending: "--consent-send", contacts: "--consent" };
+    const consent = async (kind, reply) => {
+        if (!Object.hasOwn(FLAGS, kind)) throw new AppError(400, "invalid_request", `kind must be one of ${Object.keys(FLAGS).join(", ")}.`);
         if (!appPath) throw new AppError(501, "consent_unavailable", "Reply Core is not running from the {reply} app, so it cannot ask macOS for permission. Run: node scripts/reply-core build-app, then install-agent.");
-        await new Promise((resolve, reject) => execFile("/usr/bin/open", ["-a", appPath, "--args", "--consent-send"], (err) => (err ? reject(new AppError(502, "consent_failed", "The {reply} app could not be opened.")) : resolve())));
+        await new Promise((resolve, reject) => execFile("/usr/bin/open", ["-a", appPath, "--args", FLAGS[kind]], (err) => (err ? reject(new AppError(502, "consent_failed", "The {reply} app could not be opened.")) : resolve())));
         return reply.status(202).send({ opened: true });
-    });
+    };
+    app.post("/api/consent", (req, reply) => consent(req.body?.kind, reply));
+    app.post("/api/send/consent", (req, reply) => consent("sending", reply));
 }

@@ -22,7 +22,7 @@ What is not done, what is less reliable than the rest, and which checks need a p
 
 ## Permissions
 
-- macOS lists {reply} under Automation, Accessibility and Contacts only after the app has asked; use **Allow {reply} to send** in the Reply box (or `open -a ~/Applications/{reply}.app --args --consent-send`) and `--consent` for Contacts.
+- macOS lists {reply} under Automation, Accessibility and Contacts only after the app has asked; use **Allow {reply} to send** on the Sources screen or in the Reply box (and **Allow {reply} to read Contacts** there when Contacts is blocked) (or `open -a ~/Applications/{reply}.app --args --consent-send`) and `--consent` for Contacts.
 - The signed `{reply}.app` uses an Apple Development certificate. Rebuilding it with a different certificate makes macOS treat it as a new app and ask for every permission again.
 - If the login agent runs bare `node` (the app could not be built), Full Disk Access belongs to that exact `node` binary and has to be granted again after a Node upgrade.
 

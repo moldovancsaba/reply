@@ -51,7 +51,7 @@ The **Reply** box is under the conversation.
 3. Press **Send**. Reply Core shows exactly what will be sent and to whom; confirm with **Send**. It is sent through Messages, Mail or WhatsApp on your Mac and appears in the conversation a few seconds later. You can switch the confirmation off with **Ask me before sending**.
 4. Prefer to review in the app yourself? **Open in {App} instead** opens Messages, Mail or WhatsApp with your text ready, and you press send there. **Copy text** copies it.
 
-Your unfinished text is kept for this browser session. The first time you send, macOS asks for permission ("{reply} wants to control Messages" and so on); use **Allow {reply} to send** if it does not. WhatsApp also needs Accessibility. Details: [CORE_SENDING.md](CORE_SENDING.md). If the box says "The message may have been sent", check the conversation before sending again.
+Your unfinished text is kept for this browser session. The first time you send, macOS asks for permission ("{reply} wants to control Messages" and so on); use **Allow {reply} to send** (on the Sources screen or in the Reply box) if it does not. WhatsApp also needs Accessibility. Details: [CORE_SENDING.md](CORE_SENDING.md). If the box says "The message may have been sent", check the conversation before sending again.
 
 ## Suggested replies (optional)
 
