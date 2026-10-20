@@ -130,7 +130,7 @@ function logs(args) {
 const launchctl = (...a) => spawnSync(env.REPLY_CORE_LAUNCHCTL || "launchctl", a, { encoding: "utf8" });
 const domain = () => `gui/${process.getuid?.() ?? os.userInfo().uid}`;
 
-function installAgent() {
+async function installAgent() {
     ensureNode();
     ensureUi();
     mkdirSync(paths.logDir, { recursive: true, mode: 0o700 });
@@ -145,14 +145,16 @@ function installAgent() {
         entry: path.join(coreDir, "src", "index.js"),
         workingDirectory: coreDir,
         launchdLog: paths.launchdLog,
-        env: { REPLY_CORE_LOG_FILE: paths.logFile, ...(env.REPLY_CORE_HOME ? { REPLY_CORE_HOME: paths.dataHome } : {}), ...(env.REPLY_CORE_PORT ? { REPLY_CORE_PORT: String(port) } : {}) },
+        env: { REPLY_CORE_LOG_FILE: paths.logFile, ...(env.REPLY_CORE_HOME ? { REPLY_CORE_HOME: paths.dataHome } : {}), ...(env.REPLY_CORE_PORT ? { REPLY_CORE_PORT: String(port) } : {}), ...(env.REPLY_CORE_CONNECTORS ? { REPLY_CORE_CONNECTORS: env.REPLY_CORE_CONNECTORS } : {}) },
     });
     const existing = existsSync(paths.plist) ? readFileSync(paths.plist, "utf8") : null;
     if (existing !== null && !isOurPlist(existing)) die(1, `${paths.plist} exists and was not created by reply-core; not touching it.`);
     if (existing !== text) writeFileSync(paths.plist, text, { mode: 0o644 });
     chmodSync(paths.plist, 0o644);
     launchctl("bootout", `${domain()}/com.moldovancsaba.reply-core`); // ignore: it may not be loaded yet
-    const r = launchctl("bootstrap", domain(), paths.plist);
+    // bootout is asynchronous: right after it launchd may still be tearing the old job down and bootstrap fails with an I/O error
+    let r = launchctl("bootstrap", domain(), paths.plist);
+    for (let i = 0; i < 5 && r.status !== 0; i++) { await sleep(1000); r = launchctl("bootstrap", domain(), paths.plist); }
     if (r.status !== 0) say(`launchctl said: ${(r.stderr || r.stdout || "").trim() || `exit ${r.status}`}. It will load at your next login.`);
     say(existing === text ? "The login agent was already installed; it has been reloaded." : "Reply Core will now start at login and restart if it stops.");
     say(`Agent file: ${paths.plist}`);
