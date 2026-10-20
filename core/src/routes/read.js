@@ -51,6 +51,9 @@ export function registerRead(app, { read }) {
         return reply.header("cache-control", "no-store").send(read.getContact(req.params.id));
     });
 
+    // "I have seen this conversation": clears its new-message count. A small write, but the only one the read API has.
+    app.post("/api/contacts/:id/read", async (req, reply) => reply.header("cache-control", "no-store").send(read.markRead(req.params.id)));
+
     app.get("/api/contacts/:id/messages", async (req, reply) => {
         noParams(req.query, ["before", "limit", "channel"]);
         const before = textParam(req.query.before, "before", 500);

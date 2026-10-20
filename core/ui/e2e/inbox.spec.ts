@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 import { expectAccessible, expectAccessibleNow } from "./a11y";
 import { startService, type Service } from "./service";
 
@@ -6,6 +6,7 @@ let svc: Service;
 test.beforeAll(async () => { svc = await startService(); });
 test.afterAll(async () => { await svc.stop(); });
 
+const json = (r: Route, body: unknown, status = 200) => r.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 const counts = (imessage = 0, email = 0, whatsapp = 0) => ({ imessage, email, whatsapp });
 const person = (i: number, over: Record<string, unknown> = {}) => ({
   id: `c_${i}`, displayName: `Person ${i}`, lastTs: new Date(Date.now() - i * 300_000).toISOString(), lastChannel: "imessage", lastPreview: `Hello number ${i}`,
@@ -125,4 +126,18 @@ test("a11y gate: real empty service in light and dark, and populated at phone wi
   await mockContacts(page, (u) => ({ body: u.searchParams.get("cursor") ? page2 : page1 }));
   await page.setViewportSize({ width: 375, height: 800 });
   await expectAccessible(page, `${svc.url}/inbox`);
+});
+
+test("a conversation with new messages says how many, and opening it marks it seen", async ({ page }) => {
+  let reads = 0;
+  let unread = 2;
+  await page.route(/\/api\/contacts\?/, (r) => json(r, { items: [person(1, { unread })], nextCursor: null, hasMore: false, total: 1 }));
+  await page.route(/\/api\/contacts\/c_1\/read$/, (r) => { reads++; unread = 0; return json(r, { unread: 0 }); });
+  await page.route(/\/api\/contacts\/c_1$/, (r) => json(r, { id: "c_1", displayName: "Person 1", origin: "auto", counts: counts(1, 0, 0), countTotal: 1, handles: [], replyChannels: [] }));
+  await page.route(/\/api\/contacts\/c_1\/messages\?/, (r) => json(r, { items: [{ id: "m1", channel: "imessage", isFromMe: false, ts: new Date().toISOString(), text: "hi", attachments: [], counterpartHandle: "x" }], nextCursor: null, hasMore: false }));
+  await page.goto(`${svc.url}/inbox`);
+  await expect(page.getByRole("link", { name: /Person 1.*2 new/ })).toBeVisible();
+  await page.getByRole("link", { name: /Person 1/ }).click();
+  await expect.poll(() => reads, { timeout: 5000 }).toBeGreaterThan(0);
+  await expect(page.getByText("2 new")).toHaveCount(0);
 });

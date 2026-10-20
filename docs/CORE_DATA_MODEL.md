@@ -63,3 +63,5 @@ Prints schema version, `quick_check`, row counts and per-channel counts (read-on
 | `contact_profile` | what the user wrote: profession, company, relationship, LinkedIn address, intro | **no** (user data, kept by backup and by `rebuild`) |
 | `contact_notes` | the user's notes per contact | **no** (user data, kept by backup and by `rebuild`) |
 | `group_members` (migration 0009) | members of group chats: group handle, member handle, WhatsApp's name for them, admin flag; replaced for a group each time the source is read | yes, by the next WhatsApp sync |
+| `read_state` (migration 0012) | per contact, when you last had the conversation open at its newest message (user data) | no |
+| `app_settings` (migration 0012) | small key/value settings, today the unread baseline | no |

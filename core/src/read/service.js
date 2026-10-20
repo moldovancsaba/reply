@@ -44,7 +44,27 @@ export function createReadService({ db, replyChannels }) {
         summary: db.prepare("SELECT count_total, counts_json FROM contact_summary WHERE contact_id = ?"),
         handles: db.prepare("SELECT handle_norm, link_origin FROM contact_handles WHERE contact_id = ? ORDER BY handle_norm"),
         kind: db.prepare("SELECT kind FROM handles WHERE handle_norm = ?"),
+        baseline: db.prepare("SELECT value FROM app_settings WHERE key = 'unread_baseline_ms'"),
+        markRead: db.prepare("INSERT INTO read_state (contact_id, read_ms) VALUES (?, ?) ON CONFLICT(contact_id) DO UPDATE SET read_ms = excluded.read_ms"),
     };
+
+    // Messages received since you last had the conversation open (or since the baseline, for a conversation never opened).
+    function unreadFor(ids) {
+        const out = new Map(ids.map((id) => [id, 0]));
+        if (!ids.length) return out;
+        const baseline = Number(q.baseline.get()?.value ?? 0);
+        const rows = db.prepare(`SELECT ch.contact_id AS id, COUNT(*) AS n FROM messages m
+            JOIN contact_handles ch ON ch.handle_norm = m.handle_norm LEFT JOIN read_state r ON r.contact_id = ch.contact_id
+            WHERE ch.contact_id IN (${ids.map(() => "?").join(",")}) AND m.is_from_me = 0 AND m.ts_ms > COALESCE(r.read_ms, ?) GROUP BY ch.contact_id`).all(...ids, baseline);
+        for (const r of rows) out.set(r.id, r.n);
+        return out;
+    }
+
+    function markRead(contactId) {
+        activeContact(contactId);
+        q.markRead.run(contactId, Date.now());
+        return { unread: 0 };
+    }
 
     function handlesFor(ids) {
         if (!ids.length) return new Map();
@@ -99,8 +119,10 @@ export function createReadService({ db, replyChannels }) {
         const hasMore = rows.length > limit;
         const page = rows.slice(0, limit);
         const handles = handlesFor(page.map((r) => r.id));
+        const unread = unreadFor(page.map((r) => r.id));
         const items = page.map((r) => ({
             id: r.id,
+            unread: unread.get(r.id) ?? 0,
             displayName: r.display_name,
             lastTs: r.last_ts_ms == null ? null : iso(r.last_ts_ms),
             lastChannel: r.last_channel ?? null,
@@ -188,5 +210,5 @@ export function createReadService({ db, replyChannels }) {
         return { items, nextCursor: hasMore ? encodeCursor({ rank: last.rank, ts: last.ts_ms, id: last.id }) : null, hasMore };
     }
 
-    return { listContacts, getContact, getThread, search };
+    return { listContacts, getContact, getThread, search, markRead, unreadFor };
 }

@@ -175,3 +175,5 @@ export type ProfileEdit = Partial<Pick<ProfileFields, "profession" | "company" |
 export const saveProfile = (id: string, body: ProfileEdit) => fetchJson<ProfileFields>(`/api/contacts/${encodeURIComponent(id)}/profile`, { method: "PUT", body });
 export const addNote = (id: string, text: string) => fetchJson<Note>(`/api/contacts/${encodeURIComponent(id)}/notes`, { method: "POST", body: { text } });
 export const deleteNote = (id: string, noteId: string) => fetchJson<{ deleted: boolean }>(`/api/contacts/${encodeURIComponent(id)}/notes/${encodeURIComponent(noteId)}`, { method: "DELETE" });
+
+export const markRead = (id: string) => fetchJson<{ unread: number }>(`/api/contacts/${encodeURIComponent(id)}/read`, { method: "POST", body: {} });

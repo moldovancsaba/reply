@@ -1,7 +1,8 @@
 import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type HTMLAttributes } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { Anchor, CardTitle, ChoiceChip, GdsBox, GdsInline, GdsStack, InlineAlert, MetadataText, SectionTitle, SemanticButton, StateBlock } from "@sovereignsquad/gds";
-import { ApiFailure, useContact, useStatus, useThread } from "../../api/queries";
+import { ApiFailure, markRead, useContact, useStatus, useThread } from "../../api/queries";
 import type { Channel } from "../../api/types.gen";
 import { Composer } from "./Composer";
 import { TimelineEntry } from "../../patterns/TimelineEntry";
@@ -27,6 +28,7 @@ export function ThreadPane({ contactId, profile }: { contactId: string; profile:
   const filter: Filter = raw && (CHANNELS as readonly string[]).includes(raw) ? (raw as Filter) : "all";
   const setFilter = (f: Filter) => setParams((p) => { const n = new URLSearchParams(p); if (f === "all") n.delete("thread"); else n.set("thread", f); return n; }, { replace: false });
 
+  const qc = useQueryClient();
   const contact = useContact(contactId);
   const thread = useThread(contactId, filter);
   const status = useStatus();
@@ -75,6 +77,14 @@ export function ThreadPane({ contactId, profile }: { contactId: string; profile:
     }
     firstId.current = first; newestId.current = newest;
   }, [ascending, key, toBottom]);
+
+  // "Seen": once the newest message is on screen (the reader is at the bottom), clear the conversation's new-message count.
+  const newest = ascending[ascending.length - 1]?.id;
+  useEffect(() => {
+    if (!newest || pendingNew > 0) return;
+    const t = window.setTimeout(() => { void markRead(contactId).then((r) => { if (r.ok) void qc.invalidateQueries({ queryKey: ["contacts"] }); }); }, 800);
+    return () => window.clearTimeout(t);
+  }, [newest, pendingNew, contactId, qc]);
 
   // ---- states
   if (contact.isError) {
