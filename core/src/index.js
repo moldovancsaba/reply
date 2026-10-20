@@ -11,7 +11,8 @@ import { createHandoff } from "./handoff/service.js";
 import { createIdentity } from "./identity/service.js";
 import { createBackupSchedule } from "./ops/auto.js";
 import { removePidfile, writePidfile } from "./ops/guard.js";
-import { createFakeDrivers, createAppleScriptDrivers } from "./send/drivers.js";
+import { createFakeDrivers, createAppleScriptDrivers, createNudges } from "./send/drivers.js";
+import { createWhatsAppConnector } from "./connectors/whatsapp.js";
 import { createSender } from "./send/service.js";
 import { createProfile } from "./profile/service.js";
 import { createReadService } from "./read/service.js";
@@ -61,9 +62,12 @@ const scheduler = createScheduler({ registry, runner, repo, logger, intervals: c
 const handoffs = createHandoff({ db: storage.db });
 const drivers = config.sendDriver === "fake" ? createFakeDrivers(config.home) : createAppleScriptDrivers();
 const SYNC_AFTER_SEND = { imessage: "imessage", email: "apple-mail", whatsapp: "whatsapp" };
+const whatsappForConfirm = registry.get("whatsapp") ?? createWhatsAppConnector({ config, logger });
 const sender = createSender({
     db: storage.db, handoffs, drivers, enabled: config.sending, logger,
-    confirmers: config.sendDriver === "fake" || !registry.get("whatsapp") ? {} : { whatsapp: (m) => registry.get("whatsapp").confirmSent(m) },
+    // a sent WhatsApp message is looked for in WhatsApp's database, also when the WhatsApp source is not switched on for syncing
+    confirmers: config.sendDriver === "fake" ? {} : { whatsapp: (m) => whatsappForConfirm.confirmSent(m) },
+    nudges: config.sendDriver === "fake" ? {} : createNudges(),
     // the sent message reaches the source app's database a moment later: read the source again, twice, to pick it up
     onSent: (channel) => { for (const delay of [3000, 12000]) setTimeout(() => { const c = registry.get(SYNC_AFTER_SEND[channel]); if (c && !runner.isRunning(c.id, "")) runner.start(c, "")?.done.catch(() => {}); }, delay).unref(); },
 });

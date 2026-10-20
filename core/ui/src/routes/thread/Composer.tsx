@@ -13,7 +13,7 @@ import { openFromGesture } from "./openLink";
 export const APP_LABEL = { imessage: "Messages", email: "Mail", whatsapp: "WhatsApp" } as const;
 export const PREFILL_LIMIT = 1500; // above this the service answers copy_and_open (see CORE_HANDOFF.md)
 
-type Sent = { sendId: string; status: "sent"; channel: Channel; handleLabel?: string; note: string; replayed?: boolean };
+type Sent = { sendId: string; status: "sent"; channel: Channel; handleLabel?: string; note: string; replayed?: boolean; confirmed?: boolean };
 type Handoff = { handoffId: string; action: "open_url" | "copy_and_open"; url: string; channel: Channel; handleLabel: string; note: string };
 
 const ERROR_TEXT: Record<string, string> = {
@@ -135,7 +135,8 @@ export function Composer({ contact, lastChannel, lastEmailSubject }: { contact: 
       return;
     }
     attempt.current = null;
-    toasts.notifySuccess({ title: `${r.data.note.replace(/\.$/, "")} to ${contact.displayName}.`, message: "It appears in the conversation after the next sync, in a few seconds.", autoCloseMs: 8000 });
+    if (r.data.confirmed === false) toasts.notifySuccess({ title: r.data.note, message: `Check the ${CHANNEL_LABEL[channel]} chat with ${contact.displayName} before you rely on it.`, autoCloseMs: 15000 });
+    else toasts.notifySuccess({ title: `${r.data.note.replace(/\.$/, "")} to ${contact.displayName}.`, message: "It appears in the conversation after the next sync, in a few seconds.", autoCloseMs: 8000 });
     clearDraft(contact.id);
     setText("");
     setSaved(false);

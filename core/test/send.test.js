@@ -14,7 +14,7 @@ const NOW = Date.UTC(2026, 9, 19, 8, 0, 0);
 const msg = (n, handle, extra = {}) => ({ channel: "imessage", account: "", providerMessageKey: `m${n}`, threadKey: "t", handle_norm: handle, isFromMe: false, tsMs: NOW - n * 1000, text: `t${n}`, attachments: [], ...extra });
 const CID = (n) => `client-id-${String(n).padStart(4, "0")}`;
 
-function setup({ drivers, enabled = true, clock, confirmers } = {}) {
+function setup({ drivers, enabled = true, clock, confirmers, nudges, confirmMs = 3000 } = {}) {
     const home = mkdtempSync(path.join(os.tmpdir(), "rc-send-"));
     const { db } = openDb(home);
     const repo = createRepo(db, { now: () => NOW });
@@ -24,7 +24,7 @@ function setup({ drivers, enabled = true, clock, confirmers } = {}) {
     const fake = Object.fromEntries(["imessage", "email", "whatsapp"].map((c) => [c, async (m) => { sent.push({ channel: c, ...m }); }]));
     const { logger, lines } = memoryLogger();
     const sentHooks = [];
-    const sender = createSender({ db, handoffs, drivers: drivers ?? fake, confirmers, sleep: async () => {}, confirmMs: 3000, enabled, now: clock ?? (() => NOW), onSent: (c) => sentHooks.push(c), logger });
+    const sender = createSender({ db, handoffs, drivers: drivers ?? fake, confirmers, nudges, sleep: async () => {}, confirmMs, enabled, now: clock ?? (() => NOW), onSent: (c) => sentHooks.push(c), logger });
     const id = (h) => db.prepare("SELECT contact_id c FROM contact_handles WHERE handle_norm = ?").get(h).c;
     return { home, db, handoffs, sender, sent, sentHooks, lines, id };
 }
@@ -211,9 +211,27 @@ test("WhatsApp: it is sent only once the message shows up in that chat; the wron
     assert.equal((await mail.sender.send({ contactId: mail.id("+36301234567"), channel: "imessage", text: "hi", clientId: CID(5) })).confirmed, undefined);
 });
 
+test("WhatsApp: no database to look in means 'sent' is never claimed; a lost Return is pressed once more after 5 s", async () => {
+    const none = setup();
+    const r = await none.sender.send({ contactId: none.id("+36301234567@wa"), channel: "whatsapp", text: "hi", clientId: CID(1) });
+    assert.deepEqual([r.status, r.confirmed], ["sent", false]);
+    assert.match(r.note, /could not be confirmed/);
+    assert.equal((await none.sender.send({ contactId: none.id("+36301234567"), channel: "imessage", text: "hi", clientId: CID(2) })).note, "Sent through Messages.");
+
+    let nudged = 0;
+    let polls = 0;
+    const s = setup({ confirmMs: 15_000, nudges: { whatsapp: async () => { nudged++; } }, confirmers: { whatsapp: async () => (++polls > 7 ? "chat" : "none") } });
+    const ok = await s.sender.send({ contactId: s.id("+36301234567@wa"), channel: "whatsapp", text: "hi", clientId: CID(3) });
+    assert.deepEqual([ok.confirmed, nudged], [true, 1]);
+    const early = setup({ confirmMs: 15_000, nudges: { whatsapp: async () => { nudged++; } }, confirmers: { whatsapp: async () => "chat" } });
+    await early.sender.send({ contactId: early.id("+36301234567@wa"), channel: "whatsapp", text: "hi", clientId: CID(4) });
+    assert.equal(nudged, 1, "no second Return when the message is already there");
+});
+
 test("the WhatsApp script checks the focus again right before it presses Return", () => {
     const src = SCRIPTS.whatsapp.join("\n");
-    assert.ok(src.indexOf("lost the focus") < src.indexOf("keystroke return"));
+    assert.ok(src.indexOf("lost the focus") < src.indexOf("key code 36"), "Return is the key code, pressed only after the focus check");
+    assert.doesNotMatch(src, /keystroke return/);
     assert.equal(classify("execution error: WhatsApp lost the focus (9002)", "whatsapp").code, "whatsapp_not_ready");
 });
 
