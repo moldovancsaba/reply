@@ -8,7 +8,7 @@ Press **Send** in the Reply box and the message leaves this Mac through the app 
 |---|---|---|---|
 | iMessage | AppleScript tells **Messages** to send to the contact's phone number or email address (iMessage first, then SMS if the person is not on iMessage and your iPhone relays texts) | Automation: {reply} may control Messages | good |
 | Email | AppleScript tells **Mail** to make and send a message from your default Mail account (subject starts as "Re: ..." of the last mail) | Automation: {reply} may control Mail | good |
-| WhatsApp | opens the chat with the text typed in (`whatsapp://send`), waits until WhatsApp Desktop is in front, then presses Return through System Events | Automation: System Events, and **Accessibility** for {reply} | least reliable: it depends on WhatsApp Desktop's window; if WhatsApp does not come to the front, or loses the focus before the key press, nothing is sent. The message must then show up in WhatsApp's database, in that chat, within 15 s (see "Confirming WhatsApp") |
+| WhatsApp | opens the chat with the text typed in (`whatsapp://send`), waits until WhatsApp Desktop is in front, then presses Return (key code 36, after a 2.5 s wait for the chat to load) through System Events | Automation: System Events, and **Accessibility** for {reply} | least reliable: it depends on WhatsApp Desktop's window; if WhatsApp does not come to the front, or loses the focus before the key press, nothing is sent. The message must then show up in WhatsApp's database, in that chat, within 15 s (see "Confirming WhatsApp") |
 
 Group chats and people without a phone number or address cannot be a recipient (the Reply box offers only what the contact really has). Attachments cannot be sent; use "Open in {App} instead".
 
@@ -38,7 +38,7 @@ A key press cannot tell whether WhatsApp sent anything, so after it Reply Core l
 | not at all | `send_unconfirmed` (504), recorded as `unknown`: it may have been sent; no blind retry |
 | the database cannot be read (permission, schema changed) | `sent`, `confirmed: false`, with the note that arrival could not be confirmed |
 
-The window is also checked a second time right before Return; if WhatsApp lost the focus meanwhile nothing is sent (`whatsapp_not_ready`). The send request therefore takes up to about 15 seconds longer for WhatsApp; the one-at-a-time lock is held meanwhile. Confirmation is tested with fixture databases, not yet with a real WhatsApp send (#256).
+The look-up works whether or not the WhatsApp source is switched on for syncing; it needs the same access to WhatsApp's data (Full Disk Access for {reply}). If the message is still not there after 5 seconds the Return key is pressed once more (on an empty message box it does nothing, so nothing is sent twice). Without access to the data nothing can be confirmed and the answer is `sent` with `confirmed: false` and the note "Pressed Send in WhatsApp. It could not be confirmed that the message arrived." The window is also checked a second time right before Return; if WhatsApp lost the focus meanwhile nothing is sent (`whatsapp_not_ready`). The send request therefore takes up to about 15 seconds longer for WhatsApp; the one-at-a-time lock is held meanwhile. Confirmation is tested with fixture databases, not yet with a real WhatsApp send (#256).
 
 ## After sending
 

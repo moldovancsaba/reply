@@ -51,13 +51,23 @@ const SCRIPTS = {
         "end if",
         "end repeat",
         "if not ready then error \"WhatsApp did not come to the front\" number 9001",
-        "delay 1",
+        "delay 2.5",
         "if not (frontmost of process \"WhatsApp\") then error \"WhatsApp lost the focus\" number 9002",
-        "keystroke return",
+        "key code 36",
         "end tell",
         "end run",
     ],
 };
+
+// The same key press again, without opening the chat: used once when the message has not shown up after the first one.
+// On an empty message box it does nothing, so it cannot send anything twice.
+const NUDGE = [
+    "tell application \"System Events\"",
+    "if not (exists process \"WhatsApp\") then error \"WhatsApp is not running\" number 9001",
+    "if not (frontmost of process \"WhatsApp\") then error \"WhatsApp lost the focus\" number 9002",
+    "key code 36",
+    "end tell",
+];
 
 export const scriptArgs = {
     imessage: ({ handle, text }) => [handle, text],
@@ -120,6 +130,11 @@ export function defaultRun(lines, args, timeoutMs = 45_000) {
 export function createFakeDrivers(home) {
     const make = (channel) => async (msg) => { appendFileSync(path.join(home, "sent-fake.jsonl"), `${JSON.stringify({ channel, handle: msg.handle, subject: msg.subject, text: msg.text })}\n`); };
     return { imessage: make("imessage"), email: make("email"), whatsapp: make("whatsapp") };
+}
+
+// A second Return for WhatsApp (see NUDGE); errors are ignored by the caller, the confirmation decides the outcome.
+export function createNudges({ run = defaultRun } = {}) {
+    return { whatsapp: async () => { await run(NUDGE, []); } };
 }
 
 export { SCRIPTS };

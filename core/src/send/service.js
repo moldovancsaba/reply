@@ -11,7 +11,7 @@ const NOTE = { imessage: "Sent through Messages.", email: "Sent through Mail.", 
 
 // Sending a message from the app: one explicit request per message (the UI asks the person first), checked against the
 // contact's own handles, idempotent per `clientId`, rate limited, one at a time, audited without content.
-export function createSender({ db, handoffs, drivers, confirmers = {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), confirmMs = 15_000, enabled = true, now = () => Date.now(), onSent, logger }) {
+export function createSender({ db, handoffs, drivers, confirmers = {}, nudges = {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), confirmMs = 15_000, enabled = true, now = () => Date.now(), onSent, logger }) {
     const q = {
         byClient: db.prepare("SELECT * FROM sends WHERE client_id = ?"),
         insert: db.prepare("INSERT INTO sends (id, client_id, ts_ms, contact_id, channel, handle_kind, text_length, status) VALUES (?,?,?,?,?,?,?, 'sending')"),
@@ -65,11 +65,14 @@ export function createSender({ db, handoffs, drivers, confirmers = {}, sleep = (
             }
             // WhatsApp has no sending interface (a key press), so look for the message in its database: only then is it "sent".
             let confirmed;
+            if (channel === "whatsapp" && !confirmers[channel]) confirmed = false; // a key press cannot say whether anything was sent
             if (confirmers[channel]) {
                 const since = startedAt - 2000;
                 let seen = "none";
                 for (let waited = 0; seen === "none" && waited <= confirmMs; waited += 1000) {
                     if (waited) await sleep(1000);
+                    // the first Return may have been lost (the chat was still loading): press it once more, it is harmless on an empty box
+                    if (waited === 5000 && nudges[channel]) await nudges[channel]().catch(() => {});
                     seen = await confirmers[channel]({ handle: chosen.value, text, sinceMs: since });
                     if (seen === "unavailable") break;
                 }
