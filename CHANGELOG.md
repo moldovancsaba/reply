@@ -29,6 +29,7 @@ The first release you can live in: profiles, sending, new-message counts, a sign
 - The previous generation of the project moved to [`legacy/`](legacy/README.md); the plan moved to [docs/CORE_PLAN.md](docs/CORE_PLAN.md); legacy Markdown links no longer contain absolute paths of one machine.
 
 ### Fixed
+- The inbox at tablet widths (about 1024 px) squeezed three columns into 160 to 290 px each; the third (profile) column now needs 80 em, and between 62 and 80 em the profile page replaces the conversation.
 - WhatsApp group messages named the group as sender; the real member is now used (re-import once after upgrading: `node scripts/reset-cursor.js whatsapp --purge`, service stopped).
 - Encoded WhatsApp push names (`+CgAQ…=`) were shown as names (migration 0010 restores the handle on affected automatic contacts).
 - A merged-away or unknown contact no longer shows a second, empty profile column.
