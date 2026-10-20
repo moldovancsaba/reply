@@ -3,7 +3,7 @@ import { AppError } from "../errors.js";
 import { formatHandle } from "../identity/normalize.js";
 import { CHANNELS } from "../storage/repo.js";
 
-// Reply Core never sends. A handoff validates the recipient, builds a link that opens the right macOS app with the
+// A handoff (the "open in the app instead" path; the app can also send itself, see src/send) validates the recipient, builds a link that opens the right macOS app with the
 // text prefilled, and records that it happened (length only, never the text). The human presses send in that app.
 export const MAX_TEXT = 1500; // above this the body would not survive a URL reliably: the UI copies it instead
 const MAX_INPUT = 10_000;
@@ -72,12 +72,10 @@ export function createHandoff({ db, now = () => Date.now() }) {
         return out;
     }
 
-    function handoff({ contactId, channel, handle, text, subject }) {
+    // The one place that decides who a message may go to: always one of the contact's own stored handles of the right
+    // kind for the channel, never a value taken from the request.
+    function resolve({ contactId, channel, handle }) {
         if (!CHANNELS.includes(channel)) throw new AppError(400, "invalid_request", `channel must be one of ${CHANNELS.join(", ")}.`);
-        if (typeof text !== "string") throw new AppError(400, "invalid_request", "text must be a string.");
-        if (!text.trim()) throw new AppError(400, "text_empty", "Write a message first.");
-        if (text.length > MAX_INPUT) throw new AppError(413, "text_too_long", `Messages over ${MAX_INPUT.toLocaleString("en-US")} characters cannot be handed off.`);
-        if (subject !== undefined && (typeof subject !== "string" || subject.length > MAX_SUBJECT)) throw new AppError(400, "invalid_request", `subject must be text of at most ${MAX_SUBJECT} characters.`);
         activeContact(contactId);
         const available = channelsFor(contactId);
         const entry = available.find((c) => c.channel === channel);
@@ -91,7 +89,16 @@ export function createHandoff({ db, now = () => Date.now() }) {
             chosen = entry.handles.find((h) => h.value === handle);
             if (!chosen) throw new AppError(422, "handle_not_owned", "That address does not belong to this contact for that channel.");
         }
-        const kind = db.prepare("SELECT kind FROM handles WHERE handle_norm = ?").get(chosen.value).kind;
+        return { chosen, kind: db.prepare("SELECT kind FROM handles WHERE handle_norm = ?").get(chosen.value).kind };
+    }
+
+    function handoff({ contactId, channel, handle, text, subject }) {
+        if (!CHANNELS.includes(channel)) throw new AppError(400, "invalid_request", `channel must be one of ${CHANNELS.join(", ")}.`);
+        if (typeof text !== "string") throw new AppError(400, "invalid_request", "text must be a string.");
+        if (!text.trim()) throw new AppError(400, "text_empty", "Write a message first.");
+        if (text.length > MAX_INPUT) throw new AppError(413, "text_too_long", `Messages over ${MAX_INPUT.toLocaleString("en-US")} characters cannot be handed off.`);
+        if (subject !== undefined && (typeof subject !== "string" || subject.length > MAX_SUBJECT)) throw new AppError(400, "invalid_request", `subject must be text of at most ${MAX_SUBJECT} characters.`);
+        const { chosen, kind } = resolve({ contactId, channel, handle });
         const full = buildUrl(channel, chosen.value, text, subject);
         const copy = full.length > MAX_URL || text.length > MAX_TEXT;
         const id = `h_${randomUUID().slice(0, 12)}`;
@@ -102,5 +109,5 @@ export function createHandoff({ db, now = () => Date.now() }) {
         };
     }
 
-    return { handoff, channelsFor };
+    return { handoff, channelsFor, resolve };
 }
