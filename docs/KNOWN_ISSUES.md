@@ -41,4 +41,4 @@ What is not done, what is less reliable than the rest, and which checks need a p
 
 ## Repository
 
-- **Old commits still contain personal data and an API key** from an earlier layout of this repository (contacts database, message exports, a Google API key). They are removed from the current tree and ignored; removing them from the history needs the maintainer to run the purge script and force-push, and the key must be revoked. Until that is done the repository must not be promoted as clean. GitHub may also keep cached views of old pull-request commits until GitHub Support purges them.
+- **GitHub may still serve cached views of old commits.** The history was rewritten on 2026-10-20 (no branch contains personal data or the key; the key is revoked), but GitHub keeps old `refs/pull/*` objects and cached views until GitHub Support purges them. Old clones and forks still hold the old history and should be deleted. Tracked in issue #255.
