@@ -206,6 +206,13 @@ export interface Profile {
     };
   };
   mergedFrom: string[];
+  members: {
+    handle: string;
+    name: string;
+    admin: boolean;
+    messages: number;
+    contactId: string | null;
+  }[];
 }
 /**
  * This interface was referenced by `ReadResponses`'s JSON-Schema

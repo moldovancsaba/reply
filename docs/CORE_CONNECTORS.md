@@ -135,7 +135,7 @@ To discard imported email and re-ingest: stop the service, `node core/scripts/re
 
 ## WhatsApp
 
-Chat names: the group subject (or the name a person uses) from `ZWACHATSESSION.ZPARTNERNAME` names **automatic** contacts that would otherwise be called by their id; an address-book or merged contact is never renamed. In group chats each message carries the sender's name (their contact, else their formatted number) as `senderName`.
+Chat names: the group subject (or the name a person uses) from `ZWACHATSESSION.ZPARTNERNAME` names **automatic** contacts that would otherwise be called by their id; an address-book or merged contact is never renamed. Group member lists (`ZWAGROUPMEMBER`, active members only, with the names above) are stored in `group_members` and shown on the group's profile; the tables are optional, a layout without them just has no member lists. In group chats each message carries the sender's name (their contact, else their formatted number) as `senderName`.
  (`whatsapp`, issue #195)
 
 Reads WhatsApp Desktop's local `ChatStorage.sqlite` directly (no helper, no OpenClaw), incrementally by primary key, every 2 minutes. **Best-effort**: the file is an undocumented, app-private format, so the connector checks the layout first and stops rather than guess when WhatsApp changes it. It only reads; it never sends.
