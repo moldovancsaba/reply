@@ -11,6 +11,8 @@ import { createHandoff } from "./handoff/service.js";
 import { createIdentity } from "./identity/service.js";
 import { createBackupSchedule } from "./ops/auto.js";
 import { removePidfile, writePidfile } from "./ops/guard.js";
+import { createFakeDrivers, createAppleScriptDrivers } from "./send/drivers.js";
+import { createSender } from "./send/service.js";
 import { createProfile } from "./profile/service.js";
 import { createReadService } from "./read/service.js";
 import { defaultHelperPath } from "./helper/index.js";
@@ -57,11 +59,18 @@ const runner = createRunner({ db: storage.db, repo, logger, onNames: (names) => 
 });
 const scheduler = createScheduler({ registry, runner, repo, logger, intervals: config.intervals });
 const handoffs = createHandoff({ db: storage.db });
-const read = createReadService({ db: storage.db, replyChannels: (id) => handoffs.channelsFor(id) });
+const drivers = config.sendDriver === "fake" ? createFakeDrivers(config.home) : createAppleScriptDrivers();
+const SYNC_AFTER_SEND = { imessage: "imessage", email: "apple-mail", whatsapp: "whatsapp" };
+const sender = createSender({
+    db: storage.db, handoffs, drivers, enabled: config.sending, logger,
+    // the sent message reaches the source app's database a moment later: read the source again, twice, to pick it up
+    onSent: (channel) => { for (const delay of [3000, 12000]) setTimeout(() => { const c = registry.get(SYNC_AFTER_SEND[channel]); if (c && !runner.isRunning(c.id, "")) runner.start(c, "")?.done.catch(() => {}); }, delay).unref(); },
+});
+const read = createReadService({ db: storage.db, replyChannels: (id) => handoffs.channelsFor(id).map((c) => ({ ...c, send: sender.capability(c.channel) })) });
 const drafting = createDrafting({ config, read, logger });
 const profile = createProfile({ db: storage.db });
 const status = createStatus({ db: storage.db, config, registry, runner, scheduler, repo, helper: defaultHelperPath() });
-const app = createServer(config, logger, { registry, runner, repo, identity, read, profile, status, handoffs, drafting, logger, uiDir: config.uiDir });
+const app = createServer(config, logger, { registry, runner, repo, identity, read, profile, sender, appPath: config.appPath, status, handoffs, drafting, logger, uiDir: config.uiDir });
 
 try {
     await app.listen({ host: HOST, port: config.port });

@@ -2,7 +2,7 @@
 
 Status: living document, owned by issue #203; the composer (#205) is its first user.
 
-**Reply Core never sends anything.** A handoff builds a link that opens the right macOS app with your text prefilled; you press send there. This keeps a person in final control and removes the automation permissions and transport failures that sending would need.
+Status: since the first release the app can also send by itself ([CORE_SENDING.md](CORE_SENDING.md)); a handoff stays available as **"Open in {App} instead"** (attachments, groups, or when you want to review in the app). A handoff builds a link that opens the right macOS app with your text prefilled; you press send there. This keeps a person in final control and removes the automation permissions and transport failures that sending would need.
 
 ## `POST /api/handoff`
 
@@ -70,6 +70,6 @@ Every handoff writes one row to `handoffs` (migration `0006_handoffs.sql`): id, 
 
 ## What you see in the app (user-facing)
 
-Under every conversation there is a **Reply** box. Pick the channel (only channels this person has an address for are offered, each with the address), write your message and press **Open in Messages / Mail / WhatsApp**. Reply Core opens that app with your text already in place. **Nothing has been sent at that point and Reply Core never sends anything itself**: you read it there and press send. A message you do send shows up in Reply Core after the next sync.
+Under every conversation there is a **Reply** box. Pick the channel (only channels this person has an address for are offered, each with the address), write your message and press **Open in Messages / Mail / WhatsApp**. Reply Core opens that app with your text already in place. **Nothing has been sent at that point**: you read it there and press send. (Pressing **Send** instead sends it from Reply Core; see [CORE_SENDING.md](CORE_SENDING.md).) A message you do send shows up in Reply Core after the next sync.
 
 Very long messages (over 1,500 characters) are copied to the clipboard instead; the app opens empty and the notice tells you to paste. If you have not finished writing, your draft is kept for this browser session and comes back when you return to the conversation.

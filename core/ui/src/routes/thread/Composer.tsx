@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Anchor, BodyText, CardTitle, GdsInline, GdsStack, InlineAlert, MetadataText, Radio, SemanticButton, StateBlock, Select, Textarea, useGdsToasts } from "@sovereignsquad/gds";
+import { useQueryClient } from "@tanstack/react-query";
+import { Anchor, BodyText, CardTitle, GdsBox, GdsInline, GdsStack, InlineAlert, MetadataText, Radio, SemanticButton, StateBlock, Select, Switch, Textarea, TextInput, useGdsToasts } from "@sovereignsquad/gds";
 import { fetchJson, type ApiError } from "../../api/client";
 import type { Channel, Contact } from "../../api/types.gen";
 import { CHANNEL_LABEL } from "../../lib/time";
+import { ConfirmPanel } from "../../components/ConfirmPanel";
+import { recoverySteps } from "../sources/viewModel";
 import { clearDraft, loadDraft, saveDraft } from "./draftStore";
 import { DraftPanel } from "./DraftPanel";
 import { openFromGesture } from "./openLink";
@@ -10,6 +13,7 @@ import { openFromGesture } from "./openLink";
 export const APP_LABEL = { imessage: "Messages", email: "Mail", whatsapp: "WhatsApp" } as const;
 export const PREFILL_LIMIT = 1500; // above this the service answers copy_and_open (see CORE_HANDOFF.md)
 
+type Sent = { sendId: string; status: "sent"; channel: Channel; handleLabel?: string; note: string; replayed?: boolean };
 type Handoff = { handoffId: string; action: "open_url" | "copy_and_open"; url: string; channel: Channel; handleLabel: string; note: string };
 
 const ERROR_TEXT: Record<string, string> = {
@@ -21,8 +25,22 @@ const ERROR_TEXT: Record<string, string> = {
 };
 const errorText = (e: ApiError) => ERROR_TEXT[e.code] ?? e.message;
 
-export function Composer({ contact, lastChannel }: { contact: Contact; lastChannel: Channel | null }) {
+const CONFIRM_KEY = "rc.send.confirm";
+const readConfirm = () => { try { return window.localStorage.getItem(CONFIRM_KEY) !== "0"; } catch { return true; } };
+const newAttemptId = () => crypto.randomUUID().replace(/-/g, "");
+
+export function Composer({ contact, lastChannel, lastEmailSubject }: { contact: Contact; lastChannel: Channel | null; lastEmailSubject?: string }) {
   const toasts = useGdsToasts();
+  const qc = useQueryClient();
+  const replySubject = lastEmailSubject ? `Re: ${lastEmailSubject.replace(/^(re:\s*)+/i, "")}` : "";
+  const [subject, setSubject] = useState(replySubject);
+  const subjectTouched = useRef(false);
+  useEffect(() => { if (!subjectTouched.current) setSubject(replySubject); }, [replySubject]); // the thread may load after the composer appears
+  const [confirmBefore, setConfirmBefore] = useState(readConfirm);
+  const [confirming, setConfirming] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<ApiError | null>(null);
+  const attempt = useRef<string | null>(null); // one id per message, so a double click or a retry after a lost answer never sends twice
   const channels = contact.replyChannels ?? [];
   const draft = useRef(loadDraft(contact.id)).current;
   const initial = (c: Channel | null | undefined) => (channels.some((x) => x.channel === c) ? (c as Channel) : channels[0]?.channel);
@@ -91,6 +109,48 @@ export function Composer({ contact, lastChannel }: { contact: Contact; lastChann
     window.setTimeout(() => area.current?.focus(), 0);
   };
 
+  const canSend = current.send.available;
+
+  const askToSend = () => {
+    if (!text.trim()) { setStatus("error"); setError({ code: "text_empty", message: ERROR_TEXT.text_empty }); return; }
+    setSendError(null);
+    if (confirmBefore) setConfirming(true); else void doSend();
+  };
+
+  const doSend = async () => {
+    if (sending) return;
+    attempt.current ??= newAttemptId();
+    setSending(true);
+    setSendError(null);
+    const r = await fetchJson<Sent>("/api/send", {
+      method: "POST", timeoutMs: 60_000,
+      body: { contactId: contact.id, channel, text, clientId: attempt.current, ...(current.handles.length > 1 ? { handle: target.value } : {}), ...(channel === "email" ? { subject } : {}) },
+    });
+    setSending(false);
+    setConfirming(false);
+    if (!r.ok) {
+      // a lost answer (timeout, network) keeps the id: asking again replays the same attempt instead of sending twice
+      if (r.error.code !== "timeout" && r.error.code !== "network_error") attempt.current = null;
+      setSendError(r.error);
+      return;
+    }
+    attempt.current = null;
+    toasts.notifySuccess({ title: `${r.data.note.replace(/\.$/, "")} to ${contact.displayName}.`, message: "It appears in the conversation after the next sync, in a few seconds.", autoCloseMs: 8000 });
+    clearDraft(contact.id);
+    setText("");
+    setSaved(false);
+    window.setTimeout(() => area.current?.focus(), 400); // after the dialog has handed focus back to its button
+    for (const delay of [4000, 14000]) window.setTimeout(() => { void qc.invalidateQueries({ queryKey: ["thread", contact.id] }); void qc.invalidateQueries({ queryKey: ["contacts"] }); void qc.invalidateQueries({ queryKey: ["profile", contact.id] }); }, delay);
+  };
+
+  const allowSending = async () => {
+    const r = await fetchJson<{ opened: boolean }>("/api/send/consent", { method: "POST", body: {} });
+    if (r.ok) toasts.notifySuccess({ title: "Look for a macOS window.", message: "It asks whether {reply} may control Messages, Mail and System Events. Choose Allow, then try again.", autoCloseMs: 12000 });
+    else toasts.notifyError({ title: "Could not ask macOS", message: r.error.message });
+  };
+
+  const toggleConfirm = (v: boolean) => { setConfirmBefore(v); try { window.localStorage.setItem(CONFIRM_KEY, v ? "1" : "0"); } catch { /* the choice is just not remembered */ } };
+
   const copy = async () => {
     const ok = await navigator.clipboard.writeText(text).then(() => true, () => false);
     toasts.notifySuccess({ title: ok ? "Text copied." : "Could not copy. Select the text and copy it manually.", autoCloseMs: 4000 });
@@ -132,11 +192,50 @@ export function Composer({ contact, lastChannel }: { contact: Contact; lastChann
           <InlineAlert severity="error" title="Nothing was opened" message={errorText(error as ApiError)} action={status === "error" && error.code !== "text_empty" && (error as ApiError).retryable ? <SemanticButton action="refresh" label="Try again" onClick={() => void open()} /> : undefined} />
         </div>
       ) : null}
-      <BodyText>{`To ${contact.displayName} through ${CHANNEL_LABEL[channel]} (${target.label}). Reply Core opens ${app} with your text; you press send there. Reply Core never sends anything itself.`}</BodyText>
-      <GdsInline gap="sm">
-        <SemanticButton action="send" label={`Open in ${app}`} loading={status === "submitting"} disabled={status === "submitting"} onClick={() => void open()} />
+      {canSend && channel === "email" ? <TextInput label="Subject" maxLength={300} value={subject} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { subjectTouched.current = true; setSubject(e.currentTarget.value); }} /> : null}
+      {sendError ? (
+        <div tabIndex={-1} ref={(el) => el?.focus()}>
+          <InlineAlert
+            severity="error"
+            title={sendError.code === "send_timeout" || (sendError.code === "already_attempted" && /may already/.test(sendError.message)) ? "The message may have been sent" : "The message was not sent"}
+            message={sendError.message}
+            action={
+              <GdsStack gap="sm">
+                {recoverySteps((sendError.details?.recovery as { order: number; text: string; deepLink?: string }[] | undefined)).length > 0 ? (
+                  <GdsStack component="ol" gap="xs" aria-label="What to do">
+                    {recoverySteps((sendError.details?.recovery as { order: number; text: string; deepLink?: string }[] | undefined)).map((st) => (
+                      <GdsBox component="li" key={st.order}><BodyText>{st.text}</BodyText>{st.href ? <Anchor href={st.href}>{st.linkLabel}</Anchor> : null}</GdsBox>
+                    ))}
+                  </GdsStack>
+                ) : null}
+                <GdsInline gap="sm">
+                  {sendError.code === "automation_denied" || sendError.code === "accessibility_denied" ? <SemanticButton action="settings" label="Allow {reply} to send" onClick={() => void allowSending()} /> : null}
+                  {sendError.retryable || sendError.code === "network_error" || sendError.code === "timeout" ? <SemanticButton action="refresh" label="Try again" onClick={() => void doSend()} /> : null}
+                </GdsInline>
+              </GdsStack>
+            }
+          />
+        </div>
+      ) : null}
+      <BodyText>
+        {canSend
+          ? `To ${contact.displayName} through ${CHANNEL_LABEL[channel]} (${target.label}). Send sends it now, through ${app} on this Mac.`
+          : `To ${contact.displayName} through ${CHANNEL_LABEL[channel]} (${target.label}). ${current.send.reason ?? ""} Reply Core opens ${app} with your text; you press send there.`}
+      </BodyText>
+      <GdsInline gap="sm" align="center" wrap="wrap">
+        {canSend ? <SemanticButton action="send" label="Send" loading={sending} disabled={sending || confirming} onClick={askToSend} /> : null}
+        <SemanticButton action={canSend ? "message" : "send"} label={canSend ? `Open in ${app} instead` : `Open in ${app}`} variant={canSend ? "default" : undefined} loading={status === "submitting"} disabled={status === "submitting"} onClick={() => void open()} />
         <SemanticButton action="copy" label="Copy text" variant="default" disabled={text.trim() === ""} onClick={() => void copy()} />
       </GdsInline>
+      {canSend ? <Switch label="Ask me before sending" checked={confirmBefore} onChange={(e: React.ChangeEvent<HTMLInputElement>) => toggleConfirm(e.currentTarget.checked)} /> : null}
+      <ConfirmPanel id="send-confirm" opened={confirming} title="Send this message?" confirmLabel="Send" loading={sending} onConfirm={() => void doSend()} onClose={() => { if (!sending) setConfirming(false); }}>
+        <GdsStack gap="sm">
+          <BodyText>{`To ${contact.displayName} through ${CHANNEL_LABEL[channel]} (${target.label})`}</BodyText>
+          {channel === "email" && subject ? <BodyText>{`Subject: ${subject}`}</BodyText> : null}
+          <GdsStack gap="xs" aria-label="The message">{text.split("\n").filter((l) => l.trim()).map((l, i) => <BodyText key={i}>{l}</BodyText>)}</GdsStack>
+          <MetadataText>It is sent now and cannot be taken back.</MetadataText>
+        </GdsStack>
+      </ConfirmPanel>
     </GdsStack>
   );
 }

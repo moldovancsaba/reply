@@ -1,0 +1,48 @@
+# Reply Core: sending messages
+
+Status: living document. Sending from the app was added after the first release, which only handed replies off to other apps ([CORE_HANDOFF.md](CORE_HANDOFF.md), still available as "Open in {App} instead").
+
+Press **Send** in the Reply box and the message leaves this Mac through the app you already use for that channel. Nothing goes anywhere else: no cloud, no relay.
+
+| Channel | How it is sent | Permission it needs | Reliability |
+|---|---|---|---|
+| iMessage | AppleScript tells **Messages** to send to the contact's phone number or email address (iMessage first, then SMS if the person is not on iMessage and your iPhone relays texts) | Automation: {reply} may control Messages | good |
+| Email | AppleScript tells **Mail** to make and send a message from your default Mail account (subject starts as "Re: ..." of the last mail) | Automation: {reply} may control Mail | good |
+| WhatsApp | opens the chat with the text typed in (`whatsapp://send`), waits until WhatsApp Desktop is in front, then presses Return through System Events | Automation: System Events, and **Accessibility** for {reply} | least reliable: it depends on WhatsApp Desktop's window; if WhatsApp does not come to the front nothing is sent |
+
+Group chats and people without a phone number or address cannot be a recipient (the Reply box offers only what the contact really has). Attachments cannot be sent; use "Open in {App} instead".
+
+## Safety rules
+
+- **One explicit request per message.** The UI asks first ("Send this message?" with the recipient, channel and the exact text) unless you switch "Ask me before sending" off. There is no automatic, scheduled or bulk sending, and drafts from the optional local model are never sent without you pressing Send.
+- **The recipient is always one of the contact's own stored handles** for that channel, never a value from the request (`handle_not_owned` otherwise).
+- **Text and recipient are arguments to the script, never part of its source** (`on run argv`), so nothing in a message can change what the script does (tested with a hostile text).
+- **Idempotent per message.** Every attempt carries a `clientId`; asking again with the same id returns the first outcome (`replayed: true`) and never sends a second message. A request that failed or whose outcome is unknown cannot be repeated with the same id, and the UI keeps the id only when the answer was lost (timeout, network), so a retry replays instead of duplicating.
+- **Unknown outcome is said out loud.** If the app does not answer in time (45 s) the attempt is recorded as `unknown`, the UI says "The message may have been sent: check the conversation" and does not offer a blind retry.
+- **Rate limit:** one send at a time and at most 10 a minute (`send_rate_limited`).
+- **Audit without content:** one row per attempt in `sends` (time, contact id, channel, kind of address, text length, outcome). Never the text, the subject or the address; the log lines carry the channel, length and outcome only.
+- **Off switch:** `REPLY_CORE_SENDING=off` removes the Send button (the reason is shown) and the API refuses (`sending_disabled`). `install-agent` stores the setting in the agent.
+
+## Permissions, step by step
+
+macOS lists an app under Automation or Accessibility only after the app asks. In the Reply box a permission error shows the steps and an **Allow {reply} to send** button, which opens {reply} in its permission mode (`{reply}.app --consent-send`, or `POST /api/send/consent`): it launches Messages, Mail and System Events and asks macOS for Automation of each, and for Accessibility. Choose Allow in each macOS window, then press Send again. Afterwards System Settings > Privacy & Security > Automation shows {reply} with Messages, Mail and System Events, and Accessibility shows {reply}. The permission belongs to the signed {reply} app, so it survives rebuilds and Node upgrades.
+
+## After sending
+
+The sent message reaches the source app's database a moment later. Reply Core reads that source again 3 and 12 seconds after a send, and the conversation refreshes after 4 and 14 seconds, so your message appears in the thread through the normal import (there is no separate "pending" copy).
+
+## Errors
+
+| Code | Meaning | What the UI shows |
+|---|---|---|
+| `automation_denied` (403) | {reply} may not control the app | steps, link to Automation settings, Allow button |
+| `accessibility_denied` (403) | {reply} may not press keys (WhatsApp) | steps, link to Accessibility settings, Allow button |
+| `recipient_not_found` (422) | the app could not find the recipient | nothing was sent |
+| `whatsapp_not_ready` (502) | WhatsApp did not come to the front in 10 s | nothing was sent; open WhatsApp and retry |
+| `app_not_running` (502) | the app could not be opened | nothing was sent |
+| `send_failed` (502) | the app refused the message | nothing was sent |
+| `send_timeout` (504) | no answer in 45 s | the message may have been sent |
+| `send_rate_limited` (429) | too many or one in flight | wait a moment |
+| `send_in_progress` (409) | the same message is still being sent | wait |
+| `already_attempted` (409) | this `clientId` already failed or has an unknown outcome | write it again to send a new one |
+| `sending_disabled` (403) | `REPLY_CORE_SENDING=off` | no Send button |

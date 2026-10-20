@@ -10,7 +10,7 @@ Status: living document, owned by issue #196; other issues add their rules here.
 | Message text, handles and names never appear in logs, metrics or errors | log redaction, counts-only log lines, tests that capture logs |
 | Other apps' databases are opened read-only | native helper, direct read-only SQLite, IMAP `EXAMINE` only |
 | No cloud: conversation text leaves this Mac only if you set a remote model URL on purpose | drafting config refuses non-loopback URLs without `REPLY_CORE_ALLOW_REMOTE_LLM=1` |
-| Reply Core never sends a message | handoff opens another app; there is no send code |
+| A message is sent only when you press Send, to one of the contact's own handles, once | `core/src/send/service.js`: explicit request per message, handle ownership check, `clientId` idempotency, one at a time, 10 a minute, audit without content, `REPLY_CORE_SENDING=off`; see [CORE_SENDING.md](CORE_SENDING.md) |
 
 ## Secrets (IMAP app passwords)
 

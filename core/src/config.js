@@ -43,6 +43,11 @@ export function loadConfig(env = process.env) {
         }
     }
 
+    const sending = (env.REPLY_CORE_SENDING || "on").toLowerCase();
+    if (!["on", "off"].includes(sending)) throw new ConfigError("REPLY_CORE_SENDING must be on or off");
+    const sendDriver = (env.REPLY_CORE_SEND_DRIVER || "applescript").toLowerCase();
+    if (!["applescript", "fake"].includes(sendDriver)) throw new ConfigError("REPLY_CORE_SEND_DRIVER must be applescript or fake");
+
     // unset or empty -> DEFAULT_ENABLED_IDS; the single word `none` -> no connectors at all
     const rawConnectors = (env.REPLY_CORE_CONNECTORS ?? "").trim().toLowerCase();
     const connectors = rawConnectors === "none" ? [] : rawConnectors.split(",").map((s) => s.trim()).filter(Boolean);
@@ -85,7 +90,7 @@ export function loadConfig(env = process.env) {
         (k) => k.startsWith("REPLY_CORE_") && !KNOWN_KEYS.has(k) && !/_INTERVAL_MS$/.test(k),
     );
     // IMAP joins the default connectors once an account has been added (see `reply-core accounts add-imap`)
-    return { home, port, logLevel, logFile, logMaxBytes, allowedOrigins, connectors: rawConnectors === "none" ? [] : connectors.length ? connectors : [...DEFAULT_ENABLED_IDS, ...(hasAccounts(home) ? ["imap"] : [])], llm: { provider: llm, model: ollamaModel, url: ollamaUrl }, imessageDb: env.REPLY_CORE_IMESSAGE_DB || null, mailRoot: env.REPLY_CORE_MAIL_ROOT || null, whatsappDb: env.REPLY_CORE_WHATSAPP_DB || null, uiDir: env.REPLY_CORE_UI_DIR ? path.resolve(env.REPLY_CORE_UI_DIR) : path.resolve(import.meta.dirname, "..", "ui", "dist"), intervals, defaultRegion, unknownKeys };
+    return { home, port, logLevel, sending: sending === "on", sendDriver, appPath: env.REPLY_CORE_APP || null, logFile, logMaxBytes, allowedOrigins, connectors: rawConnectors === "none" ? [] : connectors.length ? connectors : [...DEFAULT_ENABLED_IDS, ...(hasAccounts(home) ? ["imap"] : [])], llm: { provider: llm, model: ollamaModel, url: ollamaUrl }, imessageDb: env.REPLY_CORE_IMESSAGE_DB || null, mailRoot: env.REPLY_CORE_MAIL_ROOT || null, whatsappDb: env.REPLY_CORE_WHATSAPP_DB || null, uiDir: env.REPLY_CORE_UI_DIR ? path.resolve(env.REPLY_CORE_UI_DIR) : path.resolve(import.meta.dirname, "..", "ui", "dist"), intervals, defaultRegion, unknownKeys };
 }
 
 const KNOWN_KEYS = new Set([
@@ -93,6 +98,9 @@ const KNOWN_KEYS = new Set([
     "REPLY_CORE_PORT",
     "REPLY_CORE_LOG_LEVEL",
     "REPLY_CORE_LOG_FILE",
+    "REPLY_CORE_SENDING",
+    "REPLY_CORE_SEND_DRIVER",
+    "REPLY_CORE_APP",
     "REPLY_CORE_LOG_MAX_BYTES",
     "REPLY_CORE_ALLOWED_ORIGINS",
     "REPLY_CORE_CONNECTORS",
