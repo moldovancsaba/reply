@@ -15,6 +15,7 @@ export function createProfile({ db, now = () => Date.now() }) {
     const q = {
         contact: db.prepare("SELECT id, display_name, origin, merged_into FROM contacts WHERE id = ?"),
         details: db.prepare("SELECT json FROM contact_details WHERE contact_id = ?"),
+        photo: db.prepare("SELECT mime, data FROM contact_photos WHERE contact_id = ?"),
         profile: db.prepare("SELECT * FROM contact_profile WHERE contact_id = ?"),
         upsertProfile: db.prepare(`INSERT INTO contact_profile (contact_id, profession, company, relationship, linkedin_url, intro, updated_ms) VALUES (@id, @profession, @company, @relationship, @linkedinUrl, @intro, @now)
             ON CONFLICT(contact_id) DO UPDATE SET profession = @profession, company = @company, relationship = @relationship, linkedin_url = @linkedinUrl, intro = @intro, updated_ms = @now`),
@@ -73,6 +74,7 @@ export function createProfile({ db, now = () => Date.now() }) {
             displayName: c.display_name,
             origin: c.origin,
             card: JSON.parse(q.details.get(id)?.json ?? "{}"),
+            hasPhoto: Boolean(q.photo.get(id)),
             profile: profileOf(id),
             notes: q.notes.all(id).map((n) => ({ id: n.id, text: n.text, createdAt: iso(n.created_ms) })),
             handles: q.handles.all(id).map((h) => ({ value: h.handle_norm, label: formatHandle(h.handle_norm), kind: h.kind, origin: h.link_origin, messages: h.n, lastTs: iso(h.last_ms) })),
@@ -148,5 +150,8 @@ export function createProfile({ db, now = () => Date.now() }) {
         return { deleted: true };
     }
 
-    return { get, setProfile, addNote, deleteNote };
+    // The address-book thumbnail of a visible contact, or null.
+    const photo = (id) => q.photo.get(id) ?? null;
+
+    return { get, photo, setProfile, addNote, deleteNote };
 }

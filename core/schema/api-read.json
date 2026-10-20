@@ -501,7 +501,8 @@
         "handles",
         "stats",
         "mergedFrom",
-        "members"
+        "members",
+        "hasPhoto"
       ],
       "properties": {
         "id": {
@@ -791,6 +792,9 @@
               }
             }
           }
+        },
+        "hasPhoto": {
+          "type": "boolean"
         },
         "mergedFrom": {
           "type": "array",

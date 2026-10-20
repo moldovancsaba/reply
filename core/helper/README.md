@@ -23,7 +23,7 @@ stdout is NDJSON only (one object per line); stderr is human diagnostics without
 | `type` | Meaning |
 |---|---|
 | `message` | One iMessage or mail message. Common fields: `source`, `providerMessageKey`, `account`, `threadKey`, `counterpartHandle` (raw, unnormalized), `isFromMe`, `tsMs` (UTC epoch ms, `0` = no usable date), `subject?`, `text`, `attachments[]`. iMessage adds `isGroup`, `isReaction`, `service`. Mail adds `sender`, `to[]`, `mailboxKind`, `accountLabel`. |
-| `contact` | `contactId` (Contacts identifier), `displayName`, `phones[]`, `emails[]` and, when present, `givenName`, `familyName`, `nickname`, `organization`, `jobTitle`, `department`, `birthday` (`YYYY-MM-DD`, or `--MM-DD` without a year), `urls[]`, `addresses[]`. |
+| `contact` | `contactId` (Contacts identifier), `displayName`, `phones[]`, `emails[]` and, when present, `givenName`, `familyName`, `nickname`, `organization`, `jobTitle`, `department`, `birthday` (`YYYY-MM-DD`, or `--MM-DD` without a year), `urls[]`, `addresses[]`, `photo` (base64 thumbnail, at most 48 KB). |
 | `cursor` | Always the last line. `cursor` is `{rowid}` (imessage, mail) or `{offset}` (contacts), `exported`, `more`. |
 | `secret` | The answer to `keychain get`: `{ "secret": "..." }`. |
 | `warning` | `undecodable_text` with a count (an `attributedBody` that could not be decoded; the message is still exported with empty text). |

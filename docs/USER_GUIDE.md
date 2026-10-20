@@ -27,6 +27,7 @@ Click a person. The middle column is **one timeline across all channels**: each 
 
 The right column (**Hide profile** / **Show profile** in the conversation header; on a narrow window use the **Profile** link) is everything Reply Core knows about the person:
 
+- **Photo:** the picture from your address book (a letter avatar when there is none).
 - **Address book:** name parts, nickname, organization, job title, department, birthday, web addresses, postal addresses (read-only, from your Contacts).
 - **How to reach them:** every phone number, email address and WhatsApp number, with how many messages and when the last one was.
 - **Activity:** how many messages, how many you received and sent, since when, when you last heard from them and last wrote to them, the last 30 days, and the split by channel.

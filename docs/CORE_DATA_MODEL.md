@@ -1,6 +1,6 @@
 # Reply Core Data Model
 
-Status: living document. Migrations are `core/src/storage/migrations/0001`..`0012`, listed below.
+Status: living document. Migrations are `core/src/storage/migrations/0001`..`0013`, listed below.
 
 One SQLite file, `core.db`, in `REPLY_CORE_HOME` (default `~/Library/Application Support/reply-core`). Mode `0600` inside a `0700` directory. WAL mode, `foreign_keys=ON`, `busy_timeout=5000`, `synchronous=NORMAL`. The database is a rebuildable cache of the source apps, except for user data that cannot be re-imported: manual merges (`merge_log`, manual links), `contact_profile`, `contact_notes`, `read_state`, and the audits `sends` and `handoffs`.
 
@@ -46,6 +46,7 @@ Files `core/src/storage/migrations/NNNN_name.sql`, forward-only, each applied in
 | `0010_clean_blob_names` | data fix: automatic contacts named after an encoded WhatsApp push name get their handle back |
 | `0011_sends` | `sends` audit |
 | `0012_read_state` | `read_state`, `app_settings` (unread baseline) |
+| `0013_contact_photos` | `contact_photos` (address-book thumbnail per person) |
 
 ## Startup failures
 
@@ -79,5 +80,6 @@ Prints schema version, `quick_check` and row counts of the core tables (read-onl
 | `contact_notes` | the user's notes per contact | **no** (user data, kept by backup and by `rebuild`) |
 | `group_members` (migration 0009) | members of group chats: group handle, member handle, WhatsApp's name for them, admin flag; replaced for a group each time the source is read | yes, by the next WhatsApp sync |
 | `read_state` (migration 0012) | per contact, when you last had the conversation open at its newest message (user data). Kept by backup and restore; `rebuild` does not carry it, so after a rebuild everything counts as seen (the baseline restarts) | no |
+| `contact_photos` (migration 0013) | the address-book thumbnail (JPEG or PNG, at most 48 KB, type checked by its first bytes on import). Import data: replaced or removed on every contacts sync, comes back after a rebuild | no |
 | `app_settings` (migration 0012) | small key/value settings: the unread baseline and the dismissed duplicate suggestions (`dismissed_duplicates`) | no |
 | `sends` (migration 0011) | one row per attempt to send from the app: id, client id (unique), time, contact id, channel, kind of address, text length, status (`sending`, `sent`, `failed`, `unknown`), error code, finish time. Never the text, the subject or the address | no (audit) |

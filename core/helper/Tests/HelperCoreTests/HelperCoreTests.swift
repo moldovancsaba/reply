@@ -140,6 +140,10 @@ final class HelperCoreTests: XCTestCase {
         XCTAssertEqual(ContactsSource.birthdayString(DateComponents(year: 1985, month: 3, day: 9)), "1985-03-09")
         XCTAssertEqual(ContactsSource.birthdayString(DateComponents(month: 12, day: 24)), "--12-24")
         XCTAssertNil(ContactsSource.birthdayString(DateComponents(year: 1985)))
+        XCTAssertEqual(ContactsSource.photoString(Data([0xFF, 0xD8, 0xFF])), "/9j/")
+        XCTAssertNil(ContactsSource.photoString(nil))
+        XCTAssertNil(ContactsSource.photoString(Data()))
+        XCTAssertNil(ContactsSource.photoString(Data(count: ContactsSource.photoCap + 1)), "over the cap is left out")
         XCTAssertNil(ContactsSource.nonEmpty("  "))
         let r = ContactRecord(contactId: "1", displayName: "A", phones: [], emails: [], organization: "Org", jobTitle: "CTO")
         let json = String(data: try JSONEncoder().encode(r), encoding: .utf8)!

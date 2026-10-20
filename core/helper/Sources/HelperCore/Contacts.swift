@@ -11,6 +11,13 @@ public enum ContactsSource {
         }
     }
 
+    /// The address-book thumbnail, base64, or nil when there is none or it is over the cap (keeps the database and the NDJSON small).
+    static let photoCap = 48 * 1024
+    static func photoString(_ data: Data?) -> String? {
+        guard let d = data, !d.isEmpty, d.count <= photoCap else { return nil }
+        return d.base64EncodedString()
+    }
+
     static func nonEmpty(_ s: String) -> String? { s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : s }
 
     /// "1985-03-09", or "--03-09" when the year is unknown.
@@ -57,6 +64,7 @@ public enum ContactsSource {
             CNContactBirthdayKey as CNKeyDescriptor,
             CNContactUrlAddressesKey as CNKeyDescriptor,
             CNContactPostalAddressesKey as CNKeyDescriptor,
+            CNContactThumbnailImageDataKey as CNKeyDescriptor,
         ]
         let request = CNContactFetchRequest(keysToFetch: keys)
         request.unifyResults = true
@@ -72,7 +80,8 @@ public enum ContactsSource {
                     organization: nonEmpty(c.organizationName), jobTitle: nonEmpty(c.jobTitle), department: nonEmpty(c.departmentName),
                     birthday: c.birthday.flatMap(birthdayString),
                     urls: c.urlAddresses.isEmpty ? nil : c.urlAddresses.map { String($0.value) }.filter { !$0.isEmpty },
-                    addresses: c.postalAddresses.isEmpty ? nil : c.postalAddresses.map { CNPostalAddressFormatter.string(from: $0.value, style: .mailingAddress).replacingOccurrences(of: "\n", with: ", ") }.filter { !$0.isEmpty }
+                    addresses: c.postalAddresses.isEmpty ? nil : c.postalAddresses.map { CNPostalAddressFormatter.string(from: $0.value, style: .mailingAddress).replacingOccurrences(of: "\n", with: ", ") }.filter { !$0.isEmpty },
+                    photo: photoString(c.thumbnailImageData)
                 ))
             }
         } catch {
