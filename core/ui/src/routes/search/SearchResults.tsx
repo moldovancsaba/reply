@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import { useNavigate } from "react-router-dom";
-import { Anchor, BodyText, GdsBadge, GdsBox, GdsGeneratedAvatar, GdsInline, GdsRelativeTime, GdsStack, InlineAlert, LabelText, MetadataText, SemanticButton, StateBlock } from "@sovereignsquad/gds";
+import { AccentPanel, Anchor, BodyText, GdsBadge, GdsBox, GdsGeneratedAvatar, GdsInline, GdsRelativeTime, GdsStack, InlineAlert, LabelText, MetadataText, SemanticButton, StateBlock } from "@sovereignsquad/gds";
 import type { SearchQuery, useSearch } from "../../api/queries";
 import type { Channel } from "../../api/types.gen";
 import { CHANNEL_LABEL, exactLabel, listOf, relativeParts } from "../../lib/time";
@@ -50,8 +50,9 @@ export function SearchResults({ query, result, searched, dimmed, filtered, onCle
           const parts = relativeParts(h.ts);
           const href = `/inbox/${h.contactId}`;
           return (
-            <li key={h.messageId}>
-              <Anchor href={href} onClick={(e: React.MouseEvent) => { if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); navigate(href); }}>
+            <GdsBox component="li" key={h.messageId}>
+              <AccentPanel tone="gray" variant="soft-outline">
+              <Anchor href={href} underline="never" c="inherit" onClick={(e: React.MouseEvent) => { if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); navigate(href); }}>
                 <GdsInline gap="md" align="start" wrap="nowrap">
                   <GdsBox aria-hidden="true"><GdsGeneratedAvatar name={h.contactName} size={40} /></GdsBox>
                   <GdsStack gap="xs" minWidth="zero">
@@ -64,7 +65,8 @@ export function SearchResults({ query, result, searched, dimmed, filtered, onCle
                   </GdsStack>
                 </GdsInline>
               </Anchor>
-            </li>
+              </AccentPanel>
+            </GdsBox>
           );
         })}
       </GdsStack>

@@ -40,7 +40,7 @@ function SourcePanel({ c, busy, onSync, onRecheck, rechecking }: { c: ConnectorS
         {c.state === "syncing" ? <GdsBox component="output">{`Imported ${imported.toLocaleString("en-US")} messages so far`}</GdsBox> : null}
         {c.state === "blocked" || c.state === "error" ? <Steps steps={c.recovery} /> : null}
         <MetadataText>
-          {`${c.messagesTotal.toLocaleString("en-US")} ${c.messagesTotal === 1 ? "message" : "messages"}`}
+          {c.id === "contacts" ? `${c.messagesTotal.toLocaleString("en-US")} ${c.messagesTotal === 1 ? "person" : "people"}` : `${c.messagesTotal.toLocaleString("en-US")} ${c.messagesTotal === 1 ? "message" : "messages"}`}
           {c.lastSuccessAt ? <> · Last success {when(c.lastSuccessAt)}</> : null}
           {c.state === "error" && c.retryAt ? <> · Next attempt {when(c.retryAt)}</> : c.nextRunAt && c.state === "ok" ? <> · Next check {when(c.nextRunAt)}</> : null}
         </MetadataText>

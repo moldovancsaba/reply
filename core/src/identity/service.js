@@ -119,6 +119,21 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
         q.deleteContact.run(id);
     }
 
+    // Names for automatic contacts only (a chat or group name): never touches an address-book or merged contact.
+    function applyNames(names) {
+        return db.transaction(() => {
+            let renamed = 0;
+            for (const { handle_norm: h, displayName } of names) {
+                const link = q.owner.get(h);
+                const c = link && q.contact.get(link.contact_id);
+                if (!c || c.origin !== "auto" || c.merged_into || c.display_name === displayName) continue;
+                q.rename.run(displayName, c.id);
+                renamed++;
+            }
+            return renamed;
+        })();
+    }
+
     function importContacts(people) {
         return db.transaction(() => {
             const r = { created: 0, updated: 0, unchanged: 0, linked: 0, conflicts: [], protectedByMerge: 0 };
@@ -241,5 +256,5 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
         return applied;
     }
 
-    return { merge, unmerge, history, importContacts, resetToAuto, replayMerge, applyPendingMerges, pendingCount: () => pend.count.get().n };
+    return { merge, unmerge, history, importContacts, applyNames, resetToAuto, replayMerge, applyPendingMerges, pendingCount: () => pend.count.get().n };
 }
