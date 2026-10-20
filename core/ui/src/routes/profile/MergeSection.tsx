@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { BodyText, GdsBox, CardTitle, GdsInline, GdsRelativeTime, GdsStack, InlineAlert, MetadataText, SearchableSelect, SemanticButton, useGdsToasts } from "@sovereignsquad/gds";
-import { mergeContacts, mergeErrorText, unmergeContacts, useMerges, type MergeHistoryItem } from "../../api/queries";
+import { dismissDuplicate, mergeContacts, useDuplicates, mergeErrorText, unmergeContacts, useMerges, type MergeHistoryItem } from "../../api/queries";
 import { fetchJson, type ApiError } from "../../api/client";
 import type { ContactList, ContactListItem } from "../../api/types.gen";
 import { ConfirmPanel } from "../../components/ConfirmPanel";
@@ -10,6 +10,9 @@ import { exactLabel, relativeParts } from "../../lib/time";
 
 
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
+
+// What the confirmation needs to know about the entry that moves in; the picker and the suggestions both provide it.
+type MergeSource = Pick<ContactListItem, "id" | "displayName" | "countTotal"> & { handles: unknown[] };
 
 // Merge two entries into this one, and the merge history with undo (the identity API, see CORE_IDENTITY.md).
 export function MergeSection({ contactId, name }: { contactId: string; name: string }) {
@@ -19,14 +22,15 @@ export function MergeSection({ contactId, name }: { contactId: string; name: str
   const [params, setParams] = useSearchParams();
   const merges = useMerges(contactId);
 
-  const [source, setSource] = useState<ContactListItem | null>(null);
+  const duplicates = useDuplicates(contactId);
+  const [source, setSource] = useState<MergeSource | null>(null);
   const known = useRef(new Map<string, ContactListItem>()); // rows the picker has shown, for the confirmation text
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [undoError, setUndoError] = useState<ApiError | null>(null);
   const [undoTarget, setUndoTarget] = useState<MergeHistoryItem | null>(null);
 
-  const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: ["contacts"] }), qc.invalidateQueries({ queryKey: ["contact"] }), qc.invalidateQueries({ queryKey: ["thread"] }), qc.invalidateQueries({ queryKey: ["merges"] }), qc.invalidateQueries({ queryKey: ["profile"] })]);
+  const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: ["contacts"] }), qc.invalidateQueries({ queryKey: ["contact"] }), qc.invalidateQueries({ queryKey: ["thread"] }), qc.invalidateQueries({ queryKey: ["merges"] }), qc.invalidateQueries({ queryKey: ["duplicates"] }), qc.invalidateQueries({ queryKey: ["profile"] })]);
 
   const loadOptions = async (query: string) => {
     const p = new URLSearchParams({ limit: "20", includeEmpty: "true" });
@@ -35,6 +39,12 @@ export function MergeSection({ contactId, name }: { contactId: string; name: str
     if (!r.ok) throw new Error(r.error.message);
     r.data.items.forEach((i) => known.current.set(i.id, i));
     return r.data.items.filter((i) => i.id !== contactId).map((i) => ({ value: i.id, label: `${i.displayName} (${plural(i.countTotal, "message", "messages")})` }));
+  };
+
+  const notSame = async (otherId: string) => {
+    const r = await dismissDuplicate(contactId, otherId);
+    if (r.ok) await qc.invalidateQueries({ queryKey: ["duplicates"] });
+    else toasts.notifyError({ title: "Could not save that", message: r.error.message });
   };
 
   const confirmMerge = async () => {
@@ -73,6 +83,28 @@ export function MergeSection({ contactId, name }: { contactId: string; name: str
 
   return (
     <GdsStack gap="lg">
+      {(duplicates.data?.items ?? []).length > 0 ? (
+        <GdsStack gap="sm">
+          <CardTitle>Might be the same person</CardTitle>
+          <GdsStack component="ul" gap="sm" aria-label="Suggested duplicates">
+            {duplicates.data!.items.map((d) => (
+              <GdsBox component="li" key={d.id}>
+                <GdsInline gap="sm" align="center" justify="between">
+                  <GdsStack gap="xs">
+                    <BodyText>{d.displayName}</BodyText>
+                    <MetadataText>{`${d.reason === "same_number" ? "Same number on another channel" : "Same name"} · ${plural(d.countTotal, "message", "messages")}`}</MetadataText>
+                  </GdsStack>
+                  <GdsInline gap="sm">
+                    <SemanticButton action="reset" label="Not the same" onClick={() => void notSame(d.id)} />
+                    <SemanticButton action="refresh" label="Review merge" onClick={() => { setError(null); setSource(d); }} />
+                  </GdsInline>
+                </GdsInline>
+              </GdsBox>
+            ))}
+          </GdsStack>
+        </GdsStack>
+      ) : null}
+
       <GdsStack gap="sm">
         <CardTitle>Merge with another contact</CardTitle>
         <BodyText>Use this when two entries are the same person. Their numbers and addresses move here; you can undo it.</BodyText>

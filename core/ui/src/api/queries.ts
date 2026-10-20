@@ -87,6 +87,16 @@ export function useThread(id: string, channel: Channel | "all") {
   });
 }
 
+export type DuplicateSuggestion = { id: string; displayName: string; reason: "same_name" | "same_number"; handles: string[]; countTotal: number };
+export function useDuplicates(id: string) {
+  return useQuery({
+    queryKey: ["duplicates", id],
+    queryFn: ({ signal }) => unwrap(fetchJson<{ items: DuplicateSuggestion[] }>(`/api/contacts/${encodeURIComponent(id)}/duplicates`, { signal })),
+  });
+}
+export const dismissDuplicate = (id: string, otherContactId: string) =>
+  fetchJson<{ dismissed: boolean }>(`/api/contacts/${encodeURIComponent(id)}/duplicates/dismiss`, { method: "POST", body: { otherContactId } });
+
 export type MergeResult = { mergeLogId: string; movedHandles: string[]; movedMessages: number; targetContactId: string };
 export type MergeHistoryItem = { id: string; ts: string; action: "merge" | "unmerge"; fromName: string; toName: string; handlesCount: number; revertedBy?: string };
 
