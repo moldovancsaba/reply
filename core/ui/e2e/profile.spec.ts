@@ -125,3 +125,22 @@ test("profile shows the address-book photo; a photo that cannot be shown falls b
   await expect(page.getByRole("region", { name: /^Profile of/ }).getByRole("heading").first()).toBeVisible();
   await expect(page.locator("img[src$='/photo']")).toHaveCount(0);
 });
+
+test("tablet width (1024 px): list and conversation get room; the profile opens in the conversation's place", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await page.goto(`${svc.url}/inbox`);
+  await rows(page).filter({ hasText: "+36301234567" }).click();
+  await expect(page.getByRole("log")).toBeVisible();
+  await expect(page.getByRole("list", { name: "Phone numbers and addresses" })).toHaveCount(0); // no third column
+  const [list, conversation] = await Promise.all([page.getByRole("list", { name: "Conversations" }).boundingBox(), page.getByRole("log").boundingBox()]);
+  expect(list!.width, "the list is readable").toBeGreaterThan(220);
+  expect(conversation!.width, "the conversation is readable").toBeGreaterThan(380);
+  await expectAccessibleNow(page, "tablet inbox");
+  await page.getByRole("link", { name: "Profile", exact: true }).click();
+  await expect(page).toHaveURL(/\/profile$/);
+  await expect(page.getByRole("list", { name: "Phone numbers and addresses" })).toBeVisible();
+  await expect(rows(page).first()).toBeVisible(); // the list stays
+  await expectAccessibleNow(page, "tablet profile");
+  await page.getByRole("link", { name: "Back to conversation" }).click();
+  await expect(page.getByRole("log")).toBeVisible();
+});

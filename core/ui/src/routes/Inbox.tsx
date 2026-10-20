@@ -17,7 +17,8 @@ export default function Inbox() {
   const { contactId, section } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const wide = useMediaQuery("(min-width: 62em)");
+  const wide = useMediaQuery("(min-width: 62em)"); // list | conversation
+  const huge = useMediaQuery("(min-width: 80em)"); // the sidebar takes about 14rem, so a third column needs this much room
   const { query, draft, setSearch, setChannel, clear, clearSearch, active } = useInboxQuery();
 
   const list = (
@@ -39,19 +40,20 @@ export default function Inbox() {
       <ConversationList query={query} selectedId={contactId} active={active} onClear={clear} />
     </GdsStack>
   );
-  // Wide: list | conversation | profile (the profile column can be hidden and the choice is remembered). Narrow: the
-  // conversation, or the profile page (/inbox/:id/profile), one at a time.
+  // Huge: list | conversation | profile (the profile column can be hidden and the choice is remembered). Wide: list |
+  // conversation, and the profile page (/inbox/:id/profile) takes the conversation's place. Narrow: the list, the
+  // conversation or the profile page, one at a time.
   const [profileShown, setProfileShown] = useState(() => { try { return window.localStorage.getItem("rc.profile.shown") !== "0"; } catch { return true; } });
   const toggleProfile = () => setProfileShown((v) => { try { window.localStorage.setItem("rc.profile.shown", v ? "0" : "1"); } catch { /* the choice is just not remembered */ } return !v; });
   const profileData = useProfile(contactId ?? "", contactId !== undefined); // shared with the column; an unknown contact gets no column
-  const showProfileColumn = wide && contactId !== undefined && !profileData.isError && (profileShown || section === "profile");
+  const showProfileColumn = huge && contactId !== undefined && !profileData.isError && (profileShown || section === "profile");
   const profileLink = contactId ? `/inbox/${contactId}/profile` : "";
 
-  const thread = contactId ? <ThreadPane key={contactId} contactId={contactId} profile={wide ? { shown: showProfileColumn, toggle: toggleProfile } : { href: profileLink, open: () => navigate(profileLink) }} /> : (
+  const thread = contactId ? <ThreadPane key={contactId} contactId={contactId} profile={huge ? { shown: showProfileColumn, toggle: toggleProfile } : { href: profileLink, open: () => navigate(profileLink) }} /> : (
     <StateBlock variant="empty" title="Pick a conversation" description="Choose someone from the list to read your messages with them." />
   );
-  const profile = contactId ? <ProfilePane key={contactId} contactId={contactId} onBack={wide ? undefined : () => navigate(`/inbox/${contactId}`)} /> : null;
-  const detail = section === "profile" && !wide ? profile : thread;
+  const profile = contactId ? <ProfilePane key={contactId} contactId={contactId} onBack={huge ? undefined : () => navigate(`/inbox/${contactId}`)} /> : null;
+  const detail = section === "profile" && !huge ? profile : thread;
 
   // GdsSplit's inline grid-template-columns beats its own media query, so it never splits; a 12-column grid does.
   return (
@@ -66,11 +68,11 @@ export default function Inbox() {
         ) : list
       ) : (
         <GdsColumnGrid columns={12} gap="lg">
-          <GdsColumnGridItem span={showProfileColumn ? 3 : 4}>
+          <GdsColumnGridItem span={showProfileColumn ? 3 : huge ? 4 : 5}>
             <OverflowContainer maxHeight={PANE_HEIGHT} label="Conversations"><GdsBox padding="xs">{list}</GdsBox></OverflowContainer>
           </GdsColumnGridItem>
-          <GdsColumnGridItem span={showProfileColumn ? 5 : 8}>
-            <OverflowContainer maxHeight={PANE_HEIGHT} label="Conversation"><GdsBox padding="xs">{thread}</GdsBox></OverflowContainer>
+          <GdsColumnGridItem span={showProfileColumn ? 5 : huge ? 8 : 7}>
+            <OverflowContainer maxHeight={PANE_HEIGHT} label={detail === profile && profile ? "Profile" : "Conversation"}><GdsBox padding="xs">{detail}</GdsBox></OverflowContainer>
           </GdsColumnGridItem>
           {showProfileColumn ? (
             <GdsColumnGridItem span={4}>
