@@ -90,6 +90,10 @@ export interface Contact {
         default: boolean;
       }[]
     ];
+    send: {
+      available: boolean;
+      reason?: string;
+    };
   }[];
 }
 /**

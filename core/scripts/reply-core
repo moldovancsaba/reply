@@ -145,7 +145,7 @@ async function installAgent() {
         entry: path.join(coreDir, "src", "index.js"),
         workingDirectory: coreDir,
         launchdLog: paths.launchdLog,
-        env: { REPLY_CORE_LOG_FILE: paths.logFile, ...(env.REPLY_CORE_HOME ? { REPLY_CORE_HOME: paths.dataHome } : {}), ...(env.REPLY_CORE_PORT ? { REPLY_CORE_PORT: String(port) } : {}), ...(env.REPLY_CORE_CONNECTORS ? { REPLY_CORE_CONNECTORS: env.REPLY_CORE_CONNECTORS } : {}) },
+        env: { REPLY_CORE_LOG_FILE: paths.logFile, ...(env.REPLY_CORE_HOME ? { REPLY_CORE_HOME: paths.dataHome } : {}), ...(env.REPLY_CORE_PORT ? { REPLY_CORE_PORT: String(port) } : {}), ...(env.REPLY_CORE_CONNECTORS ? { REPLY_CORE_CONNECTORS: env.REPLY_CORE_CONNECTORS } : {}), ...(useApp ? { REPLY_CORE_APP: paths.app } : {}), ...(env.REPLY_CORE_SENDING ? { REPLY_CORE_SENDING: env.REPLY_CORE_SENDING } : {}) },
     });
     const existing = existsSync(paths.plist) ? readFileSync(paths.plist, "utf8") : null;
     if (existing !== null && !isOurPlist(existing)) die(1, `${paths.plist} exists and was not created by reply-core; not touching it.`);
