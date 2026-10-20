@@ -41,4 +41,4 @@ What is not done, what is less reliable than the rest, and which checks need a p
 
 ## Repository
 
-- **GitHub may still serve cached views of old commits.** The history was rewritten on 2026-10-20 (no branch contains personal data or the key; the key is revoked), but GitHub keeps old `refs/pull/*` objects and cached views until GitHub Support purges them. Old clones and forks still hold the old history and should be deleted. Tracked in issue #255.
+- **Old commits remain fetchable by SHA on GitHub (accepted by the maintainer, 2026-10-20).** The history of every branch was rewritten and the Google key is revoked, but GitHub keeps the old `refs/pull/*` objects, and only GitHub Support can remove them. The maintainer decided not to contact Support or recreate the repository, so anyone who knows an old commit SHA can still read the removed files. Do not treat the removed personal data as erased. Old clones and forks hold it too. Tracked in issue #255.
