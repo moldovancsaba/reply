@@ -63,6 +63,7 @@ const drivers = config.sendDriver === "fake" ? createFakeDrivers(config.home) : 
 const SYNC_AFTER_SEND = { imessage: "imessage", email: "apple-mail", whatsapp: "whatsapp" };
 const sender = createSender({
     db: storage.db, handoffs, drivers, enabled: config.sending, logger,
+    confirmers: config.sendDriver === "fake" || !registry.get("whatsapp") ? {} : { whatsapp: (m) => registry.get("whatsapp").confirmSent(m) },
     // the sent message reaches the source app's database a moment later: read the source again, twice, to pick it up
     onSent: (channel) => { for (const delay of [3000, 12000]) setTimeout(() => { const c = registry.get(SYNC_AFTER_SEND[channel]); if (c && !runner.isRunning(c.id, "")) runner.start(c, "")?.done.catch(() => {}); }, delay).unref(); },
 });

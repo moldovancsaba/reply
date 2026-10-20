@@ -240,6 +240,22 @@ export function createWhatsAppConnector({ config = {}, logger, tmpDir = os.tmpdi
                 throw err;
             }
         },
+        // After a send: did a message of yours with exactly this text reach the database since `sinceMs`, and in the
+        // chat of this number? "chat" yes, "other" only in some other chat (the wrong chat was open), "none" not (yet),
+        // "unavailable" the database cannot be read, so nothing can be said.
+        async confirmSent({ handle, text, sinceMs }) {
+            const digits = String(handle).replace(/\D/g, "");
+            try {
+                return await withSource((db) => {
+                    const rows = db.prepare("SELECT s.ZCONTACTJID AS jid FROM ZWAMESSAGE m LEFT JOIN ZWACHATSESSION s ON s.Z_PK = m.ZCHATSESSION WHERE m.ZISFROMME = 1 AND m.ZMESSAGEDATE >= ? AND TRIM(m.ZTEXT) = ?")
+                        .all(sinceMs / 1000 - CORE_DATA_EPOCH_S - 2, String(text).trim());
+                    if (rows.some((r) => String(r.jid ?? "").replace(/@.*$/, "") === digits)) return "chat";
+                    return rows.length > 0 ? "other" : "none";
+                });
+            } catch {
+                return "unavailable";
+            }
+        },
         async fetch(_account, cursor, { limit }) {
             const t0 = performance.now();
             const out = await withSource((db, copied) => {

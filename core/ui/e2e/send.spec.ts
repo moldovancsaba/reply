@@ -112,6 +112,20 @@ test("a send that timed out says the message may have been sent and does not off
   await expect(area(page)).toHaveValue("Maybe sent");
 });
 
+test("WhatsApp: an unconfirmed message says it may have been sent; one that went to another chat says so", async ({ page }) => {
+  for (const [code, status, title, text] of [["send_unconfirmed", 504, "The message may have been sent", "WhatsApp did not show the message in this chat. It may have been sent: check the conversation before sending again."], ["whatsapp_wrong_chat", 502, "The message went to a different chat", "The message went to a different WhatsApp chat than the one you chose. Open WhatsApp and check it."]] as const) {
+    await page.route("**/api/send", (r) => json(r, { error: { code, message: text, requestId: "r", retryable: false } }, status));
+    await open(page);
+    await area(page).fill("Hello");
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Send", exact: true }).click();
+    const alert = page.getByRole("alert").filter({ hasText: title });
+    await expect(alert).toContainText(text);
+    await expect(alert.getByRole("button", { name: "Try again" })).toHaveCount(0);
+    await page.unroute("**/api/send");
+  }
+});
+
 test("a lost answer keeps the attempt id: asking again replays it instead of sending twice", async ({ page }) => {
   const ids: string[] = [];
   let first = true;

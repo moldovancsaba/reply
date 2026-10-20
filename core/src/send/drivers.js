@@ -52,6 +52,7 @@ const SCRIPTS = {
         "end repeat",
         "if not ready then error \"WhatsApp did not come to the front\" number 9001",
         "delay 1",
+        "if not (frontmost of process \"WhatsApp\") then error \"WhatsApp lost the focus\" number 9002",
         "keystroke return",
         "end tell",
         "end run",
@@ -92,6 +93,7 @@ export function classify(stderr, channel, timedOut = false) {
             { order: 2, text: "Switch on {reply}, then try again." },
         ] });
     }
+    if (/9002|lost the focus/i.test(text)) return new SendError("whatsapp_not_ready", "WhatsApp lost the focus before the message was sent. Nothing was sent. Leave WhatsApp in front and try again.");
     if (/9001|did not come to the front/i.test(text)) return new SendError("whatsapp_not_ready", "WhatsApp did not open the chat in time. Nothing was sent. Open WhatsApp, then try again.");
     if (/-1728|can.t get buddy|can.t get service|-1719/i.test(text)) return new SendError("recipient_not_found", `${app} could not find this recipient. Nothing was sent.`);
     if (/-600|isn.t running/i.test(text)) return new SendError("app_not_running", `${app} is not running and could not be opened. Nothing was sent.`);
