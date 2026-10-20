@@ -79,5 +79,5 @@ Prints schema version, `quick_check` and row counts of the core tables (read-onl
 | `contact_notes` | the user's notes per contact | **no** (user data, kept by backup and by `rebuild`) |
 | `group_members` (migration 0009) | members of group chats: group handle, member handle, WhatsApp's name for them, admin flag; replaced for a group each time the source is read | yes, by the next WhatsApp sync |
 | `read_state` (migration 0012) | per contact, when you last had the conversation open at its newest message (user data). Kept by backup and restore; `rebuild` does not carry it, so after a rebuild everything counts as seen (the baseline restarts) | no |
-| `app_settings` (migration 0012) | small key/value settings, today the unread baseline | no |
+| `app_settings` (migration 0012) | small key/value settings: the unread baseline and the dismissed duplicate suggestions (`dismissed_duplicates`) | no |
 | `sends` (migration 0011) | one row per attempt to send from the app: id, client id (unique), time, contact id, channel, kind of address, text length, status (`sending`, `sent`, `failed`, `unknown`), error code, finish time. Never the text, the subject or the address | no (audit) |

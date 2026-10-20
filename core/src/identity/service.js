@@ -3,7 +3,7 @@ import { AppError } from "../errors.js";
 import { kindOf } from "../storage/repo.js";
 
 // Identity rules (docs/CORE_IDENTITY.md): handles link to contacts only through (1) automatic single-handle contacts,
-// (2) the user's own address book, (3) explicit merges. Nothing here ever infers a link from names, domains or resemblance between numbers.
+// (2) the user's own address book, (3) explicit merges. Nothing here ever infers a link from names, domains or resemblance between numbers (duplicatesOf only proposes exact matches).
 export function createIdentity({ db, repo, now = () => Date.now() }) {
     const q = {
         moveNotes: db.prepare("UPDATE contact_notes SET contact_id = ? WHERE contact_id = ?"),
@@ -39,6 +39,8 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
         allManual: db.prepare("SELECT handle_norm FROM contact_handles WHERE link_origin = 'manual_merge'"),
         merges: db.prepare("SELECT * FROM merge_log WHERE action = 'merge' AND reverted_by IS NULL ORDER BY ts_ms ASC, rowid ASC"),
         allContacts: db.prepare("SELECT id FROM contacts"),
+        visible: db.prepare("SELECT id, display_name FROM contacts WHERE hidden = 0 AND merged_into IS NULL"),
+        getDismissed: db.prepare("SELECT value FROM app_settings WHERE key = 'dismissed_duplicates'"),
         emptyAuto: db.prepare("SELECT c.id FROM contacts c WHERE c.origin = 'auto' AND NOT EXISTS (SELECT 1 FROM contact_handles h WHERE h.contact_id = c.id)"),
     };
 
@@ -100,6 +102,40 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
             id: l.id, ts: new Date(l.ts_ms).toISOString(), action: l.action, fromName: l.from_name, toName: l.to_name,
             handlesCount: JSON.parse(l.handles_json).length, ...(l.reverted_by ? { revertedBy: l.reverted_by } : {}),
         }));
+    }
+
+    // Suggestions only, never links: the same name written the same way (case, accents and spacing aside), or the same
+    // phone number once as a phone and once as WhatsApp. The user confirms through the normal merge. A pair the user
+    // dismissed ("not the same person") is remembered in app_settings and not suggested again.
+    const plain = (n) => n.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+    const namedLikeAPerson = (n) => /\p{L}/u.test(n) && !n.includes("@");
+    const pairKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+    const dismissed = () => new Set(JSON.parse(q.getDismissed.get()?.value ?? "[]"));
+
+    function duplicatesOf(contactId) {
+        const me = activeContact(contactId);
+        const skip = dismissed();
+        const found = new Map(); // id -> reason
+        if (namedLikeAPerson(me.display_name)) {
+            const want = plain(me.display_name);
+            for (const c of q.visible.all()) if (c.id !== me.id && plain(c.display_name) === want) found.set(c.id, "same_name");
+        }
+        for (const { handle_norm: h } of q.handlesOf.all(me.id)) {
+            const twin = h.endsWith("@wa") ? h.slice(0, -3) : `${h}@wa`;
+            const o = /^\+\d+(@wa)?$/.test(h) ? q.owner.get(twin) : null;
+            if (o && o.contact_id !== me.id && !found.has(o.contact_id) && !q.contact.get(o.contact_id)?.hidden) found.set(o.contact_id, "same_number");
+        }
+        return [...found].filter(([id]) => !skip.has(pairKey(me.id, id))).map(([id, reason]) => {
+            const handles = q.handlesOf.all(id).map((h) => h.handle_norm);
+            return { id, displayName: q.contact.get(id).display_name, reason, handles, countTotal: messageCount(handles) };
+        });
+    }
+
+    function dismissDuplicate(a, b) {
+        activeContact(a);
+        activeContact(b);
+        const set = dismissed().add(pairKey(a, b));
+        db.prepare("INSERT INTO app_settings (key, value) VALUES ('dismissed_duplicates', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(JSON.stringify([...set]));
     }
 
     // people: [{ externalId, displayName, handles: [{ handle_norm, kind }], fingerprint? }] from the user's own address book.
@@ -268,5 +304,5 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
         return applied;
     }
 
-    return { merge, unmerge, history, importContacts, applyNames, setGroupMembers, resetToAuto, replayMerge, applyPendingMerges, pendingCount: () => pend.count.get().n };
+    return { merge, unmerge, history, duplicatesOf, dismissDuplicate, importContacts, applyNames, setGroupMembers, resetToAuto, replayMerge, applyPendingMerges, pendingCount: () => pend.count.get().n };
 }

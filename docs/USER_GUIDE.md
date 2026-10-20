@@ -40,7 +40,7 @@ The right column (**Hide profile** / **Show profile** in the conversation header
 
 ## Two entries for the same person
 
-Reply Core never merges people by itself. If you see the same person twice (say a phone number and an email address), open one, go to **Merge** at the bottom of the profile, search for the other and confirm. The dialog says exactly what moves ("Move 1 handle and 2 messages from … into …?"). After a merge a notice offers **Undo** for 15 seconds; later you can undo from **Merge history** in the profile. If you merged in several steps, undo the last one first.
+Reply Core never merges people by itself. In a profile, **Might be the same person** proposes entries with the same name or the same number on another channel: **Review merge** opens the usual confirmation, **Not the same** hides the proposal for good. If you see the same person twice (say a phone number and an email address), open one, go to **Merge** at the bottom of the profile, search for the other and confirm. The dialog says exactly what moves ("Move 1 handle and 2 messages from … into …?"). After a merge a notice offers **Undo** for 15 seconds; later you can undo from **Merge history** in the profile. If you merged in several steps, undo the last one first.
 
 ## Replying
 

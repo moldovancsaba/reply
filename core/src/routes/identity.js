@@ -14,5 +14,13 @@ export function registerIdentity(app, { identity }) {
         const r = identity.unmerge(mergeLogId);
         return { restoredContactId: r.restoredContactId, restoredHandles: r.restoredHandles };
     });
+    // Proposals only; the user confirms with the normal merge. See docs/CORE_IDENTITY.md.
+    app.get("/api/contacts/:id/duplicates", async (req) => ({ items: identity.duplicatesOf(req.params.id) }));
+    app.post("/api/contacts/:id/duplicates/dismiss", async (req) => {
+        const otherContactId = req.body?.otherContactId;
+        if (!isId(otherContactId) || Object.keys(req.body).some((k) => k !== "otherContactId")) throw new AppError(400, "invalid_request", 'Body must be {"otherContactId": "<id>"}.');
+        identity.dismissDuplicate(req.params.id, otherContactId);
+        return { dismissed: true };
+    });
     app.get("/api/contacts/:id/merges", async (req) => ({ items: identity.history(req.params.id) }));
 }

@@ -6,7 +6,7 @@ One person, many handles. Reply Core groups handles under a **contact** and show
 
 ## Rules
 
-1. **Merge and unmerge are explicit user actions only.** Nothing links handles by name, email domain, number resemblance or channel. (A test scans the code for similarity matching.)
+1. **Merge and unmerge are explicit user actions only.** Nothing links handles by name, email domain, number resemblance or channel. (A test scans the code for similarity matching.) The app may *suggest* a merge (see "Duplicate suggestions"), but a suggestion changes nothing until the user confirms the normal merge.
 2. **Every handle has exactly one contact.** The first time a handle is seen it gets its own `auto` contact named after the handle, so every message always belongs to a contact.
 3. **The user's address book is authoritative over `auto` links.** Importing a person from Apple Contacts links all of their handles to one contact and retires the empty `auto` contacts those handles had.
 4. **A manual merge is never overridden** by an import.
@@ -37,6 +37,12 @@ One person, many handles. Reply Core groups handles under a **contact** and show
 ## Names from chats
 
 A later WhatsApp chat or group name may rename an *automatic* contact (one still named after its handle); address-book and merged contacts are never renamed. Notes and profile fields of an emptied automatic contact move to the contact that took its handles (see the last section).
+
+## Duplicate suggestions
+
+`GET /api/contacts/:id/duplicates` returns `{ items: [{ id, displayName, reason, handles, countTotal }] }`, proposals for the merge dialog, never links. Only exact rules are used: `same_name` (the two names are equal once case, accents and spacing are ignored; both must contain a letter, and names with `@` are skipped) and `same_number` (one contact has a phone number and the other the same number as WhatsApp). Hidden, merged and the contact's own entries are never suggested.
+
+`POST /api/contacts/:id/duplicates/dismiss` with `{ "otherContactId": "..." }` records "not the same person" for that pair (answer `{ "dismissed": true }`). The pair is kept in `app_settings` under `dismissed_duplicates` and not suggested again. Unknown or merged-away contacts answer `404 contact_not_found`.
 
 ## Merge and unmerge
 

@@ -85,3 +85,25 @@ test("a11y gate: profile in light and dark, and at phone width", async ({ page }
   await expectAccessible(page, `${svc.url}${href}/profile`);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test("suggested duplicates: proposals only; Review merge opens the usual confirmation; Not the same dismisses", async ({ page }) => {
+  const posts: string[] = [];
+  page.on("request", (r) => { if (r.method() === "POST") posts.push(r.url().replace(svc.url, "")); });
+  let items = [{ id: "c_other", displayName: "Anna K", reason: "same_number", handles: ["+36301234567@wa"], countTotal: 4 }];
+  await page.route("**/api/contacts/*/duplicates", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items }) }));
+  await page.route("**/api/contacts/*/duplicates/dismiss", (r) => { items = []; return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ dismissed: true }) }); });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${svc.url}/inbox`);
+  await rows(page).filter({ hasText: "+36301234567" }).click();
+  const list = page.getByRole("list", { name: "Suggested duplicates" });
+  await expect(list).toContainText("Anna K");
+  await expect(list).toContainText("Same number on another channel · 4 messages");
+  await expectAccessibleNow(page, "suggested duplicates");
+  await list.getByRole("button", { name: "Review merge" }).click();
+  await expect(page.getByRole("dialog")).toContainText("Move 1 handle and 4 messages from Anna K into +36301234567?");
+  expect(posts).toEqual([]);
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+  await list.getByRole("button", { name: "Not the same" }).click();
+  await expect(list).toHaveCount(0);
+  expect(posts.filter((u) => u.endsWith("/merge"))).toEqual([]);
+});

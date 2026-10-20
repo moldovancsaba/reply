@@ -325,6 +325,12 @@ test("HTTP: merge, unmerge, history and error envelopes", async (t) => {
     const wa = contactOf(db, "+36301234567@wa");
     const bela = contactOf(db, "bela@example.com");
 
+    const dup = await get(`/api/contacts/${a}/duplicates`);
+    assert.deepEqual(dup.json.items.map((d) => [d.id, d.reason]), [[wa, "same_number"]]);
+    assert.equal((await post(`/api/contacts/${a}/duplicates/dismiss`, { otherContactId: wa, x: 1 })).status, 400);
+    assert.equal((await post(`/api/contacts/${a}/duplicates/dismiss`, { otherContactId: wa })).status, 200);
+    assert.deepEqual((await get(`/api/contacts/${a}/duplicates`)).json.items, []);
+    assert.equal((await get("/api/contacts/nope/duplicates")).status, 404);
     assert.equal((await post(`/api/contacts/${a}/merge`, {})).status, 400);
     assert.equal((await post(`/api/contacts/${a}/merge`, { sourceContactId: wa, extra: 1 })).status, 400);
     assert.equal((await post(`/api/contacts/${a}/merge`, { sourceContactId: a })).json.error.code, "cannot_merge_self");
@@ -364,4 +370,32 @@ test("no code path links handles by name, domain or number similarity", () => {
     // the only writers of link_origin = 'manual_merge' are the explicit merge path
     const svc = readFileSync(path.resolve("src/identity/service.js"), "utf8");
     assert.equal((svc.match(/"manual_merge"/g) ?? []).length, 1);
+});
+
+test("duplicate suggestions: same number as phone and WhatsApp, same name written alike; proposals only, dismissals remembered", () => {
+    const { db, repo, identity } = setup();
+    seed(repo);
+    identity.importContacts([
+        { externalId: "CN1", displayName: "Éva  Kovács", handles: [{ handle_norm: "eva@example.com", kind: "email" }] },
+        { externalId: "CN2", displayName: "eva kovacs", handles: [{ handle_norm: "+3611111111", kind: "phone" }] },
+        { externalId: "CN3", displayName: "Eva Nagy", handles: [{ handle_norm: "+3622222222", kind: "phone" }] },
+    ]);
+    const before = snapshot(db);
+    const phone = contactOf(db, "+36301234567");
+    const wa = contactOf(db, "+36301234567@wa");
+    assert.deepEqual(identity.duplicatesOf(phone).map((d) => [d.id, d.reason]), [[wa, "same_number"]]);
+    assert.deepEqual(identity.duplicatesOf(wa).map((d) => [d.id, d.reason]), [[phone, "same_number"]]);
+    assert.equal(identity.duplicatesOf(phone)[0].countTotal, 1);
+    const eva = contactOf(db, "eva@example.com");
+    const eva2 = contactOf(db, "+3611111111");
+    assert.deepEqual(identity.duplicatesOf(eva).map((d) => [d.id, d.reason]), [[eva2, "same_name"]], "Eva Nagy is a different name");
+    assert.deepEqual(identity.duplicatesOf(contactOf(db, "bela@example.com")), [], "an address-named contact never matches by name");
+    assert.equal(snapshot(db), before, "suggesting changes nothing");
+    identity.dismissDuplicate(eva2, eva);
+    assert.deepEqual(identity.duplicatesOf(eva), []);
+    assert.deepEqual(identity.duplicatesOf(eva2), []);
+    assert.equal(identity.duplicatesOf(phone).length, 1, "other pairs are unaffected");
+    identity.merge(wa, phone);
+    assert.deepEqual(identity.duplicatesOf(phone), [], "a merged contact is no longer suggested");
+    assert.throws(() => identity.duplicatesOf("nope"), { code: "contact_not_found" });
 });

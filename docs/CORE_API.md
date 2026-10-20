@@ -17,7 +17,7 @@ Response schemas for the read endpoints are in [`core/schema/api-read.json`](../
 | `POST /api/handoff` | open Messages, Mail or WhatsApp with a prefilled reply (does not send); see [CORE_HANDOFF.md](CORE_HANDOFF.md) |
 | `POST /api/send`, `POST /api/consent` (`{"kind":"sending"|"contacts"}`; `POST /api/send/consent` is the older name for `sending`) | send a message through Messages, Mail or WhatsApp, and open {reply} to ask macOS for the permissions; see [CORE_SENDING.md](CORE_SENDING.md) |
 | `POST /api/sync/:connector` | start a sync (`202`, `409`, `423`, `404`); see [CORE_CONNECTORS.md](CORE_CONNECTORS.md) |
-| `POST /api/contacts/:id/merge`, `POST /api/contacts/:id/unmerge`, `GET /api/contacts/:id/merges` | explicit identity changes; see [CORE_IDENTITY.md](CORE_IDENTITY.md) |
+| `POST /api/contacts/:id/merge`, `POST /api/contacts/:id/unmerge`, `GET /api/contacts/:id/merges`, `GET /api/contacts/:id/duplicates`, `POST /api/contacts/:id/duplicates/dismiss` | explicit identity changes and merge suggestions; see [CORE_IDENTITY.md](CORE_IDENTITY.md) |
 
 ## Read endpoints
 
