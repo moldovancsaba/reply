@@ -266,6 +266,9 @@ test("confirmSent: finds your message in the chat of that number, says when it i
     const nowS = Date.now() / 1000 - 978307200;
     d.prepare("INSERT INTO ZWACHATSESSION (Z_PK, ZCONTACTJID, ZPARTNERNAME) VALUES (?, '36309998888@s.whatsapp.net', 'Target'), (?, '36307776666@s.whatsapp.net', 'Elsewhere')").run(chat, other);
     const add = (session, text, fromMe = 1, ageS = 1) => d.prepare("INSERT INTO ZWAMESSAGE (Z_PK, ZTEXT, ZMESSAGEDATE, ZISFROMME, ZCHATSESSION, ZMESSAGETYPE) VALUES ((SELECT MAX(Z_PK)+1 FROM ZWAMESSAGE), ?, ?, ?, ?, 0)").run(text, nowS - ageS, fromMe, session);
+    const lid = other + 1;
+    d.prepare("INSERT INTO ZWACHATSESSION (Z_PK, ZCONTACTJID, ZPARTNERNAME) VALUES (?, '4323000111222@lid', 'Same person under a lid')").run(lid);
+    add(lid, "lid message");
     add(chat, "hello there");
     add(other, "wrong place");
     add(chat, "their message", 0);
@@ -275,6 +278,8 @@ test("confirmSent: finds your message in the chat of that number, says when it i
     const since = Date.now() - 10_000;
     assert.equal(await c.confirmSent({ handle: "+36309998888@wa", text: "hello there ", sinceMs: since }), "chat");
     assert.equal(await c.confirmSent({ handle: "+36309998888", text: "wrong place", sinceMs: since }), "other");
+    assert.equal(await c.confirmSent({ handle: "+36309998888", text: "lid message", sinceMs: since }), "other", "a lid chat is another chat unless it is known to be this person's");
+    assert.equal(await c.confirmSent({ handle: "+36309998888", chatIds: ["4323000111222"], text: "lid message", sinceMs: since }), "chat", "the person's own lid id counts");
     assert.equal(await c.confirmSent({ handle: "+36309998888", text: "their message", sinceMs: since }), "none", "only your own messages count");
     assert.equal(await c.confirmSent({ handle: "+36309998888", text: "old news", sinceMs: since }), "none", "not one from before the send");
     assert.equal(await c.confirmSent({ handle: "+36309998888", text: "x", sinceMs: since }), "none");

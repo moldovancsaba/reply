@@ -14,6 +14,7 @@ const NOTE = { imessage: "Sent through Messages.", email: "Sent through Mail.", 
 export function createSender({ db, handoffs, drivers, confirmers = {}, nudges = {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), confirmMs = 15_000, enabled = true, now = () => Date.now(), onSent, logger }) {
     const q = {
         byClient: db.prepare("SELECT * FROM sends WHERE client_id = ?"),
+        handlesOf: db.prepare("SELECT handle_norm FROM contact_handles WHERE contact_id = ?"),
         insert: db.prepare("INSERT INTO sends (id, client_id, ts_ms, contact_id, channel, handle_kind, text_length, status) VALUES (?,?,?,?,?,?,?, 'sending')"),
         finish: db.prepare("UPDATE sends SET status = ?, error_code = ?, done_ms = ? WHERE id = ?"),
         recent: db.prepare("SELECT COUNT(*) n FROM sends WHERE ts_ms >= ?"),
@@ -64,6 +65,8 @@ export function createSender({ db, handoffs, drivers, confirmers = {}, nudges = 
                 throw Object.assign(new AppError(status, e.code, e.message, { retryable: false }), e.recovery ? { details: { recovery: e.recovery } } : {});
             }
             // WhatsApp has no sending interface (a key press), so look for the message in its database: only then is it "sent".
+            // WhatsApp may file one person's chat under a phone number or under its own `@lid` id: all of the contact's count
+            const chatIds = q.handlesOf.all(contactId).map((h) => h.handle_norm).filter((h) => h.endsWith("@lid") || /^\+\d+(@wa)?$/.test(h)).map((h) => h.replace(/^other:/, "").replace(/@(lid|wa)$/, "").replace(/\D/g, ""));
             let confirmed;
             if (channel === "whatsapp" && !confirmers[channel]) confirmed = false; // a key press cannot say whether anything was sent
             if (confirmers[channel]) {
@@ -73,7 +76,7 @@ export function createSender({ db, handoffs, drivers, confirmers = {}, nudges = 
                     if (waited) await sleep(1000);
                     // the first Return may have been lost (the chat was still loading): press it once more, it is harmless on an empty box
                     if (waited === 5000 && nudges[channel]) await nudges[channel]().catch(() => {});
-                    seen = await confirmers[channel]({ handle: chosen.value, text, sinceMs: since });
+                    seen = await confirmers[channel]({ handle: chosen.value, chatIds, text, sinceMs: since });
                     if (seen === "unavailable") break;
                 }
                 if (seen === "other") {

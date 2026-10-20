@@ -189,7 +189,13 @@ test("WhatsApp: it is sent only once the message shows up in that chat; the wron
     const ok = await confirmed.sender.send({ contactId: wa(confirmed), channel: "whatsapp", text: "hi", clientId: CID(1) });
     assert.deepEqual([ok.status, ok.confirmed, polls.length], ["sent", true, 3]);
     assert.equal(polls[0].handle, "+36301234567@wa");
+    assert.deepEqual([...new Set(polls[0].chatIds)], ["36301234567"], "the ids this person's chat may carry");
     assert.equal(polls[0].text, "hi");
+    confirmed.db.prepare("INSERT INTO handles (handle_norm, kind, first_seen_ms, last_seen_ms) VALUES ('other:4323000111222@lid','other',1,1)").run();
+    confirmed.db.prepare("INSERT INTO contact_handles (handle_norm, contact_id, link_origin, linked_ms) VALUES ('other:4323000111222@lid', ?, 'manual_merge', 1)").run(wa(confirmed));
+    polls.length = 0;
+    await confirmed.sender.send({ contactId: wa(confirmed), channel: "whatsapp", text: "again", clientId: CID(9) });
+    assert.ok(polls[0].chatIds.includes("4323000111222"), "a lid id of the contact is offered to the look-up");
 
     const wrong = setup({ confirmers: { whatsapp: async () => "other" } });
     await assert.rejects(() => wrong.sender.send({ contactId: wa(wrong), channel: "whatsapp", text: "hi", clientId: CID(2) }), (e) => e.status === 502 && e.code === "whatsapp_wrong_chat");
