@@ -21,4 +21,4 @@ Please report it privately through GitHub: **Security > Report a vulnerability**
 
 No conversation data, contact data, database or secret is ever committed (`node scripts/audit.js` fails the release gate if one is). Test data is synthetic. If you find personal data or a secret in this repository or its history, report it as above.
 
-History note (2026-10): an earlier layout of this repository committed personal files and an API key. They are removed from the tree and ignored, and the audit guards against a repeat; scrubbing the old commits and revoking the key are tracked in [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) until done.
+History note (2026-10): an earlier layout of this repository committed personal files and an API key. The history of every branch was rewritten on 2026-10-20 so none of them is reachable any more, and the key was revoked. The audit guards against a repeat. GitHub may still serve cached views of old pull-request commits until GitHub Support purges them (tracked in [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)); anyone holding an older clone or fork should delete it.
