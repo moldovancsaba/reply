@@ -25,8 +25,8 @@ This audit plan covers two major areas:
 | Cookie-based token auth | `chat/security-policy.js` → `parseCookieMap()`, `hasValidOperatorToken()` | Code comments | Verify URL decoding, timing-safe match |
 
 **Code Sections to Audit:**
-- [`security-policy.js`](chat/security-policy.js) lines 80-99: `timingSafeMatch()` and `hasValidOperatorToken()`
-- [`server.js`](chat/server.js): All routes with `hasValidOperatorToken()` and `isHumanApproved()` checks
+- [`security-policy.js`](../chat/security-policy.js) lines 80-99: `timingSafeMatch()` and `hasValidOperatorToken()`
+- [`server.js`](../chat/server.js): All routes with `hasValidOperatorToken()` and `isHumanApproved()` checks
 
 ### 1.2 Input Validation & SQL Injection Prevention
 
@@ -37,7 +37,7 @@ This audit plan covers two major areas:
 | AppleScript injection | `chat/sync-notes.js`, `chat/sync-imessage.js` | `execFile()` vs `exec()` | Verify argv-only execution |
 
 **Code Sections to Audit:**
-- [`server.js`](chat/server.js) line 133-135: `escapeSqlString()` function
+- [`server.js`](../chat/server.js) line 133-135: `escapeSqlString()` function
 - All `execFile()` calls in sync scripts
 
 ### 1.3 Secrets Management
@@ -50,8 +50,8 @@ This audit plan covers two major areas:
 | IMAP credentials | `chat/sync-imap.js`, `chat/settings-store.js` | Medium | Check password handling |
 
 **Code Sections to Audit:**
-- [`gmail-connector.js`](chat/gmail-connector.js) lines 152-161: Token refresh flow
-- [`settings-store.js`](chat/settings-store.js): `maskSettingsForClient()` function
+- [`gmail-connector.js`](../chat/gmail-connector.js) lines 152-161: Token refresh flow
+- [`settings-store.js`](../chat/settings-store.js): `maskSettingsForClient()` function
 
 ### 1.4 File Permissions & Data Protection
 
@@ -64,8 +64,8 @@ This audit plan covers two major areas:
 | Audit log | `chat/data/security_audit.jsonl` | 600 | Verify `security-policy.js` append mode |
 
 **Code Sections to Audit:**
-- [`security-audit.js`](chat/security-audit.js) lines 162-191: `applyFixes()` function
-- [`security-policy.js`](chat/security-policy.js) lines 114-122: `appendSecurityAudit()` with mode 0o600
+- [`security-audit.js`](../chat/security-audit.js) lines 162-191: `applyFixes()` function
+- [`security-policy.js`](../chat/security-policy.js) lines 114-122: `appendSecurityAudit()` with mode 0o600
 
 ### 1.5 HTTP Security Headers
 
@@ -77,7 +77,7 @@ This audit plan covers two major areas:
 | X-Content-Type-Options | `chat/server.js` | nosniff | Check header presence |
 
 **Code Sections to Audit:**
-- [`server.js`](chat/server.js): Response header setting code (search for `X-Frame-Options`, `Content-Security-Policy`)
+- [`server.js`](../chat/server.js): Response header setting code (search for `X-Frame-Options`, `Content-Security-Policy`)
 
 ### 1.6 Rate Limiting
 
@@ -88,8 +88,8 @@ This audit plan covers two major areas:
 | Retry-After header | `chat/server.js` | 429 responses | Check error responses |
 
 **Code Sections to Audit:**
-- [`rate-limiter.js`](chat/rate-limiter.js): Full implementation
-- [`server.js`](chat/server.js): Rate limiter middleware on sensitive routes
+- [`rate-limiter.js`](../chat/rate-limiter.js): Full implementation
+- [`server.js`](../chat/server.js): Rate limiter middleware on sensitive routes
 
 ### 1.7 Audit Logging
 
@@ -100,8 +100,8 @@ This audit plan covers two major areas:
 | Log integrity | `chat/data/security_audit.jsonl` | JSONL format | Parse and validate |
 
 **Code Sections to Audit:**
-- [`security-policy.js`](chat/security-policy.js) lines 114-122: `appendSecurityAudit()`
-- [`background-worker.js`](chat/background-worker.js) lines 6-16: Log rotation
+- [`security-policy.js`](../chat/security-policy.js) lines 114-122: `appendSecurityAudit()`
+- [`background-worker.js`](../chat/background-worker.js) lines 6-16: Log rotation
 
 ### 1.8 Channel Security
 
@@ -117,9 +117,9 @@ This audit plan covers two major areas:
 | LinkedIn | Draft only | Bridge inbound, clipboard fallback | `docs/CHANNEL_BRIDGE.md` |
 
 **Code Sections to Audit:**
-- [`server.js`](chat/server.js): Channel policy enforcement in send endpoints
-- [`openclaw-guard.js`](chat/openclaw-guard.js): WhatsApp DM/group policy enforcement
-- [`channel-bridge.js`](chat/channel-bridge.js): Inbound event normalization
+- [`server.js`](../chat/server.js): Channel policy enforcement in send endpoints
+- [`openclaw-guard.js`](../chat/openclaw-guard.js): WhatsApp DM/group policy enforcement
+- [`channel-bridge.js`](../chat/channel-bridge.js): Inbound event normalization
 
 ---
 

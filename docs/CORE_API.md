@@ -1,6 +1,6 @@
 # Reply Core HTTP API
 
-Status: living document, owned by issue #194; later issues add their endpoints here.
+Status: living document. Add new endpoints here when they ship.
 
 Loopback only (`127.0.0.1:45511` by default). Every error uses the envelope `{ "error": { "code", "message", "requestId", "retryable", "details"? } }` (see the README). Send `Host: 127.0.0.1:<port>` (or `localhost`); other hosts and foreign `Origin`s get `403`.
 
@@ -13,6 +13,7 @@ Response schemas for the read endpoints are in [`core/schema/api-read.json`](../
 | `GET /api/health` | liveness: `{ status, version, uptimeSeconds, home, time }` |
 | `GET /api/status`, `POST /api/status/recheck` | health of storage, helper and every source, with recovery steps; see [CORE_STATUS.md](CORE_STATUS.md) |
 | `GET /api/drafts/capabilities`, `POST /api/drafts/suggest` | optional local-model reply suggestion; see [CORE_DRAFTING.md](CORE_DRAFTING.md) |
+| `POST /api/contacts/:id/read`, `GET`/`PUT /api/contacts/:id/profile`, `POST /api/contacts/:id/notes`, `DELETE /api/contacts/:id/notes/:noteId` | mark seen, the contact profile, notes; see "Seen and new" and "Profile" below |
 | `POST /api/handoff` | open Messages, Mail or WhatsApp with a prefilled reply (does not send); see [CORE_HANDOFF.md](CORE_HANDOFF.md) |
 | `POST /api/send`, `POST /api/send/consent` | send a message through Messages, Mail or WhatsApp, and open {reply} to ask macOS for the permissions; see [CORE_SENDING.md](CORE_SENDING.md) |
 | `POST /api/sync/:connector` | start a sync (`202`, `409`, `423`, `404`); see [CORE_CONNECTORS.md](CORE_CONNECTORS.md) |
@@ -30,7 +31,7 @@ One entry per person, newest activity first (`lastTs` descending, then id). Peop
 
 ```json
 { "items": [ { "id": "c_1", "displayName": "Anna Kovacs", "lastTs": "2026-10-19T07:55:00.000Z", "lastChannel": "imessage",
-               "lastPreview": "See you at 6", "lastFromMe": false,
+               "lastPreview": "See you at 6", "lastFromMe": false, "unread": 2,
                "counts": { "imessage": 412, "email": 31, "whatsapp": 0 }, "countTotal": 443,
                "handles": [ { "value": "+36301234567", "label": "+36 30 123 4567", "kind": "phone" } ] } ],
   "nextCursor": "eyJ0cyI6...", "hasMore": true, "total": 187 }
@@ -54,11 +55,11 @@ Query: `before` (cursor), `limit`, `channel`. One merged thread across all of th
   "nextCursor": "eyJ0cyI6...", "hasMore": false }
 ```
 
-`isSummary: true` marks email text that is Mail's stored summary, not the full body. Group-chat messages carry `sender`. Pages never overlap or skip, even while new messages arrive: the cursor is the `(time, id)` position, so newer messages only appear when the first page is fetched again.
+`isSummary: true` marks email text that is Mail's stored summary, not the full body. Group-chat messages carry `sender` (the member's handle) and `senderName` (your contact's name for them, else the formatted number). Pages never overlap or skip, even while new messages arrive: the cursor is the `(time, id)` position, so newer messages only appear when the first page is fetched again.
 
 ### `POST /api/send`
 
-`{ "contactId", "channel", "handle"?, "text", "subject"? (email), "clientId" }` (any other key is `400`). `clientId` is 8 to 80 letters, digits, `-` or `_`, one per message. Success: `{ "sendId", "status": "sent", "channel", "handleLabel", "note" }`, or the same with `"replayed": true` for a repeated `clientId`. Errors and what they mean: [CORE_SENDING.md](CORE_SENDING.md#errors). `GET /api/contacts/:id` lists, per reply channel, `send: { available, reason? }`.
+`{ "contactId", "channel", "handle"?, "text", "subject"? (email), "clientId" }` (any other key is `400`). `clientId` is 8 to 80 letters, digits, `-` or `_`, one per message. Success: `{ "sendId", "status": "sent", "channel", "handleLabel", "note" }`, or the same with `"replayed": true` for a repeated `clientId`. Errors and what they mean: [CORE_SENDING.md](CORE_SENDING.md#errors). `text` is at most 4,000 characters (`413 text_too_long`), `subject` at most 300; empty text is `400 text_empty`. `GET /api/contacts/:id` lists, per reply channel, `send: { available, reason? }`.
 
 ### Seen and new
 
@@ -70,7 +71,7 @@ Each list entry has `unread`: messages **received** since the conversation was l
 
 ```json
 { "id": "c_1", "displayName": "Anna Kovacs", "origin": "apple_contacts",
-  "card": { "givenName": "Anna", "familyName": "Kovacs", "organization": "Acme", "jobTitle": "CFO", "birthday": "1985-03-09", "urls": ["https://acme.example"], "addresses": ["1 Main St, Budapest"] },
+  "card": { "givenName": "Anna", "familyName": "Kovacs", "nickname": "Annie", "organization": "Acme", "jobTitle": "CFO", "department": "Finance", "birthday": "1985-03-09", "urls": ["https://acme.example"], "addresses": ["1 Main St, Budapest"] },
   "profile": { "profession": "", "company": "", "relationship": "Client", "linkedinUrl": "", "intro": "", "updatedAt": "2026-10-19T08:00:00.000Z" },
   "notes": [ { "id": "n_...", "text": "Prefers email", "createdAt": "..." } ],
   "handles": [ { "value": "+36301234567", "label": "+36 30 123 4567", "kind": "phone", "origin": "apple_contacts", "messages": 230, "lastTs": "..." } ],
@@ -112,6 +113,12 @@ Ranking: `S = bm25(text weight 1.0, subject weight 2.0)`, lower first, then newe
 | 400 | `query_too_short` | `q` shorter than 2 characters |
 | 400 | `invalid_cursor` | cursor not issued by this API |
 | 404 | `contact_not_found` | unknown contact; merged-away contacts add `details.mergedInto` |
+| 404 | `note_not_found` | no such note on that contact |
+| 409 | `too_many_notes` | a contact already has 200 notes |
+| 403 | `forbidden_host`, `forbidden_origin` | a request that does not come from this machine's own page or tools |
+| 413 | `payload_too_large` | request body over the limit |
+
+Endpoint-specific codes are in the document for that endpoint: [CORE_SENDING.md](CORE_SENDING.md#errors), [CORE_HANDOFF.md](CORE_HANDOFF.md), [CORE_DRAFTING.md](CORE_DRAFTING.md), [CORE_CONNECTORS.md](CORE_CONNECTORS.md), [CORE_IDENTITY.md](CORE_IDENTITY.md).
 
 ## Caching
 
@@ -119,4 +126,4 @@ First pages of the contact list and of a thread carry a weak `ETag` and `Cache-C
 
 ## Performance
 
-Measured on a 100,000-message corpus (2,000 contacts), including HTTP: list page about 2 ms, thread page under 1 ms, search about 3 ms. The tests assert the issue's budgets (list < 30 ms, thread < 20 ms, search < 80 ms) with 3x tolerance, and that the list and thread queries use `contact_summary_last` and `messages_handle_ts`.
+Measured on a 100,000-message corpus (2,000 contacts), including HTTP: list page about 2 ms, thread page under 1 ms, search about 3 ms. The tests assert budgets (list < 30 ms, thread < 20 ms, search < 80 ms) with 3x tolerance, and that the list and thread queries use `contact_summary_last` and `messages_handle_ts`.

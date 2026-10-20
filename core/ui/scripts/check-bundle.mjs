@@ -2,7 +2,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 
-const BUDGET_GZIP_KB = 250; // issue #187: initial JS < 250 KB gzipped (the shared design-system chunk included)
+const BUDGET_GZIP_KB = 250; // initial JavaScript, gzipped, shared design-system chunk included
 const dir = new URL("../dist/assets/", import.meta.url);
 const files = readdirSync(dir).filter((f) => f.endsWith(".js"));
 const sizes = files.map((f) => [f, gzipSync(readFileSync(new URL(f, dir))).length / 1024]);

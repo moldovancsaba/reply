@@ -1,95 +1,75 @@
-# User Guide: {reply}
+# User guide
 
-**Doc freshness:** 2026-05-20
+Reply Core puts your messages and emails in one place. Everything stays on your Mac. For the first-time set-up (permissions, the first import) see [CORE_FIRST_RUN.md](CORE_FIRST_RUN.md); this guide is for using it.
 
-## Start / Stop
-1.  Navigate to the `{reply}` folder in Finder.
-2.  Double-click **`Launch Reply.command`**, run `make run`, or launch the native shell with `make run-app` from the repo root (see [LOCAL_MACHINE_DEPLOYMENT.md](/Users/Shared/Projects/reply/docs/LOCAL_MACHINE_DEPLOYMENT.md)).
-3.  A terminal window will open when using the `.command` launcher.
-4.  The UI is usually `http://localhost:45311/` (or the next port if `45311` is busy — use the URL printed in the terminal or check `~/Library/Logs/reply/hub.log`).
-5.  Health is available on both `/api/health` and `/api/system/health`.
+## Opening it
 
-To stop: keep the `make run` terminal open while using the app, and run `make stop` when you want the hub down (details in [LOCAL_MACHINE_DEPLOYMENT.md](/Users/Shared/Projects/reply/docs/LOCAL_MACHINE_DEPLOYMENT.md)).
+Double-click **{reply}** on your Desktop, or run `node scripts/reply-core start` in the `core` folder. It opens in Safari at `http://127.0.0.1:45511`. With the start-at-login agent installed it is already running when you log in.
 
----
+## The inbox
 
-## Where to Find What (UI Map)
+The left column lists the people you talk to, newest first. Each card shows the name, the last message (and who wrote it), when, the channel of the last message and how many messages you have exchanged on each channel. A **"3 new"** tag means three messages arrived since you last looked.
 
-### Sidebar (left)
-*   Click a contact to open the **Feed** view for that person.
-*   Click the dashboard icon to return to the **Dashboard**.
-*   Click the **gear icon** to open **Settings**.
-*   Use the **Search contacts** box to filter by name/handle/phone/email.
+- **Search names** and the **channel buttons** (All, iMessage, Email, WhatsApp) narrow the list. The address bar keeps your choice, so reloading or going back keeps it. **Clear filters** resets it.
+- **Load more** at the bottom of the list shows older conversations.
+- A source that is not working is named above the list, so a short list is not mistaken for "no messages".
 
-### Dashboard (home)
-*   Shows system health cards (iMessage/WhatsApp/Notes/Email).
-*   Use the **sync** icon on each card to trigger a manual sync in the background.
-*   Use the **⚙️** icon on a card to configure that specific service.
+## A conversation
 
-### Feed (chat)
-*   Messages for the selected contact.
-*   Sent messages render on the right. Received messages render on the left.
-*   The thread preloads the oldest 20 and newest 20 messages when you open a conversation.
-*   Longer histories load progressively in the background so the workspace stays responsive.
-*   **Composer** only shows reply/send channels that are allowed for the active conversation.
-*   If no channel is allowed for that conversation snapshot, send stays disabled and the UI says so explicitly.
-*   The buttons `🎤 Mic`, `✨ Magic`, `💡 Suggest` are visible only in the feed view.
-*   Drafting is `{trinity}`-first. If the local drafting runtime stalls, `{reply}` can fall back to a bounded local draft instead of freezing the workspace.
+Click a person. The middle column is **one timeline across all channels**: each message shows its channel (icon and name), who wrote it and when; messages you sent sit on the right in violet, messages you received on the left in grey. Day headings separate days. Emails are marked **Email summary** because Mail only stores a summary of the text. Attachments are listed by name and size; they cannot be opened here.
 
-### Profile (right pane)
-*   Contact profile fields + channels + AI suggestions + Local Intelligence.
-*   Hidden automatically on the Dashboard to maximize space.
+- **Load earlier messages** goes back in time without losing your place.
+- **Only iMessage / Only Email / Only WhatsApp** at the top of the conversation filter it to one channel.
+- When new messages arrive while you are reading older ones, a **"N new messages"** button appears at the bottom.
+- In a WhatsApp group each message shows who wrote it.
 
----
+## The profile
 
-## Settings (Full Page)
-Settings is a full page in the main area (same space as the Dashboard).
+The right column (**Hide profile** / **Show profile** in the conversation header; on a narrow window use the **Profile** link) is everything Reply Core knows about the person:
 
-### General Settings
-*   Email connector settings (IMAP + Gmail OAuth)
-*   Background worker global poll interval
+- **Address book:** name parts, nickname, organization, job title, department, birthday, web addresses, postal addresses (read-only, from your Contacts).
+- **How to reach them:** every phone number, email address and WhatsApp number, with how many messages and when the last one was.
+- **Activity:** how many messages, how many you received and sent, since when, when you last heard from them and last wrote to them, the last 30 days, and the split by channel.
+- **Details you add:** profession, company, relationship, LinkedIn address, intro. Press **Save**.
+- **Notes:** write a note and press **Add note**; delete one with **Delete note** (it asks first and cannot be undone). Notes and details stay on this Mac and survive a rebuild of the database.
+- For a **group**, the profile lists its **members** instead (admins first, how much each wrote, a link to the person's own conversation when there is one).
 
-### Service Settings
-Use either:
-*   The **⚙️** on a Dashboard card, or
-*   The **“Configure a service”** buttons at the top of Settings
+## Search
 
-Service settings include:
-*   Background worker quantity limits per channel
-*   Channel appearance (emoji + bubble colors)
+**Search** in the sidebar finds a word or phrase in every message and email. Type at least two characters and press Enter (it also searches as you type from three). The matching words are highlighted; click a result to open that conversation. The line "Searched iMessage, Email and WhatsApp" says what was covered, and a notice appears if a source could not be searched.
 
----
+## Two entries for the same person
 
-## Email (Gmail OAuth)
-If **Email** is an allowed channel for the current conversation and Gmail is connected, selecting **Email** sends via the Gmail API automatically.
+Reply Core never merges people by itself. If you see the same person twice (say a phone number and an email address), open one, go to **Merge** at the bottom of the profile, search for the other and confirm. The dialog says exactly what moves ("Move 1 handle and 2 messages from … into …?"). After a merge a notice offers **Undo** for 15 seconds; later you can undo from **Merge history** in the profile. If you merged in several steps, undo the last one first.
 
-*   Connect in Settings → Gmail (OAuth).
-*   Set **Sync scope**:
-    *   **Inbox + Sent** (default)
-    *   **All Mail** (excludes Spam/Trash)
-    *   **Custom query** (Gmail search syntax, e.g. `label:finance OR from:foo@bar.com`)
-*   Redirect URI should match the actual local hub port, usually:
-    *   `http://localhost:45311/api/gmail/oauth-callback`
+## Replying
 
----
+The **Reply** box is under the conversation.
 
-## WhatsApp Send
-*   **Primary path:** OpenClaw-backed transport.
-*   **Behavior:** `{reply}` uses the local OpenClaw path when healthy. If the transport is unavailable, `{reply}` surfaces a runtime error rather than pretending the send succeeded.
-*   **Channel safety:** WhatsApp only appears in the composer when the active conversation snapshot is allowed to reply on WhatsApp.
-*   **Setup:** see [LOCAL_MACHINE_DEPLOYMENT.md](/Users/Shared/Projects/reply/docs/LOCAL_MACHINE_DEPLOYMENT.md) for OpenClaw login and gateway notes.
+1. Choose the channel under **Send through** (only channels the person really has an address for are offered; the default is the channel of the last message). If a channel has several addresses you can pick one. For email there is a **Subject**.
+2. Write the message. The line under the box says who it goes to and how.
+3. Press **Send**. Reply Core shows exactly what will be sent and to whom; confirm with **Send**. It is sent through Messages, Mail or WhatsApp on your Mac and appears in the conversation a few seconds later. You can switch the confirmation off with **Ask me before sending**.
+4. Prefer to review in the app yourself? **Open in {App} instead** opens Messages, Mail or WhatsApp with your text ready, and you press send there. **Copy text** copies it.
 
----
+Your unfinished text is kept for this browser session. The first time you send, macOS asks for permission ("{reply} wants to control Messages" and so on); use **Allow {reply} to send** if it does not. WhatsApp also needs Accessibility. Details: [CORE_SENDING.md](CORE_SENDING.md). If the box says "The message may have been sent", check the conversation before sending again.
 
-## LinkedIn Ingest
-*   **Primary ingest mode:** browser bridge.
-*   **Behavior:** LinkedIn events are normalized through the local bridge route and should appear in the workspace without blocking on slow persistence.
-*   **If persistence is busy:** the event can be queued briefly and replayed by the background worker.
-*   **Health:** LinkedIn state appears under both the dashboard health surface and `/api/system/health`.
+## Suggested replies (optional)
 
----
+If you have set up a local model (Ollama, see [CORE_DRAFTING.md](CORE_DRAFTING.md)), **Suggest a reply** writes a draft from the recent conversation. It is marked **AI-generated draft. Review before sending.** Choose **Insert** (you pick *Replace my text* or *Add below my text* if you already wrote something), **Regenerate** or **Discard**. Nothing is inserted or sent until you say so. If drafting is off, the button is greyed out and the line next to it says how to turn it on.
 
-## Troubleshooting
-*   **Already running:** The launcher detects this and asks if you want to restart.
-*   **Permission denied:** `chmod +x "Launch Reply.command"`.
-*   **Sync says it failed:** in current builds, a successful trigger only means the background sync started. If the source still degrades, inspect that specific connector’s permissions or health card state.
+## Sources
+
+**Sources** shows each connected app, whether it is working, how many messages it has given, and what to do if it needs attention (the steps and the link to the right System Settings page). **Sync now** reads a source again; **Recheck** asks macOS again after you grant a permission. A **Not synced yet** source has not imported anything.
+
+## When something looks wrong
+
+| You see | Do |
+|---|---|
+| The inbox is empty | Open **Sources**: a blocked source (usually a missing permission) is the usual cause |
+| "Reply Core is not running" at the top | Double-click **{reply}** or run `node scripts/reply-core start` |
+| A source says **Needs your attention** | Follow its steps, then **Recheck** |
+| Sending says "not allowed to control Messages/Mail" | **Allow {reply} to send**, choose Allow in the macOS windows, try again |
+| A name is a number | WhatsApp has no name for that person; add them to your address book |
+| Anything else | `node scripts/reply-core status` and `node scripts/reply-core logs`; see [KNOWN_ISSUES.md](KNOWN_ISSUES.md) |
+
+Backups run once a day on their own; restore and rebuild are described in [CORE_OPERATIONS.md](CORE_OPERATIONS.md).

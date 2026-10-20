@@ -1,8 +1,8 @@
 # Reply Core Drafting
 
-Status: living document, owned by issue #204; the draft panel (#207) is its first user.
+Status: living document. Used by the draft panel in the composer.
 
-Drafting is **optional and off by default**. When enabled, Reply Core sends the last messages with one contact to a **local** model (Ollama) in a single request and returns one proposed reply. A person reviews and edits it; Reply Core never sends it, stores it, or learns from it.
+Drafting is **optional and off by default**. When enabled, Reply Core sends the last messages with one contact to a **local** model (Ollama) in a single request and returns one proposed reply. A person reviews and edits it; Reply Core does not send a draft by itself, store it, or learn from it; it only reaches a conversation if you Insert it and press Send.
 
 ## Turning it on
 
@@ -73,4 +73,4 @@ The conversation is wrapped in `<messages>` and introduced as data, not instruct
 
 ## What you see in the app (user-facing)
 
-Under the **Reply** box there is **Suggest a reply**. If drafting is not set up the button is greyed out and the line next to it says what to do. Press it (optionally after typing what the reply should say, for example "say yes, ask for the address"), wait a few seconds ("Writing a draft with llama3.1:8b..."; you can cancel), and the suggestion appears marked **AI-generated draft. Review before sending.** Then choose **Insert** (if you already wrote something you pick **Replace my text** or **Add below my text**), **Regenerate** or **Discard**. Nothing is put into your reply, saved or sent until you press Insert, and even then you still open the reply in your own app and press send there.
+Under the **Reply** box there is **Suggest a reply**. If drafting is not set up the button is greyed out and the line next to it says what to do. Press it (optionally after typing what the reply should say, for example "say yes, ask for the address"), wait a few seconds ("Writing a draft with llama3.1:8b..."; you can cancel), and the suggestion appears marked **AI-generated draft. Review before sending.** Then choose **Insert** (if you already wrote something you pick **Replace my text** or **Add below my text**), **Regenerate** or **Discard**. Nothing is put into your reply, saved or sent until you press Insert, and even then nothing leaves until you press Send (or open it in your own app and press send there).

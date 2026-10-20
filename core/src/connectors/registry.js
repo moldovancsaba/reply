@@ -1,4 +1,4 @@
-// Connector ids known to the service, in the default enabled order. Connector issues append here.
+// The connectors the service knows how to run, by id. Which of them run is `REPLY_CORE_CONNECTORS` (default list: DEFAULT_ENABLED_IDS in config.js).
 import { createAppleMailConnector } from "./apple-mail.js";
 import { createContactsConnector } from "./contacts.js";
 import { createImapConnector } from "./imap.js";
@@ -14,7 +14,6 @@ export const AVAILABLE = {
     imap: (deps) => createImapConnector(deps),
     stub: () => createStub(),
 };
-export const DEFAULT_ENABLED = [];
 
 // `enabled` comes from REPLY_CORE_CONNECTORS (comma list). Unknown ids are reported, never silently ignored.
 export function createRegistry({ enabled, available = AVAILABLE, deps = {} }) {

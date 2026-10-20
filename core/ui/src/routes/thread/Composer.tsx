@@ -20,7 +20,7 @@ const ERROR_TEXT: Record<string, string> = {
   no_handle_for_channel: "This person has no address for that channel any more. Pick another channel.",
   handle_not_owned: "That address does not belong to this person any more. Pick it again.",
   text_empty: "Write a message first.",
-  text_too_long: "That message is too long (over 10,000 characters). Shorten it.",
+  text_too_long: "That message is too long. Shorten it (sending takes up to 4,000 characters, opening it in the app up to 10,000).",
   contact_not_found: "This contact no longer exists. It may have been merged into another one.",
 };
 const errorText = (e: ApiError) => ERROR_TEXT[e.code] ?? e.message;
@@ -179,7 +179,7 @@ export function Composer({ contact, lastChannel, lastEmailSubject }: { contact: 
         label="Message"
         description={long ? "Long messages will be copied to the clipboard instead of prefilled." : `${text.length.toLocaleString("en-US")} characters. Longer than ${PREFILL_LIMIT.toLocaleString("en-US")} will be copied instead of prefilled.`}
         value={text}
-        readOnly={status === "submitting"}
+        readOnly={status === "submitting" || sending}
         autosize
         minRows={3}
         maxRows={12}

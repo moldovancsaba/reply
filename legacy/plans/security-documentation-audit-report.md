@@ -26,10 +26,10 @@ This audit covered comprehensive security verification and documentation accurac
 
 | Control | Status | Evidence |
 |---------|--------|----------|
-| Operator token enforcement | ✅ Verified | [`security-policy.js:88-99`](chat/security-policy.js:88) - timing-safe comparison |
-| Human approval gates | ✅ Verified | [`server.js:548-563`](chat/server.js:548) - all 25 sensitive routes protected |
-| Local request validation | ✅ Verified | [`security-policy.js:53-57`](chat/security-policy.js:53) - uses socket.remoteAddress |
-| Cookie-based token auth | ✅ Verified | [`security-policy.js:96-98`](chat/security-policy.js:96) - URL decoding + timing-safe match |
+| Operator token enforcement | ✅ Verified | `security-policy.js:88-99` - timing-safe comparison |
+| Human approval gates | ✅ Verified | `server.js:548-563` - all 25 sensitive routes protected |
+| Local request validation | ✅ Verified | `security-policy.js:53-57` - uses socket.remoteAddress |
+| Cookie-based token auth | ✅ Verified | `security-policy.js:96-98` - URL decoding + timing-safe match |
 
 **Verified Sensitive Routes (25 total):**
 - `/api/send-imessage`, `/api/send-whatsapp`, `/api/send-linkedin`, `/api/send-email`
@@ -48,9 +48,9 @@ This audit covered comprehensive security verification and documentation accurac
 | AppleScript injection | ⚠️ Minor | Some `exec()` usage with escaped scripts (non-user input) |
 
 **Files with `escapeSqlString()`:**
-- [`vector-store.js:5-6`](chat/vector-store.js:5) - 5 usages
-- [`channel-bridge.js:160-161`](chat/channel-bridge.js:160) - 1 usage
-- [`server.js:133-135`](chat/server.js:133) - defined but not actively used
+- `vector-store.js:5-6` - 5 usages
+- `channel-bridge.js:160-161` - 1 usage
+- `server.js:133-135` - defined but not actively used
 
 ### 1.3 Secrets Management ⚠️ MINOR ISSUES
 
@@ -58,8 +58,8 @@ This audit covered comprehensive security verification and documentation accurac
 |---------|--------|----------|
 | `.env` gitignored | ✅ Verified | `.gitignore` contains `chat/.env` |
 | Secrets in git history | ⚠️ Warning | Commit `cd0d7b2` removed `.env` - **rotate keys** |
-| Gmail OAuth credentials | ✅ Verified | Encrypted storage in [`settings-store.js:25-32`](chat/settings-store.js:25) |
-| Client secret masking | ✅ Verified | [`settings-store.js:201-222`](chat/settings-store.js:201) - hints only to UI |
+| Gmail OAuth credentials | ✅ Verified | Encrypted storage in `settings-store.js:25-32` |
+| Client secret masking | ✅ Verified | `settings-store.js:201-222` - hints only to UI |
 
 **SEC-001: Secrets Previously Committed to Git** (Medium)
 - **Issue**: `GOOGLE_API_KEY` and `REPLY_OPERATOR_TOKEN` were in git history before commit `cd0d7b2`
@@ -71,8 +71,8 @@ This audit covered comprehensive security verification and documentation accurac
 | Control | Status | Evidence |
 |---------|--------|----------|
 | Data directory mode | ✅ Verified | `chat/data` mode is 700 |
-| Settings file mode | ✅ Verified | Written with mode 600 in [`settings-store.js:319`](chat/settings-store.js:319) |
-| Audit log mode | ✅ Verified | Written with mode 600 in [`security-policy.js:118`](chat/security-policy.js:118) |
+| Settings file mode | ✅ Verified | Written with mode 600 in `settings-store.js:319` |
+| Audit log mode | ✅ Verified | Written with mode 600 in `security-policy.js:118` |
 
 ### 1.5 HTTP Security Headers ✅ PASS
 
@@ -102,7 +102,7 @@ base-uri 'self'; form-action 'self'
 
 | Control | Status | Evidence |
 |---------|--------|----------|
-| Rate limiter implementation | ✅ Verified | [`rate-limiter.js`](chat/rate-limiter.js) - sliding window |
+| Rate limiter implementation | ✅ Verified | [`rate-limiter.js`](../chat/rate-limiter.js) - sliding window |
 | Protected endpoints | ✅ Verified | 13 routes in `RATE_LIMITED_ROUTES` set |
 | Retry-After header | ✅ Verified | 429 responses include `Retry-After` |
 
@@ -118,9 +118,9 @@ base-uri 'self'; form-action 'self'
 
 | Control | Status | Evidence |
 |---------|--------|----------|
-| Security event logging | ✅ Verified | `appendSecurityAudit()` in [`security-policy.js:114-122`](chat/security-policy.js:114) |
+| Security event logging | ✅ Verified | `appendSecurityAudit()` in `security-policy.js:114-122` |
 | Log format | ✅ Verified | JSONL with timestamp, route, action, decision, reason |
-| Log rotation | ✅ Verified | 5MB max in [`background-worker.js:6-16`](chat/background-worker.js:6) |
+| Log rotation | ✅ Verified | 5MB max in `background-worker.js:6-16` |
 
 ### 1.8 Channel Security ✅ PASS
 

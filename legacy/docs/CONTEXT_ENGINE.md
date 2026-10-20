@@ -18,4 +18,4 @@ The hub exposes **Mic** (`#btn-mic` in `chat/index.html`) when a conversation is
 ## Related docs
 
 - [INGESTION.md](INGESTION.md) — data in LanceDB and optional annotation.
-- [README.md](../README.md) — product overview and version.
+- README.md — product overview and version.

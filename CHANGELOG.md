@@ -1,0 +1,48 @@
+# Changelog
+
+All notable changes to Reply Core. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). Each release's version is in `core/package.json` and `core/ui/package.json`; `node core/scripts/audit.js` checks that this file's newest release matches.
+
+## [0.2.0] - 2026-10-20
+
+The first release you can live in: profiles, sending, new-message counts, a signed app and a launcher, WhatsApp groups, and a documentation and repository clean-up.
+
+### Added
+- **Sending from the app.** A **Send** button in the Reply box sends through Messages, Mail (AppleScript) and WhatsApp Desktop (UI scripting) after a confirmation that shows the recipient and the exact text; "Open in {App} instead" remains. Safeguards: the recipient is always one of the contact's own handles, text is passed to the script as data, one request per message (idempotent by `clientId`), one at a time and 10 a minute, unknown outcomes are reported and never retried blindly, an audit without content (`sends`), `REPLY_CORE_SENDING=off`. ([docs/CORE_SENDING.md](docs/CORE_SENDING.md))
+- **Contact profile.** A third column (or a page on a narrow window) with address-book details (name parts, nickname, organization, job title, department, birthday, web and postal addresses), every handle with counts and last message, activity facts (counts, sent/received, since, last heard/wrote, last 30 days, per channel), details you add (profession, company, relationship, LinkedIn, intro) and notes. `GET`/`PUT /api/contacts/:id/profile`, `POST`/`DELETE` notes. Profile fields and notes survive `rebuild` and follow the person when an automatic contact is replaced by an address-book contact.
+- **WhatsApp:** group and chat names, group member lists (admins first, messages per member, link to their own conversation), sender names in groups. (`group_members`, migration 0009)
+- **New-message counts** per conversation ("3 new"), cleared when you have the conversation open at its newest message. (`read_state`, migration 0012)
+- **The signed `{reply}.app`** with the `{r}` icon: the program macOS permissions are granted to (Full Disk Access, Contacts, Automation, Accessibility), with `--consent` and `--consent-send` modes that make macOS list it. `reply-core build-app`.
+- **Launcher and login agent:** `scripts/reply-core` (`start`, `stop`, `status`, `open`, `logs`, `build-app`, `install-agent`, `uninstall-agent`), opening Safari by default; rotated service logs (10 MB x 5).
+- **Release gate:** `npm run verify:release` (lint, Swift and Node tests, launcher smoke test, UI checks and accessibility, repository audit, dependency audit) and `node scripts/audit.js`.
+- Scale check `node scripts/bench.js` (500,000 messages: every read under 15 ms).
+- Documents: user guide, technical design, design-system contract, known issues, security policy, contributing guide, documentation index, this changelog; MIT license; CI workflow.
+
+### Changed
+- Reply Core now **sends**; the first release was handoff-only. Docs, UI wording and the security rules were updated accordingly.
+- Visual pass: the list and the conversation scroll independently, conversations are cards, messages are tinted panels (received grey, sent violet), attachment-only messages read as words, dimmed text passes contrast on the tints.
+- Search results are cards; the Sources screen says "people" for Contacts.
+- The launch agent runs the signed app (falls back to `node`); it keeps the enabled connectors; `bootstrap` is retried after `bootout`.
+- Handoff recipient resolution is shared with sending.
+- The previous generation of the project moved to [`legacy/`](legacy/README.md); the plan moved to [docs/CORE_PLAN.md](docs/CORE_PLAN.md); legacy Markdown links no longer contain absolute paths of one machine.
+
+### Fixed
+- WhatsApp group messages named the group as sender; the real member is now used (re-import once after upgrading: `node scripts/reset-cursor.js whatsapp --purge`, service stopped).
+- Encoded WhatsApp push names (`+CgAQ…=`) were shown as names (migration 0010 restores the handle on affected automatic contacts).
+- A merged-away or unknown contact no longer shows a second, empty profile column.
+- Several accessibility findings: unnamed dialog close button, label-in-name mismatches, contrast of dimmed text on tinted panels.
+
+### Security
+- Removed personal data (contacts database, message exports, vector stores, built app bundle with a message database) from the repository tree and added ignore rules and an audit that fails on tracked databases, personal files and secrets. **Old commits still contain them until the history is rewritten and a leaked Google API key is revoked** (see [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)).
+
+## [0.1.0] - 2026-10-19
+
+First release of Reply Core: a local service and web app that shows iMessage, Apple Mail, Contacts, WhatsApp (opt-in) and IMAP in one inbox.
+
+### Added
+- Node service (Fastify, loopback only, uniform error envelope, redacted logs) with SQLite storage (forward-only checksummed migrations, WAL, full-text search).
+- Native Swift helper for Messages, Mail, Contacts and the keychain (NDJSON, versioned schema, checksum-verified).
+- Connector framework (runner, scheduler, retries with backoff, atomic page-and-cursor commits) and connectors for iMessage, Contacts, Apple Mail, WhatsApp and IMAP.
+- Identity: handle normalization, address-book import, explicit merge and undo with an audit log.
+- Read API (list, conversation, search, cursors, ETags), status API with recovery steps, reply handoff (opens the app with your text), optional local-model reply suggestion (Ollama).
+- Backup, restore and rebuild, daily backup, pidfile.
+- Web app (React, TypeScript, GDS only): inbox, conversation timeline, search, Sources with first-run flow, composer, draft panel; accessibility gate in light, dark and at 375 px.

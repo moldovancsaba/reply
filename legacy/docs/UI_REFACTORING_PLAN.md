@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document outlines a phased approach to refactoring the UI of the {reply} application to establish a consistent design system. The current codebase has significant technical debt with **176+ inline styles** in [`index.html`](chat/index.html:1) and **hardcoded color values** throughout the JavaScript files, which bypass the existing CSS variable design system defined in [`global.css`](chat/css/global.css:1).
+This document outlines a phased approach to refactoring the UI of the {reply} application to establish a consistent design system. The current codebase has significant technical debt with **176+ inline styles** in `index.html` and **hardcoded color values** throughout the JavaScript files, which bypass the existing CSS variable design system defined in `global.css`.
 
 Current product guardrail:
 
@@ -18,11 +18,11 @@ Current product guardrail:
 
 | File | CSS Variables | Inline Styles | Hardcoded Colors |
 |------|---------------|---------------|------------------|
-| [`global.css`](chat/css/global.css:1) | 14+ defined | 0 | 0 |
-| [`app.css`](chat/css/app.css:1) | 61 `var(--)` refs | 0 | Some hardcoded |
-| [`index.html`](chat/index.html:1) | Minimal usage | 176+ | 50+ `#666` alone |
-| [`dashboard.js`](chat/js/dashboard.js:1) | 0 `var(--)` refs | N/A | 20+ hardcoded |
-| [`training.js`](chat/js/training.js:1) | Some usage | N/A | `#d9534f` danger |
+| `global.css` | 14+ defined | 0 | 0 |
+| `app.css` | 61 `var(--)` refs | 0 | Some hardcoded |
+| `index.html` | Minimal usage | 176+ | 50+ `#666` alone |
+| `dashboard.js` | 0 `var(--)` refs | N/A | 20+ hardcoded |
+| `training.js` | Some usage | N/A | `#d9534f` danger |
 
 ### Existing CSS Variables (global.css)
 
@@ -300,7 +300,7 @@ Replace inline styles in the Settings page with utility classes from `components
 
 ### 2.1 Target Files
 
-- [`chat/index.html`](chat/index.html:157-640) - Settings sections
+- `chat/index.html` - Settings sections
 
 ### 2.2 Migration Pattern Examples
 
@@ -435,11 +435,11 @@ Add to `components.css`:
 ## Phase 3: Dashboard Cards Refactoring (Medium Risk)
 
 ### Objective
-Create reusable card rendering functions and replace hardcoded colors in [`dashboard.js`](chat/js/dashboard.js:1).
+Create reusable card rendering functions and replace hardcoded colors in `dashboard.js`.
 
 ### 3.1 Target Files
 
-- [`chat/js/dashboard.js`](chat/js/dashboard.js:82-272) - Dashboard rendering
+- `chat/js/dashboard.js` - Dashboard rendering
 
 ### 3.2 Create `renderHealthCard()` Function
 
@@ -627,11 +627,11 @@ Add to `components.css`:
 ## Phase 4: Training/Annotation Tool (Low Risk)
 
 ### Objective
-Align [`training.js`](chat/js/training.js:1) styling with the main application design system.
+Align `training.js` styling with the main application design system.
 
 ### 4.1 Target Files
 
-- [`chat/js/training.js`](chat/js/training.js:37-90) - Training page rendering
+- `chat/js/training.js` - Training page rendering
 
 ### 4.2 Color Replacements
 

@@ -11,9 +11,9 @@ Prints a JSON map of paths on stdout (timing on stderr); exits non-zero on failu
 
 | Output | Replicates | Basis |
 |---|---|---|
-| `imessage/chat.db` | Apple Messages: `message`, `handle`, `chat`, `chat_message_join`, `chat_handle_join`, `attachment`, `message_attachment_join` | columns read by `app/reply-app/Sources/ReplyHelper/IMessageExport.swift`, macOS 26 |
+| `imessage/chat.db` | Apple Messages: `message`, `handle`, `chat`, `chat_message_join`, `chat_handle_join`, `attachment`, `message_attachment_join` | columns read by `legacy/app/reply-app/Sources/ReplyHelper/IMessageExport.swift`, macOS 26 |
 | `mail/V10/MailData/Envelope Index` | Apple Mail: `messages`, `mailboxes`, `addresses`, `subjects`, `summaries`, `recipients` | columns read by `MailExport.swift`, macOS 26 |
-| `whatsapp/ChatStorage.sqlite` | WhatsApp Desktop: `ZWAMESSAGE`, `ZWACHATSESSION`, `Z_METADATA` | columns read by `chat/sync-whatsapp.js` |
+| `whatsapp/ChatStorage.sqlite` | WhatsApp Desktop: `ZWAMESSAGE`, `ZWACHATSESSION`, `Z_METADATA` | columns read by `legacy/chat/sync-whatsapp.js` |
 | `contacts/contacts.ndjson` | Output of the native helper `contacts` command | Native helper issue (#186), section 9 |
 | `corpus.ndjson` | `NormalizedMessage` lines for storage/performance tests (streams to disk) | Storage issue (#184) |
 

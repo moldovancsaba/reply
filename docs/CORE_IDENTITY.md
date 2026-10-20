@@ -1,6 +1,6 @@
 # Reply Core Identity
 
-Status: living document, owned by issue #189.
+Status: living document.
 
 One person, many handles. Reply Core groups handles under a **contact** and shows one timeline per contact. The rules below keep that grouping trustworthy.
 
@@ -22,9 +22,10 @@ One person, many handles. Reply Core groups handles under a **contact** and show
 | `36301234567` (no `+`, full international number) | `+36301234567` | `phone` |
 | `Anna@Example.COM`, ` mailto:Anna@Example.com?subject=x ` | `anna@example.com` | `email` |
 | `36301234567@s.whatsapp.net`, `@c.us`, hint `whatsapp` | `+36301234567@wa` | `whatsapp` |
-| `120363...@g.us`, `group:abc` | `group:...` | `other` |
+| `120363...@g.us`, `group:abc` | `group:<jid>` (for example `group:120363...@g.us`) | `other` |
 | `98765@lid`, anything else unrecognised | `other:<lowercase>` | `other` |
-| empty, too short, `a@b` | `null` | |
+| empty, `a@b` (no dot in the domain), or a value that cannot be a number when the hint says `phone` | `null` | |
+| anything else unrecognised | `other:<lowercase>` | `other` |
 
 - Numbers without a country code use the default region (`REPLY_CORE_DEFAULT_REGION`, default `HU`); a number is accepted if libphonenumber considers it *possible*. Extensions (`ext. 12`, `x12`) are dropped.
 - Email local parts are lowercased but Gmail dots and `+tags` are **not** altered.
@@ -32,6 +33,10 @@ One person, many handles. Reply Core groups handles under a **contact** and show
 - Changing the default region does not rewrite handles already stored.
 
 `formatHandle(handle_norm)` gives the display form (international phone format; `(WhatsApp)` suffix for WhatsApp).
+
+## Names from chats
+
+A later WhatsApp chat or group name may rename an *automatic* contact (one still named after its handle); address-book and merged contacts are never renamed. Notes and profile fields of an emptied automatic contact move to the contact that took its handles (see the last section).
 
 ## Merge and unmerge
 
@@ -74,7 +79,7 @@ With the service stopped: `node core/scripts/identity-reset.js --to-auto` undoes
 
 ## Rebuild
 
-A rebuild keeps only manual merges ([CORE_OPERATIONS.md](CORE_OPERATIONS.md)). Each merge is exported as the handles it moved plus an *anchor* handle of the target, and replayed in order; merges that cannot be applied yet wait in `pending_merges` until all of their handles exist.
+A rebuild keeps manual merges, profile fields and notes ([CORE_OPERATIONS.md](CORE_OPERATIONS.md)). Each merge is exported as the handles it moved plus an *anchor* handle of the target, and replayed in order; merges that cannot be applied yet wait in `pending_merges` until all of their handles exist.
 
 ## Data
 
@@ -82,7 +87,7 @@ Migration `0003_identity.sql` adds `contacts.external_id` (unique when set) and 
 
 ## How merging works (for the person using the app)
 
-Reply Core never decides that two entries are the same person. If you see the same person twice (for example a phone number and an email address), open one of them, choose **Profile and merge**, search for the other and confirm. The confirmation tells you exactly what moves: how many numbers or addresses, and how many messages will appear in the kept conversation. Nothing changes until you confirm.
+Reply Core never decides that two entries are the same person. If you see the same person twice (for example a phone number and an email address), open one of them, open the contact's profile and use its **Merge** section, search for the other and confirm. The confirmation tells you exactly what moves: how many numbers or addresses, and how many messages will appear in the kept conversation. Nothing changes until you confirm.
 
 After a merge the other entry disappears from the list and its messages show up in the kept contact's conversation, each still marked with its own channel. Your original messages are never changed or deleted. You can undo a merge right away from the notice, or later from **Merge history** on the kept contact's profile; undoing gives the other entry back with exactly the numbers and addresses it had. If you merged in several steps, undo them in reverse order (the last merge first), otherwise Reply Core explains which merge is in the way.
 

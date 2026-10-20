@@ -1,6 +1,6 @@
 # Reply Core UI
 
-Status: living document, owned by issue #187; each screen issue adds its section.
+Status: living document; keep one section per screen.
 
 The app lives in [`core/ui`](../core/ui/README.md) and is built **exclusively** from the Sovereign Squad General Design System (GDS, `@sovereignsquad/gds`, https://github.com/sovereignsquad/general-design-system). The rules:
 
@@ -23,11 +23,11 @@ The app lives in [`core/ui`](../core/ui/README.md) and is built **exclusively** 
 | Render error | an error boundary shows a GDS error `StateBlock` with Reload instead of a blank page; it recovers when the route changes; the error goes to the console only (no telemetry) |
 | Unknown route | a GDS "This page does not exist" state with a way back to Inbox |
 
-Routes: `/` redirects to `/inbox`; `/inbox`, `/inbox/:contactId`, `/search`, `/sources`, anything else is the not-found state. Screens are lazy modules; until a screen lands its route shows a placeholder naming its issue.
+Routes: `/` redirects to `/inbox`; `/inbox`, `/inbox/:contactId`, `/inbox/:contactId/profile`, `/search`, `/sources`; anything else is the not-found state. Screens are lazy modules.
 
 ## Talking to the service
 
-`src/api/client.ts` (`fetchJson`) is the only network code. It sets a 10 s timeout (3 s for the health check), never throws (it returns `{ ok, data } | { ok: false, error }`), and understands the service error envelope (`code`, `message`, `requestId`, `retryable`, `details`). Response types are generated from `core/schema/*.json` (`npm run gen:api`); the build fails if they are stale. Health polling (`useHealth`): every 15 s while the tab is visible, paused when hidden and re-checked on return, backoff 2 s up to 30 s after a failure, "down" only after two failures in a row.
+`src/api/client.ts` (`fetchJson`) is the only network code. It sets a 10 s timeout (3 s for the health check), never throws (it returns `{ ok, data } | { ok: false, error }`), and understands the service error envelope (`code`, `message`, `requestId`, `retryable`, `details`). Response types are generated from `core/schema/*.json` (`npm run gen:api`); the build fails if they are stale. Health polling (`useHealth`): every 15 s while the tab is visible, paused when hidden and re-checked on return, backoff 4 s, 8 s, 16 s, up to 30 s after a failure, "down" only after two failures in a row.
 
 The service hosts the build (`core/src/server.js`): `index.html` is `no-cache`, files under `/assets/` are immutable, unknown non-API pages get the app (client routes), unknown API paths and non-page requests stay JSON 404s. The page carries a strict Content Security Policy (`script-src 'self'`, `connect-src 'self'`, `frame-ancestors 'none'`; inline styles are allowed because GDS sets style attributes at runtime). The build lives in `core/ui/dist` (`REPLY_CORE_UI_DIR` overrides it).
 
@@ -47,7 +47,7 @@ Known, not failing: GDS `StateBlock` renders its title as an `h3`, which axe rep
 
 ## The accessibility gate (how it works, and a trap)
 
-`npm run test:e2e` runs `createGdsA11yTest` from `@sovereignsquad/gds-a11y` on `/inbox` (empty, populated, no match, error, blocked source), `/inbox/c_123`, `/search`, `/sources` and an unknown route, in light and dark, plus the keyboard order of the shell (skip link, then the three navigation links), a 375 px phone viewport, a 320 px / reduced-motion check, and the service-down state. Serious and critical findings fail.
+`npm run test:e2e` runs `createGdsA11yTest` from `@sovereignsquad/gds-a11y` on `/inbox` (empty, populated, no match, error, blocked source), `/inbox/c_123`, `/search`, `/sources` and an unknown route, in light and dark, plus the keyboard order of the shell (skip link, then the three navigation links), a 375 px phone viewport, a 320 px / reduced-motion check, and the service-down state. Serious and critical findings fail. The other specs (inbox, thread, search, sources, profile, composer, send, drafting) scan their own states (errors, dialogs, loading, groups) with `expectAccessible` and `expectAccessibleNow`, and the dialogs with `expectFocusTrapped`.
 
 **Trap:** `createGdsA11yTest` navigates to the route itself, which discards any script added before the call, and its scan returns "no violations" when `axe` is not in the page. The GDS documentation example adds axe first and would therefore pass without scanning anything. `e2e/a11y.ts` adds axe as an init script (present after every navigation) and asserts it is in the page, so the gate cannot pass silently.
 
@@ -61,7 +61,7 @@ For a state reached by interaction (the 375 px drawer, the service-down alert) u
 - **New messages:** a row shows "N new" (messages received since you last had the conversation open); the conversation is marked seen about 0.8 s after its newest message is on screen (not while "N new messages" is waiting below the fold), and the list refreshes.
 - **Row:** a link to `/inbox/:id`. Its accessible name is its visible text (name, relative time, preview, channel, per-channel counts) so the label always matches what is shown; the avatar is decorative. The time is a `<time dateTime title>` with the full date on hover.
 - **States:** loading, empty with no filters ("No conversations yet", link to Sources), empty with filters ("No conversations match", Clear filters), error (message plus the request reference, Try again), load-more in progress and load-more failure. A source that is blocked or in error is named above the list (`SourceNotice`, from `/api/status`) so a short list is not mistaken for "no messages".
-- **Layout:** 1280 px: list (4 columns) and detail (8 columns) side by side, each in its own scrolling pane (`OverflowContainer`), so the list stays in view while a long conversation is read; each conversation is a bordered card (selected = tinted) and each message an `AccentPanel` (received grey, sent violet); below 62 em only the list, or only the detail with a "Back to conversations" link. The layout switch is a `matchMedia` hook, so exactly one tree is in the DOM.
+- **Layout:** From 62 em wide: list (3 of 12 columns), conversation (5) and profile (4) side by side; with the profile column hidden, 4 and 8, each in its own scrolling pane (`OverflowContainer`), so the list stays in view while a long conversation is read; each conversation is a bordered card (selected = tinted) and each message an `AccentPanel` (received grey, sent violet); below 62 em only the list, or only the detail with a "Back to conversations" link. The layout switch is a `matchMedia` hook, so exactly one tree is in the DOM.
 - **Detail pane:** the thread timeline (next section).
 
 GDS notes found while building it: `GdsSplit` never splits (its inline `grid-template-columns` beats its own media query), so a `GdsColumnGrid` is used; `SemanticButton` takes its text from the `label` prop, not children; `GdsBox` has no `role` prop and `Text` components neither.
@@ -109,7 +109,7 @@ Everything you write stays on this Mac, is validated by the service (lengths, a 
 
 ### Merge and undo
 
-- **Merge:** a searchable picker (`SearchableSelect`, loads `GET /api/contacts?q=&includeEmpty=true`, excludes the current contact, "No contacts match") opens a confirmation that restates both names and counts: "Move 1 handle and 2 messages from {source} into {this contact}?". Nothing is sent before the confirmation. The Merge button is loading and disabled while the request runs (one request even on a double click), the dialog stays open on failure with a plain explanation (`mergeErrorText`: `cannot_merge_self`, `contact_not_found`, `handle_conflict` with the blocking handles, `merge_already_reverted`), and there is no optimistic update. On success contacts, contact, thread, profile and history queries are refreshed, a notice with **Undo** shows for 15 s and the app opens the kept contact's conversation.
+- **Merge:** a searchable picker (`SearchableSelect`, loads `GET /api/contacts?q=&includeEmpty=true`, excludes the current contact, "No contacts match") opens a confirmation that restates both names and counts: "Move 1 handle and 2 messages from {source} into {this contact}?". Nothing is sent before the confirmation. The Merge button is loading and disabled while the request runs (one request even on a double click), the dialog stays open on failure with a plain explanation (`mergeErrorText`: `cannot_merge_self`, `contact_not_found`, `handle_conflict` with the blocking handles, `merge_already_reverted`, `merge_not_found`), and there is no optimistic update. On success contacts, contact, thread, profile and history queries are refreshed, a notice with **Undo** shows for 15 s and the app opens the kept contact's conversation.
 - **Undo:** from the notice (it opens the profile with `?undo=<merge id>`, which opens the undo confirmation) and from **Merge history** (newest first; merges not yet undone have an Undo button; undone ones say "undone"). Undo always asks first, naming both people. A conflict (an earlier merge must be undone first) is explained in the dialog.
 - **Empty history:** "No merges yet." is plain text, not an error.
 
@@ -133,7 +133,7 @@ GDS findings: `ConfirmDialog` renders an unnamed close button (axe `button-name`
 
 | State | Badge (text + icon) | Sentence | Recommended action |
 |---|---|---|---|
-| `ok` | Connected (success) | Messages are up to date. | Sync now |
+| `ok` | Connected (success) | Messages are up to date (the Contacts source says "Your address book is up to date." and counts people). | Sync now |
 | `syncing` | Syncing (info) | Importing messages now. "Imported N messages so far" (live region, at most one update per 5 s) | none (button shows "Syncing...", disabled) |
 | `never_synced` | Not synced yet (neutral) | Nothing has been imported from this source yet. | Sync now |
 | `error` | Problem, will retry (warning) | the service's message; "Next attempt ..." | Sync now |
@@ -154,10 +154,10 @@ Each panel also shows the message count, "Last success ...", the next check and,
 
 - **Recipient and app are always visible before the action:** "To {name} through {channel} ({address}). Send sends it now, through {App} on this Mac." and the primary button is **Send**; **Open in {App} instead** and **Copy text** sit beside it. Where sending is off, the reason is shown and the primary button is "Open in {App}".
 - **Channel:** a labelled radio group (arrow keys move between options) listing only the channels in `replyChannels`, each with its address. The default is the channel of the newest message (until the person or a saved draft chooses); a contact with several addresses on one channel gets an address select.
-- **Text:** a labelled multi-line field with a character count described by `aria-describedby`; over 1,500 characters the hint becomes "Long messages will be copied to the clipboard instead of prefilled." (not an error). The field is read-only while the request runs, so the text cannot change after it was sent to the service. Secondary action: **Copy text**.
+- **Text:** a labelled multi-line field with a character count described by `aria-describedby`; over 1,500 characters the hint becomes "Long messages will be copied to the clipboard instead of prefilled." (not an error). While a handoff request runs the field is read-only; while Send runs the Send button is disabled. Send accepts up to 4,000 characters, the handoff 10,000. Secondary action: **Copy text**.
 - **Opening:** `openFromGesture` clicks a temporary `rel="noopener noreferrer"` anchor inside the click handler (a user gesture); web links open in a new tab, `sms:` and `mailto:` hand over to the app. `copy_and_open` copies the text first and says so (or says it could not copy). The notice carries the service's exact note and a "Click here to open {App} again" link as the fallback when the browser blocks the link.
 - **States:** idle; no channels ("No way to reach this person from here yet", link to the profile); submitting (loading, disabled); error (an alert with plain wording, focus moves to it, the text is kept, Try again when retryable); success (notice, text cleared, draft removed, focus back in the field); over limit.
-- **Drafts:** saved per contact in `sessionStorage` (`rc.draft.<contactId>`, 400 ms after typing, "Draft saved" shown), restored after navigation or reload within the session, removed after a handoff. Storage that is missing or throws just means no draft is kept. Leaving the thread never shows a dialog; the saved draft makes it unnecessary.
+- **Drafts:** saved per contact in `sessionStorage` (`rc.draft.<contactId>`, 400 ms after typing, "Draft saved" shown), restored after navigation or reload within the session, removed after a handoff or a successful send. Storage that is missing or throws just means no draft is kept. Leaving the thread never shows a dialog; the saved draft makes it unnecessary.
 - **Send:** one explicit request per message. A confirmation dialog shows the recipient, channel, subject (email) and the exact text ("It is sent now and cannot be taken back"); the switch **Ask me before sending** (remembered) skips it. Each message has its own attempt id, so a double click or a retry after a lost answer never sends twice. Email has a **Subject** field that starts as "Re: ..." of the last mail. On success a notice, the field is cleared and focused, and the thread refreshes after 4 s and 14 s so the sent message appears through the normal import. Errors say whether anything was sent ("The message was not sent" or "The message may have been sent" with no blind retry); permission errors show the steps, a link and **Allow {reply} to send**.
 - **Privacy:** the text only goes to the loopback API in the request body; it is never logged by the UI.
 
@@ -175,7 +175,7 @@ Each panel also shows the message count, "Last success ...", the next check and,
 
 ## Adding a screen
 
-1. Replace the route's `Placeholder` with the screen (a lazy module in `src/routes/`), composed from GDS only.
+1. Add the screen as a lazy module in `src/routes/` and a `<Route>` in `src/App.tsx`, composed from GDS only.
 2. Define loading, empty, error and success (and blocked or stale where the data can be) with `AsyncSurface` / `StateBlock`; test zero, one and many.
 3. Add the route to the accessibility specs for each state it can show, in light and dark, and at 375 px.
 4. Keyboard: every control reachable and operable, focus managed after actions, no focus stolen by updates.
@@ -183,4 +183,4 @@ Each panel also shows the message count, "Last success ...", the next check and,
 
 ## Budget and checks
 
-`npm run check:bundle` fails if the JavaScript exceeds 250 KB gzipped (currently about 193 KB, almost all of it the shared design-system chunk).
+`npm run check:bundle` fails if the JavaScript exceeds 250 KB gzipped (currently about 242 KB, almost all of it the shared design-system chunk).

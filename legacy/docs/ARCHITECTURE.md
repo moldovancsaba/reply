@@ -210,7 +210,7 @@ Membership rule:
 - if membership changes, `{reply}` opens a new conversation snapshot even if the provider-native thread id stays the same
 - participant change and contact merge are separate concepts; membership changes do not authorize automatic identity collapse
 
-See [CONVERSATION_FOUNDATION_AUDIT.md](/Users/Shared/Projects/reply/docs/CONVERSATION_FOUNDATION_AUDIT.md).
+See [CONVERSATION_FOUNDATION_AUDIT.md](CONVERSATION_FOUNDATION_AUDIT.md).
 
 ## Thread Loading Model
 
@@ -318,8 +318,8 @@ Current product direction is stable:
 
 ## Related Docs
 
-- [README.md](/Users/Shared/Projects/reply/README.md)
-- [LOCAL_MACHINE_DEPLOYMENT.md](/Users/Shared/Projects/reply/docs/LOCAL_MACHINE_DEPLOYMENT.md)
-- [TRINITY_INTEGRATION_SPINE.md](/Users/Shared/Projects/reply/docs/TRINITY_INTEGRATION_SPINE.md)
-- [POLICY_LOOP_REPO_BREAKDOWN.md](/Users/Shared/Projects/reply/docs/POLICY_LOOP_REPO_BREAKDOWN.md)
-- [THIN_UI_LOCAL_PRECOMPUTE_AUDIT.md](/Users/Shared/Projects/reply/docs/THIN_UI_LOCAL_PRECOMPUTE_AUDIT.md)
+- [README.md](../README.md)
+- [LOCAL_MACHINE_DEPLOYMENT.md](LOCAL_MACHINE_DEPLOYMENT.md)
+- [TRINITY_INTEGRATION_SPINE.md](TRINITY_INTEGRATION_SPINE.md)
+- [POLICY_LOOP_REPO_BREAKDOWN.md](POLICY_LOOP_REPO_BREAKDOWN.md)
+- [THIN_UI_LOCAL_PRECOMPUTE_AUDIT.md](THIN_UI_LOCAL_PRECOMPUTE_AUDIT.md)

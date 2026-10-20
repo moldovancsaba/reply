@@ -11,7 +11,7 @@ GITHUB_TOKEN=<a token with read:packages> npm --prefix ui ci   # the design syst
 node scripts/reply-core start
 ```
 
-The launcher checks Node (20.17 or newer), builds the web app the first time, starts the service and opens your browser. Because nothing has permission yet, it opens **Sources**:
+The launcher checks Node (20.17 or newer), builds the web app the first time, starts the service and opens Safari (`REPLY_CORE_BROWSER=default` uses your system browser). Because nothing has permission yet, it opens **Sources**:
 
 ![The Sources screen on first run: iMessage needs attention, with the steps](images/first-run-sources-blocked.png)
 
@@ -20,7 +20,7 @@ The launcher checks Node (20.17 or newer), builds the web app the first time, st
 macOS decides who may read Messages and Mail. Every source that needs something shows numbered steps:
 
 1. Open **System Settings > Privacy & Security > Full Disk Access** (the link on the screen opens it).
-2. Switch on the program that starts Reply Core. That is the `node` binary if you use the start-at-login agent (the command prints its exact path), or your Terminal app if you run `start` there. Use **+** and press Command+Shift+G to paste a path.
+2. Switch on **{reply}** if you use the start-at-login agent (the command prints where it is), or your Terminal app if you run `start` there. Use **+** and press Command+Shift+G to paste a path.
 3. Come back and press **Recheck**.
 
 The first time Reply Core reads another app's data macOS may also show a permission dialog; answer it, then press **Recheck**. Contacts need their own permission (Privacy & Security > Contacts).
@@ -35,7 +35,7 @@ A source that works turns **Connected** and starts importing ("Imported 4,300 me
 
 ## 4. Use the inbox
 
-Open **Inbox**. People appear as soon as their messages are imported. Open a conversation to see every channel in one timeline, use **Reply** to open Messages, Mail or WhatsApp with your text ready (Reply Core never sends anything itself), and **Search** to find a word across everything. See [CORE_UI.md](CORE_UI.md) for the screens.
+Open **Inbox**. People appear as soon as their messages are imported. Open a conversation to see every channel in one timeline, use **Reply** to send through Messages, Mail or WhatsApp (macOS asks once for permission, see [CORE_SENDING.md](CORE_SENDING.md); WhatsApp is opt-in: add `whatsapp` to `REPLY_CORE_CONNECTORS`), or **Open in {App} instead** to review the text in the app first, and **Search** to find a word across everything. See [CORE_UI.md](CORE_UI.md) for the screens.
 
 ## 5. Optional: start at login
 
@@ -43,7 +43,7 @@ Open **Inbox**. People appear as soon as their messages are imported. Open a con
 node scripts/reply-core install-agent
 ```
 
-This keeps Reply Core running after you log in and restarts it if it stops. It needs its own Full Disk Access grant for the `node` binary it prints, and that grant has to be repeated after a Node upgrade. Undo it with `uninstall-agent`. Details: [CORE_OPERATIONS.md](CORE_OPERATIONS.md#start-at-login-optional).
+This keeps Reply Core running after you log in and restarts it if it stops. It needs Full Disk Access for the program it prints ({reply} once the app is built; that grant survives Node upgrades). Undo it with `uninstall-agent`. Details: [CORE_OPERATIONS.md](CORE_OPERATIONS.md#start-at-login-optional).
 
 ## When something is wrong
 

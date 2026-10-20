@@ -1,12 +1,12 @@
 # reply-core-helper
 
-Standalone Swift command-line helper that exports iMessage, Apple Mail and Apple Contacts as versioned NDJSON for the Reply Core connectors. It only reads; it has no network code and writes nothing except stdout/stderr.
+Standalone Swift command-line helper that exports iMessage, Apple Mail and Apple Contacts as versioned NDJSON for the Reply Core connectors. It reads Messages, Mail and Contacts and never writes to them; its only write is `keychain set|delete` for IMAP app passwords. It has no network code.
 
 ```bash
 cd core/helper
 bash build.sh                       # swift build -c release, copies bin/reply-core-helper, records bin/reply-core-helper.sha256
 bin/reply-core-helper --version     # 1.0.0 schema=1
-bin/reply-core-helper doctor        # per-source access state, no content read (--only imessage|mail|contacts checks one)
+bin/reply-core-helper doctor        # per-source access state, no content read (--only imessage|mail|contacts checks one, --skip-contacts leaves Contacts out; sources not checked show `skipped`)
 bin/reply-core-helper imessage --db ~/Library/Messages/chat.db --after 0 --limit 500
 bin/reply-core-helper mail --root ~/Library/Mail --after 0 --limit 500
 bin/reply-core-helper contacts [--after <offset>] [--limit <n>]
@@ -23,7 +23,7 @@ stdout is NDJSON only (one object per line); stderr is human diagnostics without
 | `type` | Meaning |
 |---|---|
 | `message` | One iMessage or mail message. Common fields: `source`, `providerMessageKey`, `account`, `threadKey`, `counterpartHandle` (raw, unnormalized), `isFromMe`, `tsMs` (UTC epoch ms, `0` = no usable date), `subject?`, `text`, `attachments[]`. iMessage adds `isGroup`, `isReaction`, `service`. Mail adds `sender`, `to[]`, `mailboxKind`, `accountLabel`. |
-| `contact` | `contactId` (Contacts identifier), `displayName`, `phones[]`, `emails[]`. |
+| `contact` | `contactId` (Contacts identifier), `displayName`, `phones[]`, `emails[]` and, when present, `givenName`, `familyName`, `nickname`, `organization`, `jobTitle`, `department`, `birthday` (`YYYY-MM-DD`, or `--MM-DD` without a year), `urls[]`, `addresses[]`. |
 | `cursor` | Always the last line. `cursor` is `{rowid}` (imessage, mail) or `{offset}` (contacts), `exported`, `more`. |
 | `secret` | The answer to `keychain get`: `{ "secret": "..." }`. |
 | `warning` | `undecodable_text` with a count (an `attributedBody` that could not be decoded; the message is still exported with empty text). |

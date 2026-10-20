@@ -1,6 +1,6 @@
 # Reply Core: sending messages
 
-Status: living document. Sending from the app was added after the first release, which only handed replies off to other apps ([CORE_HANDOFF.md](CORE_HANDOFF.md), still available as "Open in {App} instead").
+Status: living document. A handoff ([CORE_HANDOFF.md](CORE_HANDOFF.md)) remains available as "Open in {App} instead".
 
 Press **Send** in the Reply box and the message leaves this Mac through the app you already use for that channel. Nothing goes anywhere else: no cloud, no relay.
 
@@ -21,11 +21,11 @@ Group chats and people without a phone number or address cannot be a recipient (
 - **Unknown outcome is said out loud.** If the app does not answer in time (45 s) the attempt is recorded as `unknown`, the UI says "The message may have been sent: check the conversation" and does not offer a blind retry.
 - **Rate limit:** one send at a time and at most 10 a minute (`send_rate_limited`).
 - **Audit without content:** one row per attempt in `sends` (time, contact id, channel, kind of address, text length, outcome). Never the text, the subject or the address; the log lines carry the channel, length and outcome only.
-- **Off switch:** `REPLY_CORE_SENDING=off` removes the Send button (the reason is shown) and the API refuses (`sending_disabled`). `install-agent` stores the setting in the agent.
+- **Off switch:** `REPLY_CORE_SENDING=off` removes the Send button (the reason is shown) and the API refuses (`sending_disabled`). `install-agent` stores the setting in the agent if it is set when you run it.
 
 ## Permissions, step by step
 
-macOS lists an app under Automation or Accessibility only after the app asks. In the Reply box a permission error shows the steps and an **Allow {reply} to send** button, which opens {reply} in its permission mode (`{reply}.app --consent-send`, or `POST /api/send/consent`): it launches Messages, Mail and System Events and asks macOS for Automation of each, and for Accessibility. Choose Allow in each macOS window, then press Send again. Afterwards System Settings > Privacy & Security > Automation shows {reply} with Messages, Mail and System Events, and Accessibility shows {reply}. The permission belongs to the signed {reply} app, so it survives rebuilds and Node upgrades.
+macOS lists an app under Automation or Accessibility only after the app asks. In the Reply box a permission error shows the steps and an **Allow {reply} to send** button, which opens {reply} in its permission mode (`{reply}.app --consent-send`, or `POST /api/send/consent`, which works only when the service was started from {reply}.app and otherwise answers `501 consent_unavailable`): it launches Messages, Mail and System Events and asks macOS for Automation of each, and for Accessibility. Choose Allow in each macOS window, then press Send again. Afterwards System Settings > Privacy & Security > Automation shows {reply} with Messages, Mail and System Events, and Accessibility shows {reply}. The permission belongs to the signed {reply} app, so it survives rebuilds and Node upgrades.
 
 ## After sending
 
@@ -46,3 +46,9 @@ The sent message reaches the source app's database a moment later. Reply Core re
 | `send_in_progress` (409) | the same message is still being sent | wait |
 | `already_attempted` (409) | this `clientId` already failed or has an unknown outcome | write it again to send a new one |
 | `sending_disabled` (403) | `REPLY_CORE_SENDING=off` | no Send button |
+| `invalid_request` (400), `text_empty` (400) | a malformed request, or nothing but whitespace | the Send button never offers it |
+| `text_too_long` (413) | over 4,000 characters (subject over 300 is `invalid_request`) | shorten the message |
+| `no_handle_for_channel`, `handle_not_owned` (422) | the contact has no such address for that channel | the channel is not offered |
+| `channel_not_supported` (422) | no driver for that channel | - |
+| `contact_not_found` (404) | unknown or merged-away contact | back to the inbox |
+| `consent_unavailable` (501), `consent_failed` (502) | the service is not running from {reply}.app (run `node scripts/reply-core build-app`, then `install-agent`), or the app could not be opened | the Allow button explains it |

@@ -18,7 +18,7 @@ const purge = flags.includes("--purge");
 db.transaction(() => {
     if (purge) {
         if (!CHANNEL[connector]) throw new Error(`--purge is not supported for ${connector}`);
-        // email is shared by apple-mail and imap: purge by account prefix of the message id instead of the whole channel
+        // email is shared by apple-mail and imap, so purging either removes the whole email channel
         const rows = connector === "apple-mail" || connector === "imap"
             ? db.prepare("DELETE FROM messages WHERE channel = 'email'").run()
             : db.prepare("DELETE FROM messages WHERE channel = ?").run(CHANNEL[connector]);
