@@ -62,3 +62,34 @@ test("group messages carry the sender's name (contact name, else the formatted n
 test("toNormalized still works without session names (regression)", () => {
     assert.ok(toNormalized({ Z_PK: 1, ZTEXT: "hi", ZMESSAGEDATE: 1, ZISFROMME: 0, ZSESSIONJID: "36301234567@s.whatsapp.net", ZMESSAGETYPE: 0 }, "HU").message);
 });
+
+test("group members: read from the source, replaced as a whole, named from the contact book first", async () => {
+    const { groupsOf } = await import("../src/connectors/whatsapp.js");
+    const { createProfile } = await import("../src/profile/service.js");
+    const { db, repo, identity } = setup();
+    const g = "group:120363407760105150@g.us";
+    const rows = [
+        { gj: "120363407760105150@g.us", mj: "36301234567@s.whatsapp.net", cn: "Anna (saved)", adm: 1 },
+        { gj: "120363407760105150@g.us", mj: "5562066571432@lid", push: "‪Mihály‬", adm: 0 },
+        { gj: "120363407760105150@g.us", mj: "77777777777@lid", adm: 0 },
+        { gj: "36301234567@s.whatsapp.net", mj: "x@lid" }, // not a group
+    ];
+    const groups = groupsOf(rows, "HU");
+    assert.equal(groups.length, 1);
+    assert.deepEqual(groups[0].members.map((m) => [m.name, m.admin]), [["Anna (saved)", true], ["Mihály", false], ["", false]]);
+    repo.upsertMessages([msg(1, g, { meta: { isGroup: true, sender: "+36301234567@wa" } }), msg(2, g, { meta: { isGroup: true, sender: "+36301234567@wa" } }), msg(3, "+36301234567@wa")]);
+    identity.setGroupMembers(groups);
+    identity.importContacts([toImport({ contactId: "ab1", displayName: "Anna Kovacs", phones: ["+36 30 123 4567"], emails: [] }, "HU").person]);
+    const profile = createProfile({ db, now: () => NOW });
+    const members = profile.get(owner(db, g)).members;
+    assert.equal(members.length, 3);
+    assert.deepEqual(members[0], { handle: "+36301234567@wa", name: "Anna Kovacs", admin: true, messages: 2, contactId: owner(db, "+36301234567@wa") });
+    const byName = Object.fromEntries(members.map((m) => [m.name, m]));
+    assert.equal(byName["Mihály"].contactId, null);
+    assert.ok(members.some((m) => /77777777777/.test(m.name)), "an unnamed member falls back to the id");
+    // replaced as a whole
+    identity.setGroupMembers([{ group: g, members: [{ handle_norm: "+36301234567@wa", name: "", admin: false }] }]);
+    assert.equal(profile.get(owner(db, g)).members.length, 1);
+    // a person's own profile has no members
+    assert.deepEqual(profile.get(owner(db, "+36301234567@wa")).members, []);
+});

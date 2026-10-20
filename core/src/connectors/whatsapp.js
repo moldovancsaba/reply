@@ -83,6 +83,23 @@ export function namesOf(sessions, region) {
     return out;
 }
 
+const clean = (v) => String(v ?? "").replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "").trim().slice(0, 200);
+
+// Group member lists: [{ group: <group handle>, members: [{ handle_norm, name, admin }] }]. A member's name is what the
+// phone's address book calls them, else the name of your chat with them, else the name they use themselves.
+export function groupsOf(rows, region) {
+    const groups = new Map();
+    for (const r of rows ?? []) {
+        const group = String(r.gj ?? "").endsWith("@g.us") ? normalizeHandle(String(r.gj), "whatsapp", region) : null;
+        const member = normalizeHandle(String(r.mj ?? ""), "whatsapp", region);
+        if (!group || !member) continue;
+        const name = clean(r.cn) || clean(r.pn) || clean(r.push) || clean(r.fn);
+        if (!groups.has(group.handle_norm)) groups.set(group.handle_norm, new Map());
+        groups.get(group.handle_norm).set(member.handle_norm, { handle_norm: member.handle_norm, name: name === member.handle_norm ? "" : name, admin: Boolean(r.adm) });
+    }
+    return [...groups].map(([group, m]) => ({ group, members: [...m.values()] }));
+}
+
 // Maps one ZWAMESSAGE row (joined with its chat session) to a NormalizedMessage, or says why it is skipped.
 export function toNormalized(r, region) {
     const jid = String(r.ZSESSIONJID ?? "");
@@ -232,7 +249,17 @@ export function createWhatsAppConnector({ config = {}, logger, tmpDir = os.tmpdi
                 const rows = db.prepare(`SELECT m.Z_PK, m.ZTEXT, m.ZMESSAGEDATE, m.ZISFROMME, m.ZFROMJID, m.ZMEDIAITEM, m.ZMESSAGETYPE, s.ZCONTACTJID AS ZSESSIONJID
                     FROM ZWAMESSAGE m LEFT JOIN ZWACHATSESSION s ON s.Z_PK = m.ZCHATSESSION WHERE m.Z_PK > ? ORDER BY m.Z_PK ASC LIMIT ?`).all(pk, limit);
                 const sessions = db.prepare("SELECT ZCONTACTJID AS j, ZPARTNERNAME AS n FROM ZWACHATSESSION WHERE ZPARTNERNAME IS NOT NULL AND ZPARTNERNAME != ''").all();
-                return { rows, uuid, pk, copied, sessions };
+                // optional tables: a layout without them just means no member lists
+                let members = [];
+                let push = new Map();
+                try {
+                    members = db.prepare(`SELECT s.ZCONTACTJID AS gj, m.ZMEMBERJID AS mj, m.ZCONTACTNAME AS cn, m.ZFIRSTNAME AS fn, m.ZISADMIN AS adm,
+                        (SELECT p.ZPARTNERNAME FROM ZWACHATSESSION p WHERE p.ZCONTACTJID = m.ZMEMBERJID LIMIT 1) AS pn
+                        FROM ZWAGROUPMEMBER m JOIN ZWACHATSESSION s ON s.Z_PK = m.ZCHATSESSION
+                        WHERE m.ZMEMBERJID IS NOT NULL AND m.ZISACTIVE = 1 AND s.ZCONTACTJID LIKE '%@g.us'`).all();
+                    push = new Map(db.prepare("SELECT ZJID AS j, ZPUSHNAME AS n FROM ZWAPROFILEPUSHNAME").all().map((r) => [r.j, r.n]));
+                } catch { /* no member tables */ }
+                return { rows, uuid, pk, copied, sessions, members: members.map((m) => ({ ...m, push: push.get(m.mj) })) };
             });
             const messages = [];
             const skipped = { system: 0, empty: 0, bad_handle: 0 };
@@ -245,7 +272,7 @@ export function createWhatsAppConnector({ config = {}, logger, tmpDir = os.tmpdi
             if (!more) dropCache();
             const last = out.rows.at(-1)?.Z_PK ?? out.pk;
             logger?.info({ connector: "whatsapp", messages: messages.length, skippedSystem: skipped.system, skippedEmpty: skipped.empty, skippedBadHandle: skipped.bad_handle, usedCopy: out.copied, ms: Math.round(performance.now() - t0) }, "connector.whatsapp page");
-            return { messages, names: namesOf(out.sessions, region), nextCursor: { pk: last, db: out.uuid }, more };
+            return { messages, names: namesOf(out.sessions, region), groups: groupsOf(out.members, region), nextCursor: { pk: last, db: out.uuid }, more };
         },
         close: dropCache,
     };

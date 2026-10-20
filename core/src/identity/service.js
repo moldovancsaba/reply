@@ -134,6 +134,18 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
         })();
     }
 
+    // The member list of a group is replaced as a whole each time the source is read.
+    function setGroupMembers(groups) {
+        const del = db.prepare("DELETE FROM group_members WHERE group_handle = ?");
+        const ins = db.prepare("INSERT OR REPLACE INTO group_members (group_handle, member_handle, name, is_admin) VALUES (?, ?, ?, ?)");
+        db.transaction(() => {
+            for (const g of groups) {
+                del.run(g.group);
+                for (const m of g.members) ins.run(g.group, m.handle_norm, m.name ?? "", m.admin ? 1 : 0);
+            }
+        })();
+    }
+
     function importContacts(people) {
         return db.transaction(() => {
             const r = { created: 0, updated: 0, unchanged: 0, linked: 0, conflicts: [], protectedByMerge: 0 };
@@ -256,5 +268,5 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
         return applied;
     }
 
-    return { merge, unmerge, history, importContacts, applyNames, resetToAuto, replayMerge, applyPendingMerges, pendingCount: () => pend.count.get().n };
+    return { merge, unmerge, history, importContacts, applyNames, setGroupMembers, resetToAuto, replayMerge, applyPendingMerges, pendingCount: () => pend.count.get().n };
 }

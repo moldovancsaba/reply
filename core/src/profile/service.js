@@ -29,6 +29,10 @@ export function createProfile({ db, now = () => Date.now() }) {
             FROM messages m JOIN contact_handles ch ON ch.handle_norm = m.handle_norm WHERE ch.contact_id = ? GROUP BY m.channel`),
         lastBy: db.prepare(`SELECT m.is_from_me f, MAX(m.ts_ms) t FROM messages m JOIN contact_handles ch ON ch.handle_norm = m.handle_norm WHERE ch.contact_id = ? GROUP BY m.is_from_me`),
         recent: db.prepare(`SELECT COUNT(*) n FROM messages m JOIN contact_handles ch ON ch.handle_norm = m.handle_norm WHERE ch.contact_id = ? AND m.ts_ms >= ?`),
+        groupMembers: db.prepare("SELECT member_handle, name, is_admin FROM group_members WHERE group_handle = ?"),
+        memberContact: db.prepare(`SELECT c.id, c.display_name, c.origin FROM contact_handles ch JOIN contacts c ON c.id = ch.contact_id WHERE ch.handle_norm = ?`),
+        hasMessages: db.prepare("SELECT 1 FROM contact_summary WHERE contact_id = ?"),
+        senderCount: db.prepare("SELECT COUNT(*) n FROM messages WHERE handle_norm = ? AND json_extract(meta_json, '$.sender') = ?"),
         mergedFrom: db.prepare("SELECT display_name FROM contacts WHERE merged_into = ? ORDER BY display_name"),
     };
 
@@ -79,7 +83,27 @@ export function createProfile({ db, now = () => Date.now() }) {
                 byChannel,
             },
             mergedFrom: q.mergedFrom.all(id).map((r) => r.display_name),
+            members: membersOf(q.handles.all(id).map((h) => h.handle_norm)),
         };
+    }
+
+    // Who is in a group chat: your contact's name if you have them, else the name WhatsApp knows, else their number.
+    function membersOf(handles) {
+        const out = [];
+        for (const g of handles.filter((h) => h.startsWith("group:"))) {
+            for (const m of q.groupMembers.all(g)) {
+                const c = q.memberContact.get(m.member_handle);
+                const known = c && (c.origin !== "auto" || c.display_name !== m.member_handle) ? c.display_name : "";
+                out.push({
+                    handle: m.member_handle,
+                    name: known || m.name || formatHandle(m.member_handle),
+                    admin: Boolean(m.is_admin),
+                    messages: q.senderCount.get(g, m.member_handle).n,
+                    contactId: c && q.hasMessages.get(c.id) ? c.id : null,
+                });
+            }
+        }
+        return out.sort((a, b) => Number(b.admin) - Number(a.admin) || b.messages - a.messages || a.name.localeCompare(b.name));
     }
 
     function text(body, key) {
