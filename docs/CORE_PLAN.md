@@ -1,6 +1,6 @@
-# Reply Core: a lighter unified inbox
+# Reply Core: the original plan
 
-Status: proposal. No code written. Based on reading the code and docs; the app was not run (`node_modules` not installed, `chat/messages.db` empty).
+Status: **historical, delivered.** This is the recommendation and phased plan that started the project, kept for the reasoning. The system as built is described in [CORE_ARCHITECTURE.md](CORE_ARCHITECTURE.md); what changed against the plan is listed at the end.
 
 ## Goal
 
@@ -32,7 +32,7 @@ See email, contacts and instant messages in one UI, with one merged timeline per
 
 1. One process, one SQLite file. Use FTS5 for search. No LanceDB, embeddings, Ollama or Trinity in the core.
 2. Read-only connectors: iMessage `chat.db`, email (Gmail API/IMAP, or Apple Mail's local index), Apple Contacts, WhatsApp desktop database.
-3. Sending is a handoff: open Messages, Mail or `wa.me` with the text prefilled; the human presses send. No AppleScript or OpenClaw send path.
+3. Sending is a handoff: open Messages, Mail or `wa.me` with the text prefilled; the human presses send. No AppleScript or OpenClaw send path. *(Changed: see below.)*
 4. One UI: a single localhost page or menu-bar window. Contact list on the left, merged timeline with channel icons on the right. Native SwiftUI is optional later.
 5. Drafting is optional and later: last ~20 messages with a contact sent to a local model (or Claude) in one call. No vector DB or learning loop.
 
@@ -69,3 +69,11 @@ Trinity/Train integration, LanceDB and embeddings, annotation, KYC analysis, sty
 - LinkedIn and Telegram are dropped by design.
 - Stripping this repo in place is possible but harder than a clean start (`message-store.js` is 1,163 lines; `server.js` and `routes/messaging.js` are very large and entangled).
 - Alternative: a hosted unified inbox (such as Beeper) is fastest, but messages pass through their cloud, which defeats the local-only privacy benefit.
+
+## What changed against the plan
+
+- **Sending.** The plan stopped at a handoff. Once the read side was proven, the app was given a real **Send** (Messages and Mail through AppleScript, WhatsApp Desktop through UI scripting), with an explicit confirmation, idempotency, rate limits and an audit that holds no content ([CORE_SENDING.md](CORE_SENDING.md)). The handoff remains as "Open in {App} instead" ([CORE_HANDOFF.md](CORE_HANDOFF.md)). Connectors stay read-only.
+- **Email.** Apple Mail through the native helper plus IMAP (TLS, app passwords in the keychain); no Gmail API or OAuth.
+- **Reuse.** The plan expected to copy about half the code from the old `chat/` and `app/`. In the end `core/` is self-contained; the old stack is archived in [`../legacy/`](../legacy/README.md).
+- **Phases 1 to 4 are delivered**, together with things the plan did not list: contact profile and notes, WhatsApp group members, new-message counts, merge and undo, backup/restore/rebuild, the Sources screen, the launcher with a start-at-login agent, the signed `{reply}.app` host, a release gate and a repository audit.
+- **Risks** that remain true: macOS Full Disk Access, WhatsApp Desktop's unofficial data format, and now the Automation and Accessibility permissions that sending needs ([KNOWN_ISSUES.md](KNOWN_ISSUES.md)).

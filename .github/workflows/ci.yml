@@ -1,0 +1,45 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  core:
+    # macOS: the native helper and the better-sqlite3 build are macOS-first
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: core
+      - run: bash helper/build.sh
+        working-directory: core
+      - run: npm run lint
+        working-directory: core
+      - run: npm test
+        working-directory: core
+      - run: node scripts/audit.js
+        working-directory: core
+  ui:
+    # needs a token with read:packages for the GDS design system; skipped when the secret is not set
+    runs-on: macos-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GDS_PACKAGES_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: env.GITHUB_TOKEN != ''
+        run: npm ci
+        working-directory: core
+      - if: env.GITHUB_TOKEN != ''
+        run: npm --prefix ui ci
+        working-directory: core
+      - if: env.GITHUB_TOKEN != ''
+        run: npm --prefix ui run verify
+        working-directory: core

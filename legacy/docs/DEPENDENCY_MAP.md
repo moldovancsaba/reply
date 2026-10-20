@@ -12,7 +12,7 @@ This document is no longer a historical issue graph. It is the current dependenc
 
 See also:
 
-- [RELATION_AUDIT.md](/Users/Shared/Projects/reply/docs/RELATION_AUDIT.md) for the bidirectional app/service inventory and the latest local health audit snapshot
+- [RELATION_AUDIT.md](RELATION_AUDIT.md) for the bidirectional app/service inventory and the latest local health audit snapshot
 
 ## Runtime Layers
 
@@ -180,7 +180,7 @@ Provides:
 
 This document tracks architectural dependency classes. The concrete relation list now lives in:
 
-- [RELATION_AUDIT.md](/Users/Shared/Projects/reply/docs/RELATION_AUDIT.md)
+- [RELATION_AUDIT.md](RELATION_AUDIT.md)
 
 That document records:
 

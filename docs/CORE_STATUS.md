@@ -1,6 +1,6 @@
 # Reply Core Status
 
-Status: living document, owned by issue #190.
+Status: living document.
 
 One report answers "is Reply Core working, and if not, what do I do?" for the database, the native helper and every source. It is the single source for the Sources screen (#202), so an empty inbox can never be mistaken for "no messages" while a source is blocked.
 
@@ -17,7 +17,7 @@ If the report itself cannot be built the answer is `500 status_unavailable` (ret
 ```json
 {
   "overall": "blocked",
-  "storage": { "state": "ok", "version": 5, "dbBytes": 18874368 },
+  "storage": { "state": "ok", "version": 12, "dbBytes": 18874368 },
   "helper": { "state": "ok", "version": "1.0.0 schema=1" },
   "connectors": [
     { "id": "imessage", "label": "iMessage", "state": "blocked", "code": "permission_denied",

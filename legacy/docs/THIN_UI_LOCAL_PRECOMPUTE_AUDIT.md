@@ -38,7 +38,7 @@ This is not a performance preference. It is an architecture rule.
 
 Current path:
 
-- [chat/routes/messaging.js](/Users/Shared/Projects/reply/chat/routes/messaging.js)
+- [chat/routes/messaging.js](../chat/routes/messaging.js)
 
 Current behavior:
 
@@ -82,7 +82,7 @@ Required end state:
 
 Current path:
 
-- [chat/routes/messaging.js](/Users/Shared/Projects/reply/chat/routes/messaging.js)
+- [chat/routes/messaging.js](../chat/routes/messaging.js)
 
 Current behavior:
 
@@ -108,7 +108,7 @@ Required end state:
 
 Current paths:
 
-- [chat/routes/suggestions.js](/Users/Shared/Projects/reply/chat/routes/suggestions.js)
+- [chat/routes/suggestions.js](../chat/routes/suggestions.js)
 
 Current behavior:
 
@@ -134,8 +134,8 @@ Required end state:
 
 Current paths:
 
-- [chat/js/messages.js](/Users/Shared/Projects/reply/chat/js/messages.js)
-- [chat/js/contacts.js](/Users/Shared/Projects/reply/chat/js/contacts.js)
+- [chat/js/messages.js](../chat/js/messages.js)
+- [chat/js/contacts.js](../chat/js/contacts.js)
 
 Current behavior:
 

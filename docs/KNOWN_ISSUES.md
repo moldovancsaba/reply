@@ -1,0 +1,44 @@
+# Known issues and limits
+
+What is not done, what is less reliable than the rest, and which checks need a person with a Mac. Updated with every release; newest information first.
+
+## Sending
+
+- **WhatsApp is the least reliable channel.** WhatsApp Desktop has no sending interface, so Reply Core opens the chat with your text and presses Return once WhatsApp is in front. It needs Accessibility permission for {reply}, depends on WhatsApp's window, and cannot confirm delivery. If WhatsApp does not come to the front nothing is sent. Group chats cannot be sent to from Reply Core.
+- **iMessage to someone who is not on iMessage** is sent as SMS only if your iPhone relays text messages to this Mac; otherwise Messages refuses and nothing is sent.
+- **Whether Messages prefills the text from an `sms:` link** (the "Open in Messages instead" path) depends on the macOS release and has to be checked by a person on each release.
+- **Attachments cannot be sent** (use "Open in {App} instead"). Attachments in received messages are shown by name, type and size only.
+- **A send whose answer is lost** is reported as "may have been sent"; Reply Core never retries it blindly. The sent message appears in the conversation after the next sync, a few seconds later.
+- **Real-Mac checks still to do** (the tests use a fake sender, so none of this is covered by automation): one real send per channel after the permissions are granted, and the permission prompts after a macOS upgrade.
+
+## Data sources
+
+- **WhatsApp Desktop's data format is unofficial** and may change with an update; Reply Core stops reading rather than guess (the Sources screen says so).
+- **Some WhatsApp group members have no name.** WhatsApp stores no name for people who are neither in your address book nor in a chat with you; they show as numbers.
+- **Address-book notes and contact photos are not imported.** Notes need a special Apple entitlement; photos are not read.
+- **The first import of a large history takes time** (about 12,000 messages per second on an Apple-silicon Mac, plus the time macOS needs to answer permission prompts).
+- **Messages edited or unsent after they were imported are not updated;** reactions are not shown.
+- **IMAP** has no OAuth (app passwords only), reads the inbox and sent folders only, and a message deleted at the server stays in Reply Core.
+
+## Permissions
+
+- macOS lists {reply} under Automation, Accessibility and Contacts only after the app has asked; use **Allow {reply} to send** in the Reply box (or `open -a ~/Applications/{reply}.app --args --consent-send`) and `--consent` for Contacts.
+- The signed `{reply}.app` uses an Apple Development certificate. Rebuilding it with a different certificate makes macOS treat it as a new app and ask for every permission again.
+- If the login agent runs bare `node` (the app could not be built), Full Disk Access belongs to that exact `node` binary and has to be granted again after a Node upgrade.
+
+## Interface
+
+- **Only Chrome's engine is tested.** The browser tests run in Google Chrome; the interface has not been checked in Safari's engine by automation (the launcher opens Safari by default).
+- **Not verified by hand:** screen-reader announcements, forced-colors mode, 200% zoom (the 375 px layout and the colour modes are tested).
+- **Design-system workarounds** (`GdsSplit` never splits, `ConfirmDialog` has an unnamed close button, no toast renderer, ...) are listed in [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) and reported upstream in general-design-system#944 and #945; they can be removed when GDS fixes them.
+- The page header of Search and Sources is the standard GDS header and takes more room than the Inbox one.
+
+## Operations
+
+- `rebuild` does not carry which conversations you had marked as seen (everything counts as seen afterwards) or the send and handoff audits; it keeps manual merges, profile fields and notes.
+- A multi-account source (IMAP) that was running when the service crashed is not reset to idle on the next start (the single-account sources are).
+- **Continuous integration** (`.github/workflows/ci.yml`) has not run on GitHub yet; the same commands pass locally (`npm run verify:release`).
+
+## Repository
+
+- **Old commits still contain personal data and an API key** from an earlier layout of this repository (contacts database, message exports, a Google API key). They are removed from the current tree and ignored; removing them from the history needs the maintainer to run the purge script and force-push, and the key must be revoked. Until that is done the repository must not be promoted as clean. GitHub may also keep cached views of old pull-request commits until GitHub Support purges them.

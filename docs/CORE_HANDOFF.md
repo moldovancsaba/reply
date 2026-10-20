@@ -1,8 +1,8 @@
 # Reply Core Handoff
 
-Status: living document, owned by issue #203; the composer (#205) is its first user.
+Status: living document. The composer's **Open in {App} instead** action uses it; the app can also send by itself ([CORE_SENDING.md](CORE_SENDING.md)).
 
-Status: since the first release the app can also send by itself ([CORE_SENDING.md](CORE_SENDING.md)); a handoff stays available as **"Open in {App} instead"** (attachments, groups, or when you want to review in the app). A handoff builds a link that opens the right macOS app with your text prefilled; you press send there. This keeps a person in final control and removes the automation permissions and transport failures that sending would need.
+A handoff builds a link that opens the right macOS app with your text prefilled; you press send there. This keeps a person in final control and removes the automation permissions and transport failures that sending would need.
 
 ## `POST /api/handoff`
 
@@ -65,7 +65,7 @@ Every handoff writes one row to `handoffs` (migration `0006_handoffs.sql`): id, 
 ## What a handoff does not guarantee
 
 - Whether the message was actually sent: the user may not press send. A sent message appears in Reply Core through the normal connectors after the next sync.
-- That the destination app prefills the text. On the macOS version used to develop this, `sms:` is handled by Messages.app, `mailto:` by Mail.app and `https://wa.me/...` by the browser (which then offers to open WhatsApp). Whether Messages fills in the body from an `sms:` link has to be checked by a person on each macOS release: send yourself a test (owner step). If it does not, switch `imessage` to `copy_and_open` in `core/src/handoff/service.js`.
+- That the destination app prefills the text. On the macOS version used to develop this, `sms:` is handled by Messages.app, `mailto:` by Mail.app and `https://wa.me/...` by the browser (which then offers to open WhatsApp). Whether Messages fills in the body from an `sms:` link has to be checked by a person on each macOS release: send yourself a test (owner step). If it does not, change the `imessage` branch of `handoff()` in `core/src/handoff/service.js` to answer `copy_and_open`.
 - Which mail app opens `mailto:` links: the system default.
 
 ## What you see in the app (user-facing)

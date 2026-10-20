@@ -7,7 +7,7 @@ import { normalizeHandle } from "../identity/normalize.js";
 import { ConnectorError } from "./errors.js";
 
 // WhatsApp Desktop's ChatStorage.sqlite is an undocumented, app-private format: this connector is best-effort. It checks
-// the layout before reading and stops (blocked: schema_unsupported) rather than guess. Read-only; never sends.
+// the layout before reading and stops (blocked: schema_unsupported) rather than guess. Read-only: it never writes to the source (sending is a separate feature, see src/send).
 export const REQUIRED_SCHEMA = {
     ZWAMESSAGE: ["Z_PK", "ZTEXT", "ZMESSAGEDATE", "ZISFROMME", "ZFROMJID", "ZTOJID", "ZCHATSESSION", "ZMEDIAITEM", "ZMESSAGETYPE"],
     ZWACHATSESSION: ["Z_PK", "ZCONTACTJID", "ZPARTNERNAME"],

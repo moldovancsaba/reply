@@ -1,8 +1,8 @@
 # Reply Core Data Model
 
-Status: living document, owned by issue #184. Extended by Identity (#189, migration `0003`), Contacts (#192), Apple Mail (#193), Handoff (#203), Backup (#197). Migration numbers are assigned in merge order (`0002` is `sync_runs`).
+Status: living document. Migrations are `core/src/storage/migrations/0001`..`0012`, listed below.
 
-One SQLite file, `core.db`, in `REPLY_CORE_HOME` (default `~/Library/Application Support/reply-core`). Mode `0600` inside a `0700` directory. WAL mode, `foreign_keys=ON`, `busy_timeout=5000`, `synchronous=NORMAL`. The database is a rebuildable cache of the source apps, except for the user's manual identity decisions (`merge_log`, manual links).
+One SQLite file, `core.db`, in `REPLY_CORE_HOME` (default `~/Library/Application Support/reply-core`). Mode `0600` inside a `0700` directory. WAL mode, `foreign_keys=ON`, `busy_timeout=5000`, `synchronous=NORMAL`. The database is a rebuildable cache of the source apps, except for user data that cannot be re-imported: manual merges (`merge_log`, manual links), `contact_profile`, `contact_notes`, `read_state`, and the audits `sends` and `handoffs`.
 
 ## Tables
 
@@ -32,13 +32,28 @@ One SQLite file, `core.db`, in `REPLY_CORE_HOME` (default `~/Library/Application
 
 Files `core/src/storage/migrations/NNNN_name.sql`, forward-only, each applied in a transaction and recorded with its checksum. Editing an applied migration aborts start (`migration_checksum_mismatch`); fix forward with a new numbered file. Before applying pending migrations to an existing database, the runner copies it to `core.db.bak-<previous version>` and keeps the last three copies.
 
+| Migration | Adds |
+|---|---|
+| `0001_init` | messages, handles, contacts, contact_handles, merge_log, contact_summary, sync_state, full-text index |
+| `0002_sync_runs` | `sync_runs` |
+| `0003_identity` | `external_id` and `merged_into` on contacts |
+| `0004_message_meta` | `meta_json` on messages |
+| `0005_contact_fingerprint` | contact `fingerprint` (skip unchanged address-book people) |
+| `0006_handoffs` | `handoffs` audit |
+| `0007_merge_anchor_pending` | `anchor_handle` on `merge_log`, `pending_merges` |
+| `0008_profile` | `contact_details`, `contact_profile`, `contact_notes` |
+| `0009_group_members` | `group_members` |
+| `0010_clean_blob_names` | data fix: automatic contacts named after an encoded WhatsApp push name get their handle back |
+| `0011_sends` | `sends` audit |
+| `0012_read_state` | `read_state`, `app_settings` (unread baseline) |
+
 ## Startup failures
 
-`openDb` throws `storage_unavailable`, `storage_corrupt` (failed `quick_check` or not a database) or `storage_migration_failed`. The service exits with code 74 and a one-line message. Recovery: restore a backup, or delete `core.db` and let connectors re-ingest (manual merges are lost in that case; see the Backup and rebuild issue for the preserving path).
+`openDb` throws `storage_unavailable`, `storage_corrupt` (failed `quick_check` or not a database) or `storage_migration_failed`. The service exits with code 74 and a one-line message. Recovery: restore a backup, or delete `core.db` and let connectors re-ingest (user data is lost in that case; see [CORE_OPERATIONS.md](CORE_OPERATIONS.md) (`restore`, `rebuild`; `rebuild` keeps manual merges, profile fields and notes)).
 
 ## Module interface
 
-`openDb(home) -> { db, file }`; `createRepo(db) -> { upsertMessages, getThread, listContacts, search, getSyncState, setSyncState, rebuildSummary, ensureContactForHandle, handlesOf }`. HTTP routes over these are specified in the Read API issue (#194); cursors there are opaque encodings of the `(ts, id)` keyset used here.
+`openDb(home) -> { db, file }`; `createRepo(db) -> { setAfterBatch, upsertMessages, getThread, listContacts, search, getSyncState, setSyncState, rebuildSummary, ensureContactForHandle, handlesOf }`. The HTTP routes over these are specified in [CORE_API.md](CORE_API.md); cursors there are opaque encodings of the `(ts, id)` keyset used here. The unread counts are not stored in `contact_summary`: they are derived at read time from `read_state` and the baseline.
 
 `NormalizedMessage`: `{ channel, account, providerMessageKey, threadKey, handle_norm, isFromMe, tsMs, subject?, text, attachments }`.
 
@@ -48,14 +63,14 @@ Files `core/src/storage/migrations/NNNN_name.sql`, forward-only, each applied in
 REPLY_CORE_HOME=/path/to/home node core/scripts/db-inspect.js
 ```
 
-Prints schema version, `quick_check`, row counts and per-channel counts (read-only).
+Prints schema version, `quick_check` and row counts of the core tables (read-only).
 
 ## Known limitations
 
 - Deletions at the source are not propagated.
 - No encryption at rest beyond FileVault.
 
-## Profile tables (migration 0008)
+## Profile, group, read-state and send tables (migrations 0008, 0009, 0011, 0012)
 
 | Table | Holds | Rebuilt from sources? |
 |---|---|---|
@@ -63,5 +78,6 @@ Prints schema version, `quick_check`, row counts and per-channel counts (read-on
 | `contact_profile` | what the user wrote: profession, company, relationship, LinkedIn address, intro | **no** (user data, kept by backup and by `rebuild`) |
 | `contact_notes` | the user's notes per contact | **no** (user data, kept by backup and by `rebuild`) |
 | `group_members` (migration 0009) | members of group chats: group handle, member handle, WhatsApp's name for them, admin flag; replaced for a group each time the source is read | yes, by the next WhatsApp sync |
-| `read_state` (migration 0012) | per contact, when you last had the conversation open at its newest message (user data) | no |
+| `read_state` (migration 0012) | per contact, when you last had the conversation open at its newest message (user data). Kept by backup and restore; `rebuild` does not carry it, so after a rebuild everything counts as seen (the baseline restarts) | no |
 | `app_settings` (migration 0012) | small key/value settings, today the unread baseline | no |
+| `sends` (migration 0011) | one row per attempt to send from the app: id, client id (unique), time, contact id, channel, kind of address, text length, status (`sending`, `sent`, `failed`, `unknown`), error code, finish time. Never the text, the subject or the address | no (audit) |

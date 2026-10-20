@@ -2,7 +2,7 @@
 
 **Doc freshness:** 2026-05-18 — `{reply}` SSOT is **[Project #7](https://github.com/users/moldovancsaba/projects/7)** + **[moldovancsaba/reply](https://github.com/moldovancsaba/reply) issues** + **[HANDOVER.md](./HANDOVER.md)** + **[NATIVE_WORKSPACE_HOT_PATH_SSOT.md](./NATIVE_WORKSPACE_HOT_PATH_SSOT.md)**. This file is a **boot prompt**, not a backlog.
 
-**Product / release:** See `chat/package.json` `version` and [RELEASE_NOTES.md](./RELEASE_NOTES.md) for shipped facts.
+**Product / release:** See `chat/package.json` `version` and RELEASE_NOTES.md for shipped facts.
 
 ---
 

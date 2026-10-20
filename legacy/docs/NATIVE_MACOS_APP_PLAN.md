@@ -8,7 +8,7 @@ It is based on:
 
 - the delivery patterns in `/Users/Shared/Projects/claude/calendar-agent/DEVELOPMENT.md`
 - the structure and build approach in `/Users/Shared/Projects/claude/calendar-agent`
-- the current `{reply}` architecture in [`/Users/Shared/Projects/reply/docs/ARCHITECTURE.md`](/Users/Shared/Projects/reply/docs/ARCHITECTURE.md)
+- the current `{reply}` architecture in [`/Users/Shared/Projects/reply/docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
 ## What We Learn From `calendar-agent`
 
@@ -37,12 +37,12 @@ That is exactly the pattern `{reply}` needs.
 
 Today `{reply}` is:
 
-- Node hub in [`/Users/Shared/Projects/reply/chat/server.js`](/Users/Shared/Projects/reply/chat/server.js)
-- managed Node worker in [`/Users/Shared/Projects/reply/chat/background-worker.js`](/Users/Shared/Projects/reply/chat/background-worker.js)
+- Node hub in [`/Users/Shared/Projects/reply/chat/server.js`](../chat/server.js)
+- managed Node worker in [`/Users/Shared/Projects/reply/chat/background-worker.js`](../chat/background-worker.js)
 - web UI in `chat/index.html` + `chat/js/*`
 - Apple integrations split across Node, AppleScript, and small Swift exporters
 - local runtime scripts in `runbook/*`
-- leftover menu bar surface in [`/Users/Shared/Projects/reply/tools/macos/ReplyMenubar/MenubarCore.swift`](/Users/Shared/Projects/reply/tools/macos/ReplyMenubar/MenubarCore.swift)
+- leftover menu bar surface in [`/Users/Shared/Projects/reply/tools/macos/ReplyMenubar/MenubarCore.swift`](../tools/macos/ReplyMenubar/MenubarCore.swift)
 
 So the correct plan is not a blind rewrite.
 
@@ -354,8 +354,8 @@ Do not rewrite static HTML modules just for aesthetics.
 
 Already partially moving in the right direction:
 
-- [`/Users/Shared/Projects/reply/chat/native/apple-contacts-export.swift`](/Users/Shared/Projects/reply/chat/native/apple-contacts-export.swift)
-- [`/Users/Shared/Projects/reply/chat/ingest-contacts.js`](/Users/Shared/Projects/reply/chat/ingest-contacts.js)
+- [`/Users/Shared/Projects/reply/chat/native/apple-contacts-export.swift`](../chat/native/apple-contacts-export.swift)
+- [`/Users/Shared/Projects/reply/chat/ingest-contacts.js`](../chat/ingest-contacts.js)
 
 Plan:
 
@@ -370,8 +370,8 @@ Plan:
 
 Already partially moving in the right direction:
 
-- [`/Users/Shared/Projects/reply/chat/native/apple-calendar-export.swift`](/Users/Shared/Projects/reply/chat/native/apple-calendar-export.swift)
-- [`/Users/Shared/Projects/reply/chat/sync-calendar.js`](/Users/Shared/Projects/reply/chat/sync-calendar.js)
+- [`/Users/Shared/Projects/reply/chat/native/apple-calendar-export.swift`](../chat/native/apple-calendar-export.swift)
+- [`/Users/Shared/Projects/reply/chat/sync-calendar.js`](../chat/sync-calendar.js)
 
 Plan:
 
@@ -445,9 +445,9 @@ Collapse hub and worker responsibilities where sensible.
 
 Today:
 
-- hub in [`/Users/Shared/Projects/reply/chat/server.js`](/Users/Shared/Projects/reply/chat/server.js)
-- worker in [`/Users/Shared/Projects/reply/chat/background-worker.js`](/Users/Shared/Projects/reply/chat/background-worker.js)
-- extra supervision in [`/Users/Shared/Projects/reply/chat/service-manager.js`](/Users/Shared/Projects/reply/chat/service-manager.js)
+- hub in [`/Users/Shared/Projects/reply/chat/server.js`](../chat/server.js)
+- worker in [`/Users/Shared/Projects/reply/chat/background-worker.js`](../chat/background-worker.js)
+- extra supervision in [`/Users/Shared/Projects/reply/chat/service-manager.js`](../chat/service-manager.js)
 
 Target:
 
@@ -578,7 +578,7 @@ Do not bundle mutable data.
 
 These surfaces should be deprecated as product runtime mechanisms:
 
-- [`/Users/Shared/Projects/reply/tools/macos/ReplyMenubar/MenubarCore.swift`](/Users/Shared/Projects/reply/tools/macos/ReplyMenubar/MenubarCore.swift)
+- [`/Users/Shared/Projects/reply/tools/macos/ReplyMenubar/MenubarCore.swift`](../tools/macos/ReplyMenubar/MenubarCore.swift)
 - launchd-first operational assumptions in docs and scripts
 - repo-path-based service assumptions
 - leftover helper scripts as primary runtime UX

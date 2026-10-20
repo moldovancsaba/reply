@@ -1,6 +1,6 @@
 # Reply Core Connectors
 
-Status: living document, owned by issue #188. Each connector issue adds its own section.
+Status: living document; one section per connector.
 
 A connector only **fetches and normalizes**. The framework (`core/src/connectors`) owns everything operational: scheduling, locking, preflight, paging, atomic cursor commits, retries, run records.
 
@@ -13,11 +13,12 @@ A connector only **fetches and normalizes**. The framework (`core/src/connectors
   intervalMs: 60_000,                   // default interval; REPLY_CORE_<ID>_INTERVAL_MS overrides (>= 1000)
   accounts(): Promise<string[]>,        // [""] for single-account sources
   preflight(): Promise<{ ok: true } | { ok: false, code, hint }>,
-  fetch(account, cursor, { limit, signal }): Promise<{ messages, contacts?, nextCursor, more }>,
+  fetch(account, cursor, { limit, signal }): Promise<{ messages, contacts?, names?, groups?, nextCursor, more, total? }>,
+// names: chat or group names for automatic contacts; groups: group member lists; total: an absolute count (Contacts counts people)
 }
 ```
 
-`messages` are `NormalizedMessage` (see [CORE_DATA_MODEL.md](CORE_DATA_MODEL.md)); handle normalization is the identity module's job (#189). `fetch` receives the stored cursor (`{}` the first time) and must be safe to call again with the same cursor (the page is refetched after any failure). Add a connector by writing the module, registering it in `core/src/connectors/registry.js` (`AVAILABLE`) and, when it should run by default, in `DEFAULT_ENABLED_IDS` (`core/src/config.js`).
+`messages` are `NormalizedMessage` (see [CORE_DATA_MODEL.md](CORE_DATA_MODEL.md)); handle normalization is the identity module's job (see [CORE_IDENTITY.md](CORE_IDENTITY.md)). `fetch` receives the stored cursor (`{}` the first time) and must be safe to call again with the same cursor (the page is refetched after any failure). Add a connector by writing the module, registering it in `core/src/connectors/registry.js` (`AVAILABLE`) and, when it should run by default, in `DEFAULT_ENABLED_IDS` (`core/src/config.js`).
 
 ## Runtime flow
 
@@ -74,7 +75,7 @@ A blocked connector is re-checked first; if its preflight now succeeds it is cle
 
 `REPLY_CORE_CONNECTORS=stub` enables a deterministic demo connector (three pages of synthetic messages) for trying the framework without any source app.
 
-## iMessage (`imessage`, issue #191)
+## iMessage (`imessage`)
 
 Reads Apple Messages through the native helper (`helper imessage`), incrementally by message `ROWID`, every 60 s.
 
@@ -95,11 +96,11 @@ Limitations: edits and unsends are not propagated; reactions are not shown; a me
 
 Run it: `REPLY_CORE_CONNECTORS=imessage npm start`, then `curl -X POST http://127.0.0.1:45511/api/sync/imessage`. To discard imported iMessage rows and re-ingest: stop the service, `node core/scripts/reset-cursor.js imessage --purge`.
 
-## Apple Contacts (`contacts`, issue #192)
-
-Besides names, phone numbers and email addresses the helper now exports given and family name, nickname, organization, job title, department, birthday (`--MM-DD` without a year), web addresses and postal addresses. They are stored as `contact_details` (the Contacts framework's notes field is not available to apps without a special Apple entitlement, so notes are not imported) and shown read-only on the profile. A change in any of them is picked up, because they are part of the fingerprint.
+## Apple Contacts (`contacts`)
 
 Imports people from the macOS address book through the native helper so conversations show real names and one person's channels share a contact. Interval 15 minutes.
+
+Besides names, phone numbers and email addresses the helper exports given and family name, nickname, organization, job title, department, birthday (`--MM-DD` without a year), web addresses and postal addresses. They are stored as `contact_details` (the Contacts framework's notes field is not available to apps without a special Apple entitlement, so notes are not imported) and shown read-only on the profile. A change in any of them is picked up, because they are part of the fingerprint.
 
 | | |
 |---|---|
@@ -112,7 +113,7 @@ Imports people from the macOS address book through the native helper so conversa
 
 Limitations: a person removed from the address book stays in Reply Core (with their handles); old handles removed from a person stay linked until `identity-reset.js --to-auto`.
 
-## Apple Mail (`apple-mail`, issue #193)
+## Apple Mail (`apple-mail`)
 
 Reads the local Mail index through the native helper, so every account already set up in Mail (Gmail, iCloud, Exchange, IMAP) appears without storing any email credentials. Interval 2 minutes.
 
@@ -133,16 +134,13 @@ Limitations: summaries only; no attachments; no HTML rendering; edits and deleti
 
 To discard imported email and re-ingest: stop the service, `node core/scripts/reset-cursor.js apple-mail --purge` (this removes **all** email rows, since the `email` channel is shared with the IMAP connector).
 
-## WhatsApp
+## WhatsApp (`whatsapp`)
 
-Chat names: the group subject (or the name a person uses) from `ZWACHATSESSION.ZPARTNERNAME` names **automatic** contacts that would otherwise be called by their id; an address-book or merged contact is never renamed. Group member lists (`ZWAGROUPMEMBER`, active members only, with the names above) are stored in `group_members` and shown on the group's profile; the tables are optional, a layout without them just has no member lists. In group chats each message carries the sender's name (their contact, else their formatted number) as `senderName`.
- (`whatsapp`, issue #195)
-
-Reads WhatsApp Desktop's local `ChatStorage.sqlite` directly (no helper, no OpenClaw), incrementally by primary key, every 2 minutes. **Best-effort**: the file is an undocumented, app-private format, so the connector checks the layout first and stops rather than guess when WhatsApp changes it. It only reads; it never sends.
+Reads WhatsApp Desktop's local `ChatStorage.sqlite` directly (no helper, no OpenClaw), incrementally by primary key, every 2 minutes. **Best-effort**: the file is an undocumented, app-private format, so the connector checks the layout first and stops rather than guess when WhatsApp changes it. The connector only reads; sending is a separate feature ([CORE_SENDING.md](CORE_SENDING.md)).
 
 | | |
 |---|---|
-| Enable | Not on by default (its data may not exist, and macOS may hide it): `REPLY_CORE_CONNECTORS=imessage,contacts,apple-mail,whatsapp` |
+| Enable | Not on by default (its data may not exist, and macOS may hide it): `REPLY_CORE_CONNECTORS=imessage,contacts,apple-mail,whatsapp` (add `imap` too if you use IMAP accounts; the launcher's `install-agent` stores the list in the agent) |
 | Source | `REPLY_CORE_WHATSAPP_DB`, else the first of four known locations that exists (Group Containers `group.net.whatsapp.WhatsApp.shared` first) |
 | Permission | Full Disk Access for the process that starts Reply Core. The first access can also make macOS show a dialog asking whether Reply Core may access data from other apps; until someone answers it the connector reports `permission_denied` ("macOS may be asking ... Look for a permission dialog, allow it, then recheck"). |
 | Cursor | `{ "pk": n, "db": "<Z_METADATA uuid>" }`; page size 500 |
@@ -160,7 +158,11 @@ A WhatsApp number and the same number on iMessage are **different handles** (`+e
 
 Limitations: unofficial and may break with any WhatsApp update; no media; deleted or revoked messages are skipped if empty and otherwise not propagated; if the app's database is replaced (reinstall) the cursor notices the new identity and re-imports from the start, so run `node core/scripts/reset-cursor.js whatsapp --purge` first for a clean result.
 
-## IMAP (`imap`, issue #196)
+### Chat names and groups
+
+Chat names: the group subject (or the name a person uses) from `ZWACHATSESSION.ZPARTNERNAME` names **automatic** contacts that would otherwise be called by their id; an address-book or merged contact is never renamed. Group member lists (`ZWAGROUPMEMBER`, active members only, with the names above) are stored in `group_members` and shown on the group's profile; the tables are optional, a layout without them just has no member lists. In group chats each message carries `meta_json.sender` (the member's handle); the read API adds `senderName` (the member's contact name, else the formatted number).
+
+## IMAP (`imap`)
 
 For mailboxes that are **not** in Apple Mail. Fetches the inbox and the sent folder over IMAP and stores the **full text** of each message (Apple Mail's connector stores a summary). Interval 5 minutes per account. The connector joins the default list automatically once an account has been added.
 
@@ -186,11 +188,11 @@ For Gmail or iCloud create an **app password** first (an ordinary account passwo
 | Text | plain-text part, else the HTML part reduced to text (nothing is fetched or run); capped at 256 KB (the source is truncated at 256 KB). `meta_json.isSummary` is false. |
 | Errors | refused login or no saved password: `auth_failed` (blocked, "create a new app password and add the account again"); connection problems, throttling and an untrusted certificate: `network_unavailable` (retried, then error); slow server: `timeout` |
 
-Limitations: no OAuth, no sending, no attachments, no folders other than inbox and sent, a message deleted at the server stays in Reply Core.
+Limitations: no OAuth, no sending through IMAP (the app sends email through Apple Mail, see [CORE_SENDING.md](CORE_SENDING.md)), no attachments, no folders other than inbox and sent, a message deleted at the server stays in Reply Core.
 
 ## Operations
 
 - Stop syncing entirely: `REPLY_CORE_CONNECTORS=none` and restart. The service keeps serving existing data.
 - Force a re-ingest of one connector: stop the service, `node core/scripts/reset-cursor.js <connector>` (add `--purge` to delete the messages it imported first; `apple-mail` and `imap` share the `email` channel, so purging either removes all email rows), start the service.
 - Logs: `sync.run` (outcome, pages, counts, ms), `sync.retry` (code, attempt, delay) at warn, `sync.failed` (code, kind) at error. No message content.
-- Process metrics (runs, failures by code, last duration) are available from `runner.metrics()` and are surfaced by the status API (#190).
+- Process metrics (runs, failures by code, last duration) are available from `runner.metrics()` and are surfaced by the status API (see [CORE_STATUS.md](CORE_STATUS.md)).

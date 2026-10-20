@@ -1,6 +1,6 @@
 # Reply Core Operations
 
-Status: living document, owned by issue #197; the launcher issue (#206) adds start, stop and log sections.
+Status: living document.
 
 Reply Core's database is a cache of your other apps, **except** for one thing it cannot get back from them: the merges you made yourself. Everything here exists so that a damaged or outdated database never costs you those decisions, and recovery is a command, not an investigation.
 
@@ -17,15 +17,16 @@ The launcher is `core/scripts/reply-core` (run it as `node scripts/reply-core ..
 | `status` | the same data as `GET /api/status` as a short table (storage, helper, each source, backups); exit 1 when overall is `blocked`. |
 | `open` | opens the UI of the running service. |
 | `logs [--lines N] [--no-follow]` | tails the service log. |
+| `build-app` | builds and signs `~/Applications/{reply}.app` (needs the Swift toolchain); `install-agent` does it when the app is missing. |
 | `install-agent`, `uninstall-agent` | see below. |
 
 Exit codes: `0` ok, `10` Node too old, `11` the web app could not be built (needs network and a `GITHUB_TOKEN`, see `core/ui/README.md`), `12` the service did not become healthy in 30 s, `13` not running (`stop`, `status`, `open`); when the service itself refuses to start the launcher passes its code on and explains it (`75` port in use, `78` invalid configuration, `74` storage). A pidfile whose process is gone is ignored. Single user, single instance: two accounts on one Mac need different `REPLY_CORE_PORT` values.
 
 ## Start at login (optional)
 
-`install-agent` writes `~/Library/LaunchAgents/com.moldovancsaba.reply-core.plist` and loads it: `RunAtLoad`, `KeepAlive`, `ThrottleInterval 30`, `ProcessType Background`, running exactly `<this node> core/src/index.js`. Installing again rewrites and reloads it (nothing is duplicated). `uninstall-agent` unloads it and deletes that one file, and only if it carries the marker the installer wrote; a plist it did not create is never touched. Logs and data stay.
+`install-agent` writes `~/Library/LaunchAgents/com.moldovancsaba.reply-core.plist` and loads it: `RunAtLoad`, `KeepAlive`, `ThrottleInterval 30`, `ProcessType Background`. When the Swift toolchain is available it first builds the signed **{reply}.app** (unless `REPLY_CORE_NO_APP` is set) and the agent runs `{reply}.app/Contents/MacOS/reply --service`, which starts the service as its child; otherwise the agent runs `<this node> core/src/index.js` directly. Installing again rewrites and reloads it (nothing is duplicated). `uninstall-agent` unloads it and deletes that one file, and only if it carries the marker the installer wrote; a plist it did not create is never touched. Logs and data stay.
 
-**Full Disk Access is attached to the program that starts the service**, here the exact `node` binary named in the plist (the command prints its path and the System Settings steps). Consequences: after a Node upgrade (a new path or binary) the agent loses access, so run `install-agent` again and grant it again; `status` says when the agent was installed for a different Node. The alternative without an agent is to run `start` from a Terminal that already has Full Disk Access. The plist contains paths, the port and the list of enabled connectors (`REPLY_CORE_CONNECTORS`, if it was set when you ran `install-agent`, for example to switch WhatsApp on), never a secret.
+**Full Disk Access is attached to the program that starts the service.** With the app that is **{reply}**: add it once under Privacy & Security > Full Disk Access (the command prints where it is). It is signed, so the permission survives rebuilds and Node upgrades. Only in the fallback (the agent runs bare `node`) is it the exact `node` binary, which loses access after a Node upgrade: run `install-agent` again and grant it again (`status` says when the agent was installed for a different Node). Without an agent you can run `start` from a Terminal that already has Full Disk Access. The plist contains paths, the port, the connector list, the sending switch and the app path, never a secret.
 
 ## Logs
 
@@ -72,7 +73,7 @@ What happens, in order: the merges, profile fields and notes are exported by han
 
 Merges whose people have not been imported yet (a source is blocked, for example) wait in `pending_merges` and are applied automatically as soon as **all** of their handles appear. Undone merges are not carried over.
 
-Not carried over: the handoff audit and per-contact ids (they stay in the kept old file).
+Not carried over: the handoff and send audits, which conversations were marked seen (everything counts as seen after a rebuild) and per-contact ids (they stay in the kept old file).
 
 ## Guards
 

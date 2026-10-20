@@ -25,4 +25,4 @@ function sendIMessage(target, message) {
 }
 
 // Example usage (uncomment to test):
-// sendIMessage("+36706006555", "Hello from Reply Engine!");
+// sendIMessage("+36301234567", "Hello from Reply Engine!");

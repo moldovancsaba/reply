@@ -8,7 +8,7 @@ const OK_MS = 15_000;
 const MAX_BACKOFF_MS = 30_000;
 
 // Polls the service. "down" needs two failures in a row, so one slow answer never flashes a banner. Polling pauses
-// while the tab is hidden and resumes (immediately) when it is shown again. Backoff: 2 s, 4 s, ... up to 30 s.
+// while the tab is hidden and resumes (immediately) when it is shown again. Backoff after a failure: 4 s, 8 s, 16 s, up to 30 s.
 export function useHealth(): { state: HealthState; health: Health | null; retryNow: () => void } {
   const [state, setState] = useState<HealthState>("unknown");
   const [health, setHealth] = useState<Health | null>(null);

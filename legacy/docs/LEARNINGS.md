@@ -15,7 +15,7 @@
 * **Decision is not transport:** Draft selection and wording may come from `{trinity}`, but send authority, channel gating, and local transport execution remain owned by `{reply}`.
 * **Provenance is product value:** `cycle_id`, `trace_ref`, `accepted_artifact_version`, and operator outcomes are not debugging extras; they are the audit trail that makes the learning loop trustworthy.
 * **Boundary erosion is the main architectural risk:** `{reply}` must not quietly grow back into the drafting brain, `{trinity}` must not absorb product transport semantics, and `{train}` must never mutate live behavior silently.
-* **Connector optimism is dangerous:** A connector can be technically impressive and still be wrong for the product. Evaluate connectors by local truth, identity stability, operator supportability, and honest source classification. See [CONNECTOR_DECISION_MEMO.md](/Users/Shared/Projects/reply/docs/CONNECTOR_DECISION_MEMO.md).
+* **Connector optimism is dangerous:** A connector can be technically impressive and still be wrong for the product. Evaluate connectors by local truth, identity stability, operator supportability, and honest source classification. See [CONNECTOR_DECISION_MEMO.md](CONNECTOR_DECISION_MEMO.md).
 
 ## Settings & Privacy
 * Settings are stored locally in `~/Library/Application Support/reply/settings.json` (or `REPLY_DATA_HOME/settings.json`) and are not encrypted.

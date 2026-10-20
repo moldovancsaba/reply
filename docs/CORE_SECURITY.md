@@ -1,6 +1,6 @@
 # Reply Core Security and Secrets
 
-Status: living document, owned by issue #196; other issues add their rules here.
+Status: living document; add a rule here when a feature adds one.
 
 ## What Reply Core protects, and how
 
@@ -11,6 +11,10 @@ Status: living document, owned by issue #196; other issues add their rules here.
 | Other apps' databases are opened read-only | native helper, direct read-only SQLite, IMAP `EXAMINE` only |
 | No cloud: conversation text leaves this Mac only if you set a remote model URL on purpose | drafting config refuses non-loopback URLs without `REPLY_CORE_ALLOW_REMOTE_LLM=1` |
 | A message is sent only when you press Send, to one of the contact's own handles, once | `core/src/send/service.js`: explicit request per message, handle ownership check, `clientId` idempotency, one at a time, 10 a minute, audit without content, `REPLY_CORE_SENDING=off`; see [CORE_SENDING.md](CORE_SENDING.md) |
+| The web page is served with a strict Content Security Policy (`script-src 'self'`, `connect-src 'self'`, `frame-ancestors 'none'`, `form-action 'self'`), `nosniff` and `Referrer-Policy: no-referrer`; API answers are `no-store` | `core/src/server.js`, `core/test/static.test.js` |
+| Profile fields, notes, message texts and subjects are never logged; the audit tables (`sends`, `handoffs`) hold lengths only | log redaction, tests that capture logs |
+| macOS permissions belong to a signed, named app, not to a bare `node` | `{reply}.app` (`core/app`), see [CORE_PERMISSIONS.md](CORE_PERMISSIONS.md) |
+| The native helper only runs if its SHA-256 matches the recorded one | `core/src/helper` (see `core/helper/README.md`) |
 
 ## Secrets (IMAP app passwords)
 

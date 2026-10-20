@@ -13,7 +13,7 @@ It now covers:
 
 For the full bidirectional app/service inventory and the latest audited health snapshot, see:
 
-- [RELATION_AUDIT.md](/Users/Shared/Projects/reply/docs/RELATION_AUDIT.md)
+- [RELATION_AUDIT.md](RELATION_AUDIT.md)
 
 ## Target Environment
 
@@ -417,7 +417,7 @@ If a card still fails:
 
 ## Related Docs
 
-- [README.md](/Users/Shared/Projects/reply/README.md)
-- [ARCHITECTURE.md](/Users/Shared/Projects/reply/docs/ARCHITECTURE.md)
-- [DEPENDENCY_MAP.md](/Users/Shared/Projects/reply/docs/DEPENDENCY_MAP.md)
-- [HANDOVER.md](/Users/Shared/Projects/reply/docs/HANDOVER.md)
+- [README.md](../README.md)
+- [ARCHITECTURE.md](ARCHITECTURE.md)
+- [DEPENDENCY_MAP.md](DEPENDENCY_MAP.md)
+- [HANDOVER.md](HANDOVER.md)

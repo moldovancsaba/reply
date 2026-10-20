@@ -20,6 +20,10 @@ export function runSteps(steps, { log = console.log } = {}) {
         delete env.NODE_TEST_CONTEXT; // a nested `node --test` must not think it is a child of ours
         const r = spawnSync(cmd, args, { encoding: "utf8", cwd: step.cwd, env });
         const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+        if (step.offlineOk && r.status !== 0 && /ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|network|audit endpoint returned an error/i.test(out)) {
+            results.push({ name: step.name, status: "SKIP", note: "no network", ms: Date.now() - t0 });
+            continue;
+        }
         const warned = WARNING.test(out);
         const ok = r.status === 0 && !warned;
         if (!ok) log(out.split("\n").slice(-40).join("\n"));
@@ -44,7 +48,9 @@ export function releaseSteps(coreDir) {
         { name: "helper build", cmd: ["bash", "helper/build.sh"], cwd: coreDir, skip: hasSwift ? null : "Swift toolchain not installed" },
         { name: "helper tests", cmd: ["swift", "test", "--package-path", "helper"], cwd: coreDir, skip: hasSwift ? null : "Swift toolchain not installed" },
         { name: "unit + integration tests", cmd: [process.execPath, "--throw-deprecation", "--test", ...tests], cwd: coreDir },
+        { name: "repository and documentation audit", cmd: [process.execPath, "scripts/audit.js"], cwd: coreDir },
         { name: "end-to-end smoke (launcher)", cmd: [process.execPath, "scripts/release-smoke.js"], cwd: coreDir },
+        { name: "dependency audit (core)", cmd: ["npm", "audit", "--omit=dev", "--audit-level=high"], cwd: coreDir, offlineOk: true },
         hasUi
             ? { name: "UI: lint, tests, build, a11y", cmd: ["npm", "--prefix", "ui", "run", "verify"], cwd: coreDir }
             : { name: "UI: lint, tests, build, a11y", cmd: [process.execPath, "-e", "console.error('core/ui dependencies are not installed (see core/ui/README.md)'); process.exit(1)"], cwd: coreDir },

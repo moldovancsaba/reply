@@ -35,7 +35,7 @@ Current implementation:
 - source: `conversation_index` in `chat.db`
 - default order: `latest_timestamp_ms DESC`
 - tie-break: `handle ASC`
-- code: [chat/message-store.js](/Users/Shared/Projects/reply/chat/message-store.js), [chat/routes/messaging.js](/Users/Shared/Projects/reply/chat/routes/messaging.js)
+- code: [chat/message-store.js](../chat/message-store.js), [chat/routes/messaging.js](../chat/routes/messaging.js)
 
 The list is not backed by a canonical conversation entity. It is a materialized projection built from raw `unified_messages` grouped by handle and partially collapsed through contact lookup.
 
@@ -46,7 +46,7 @@ Current implementation:
 - source: `unified_messages` in `chat.db`
 - backend returns newest or oldest windows by raw message timestamp
 - native app merges the oldest and newest windows and re-sorts locally for display
-- code: [chat/routes/messaging.js](/Users/Shared/Projects/reply/chat/routes/messaging.js), [chat/message-store.js](/Users/Shared/Projects/reply/chat/message-store.js), [app/reply-app/Sources/ReplyCoreService.swift](/Users/Shared/Projects/reply/app/reply-app/Sources/ReplyCoreService.swift)
+- code: [chat/routes/messaging.js](../chat/routes/messaging.js), [chat/message-store.js](../chat/message-store.js), [app/reply-app/Sources/ReplyCoreService.swift](../app/reply-app/Sources/ReplyCoreService.swift)
 
 That means timeline authority is split between backend and UI.
 
@@ -59,7 +59,7 @@ Current implementation:
 - merges and unmerges are explicit user actions, not background inference
 - thread expansion uses `getAllHandles()`
 - verified channel proof lives in `contact_channels.inbound_verified_at`
-- code: [chat/contact-store.js](/Users/Shared/Projects/reply/chat/contact-store.js), [chat/routes/contacts.js](/Users/Shared/Projects/reply/chat/routes/contacts.js), [chat/utils/outbound-policy.js](/Users/Shared/Projects/reply/chat/utils/outbound-policy.js)
+- code: [chat/contact-store.js](../chat/contact-store.js), [chat/routes/contacts.js](../chat/routes/contacts.js), [chat/utils/outbound-policy.js](../chat/utils/outbound-policy.js)
 
 Live local facts at audit time:
 

@@ -1,125 +1,39 @@
-# Contributing to `{reply}`
+# Contributing to Reply Core
 
-`{reply}` is a local-first macOS communication workspace. Contributions must preserve three product rules:
+Reply Core is the code in [`core/`](core/). The previous generation of the project lives in [`legacy/`](legacy/README.md) and is not developed any more.
 
-1. the primary operator shell is native macOS
-2. live drafting behavior is owned by `{trinity}`
-3. transport execution, approval, and operator workflow are owned by `{reply}`
-
-And one identity rule:
-
-4. contact merge and unmerge are explicit user-owned actions only
-
-## Before You Change Code
-
-1. Read [README.md](/Users/Shared/Projects/reply/README.md).
-2. Read [docs/CODING_STANDARDS.md](/Users/Shared/Projects/reply/docs/CODING_STANDARDS.md).
-3. Read [docs/ARCHITECTURE.md](/Users/Shared/Projects/reply/docs/ARCHITECTURE.md).
-4. If your change touches drafting or policy flow, also read [docs/TRINITY_INTEGRATION_SPINE.md](/Users/Shared/Projects/reply/docs/TRINITY_INTEGRATION_SPINE.md).
-
-## Local Setup
-
-Install core dependencies:
+## Setup
 
 ```bash
-git clone <your-fork-or-origin>
-cd /Users/Shared/Projects/reply/chat
+cd core
 npm install
+GITHUB_TOKEN=<a token with read:packages> npm --prefix ui ci     # the UI uses the GDS design system from GitHub Packages
+bash helper/build.sh                                             # the native helper (Xcode command line tools)
+node scripts/reply-core start                                    # run it: docs/CORE_FIRST_RUN.md
 ```
 
-Install the sibling `{trinity}` runtime:
+Node 20.17 or newer. Everything runs on macOS; the service needs no network.
+
+## Before you open a pull request
 
 ```bash
-cd /Users/Shared/Projects/trinity
-uv sync --dev
+cd core
+npm run verify            # lint (no warnings), Swift tests, Node tests, UI lint/types/tests/build/bundle budget/Playwright accessibility
+node scripts/audit.js     # documentation and repository audit
+npm run verify:release    # everything above plus the launcher smoke test, as one table
 ```
 
-For full local setup, see [docs/LOCAL_MACHINE_DEPLOYMENT.md](/Users/Shared/Projects/reply/docs/LOCAL_MACHINE_DEPLOYMENT.md).
+All of it must pass with **zero warnings**. The same checks run in CI.
 
-## Development Workflow
+## Rules that are not negotiable
 
-Start the hub:
+1. **UI only from the GDS design system** (`@sovereignsquad/gds`): no other component library, no hand-written visual CSS, no raw colours. A pattern GDS lacks is requested in the GDS repository and, meanwhile, composed locally from GDS parts and listed in [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md). Accessibility is mandatory: every screen passes the GDS accessibility gate in light, dark and at 375 px.
+2. **Privacy:** message text, names, addresses and phone numbers never reach logs, metrics or error messages (ids, counts, channel and error code only). Other apps' databases are opened read-only. Merging people and sending messages are explicit user actions only.
+3. **No personal data in the repository**, ever, including test data (synthetic only) and screenshots.
+4. **Documentation changes with the code**: update the matching document in [docs/](docs/README.md), [CHANGELOG.md](CHANGELOG.md) and, for a known limitation, [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md). `node scripts/audit.js` rejects obsolete wording, broken links and a changelog that does not match the version.
+5. **Tests:** every behaviour has a test that fails if it breaks; user interface behaviour is tested in a real browser against the real service (Playwright, `core/ui/e2e`). Tests never send a real message (the service is started with `REPLY_CORE_SEND_DRIVER=fake`).
+6. **Migrations are forward-only** and checksummed (`core/src/storage/migrations`); user data (notes, profile fields, read state, merges) must survive `rebuild`.
 
-```bash
-cd /Users/Shared/Projects/reply
-make run
-```
+## Commits and pull requests
 
-Build the native app:
-
-```bash
-make build-app
-```
-
-Install the native app bundle into `/Applications`:
-
-```bash
-cd app/reply-app
-./install-bundle.sh
-```
-
-## Required Verification
-
-Run the checks that match your change:
-
-```bash
-cd /Users/Shared/Projects/reply/chat
-npm test
-npm run lint
-npm run audit:conversations
-```
-
-For native shell changes:
-
-```bash
-cd /Users/Shared/Projects/reply
-make build-app
-cd app/reply-app
-swift build
-```
-
-Manual verification is required for:
-
-- conversation sidebar behavior
-- thread rendering
-- conversation/channel capability truth
-- capability-safe compose behavior and stale conversation rejection
-- native runtime startup
-- sync entry points
-- profile loading and saving
-- draft outcome reporting
-
-If the change affects shipped UI, verify against the installed `/Applications/reply.app`, not only a dev server.
-
-## Documentation Policy
-
-Every behavior change must update the relevant public docs in the same change.
-
-At minimum, consider:
-
-- [README.md](/Users/Shared/Projects/reply/README.md)
-- [docs/CODING_STANDARDS.md](/Users/Shared/Projects/reply/docs/CODING_STANDARDS.md)
-- [docs/ARCHITECTURE.md](/Users/Shared/Projects/reply/docs/ARCHITECTURE.md)
-- [docs/LOCAL_MACHINE_DEPLOYMENT.md](/Users/Shared/Projects/reply/docs/LOCAL_MACHINE_DEPLOYMENT.md)
-- [docs/USER_GUIDE.md](/Users/Shared/Projects/reply/docs/USER_GUIDE.md)
-- [docs/DEPENDENCY_MAP.md](/Users/Shared/Projects/reply/docs/DEPENDENCY_MAP.md)
-
-## Pull Request Expectations
-
-Every PR should include:
-
-- the problem statement
-- the architectural boundary affected
-- commands used for verification
-- manual validation notes for native UI or sync behavior
-- doc updates
-
-## Current Integration Notes
-
-- Gmail may require reconnect if the saved refresh token is invalid.
-- Apple Mail fallback is supported and can populate `mailto:` conversations when Gmail is unavailable.
-- Conversation threads are message-backed first and contact-enriched second.
-- Thread reads are canonical-first: the route retries conversation-foundation rebuilds before falling back to legacy `unified_messages`.
-- Web and native compose only expose channels allowed by `conversation_channel_capabilities`.
-- Contact merge state is manual-only and must not be inferred automatically by heuristics.
-- The dashboard can report ingestion totals that are larger than the currently preloaded sidebar page.
+Small, focused pull requests; the description says what changed, how it was verified and what was not verified. Commit messages are in the imperative.
