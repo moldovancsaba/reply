@@ -93,3 +93,10 @@ test("group members: read from the source, replaced as a whole, named from the c
     // a person's own profile has no members
     assert.deepEqual(profile.get(owner(db, "+36301234567@wa")).members, []);
 });
+
+test("group messages: the sender is the member, never the group itself", () => {
+    const base = { Z_PK: 1, ZTEXT: "hi", ZMESSAGEDATE: 1, ZISFROMME: 0, ZMESSAGETYPE: 0, ZSESSIONJID: "120363407760105150@g.us" };
+    assert.equal(toNormalized({ ...base, ZFROMJID: "120363407760105150@g.us" }, "HU").message.meta.sender, undefined, "old layouts name the group");
+    assert.equal(toNormalized({ ...base, ZFROMJID: "36301234567@s.whatsapp.net" }, "HU").message.meta.sender, "+36301234567@wa");
+    assert.equal(toNormalized({ ...base, ZISFROMME: 1, ZFROMJID: "36301234567@s.whatsapp.net" }, "HU").message.meta.sender, undefined);
+});

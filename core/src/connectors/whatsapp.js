@@ -110,7 +110,8 @@ export function toNormalized(r, region) {
     const isGroup = jid.endsWith("@g.us");
     const handle = normalizeHandle(jid, "whatsapp", region);
     if (!handle) return { skip: "bad_handle" };
-    const sender = isGroup && !r.ZISFROMME ? normalizeHandle(String(r.ZFROMJID ?? ""), "whatsapp", region)?.handle_norm : undefined;
+    const from = isGroup && !r.ZISFROMME ? normalizeHandle(String(r.ZFROMJID ?? ""), "whatsapp", region)?.handle_norm : undefined;
+    const sender = from && from !== handle.handle_norm ? from : undefined; // old layouts name the group itself: that is no sender
     return {
         message: {
             channel: "whatsapp", account: "", providerMessageKey: String(r.Z_PK), threadKey: jid, handle_norm: handle.handle_norm,
@@ -246,8 +247,10 @@ export function createWhatsAppConnector({ config = {}, logger, tmpDir = os.tmpdi
                     logger?.warn({ connector: "whatsapp" }, "connector.whatsapp database identity changed: re-importing from the start");
                     pk = 0;
                 }
-                const rows = db.prepare(`SELECT m.Z_PK, m.ZTEXT, m.ZMESSAGEDATE, m.ZISFROMME, m.ZFROMJID, m.ZMEDIAITEM, m.ZMESSAGETYPE, s.ZCONTACTJID AS ZSESSIONJID
-                    FROM ZWAMESSAGE m LEFT JOIN ZWACHATSESSION s ON s.Z_PK = m.ZCHATSESSION WHERE m.Z_PK > ? ORDER BY m.Z_PK ASC LIMIT ?`).all(pk, limit);
+                // In a group, ZFROMJID is the group itself; the person who wrote it is the ZGROUPMEMBER row (when the layout has it).
+                const hasMember = db.prepare("PRAGMA table_info(ZWAMESSAGE)").all().some((c) => c.name === "ZGROUPMEMBER") && db.prepare("PRAGMA table_info(ZWAGROUPMEMBER)").all().some((c) => c.name === "ZMEMBERJID");
+                const rows = db.prepare(`SELECT m.Z_PK, m.ZTEXT, m.ZMESSAGEDATE, m.ZISFROMME, ${hasMember ? "COALESCE(gm.ZMEMBERJID, m.ZFROMJID)" : "m.ZFROMJID"} AS ZFROMJID, m.ZMEDIAITEM, m.ZMESSAGETYPE, s.ZCONTACTJID AS ZSESSIONJID
+                    FROM ZWAMESSAGE m LEFT JOIN ZWACHATSESSION s ON s.Z_PK = m.ZCHATSESSION ${hasMember ? "LEFT JOIN ZWAGROUPMEMBER gm ON gm.Z_PK = m.ZGROUPMEMBER" : ""} WHERE m.Z_PK > ? ORDER BY m.Z_PK ASC LIMIT ?`).all(pk, limit);
                 const sessions = db.prepare("SELECT ZCONTACTJID AS j, ZPARTNERNAME AS n FROM ZWACHATSESSION WHERE ZPARTNERNAME IS NOT NULL AND ZPARTNERNAME != ''").all();
                 // optional tables: a layout without them just means no member lists
                 let members = [];
