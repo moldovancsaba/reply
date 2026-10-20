@@ -123,7 +123,7 @@ export function Composer({ contact, lastChannel, lastEmailSubject }: { contact: 
     setSending(true);
     setSendError(null);
     const r = await fetchJson<Sent>("/api/send", {
-      method: "POST", timeoutMs: 60_000,
+      method: "POST", timeoutMs: 75_000, // the app's own 45 s plus up to 15 s of looking for the WhatsApp message
       body: { contactId: contact.id, channel, text, clientId: attempt.current, ...(current.handles.length > 1 ? { handle: target.value } : {}), ...(channel === "email" ? { subject } : {}) },
     });
     setSending(false);
@@ -197,7 +197,7 @@ export function Composer({ contact, lastChannel, lastEmailSubject }: { contact: 
         <div tabIndex={-1} ref={(el) => el?.focus()}>
           <InlineAlert
             severity="error"
-            title={sendError.code === "send_timeout" || (sendError.code === "already_attempted" && /may already/.test(sendError.message)) ? "The message may have been sent" : "The message was not sent"}
+            title={sendError.code === "whatsapp_wrong_chat" ? "The message went to a different chat" : sendError.code === "send_timeout" || sendError.code === "send_unconfirmed" || (sendError.code === "already_attempted" && /may already/.test(sendError.message)) ? "The message may have been sent" : "The message was not sent"}
             message={sendError.message}
             action={
               <GdsStack gap="sm">

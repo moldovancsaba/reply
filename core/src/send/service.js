@@ -11,7 +11,7 @@ const NOTE = { imessage: "Sent through Messages.", email: "Sent through Mail.", 
 
 // Sending a message from the app: one explicit request per message (the UI asks the person first), checked against the
 // contact's own handles, idempotent per `clientId`, rate limited, one at a time, audited without content.
-export function createSender({ db, handoffs, drivers, enabled = true, now = () => Date.now(), onSent, logger }) {
+export function createSender({ db, handoffs, drivers, confirmers = {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), confirmMs = 15_000, enabled = true, now = () => Date.now(), onSent, logger }) {
     const q = {
         byClient: db.prepare("SELECT * FROM sends WHERE client_id = ?"),
         insert: db.prepare("INSERT INTO sends (id, client_id, ts_ms, contact_id, channel, handle_kind, text_length, status) VALUES (?,?,?,?,?,?,?, 'sending')"),
@@ -53,20 +53,45 @@ export function createSender({ db, handoffs, drivers, enabled = true, now = () =
         q.insert.run(id, clientId, now(), contactId, channel, kind, text.length);
         inFlight = true;
         try {
-            await drivers[channel]({ handle: chosen.value, text, subject });
-        } catch (err) {
-            const e = err instanceof SendError ? err : new SendError("send_failed", "The message was not sent.");
-            q.finish.run(e.unknownOutcome ? "unknown" : "failed", e.code, now(), id);
-            logger?.warn({ channel, code: e.code }, "send.failed");
-            const status = e.code === "automation_denied" || e.code === "accessibility_denied" ? 403 : e.code === "recipient_not_found" ? 422 : e.code === "send_timeout" ? 504 : 502;
-            throw Object.assign(new AppError(status, e.code, e.message, { retryable: false }), e.recovery ? { details: { recovery: e.recovery } } : {});
+            const startedAt = now();
+            try {
+                await drivers[channel]({ handle: chosen.value, text, subject });
+            } catch (err) {
+                const e = err instanceof SendError ? err : new SendError("send_failed", "The message was not sent.");
+                q.finish.run(e.unknownOutcome ? "unknown" : "failed", e.code, now(), id);
+                logger?.warn({ channel, code: e.code }, "send.failed");
+                const status = e.code === "automation_denied" || e.code === "accessibility_denied" ? 403 : e.code === "recipient_not_found" ? 422 : e.code === "send_timeout" ? 504 : 502;
+                throw Object.assign(new AppError(status, e.code, e.message, { retryable: false }), e.recovery ? { details: { recovery: e.recovery } } : {});
+            }
+            // WhatsApp has no sending interface (a key press), so look for the message in its database: only then is it "sent".
+            let confirmed;
+            if (confirmers[channel]) {
+                const since = startedAt - 2000;
+                let seen = "none";
+                for (let waited = 0; seen === "none" && waited <= confirmMs; waited += 1000) {
+                    if (waited) await sleep(1000);
+                    seen = await confirmers[channel]({ handle: chosen.value, text, sinceMs: since });
+                    if (seen === "unavailable") break;
+                }
+                if (seen === "other") {
+                    q.finish.run("failed", "whatsapp_wrong_chat", now(), id);
+                    logger?.warn({ channel, code: "whatsapp_wrong_chat" }, "send.failed");
+                    throw new AppError(502, "whatsapp_wrong_chat", "The message went to a different WhatsApp chat than the one you chose. Open WhatsApp and check it.", { retryable: false });
+                }
+                if (seen === "none") {
+                    q.finish.run("unknown", "unconfirmed", now(), id);
+                    logger?.warn({ channel, code: "unconfirmed" }, "send.unconfirmed");
+                    throw new AppError(504, "send_unconfirmed", "WhatsApp did not show the message in this chat. It may have been sent: check the conversation before sending again.", { retryable: false });
+                }
+                confirmed = seen === "chat"; // "unavailable": the database cannot be read, so it stays unconfirmed
+            }
+            q.finish.run("sent", null, now(), id);
+            logger?.info({ channel, textLength: text.length, confirmed }, "send.ok"); // never the text, the subject or the address
+            try { onSent?.(channel); } catch { /* a failed refresh must not turn a sent message into an error */ }
+            return { sendId: id, status: "sent", channel, handleLabel: chosen.label, note: confirmed === false ? "Pressed Send in WhatsApp. It could not be confirmed that the message arrived." : NOTE[channel], ...(confirmed === undefined ? {} : { confirmed }) };
         } finally {
             inFlight = false;
         }
-        q.finish.run("sent", null, now(), id);
-        logger?.info({ channel, textLength: text.length }, "send.ok"); // never the text, the subject or the address
-        try { onSent?.(channel); } catch { /* a failed refresh must not turn a sent message into an error */ }
-        return { sendId: id, status: "sent", channel, handleLabel: chosen.label, note: NOTE[channel] };
     }
 
     return { send, capability };

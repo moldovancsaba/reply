@@ -8,7 +8,7 @@ Press **Send** in the Reply box and the message leaves this Mac through the app 
 |---|---|---|---|
 | iMessage | AppleScript tells **Messages** to send to the contact's phone number or email address (iMessage first, then SMS if the person is not on iMessage and your iPhone relays texts) | Automation: {reply} may control Messages | good |
 | Email | AppleScript tells **Mail** to make and send a message from your default Mail account (subject starts as "Re: ..." of the last mail) | Automation: {reply} may control Mail | good |
-| WhatsApp | opens the chat with the text typed in (`whatsapp://send`), waits until WhatsApp Desktop is in front, then presses Return through System Events | Automation: System Events, and **Accessibility** for {reply} | least reliable: it depends on WhatsApp Desktop's window; if WhatsApp does not come to the front nothing is sent |
+| WhatsApp | opens the chat with the text typed in (`whatsapp://send`), waits until WhatsApp Desktop is in front, then presses Return through System Events | Automation: System Events, and **Accessibility** for {reply} | least reliable: it depends on WhatsApp Desktop's window; if WhatsApp does not come to the front, or loses the focus before the key press, nothing is sent. The message must then show up in WhatsApp's database, in that chat, within 15 s (see "Confirming WhatsApp") |
 
 Group chats and people without a phone number or address cannot be a recipient (the Reply box offers only what the contact really has). Attachments cannot be sent; use "Open in {App} instead".
 
@@ -27,6 +27,19 @@ Group chats and people without a phone number or address cannot be a recipient (
 
 macOS lists an app under Automation or Accessibility only after the app asks. The Sources screen has a **Sending** panel with an **Allow {reply} to send** button, and in the Reply box a permission error shows the steps and the same button. It opens {reply} in its permission mode (`{reply}.app --consent-send`, or `POST /api/consent` with `{"kind":"sending"}`, or the older `POST /api/send/consent`, which works only when the service was started from {reply}.app and otherwise answers `501 consent_unavailable`): it launches Messages, Mail and System Events and asks macOS for Automation of each, and for Accessibility. Choose Allow in each macOS window, then press Send again. Afterwards System Settings > Privacy & Security > Automation shows {reply} with Messages, Mail and System Events, and Accessibility shows {reply}. The permission belongs to the signed {reply} app, so it survives rebuilds and Node upgrades.
 
+## Confirming WhatsApp
+
+A key press cannot tell whether WhatsApp sent anything, so after it Reply Core looks in WhatsApp's own database (the WhatsApp connector, read-only) once a second for up to 15 seconds for a message of yours with exactly this text, newer than the send, in the chat of that number:
+
+| Found | Result |
+|---|---|
+| in that chat | `sent`, `confirmed: true` |
+| only in another chat | `whatsapp_wrong_chat` (502), recorded as `failed`; the message went to the wrong chat, check WhatsApp |
+| not at all | `send_unconfirmed` (504), recorded as `unknown`: it may have been sent; no blind retry |
+| the database cannot be read (permission, schema changed) | `sent`, `confirmed: false`, with the note that arrival could not be confirmed |
+
+The window is also checked a second time right before Return; if WhatsApp lost the focus meanwhile nothing is sent (`whatsapp_not_ready`). The send request therefore takes up to about 15 seconds longer for WhatsApp; the one-at-a-time lock is held meanwhile. Confirmation is tested with fixture databases, not yet with a real WhatsApp send (#256).
+
 ## After sending
 
 The sent message reaches the source app's database a moment later. Reply Core reads that source again 3 and 12 seconds after a send, and the conversation refreshes after 4 and 14 seconds, so your message appears in the thread through the normal import (there is no separate "pending" copy).
@@ -38,7 +51,9 @@ The sent message reaches the source app's database a moment later. Reply Core re
 | `automation_denied` (403) | {reply} may not control the app | steps, link to Automation settings, Allow button |
 | `accessibility_denied` (403) | {reply} may not press keys (WhatsApp) | steps, link to Accessibility settings, Allow button |
 | `recipient_not_found` (422) | the app could not find the recipient | nothing was sent |
-| `whatsapp_not_ready` (502) | WhatsApp did not come to the front in 10 s | nothing was sent; open WhatsApp and retry |
+| `whatsapp_not_ready` (502) | WhatsApp did not come to the front in 10 s, or lost the focus before Return | nothing was sent; open WhatsApp and retry |
+| `whatsapp_wrong_chat` (502) | the message showed up in another WhatsApp chat | "The message went to a different chat" |
+| `send_unconfirmed` (504) | the message did not show up in WhatsApp's database in 15 s | "The message may have been sent" |
 | `app_not_running` (502) | the app could not be opened | nothing was sent |
 | `send_failed` (502) | the app refused the message | nothing was sent |
 | `send_timeout` (504) | no answer in 45 s | the message may have been sent |

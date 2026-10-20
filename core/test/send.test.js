@@ -14,7 +14,7 @@ const NOW = Date.UTC(2026, 9, 19, 8, 0, 0);
 const msg = (n, handle, extra = {}) => ({ channel: "imessage", account: "", providerMessageKey: `m${n}`, threadKey: "t", handle_norm: handle, isFromMe: false, tsMs: NOW - n * 1000, text: `t${n}`, attachments: [], ...extra });
 const CID = (n) => `client-id-${String(n).padStart(4, "0")}`;
 
-function setup({ drivers, enabled = true, clock } = {}) {
+function setup({ drivers, enabled = true, clock, confirmers } = {}) {
     const home = mkdtempSync(path.join(os.tmpdir(), "rc-send-"));
     const { db } = openDb(home);
     const repo = createRepo(db, { now: () => NOW });
@@ -24,7 +24,7 @@ function setup({ drivers, enabled = true, clock } = {}) {
     const fake = Object.fromEntries(["imessage", "email", "whatsapp"].map((c) => [c, async (m) => { sent.push({ channel: c, ...m }); }]));
     const { logger, lines } = memoryLogger();
     const sentHooks = [];
-    const sender = createSender({ db, handoffs, drivers: drivers ?? fake, enabled, now: clock ?? (() => NOW), onSent: (c) => sentHooks.push(c), logger });
+    const sender = createSender({ db, handoffs, drivers: drivers ?? fake, confirmers, sleep: async () => {}, confirmMs: 3000, enabled, now: clock ?? (() => NOW), onSent: (c) => sentHooks.push(c), logger });
     const id = (h) => db.prepare("SELECT contact_id c FROM contact_handles WHERE handle_norm = ?").get(h).c;
     return { home, db, handoffs, sender, sent, sentHooks, lines, id };
 }
@@ -179,6 +179,42 @@ test("HTTP: send, strict body, replay, error envelope with recovery steps, no co
     assert.equal(noApp.json.error.code, "consent_unavailable");
     assert.equal((await post({ kind: "contacts" }, "/api/consent")).json.error.code, "consent_unavailable");
     assert.equal((await post({ kind: "nope" }, "/api/consent")).status, 400);
+});
+
+test("WhatsApp: it is sent only once the message shows up in that chat; the wrong chat and a silent database are said out loud", async () => {
+    const wa = (s) => s.id("+36301234567@wa");
+    const status = (s) => s.db.prepare("SELECT status, error_code FROM sends").get();
+    const polls = [];
+    let confirmed = setup({ confirmers: { whatsapp: async (m) => { polls.push(m); return polls.length < 3 ? "none" : "chat"; } } });
+    const ok = await confirmed.sender.send({ contactId: wa(confirmed), channel: "whatsapp", text: "hi", clientId: CID(1) });
+    assert.deepEqual([ok.status, ok.confirmed, polls.length], ["sent", true, 3]);
+    assert.equal(polls[0].handle, "+36301234567@wa");
+    assert.equal(polls[0].text, "hi");
+
+    const wrong = setup({ confirmers: { whatsapp: async () => "other" } });
+    await assert.rejects(() => wrong.sender.send({ contactId: wa(wrong), channel: "whatsapp", text: "hi", clientId: CID(2) }), (e) => e.status === 502 && e.code === "whatsapp_wrong_chat");
+    assert.deepEqual(status(wrong), { status: "failed", error_code: "whatsapp_wrong_chat" });
+
+    let n = 0;
+    const silent = setup({ confirmers: { whatsapp: async () => { n++; return "none"; } } });
+    await assert.rejects(() => silent.sender.send({ contactId: wa(silent), channel: "whatsapp", text: "hi", clientId: CID(3) }), (e) => e.status === 504 && e.code === "send_unconfirmed");
+    assert.deepEqual(status(silent), { status: "unknown", error_code: "unconfirmed" });
+    assert.equal(n, 4, "looks now and once a second for 3 s");
+    await assert.rejects(() => silent.sender.send({ contactId: wa(silent), channel: "whatsapp", text: "hi", clientId: CID(3) }), (e) => e.code === "already_attempted");
+
+    const blind = setup({ confirmers: { whatsapp: async () => "unavailable" } });
+    const r = await blind.sender.send({ contactId: wa(blind), channel: "whatsapp", text: "hi", clientId: CID(4) });
+    assert.deepEqual([r.status, r.confirmed], ["sent", false]);
+    assert.match(r.note, /could not be confirmed/);
+
+    const mail = setup({ confirmers: { whatsapp: async () => { throw new Error("must not be asked for other channels"); } } });
+    assert.equal((await mail.sender.send({ contactId: mail.id("+36301234567"), channel: "imessage", text: "hi", clientId: CID(5) })).confirmed, undefined);
+});
+
+test("the WhatsApp script checks the focus again right before it presses Return", () => {
+    const src = SCRIPTS.whatsapp.join("\n");
+    assert.ok(src.indexOf("lost the focus") < src.indexOf("keystroke return"));
+    assert.equal(classify("execution error: WhatsApp lost the focus (9002)", "whatsapp").code, "whatsapp_not_ready");
 });
 
 test("the fake driver (tests only) records instead of sending", async () => {
