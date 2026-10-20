@@ -48,7 +48,7 @@ const registry = createRegistry({ enabled: config.connectors, deps: { config, lo
 for (const id of registry.unknown) logger.warn({ connector: id }, "ignoring unknown connector in REPLY_CORE_CONNECTORS");
 const identity = createIdentity({ db: storage.db, repo });
 repo.setAfterBatch(() => identity.applyPendingMerges());
-const runner = createRunner({ db: storage.db, repo, logger, onContacts: (people) => {
+const runner = createRunner({ db: storage.db, repo, logger, onNames: (names) => identity.applyNames(names), onContacts: (people) => {
         const r = identity.importContacts(people);
         identity.applyPendingMerges();
         logger.info({ connector: "contacts", created: r.created, updated: r.updated, unchanged: r.unchanged, linked: r.linked, conflicts: r.conflicts.length, protectedByMerge: r.protectedByMerge }, "identity.import");

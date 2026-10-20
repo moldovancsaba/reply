@@ -141,6 +141,12 @@ export function createReadService({ db, replyChannels }) {
         const rows = db.prepare(sql).all(...params, limit + 1);
         const hasMore = rows.length > limit;
         const page = rows.slice(0, limit);
+        // group chats: the sender's name when we know it (their contact), else their number
+        const senders = [...new Set(page.map((m) => JSON.parse(m.meta_json || "{}").sender).filter(Boolean))];
+        const senderNames = new Map();
+        if (senders.length) {
+            for (const r of db.prepare(`SELECT ch.handle_norm h, c.display_name n FROM contact_handles ch JOIN contacts c ON c.id = ch.contact_id WHERE ch.handle_norm IN (${senders.map(() => "?").join(",")})`).all(...senders)) senderNames.set(r.h, r.n === r.h ? formatHandle(r.h) : r.n);
+        }
         const items = page.map((m) => {
             const meta = JSON.parse(m.meta_json || "{}");
             return {
@@ -148,7 +154,7 @@ export function createReadService({ db, replyChannels }) {
                 ...(m.subject ? { subject: m.subject } : {}), text: m.text,
                 ...(meta.isSummary ? { isSummary: true } : {}),
                 attachments: JSON.parse(m.attachments_json), counterpartHandle: m.handle_norm,
-                ...(meta.sender ? { sender: meta.sender } : {}),
+                ...(meta.sender ? { sender: meta.sender, senderName: senderNames.get(meta.sender) ?? formatHandle(meta.sender) } : {}),
             };
         });
         const last = page.at(-1);

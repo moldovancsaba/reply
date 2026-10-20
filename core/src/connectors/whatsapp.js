@@ -71,6 +71,18 @@ export function cleanStaleCopies(dir = os.tmpdir(), now = Date.now()) {
     return removed;
 }
 
+// Chat names (the group subject, or what a person calls themselves): only ever used to name automatic contacts that
+// would otherwise be called by their id, never to override the address book or a merge.
+export function namesOf(sessions, region) {
+    const out = [];
+    for (const { j, n } of sessions ?? []) {
+        const name = String(n ?? "").replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "").trim().slice(0, 200);
+        const handle = String(j ?? "").endsWith("@broadcast") ? null : normalizeHandle(String(j ?? ""), "whatsapp", region);
+        if (name && handle && name !== handle.handle_norm) out.push({ handle_norm: handle.handle_norm, displayName: name });
+    }
+    return out;
+}
+
 // Maps one ZWAMESSAGE row (joined with its chat session) to a NormalizedMessage, or says why it is skipped.
 export function toNormalized(r, region) {
     const jid = String(r.ZSESSIONJID ?? "");
@@ -219,7 +231,8 @@ export function createWhatsAppConnector({ config = {}, logger, tmpDir = os.tmpdi
                 }
                 const rows = db.prepare(`SELECT m.Z_PK, m.ZTEXT, m.ZMESSAGEDATE, m.ZISFROMME, m.ZFROMJID, m.ZMEDIAITEM, m.ZMESSAGETYPE, s.ZCONTACTJID AS ZSESSIONJID
                     FROM ZWAMESSAGE m LEFT JOIN ZWACHATSESSION s ON s.Z_PK = m.ZCHATSESSION WHERE m.Z_PK > ? ORDER BY m.Z_PK ASC LIMIT ?`).all(pk, limit);
-                return { rows, uuid, pk, copied };
+                const sessions = db.prepare("SELECT ZCONTACTJID AS j, ZPARTNERNAME AS n FROM ZWACHATSESSION WHERE ZPARTNERNAME IS NOT NULL AND ZPARTNERNAME != ''").all();
+                return { rows, uuid, pk, copied, sessions };
             });
             const messages = [];
             const skipped = { system: 0, empty: 0, bad_handle: 0 };
@@ -232,7 +245,7 @@ export function createWhatsAppConnector({ config = {}, logger, tmpDir = os.tmpdi
             if (!more) dropCache();
             const last = out.rows.at(-1)?.Z_PK ?? out.pk;
             logger?.info({ connector: "whatsapp", messages: messages.length, skippedSystem: skipped.system, skippedEmpty: skipped.empty, skippedBadHandle: skipped.bad_handle, usedCopy: out.copied, ms: Math.round(performance.now() - t0) }, "connector.whatsapp page");
-            return { messages, nextCursor: { pk: last, db: out.uuid }, more };
+            return { messages, names: namesOf(out.sessions, region), nextCursor: { pk: last, db: out.uuid }, more };
         },
         close: dropCache,
     };

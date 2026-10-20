@@ -21,7 +21,7 @@ function withTimeout(promise, ms, controller) {
 
 // Owns everything operational about a sync: locking, preflight, paging, atomic cursor commits, retries, run records.
 // Connectors only fetch and normalize.
-export function createRunner({ db, repo, logger, onContacts, now = () => Date.now(), sleep = (ms) => new Promise((r) => setTimeout(r, ms)), random = Math.random, fetchTimeoutMs = 30_000, maxAttempts = 5, pageLimit = 500 }) {
+export function createRunner({ db, repo, logger, onContacts, onNames, now = () => Date.now(), sleep = (ms) => new Promise((r) => setTimeout(r, ms)), random = Math.random, fetchTimeoutMs = 30_000, maxAttempts = 5, pageLimit = 500 }) {
     const running = new Map();
     const live = new Map(); // key -> counters of the run in progress, for the status API
     const metrics = { runs: 0, failuresByCode: {}, lastDurationMs: null };
@@ -38,6 +38,7 @@ export function createRunner({ db, repo, logger, onContacts, now = () => Date.no
         return db.transaction(() => {
             const res = repo.upsertMessages(page.messages ?? []);
             if (page.contacts?.length && onContacts) onContacts(page.contacts);
+            if (page.names?.length && onNames) onNames(page.names);
             const cur = repo.getSyncState(connector.id, account);
             repo.setSyncState(connector.id, account, {
                 cursor_json: JSON.stringify(page.nextCursor ?? {}),
