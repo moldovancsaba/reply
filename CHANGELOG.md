@@ -7,6 +7,7 @@ All notable changes to Reply Core. The format follows [Keep a Changelog](https:/
 The first release you can live in: profiles, sending, new-message counts, a signed app and a launcher, WhatsApp groups, and a documentation and repository clean-up.
 
 ### Added
+- **Send files** through iMessage and Mail from the Reply box (`POST /api/uploads`, `attachmentIds`; 5 files, 20 MB each, 25 MB together); WhatsApp stays text only.
 - **WhatsApp sends are confirmed.** After the key press Reply Core looks for the message in WhatsApp's database (15 s): sent only when it is in the right chat; a message in the wrong chat or one that never shows up is reported (`whatsapp_wrong_chat`, `send_unconfirmed`), and the focus is checked again right before Return.
 - **Contact photos.** The address-book thumbnail shows in the profile (shrunk by the helper to at most 256 px, JPEG or PNG up to 48 KB, checked on import; `contact_photos`, migration 0013, `GET /api/contacts/:id/photo`). Address-book notes stay unavailable: Apple restricts them to apps with a special entitlement.
 - **Duplicate suggestions.** A profile proposes people with the same name or the same number on another channel (**Review merge** / **Not the same**); nothing merges by itself. (`GET /api/contacts/:id/duplicates`)

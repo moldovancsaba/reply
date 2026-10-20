@@ -57,6 +57,9 @@ export function createServer(config, logger, deps = {}) {
         }
     });
 
+    // an uploaded file arrives as raw bytes (the route sets its own, larger limit)
+    app.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bodyLimit: 21 * 1024 * 1024 }, (_req, body, done) => done(null, body));
+
     app.addHook("onRequest", guards(config));
     app.addHook("onResponse", async (req, reply) => {
         req.log.info(

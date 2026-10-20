@@ -14,6 +14,7 @@ import { removePidfile, writePidfile } from "./ops/guard.js";
 import { createFakeDrivers, createAppleScriptDrivers, createNudges } from "./send/drivers.js";
 import { createWhatsAppConnector } from "./connectors/whatsapp.js";
 import { createSender } from "./send/service.js";
+import { createUploads } from "./send/uploads.js";
 import { createProfile } from "./profile/service.js";
 import { createReadService } from "./read/service.js";
 import { defaultHelperPath } from "./helper/index.js";
@@ -62,9 +63,10 @@ const scheduler = createScheduler({ registry, runner, repo, logger, intervals: c
 const handoffs = createHandoff({ db: storage.db });
 const drivers = config.sendDriver === "fake" ? createFakeDrivers(config.home) : createAppleScriptDrivers();
 const SYNC_AFTER_SEND = { imessage: "imessage", email: "apple-mail", whatsapp: "whatsapp" };
+const uploads = createUploads({ home: config.home });
 const whatsappForConfirm = registry.get("whatsapp") ?? createWhatsAppConnector({ config, logger });
 const sender = createSender({
-    db: storage.db, handoffs, drivers, enabled: config.sending, logger,
+    db: storage.db, handoffs, drivers, uploads, enabled: config.sending, logger,
     // a sent WhatsApp message is looked for in WhatsApp's database, also when the WhatsApp source is not switched on for syncing
     confirmers: config.sendDriver === "fake" ? {} : { whatsapp: (m) => whatsappForConfirm.confirmSent(m) },
     nudges: config.sendDriver === "fake" ? {} : createNudges(),
@@ -75,7 +77,7 @@ const read = createReadService({ db: storage.db, replyChannels: (id) => handoffs
 const drafting = createDrafting({ config, read, logger });
 const profile = createProfile({ db: storage.db });
 const status = createStatus({ db: storage.db, config, registry, runner, scheduler, repo, helper: defaultHelperPath() });
-const app = createServer(config, logger, { registry, runner, repo, identity, read, profile, sender, appPath: config.appPath, status, handoffs, drafting, logger, uiDir: config.uiDir });
+const app = createServer(config, logger, { registry, runner, repo, identity, read, profile, sender, uploads, appPath: config.appPath, status, handoffs, drafting, logger, uiDir: config.uiDir });
 
 try {
     await app.listen({ host: HOST, port: config.port });

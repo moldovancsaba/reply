@@ -19,8 +19,9 @@ export async function fetchJson<T>(path: string, { signal, timeoutMs = DEFAULT_T
     res = await fetch(path, {
       method,
       signal: combined,
-      headers: body === undefined ? undefined : { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      // a File is sent as it is (an upload); anything else as JSON
+      headers: body === undefined ? undefined : { "content-type": body instanceof Blob ? "application/octet-stream" : "application/json" },
+      body: body === undefined ? undefined : body instanceof Blob ? body : JSON.stringify(body),
     });
   } catch (err) {
     if (signal?.aborted) return failure({ code: "aborted", message: "The request was cancelled." });

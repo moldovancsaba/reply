@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { expectAccessible, expectAccessibleNow, expectFocusTrapped } from "./a11y";
@@ -165,4 +165,36 @@ test.describe("sending turned off", () => {
     await expect(page.getByText(/Sending is turned off/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Open in Messages" })).toBeVisible();
   });
+});
+
+test("attach files: picked, listed, removable, shown in the confirmation, sent with the message", async ({ page }) => {
+  await open(page);
+  const files = page.getByLabel("Choose files to attach");
+  await files.setInputFiles([
+    { name: "photo.png", mimeType: "image/png", buffer: Buffer.alloc(2048, 1) },
+    { name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("hello") },
+  ]);
+  const list = page.getByRole("list", { name: "Attached files" });
+  await expect(list.getByRole("listitem")).toHaveCount(2);
+  await expect(list).toContainText("photo.png");
+  await expect(list).toContainText("2 KB");
+  await list.getByRole("button", { name: "Remove notes.txt" }).click();
+  await expect(list.getByRole("listitem")).toHaveCount(1);
+  expect(readdirSync(path.join(svc.home, "outbox")).length, "a removed file leaves the outbox").toBe(1);
+  await expectAccessibleNow(page, "composer with an attachment");
+
+  // a file alone is enough: no text needed
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("list", { name: "Files that will be sent" })).toContainText("photo.png (2 KB)");
+  await dialog.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.getByText("Sent through Messages to +36301234567.")).toBeVisible();
+  await expect.poll(() => sentLog().length).toBe(1);
+  expect(sentLog()[0]).toMatchObject({ channel: "imessage", text: "", attachments: [{ name: "photo.png", size: 2048, exists: true }] });
+  await expect(page.getByRole("list", { name: "Attached files" })).toHaveCount(0);
+  expect(existsSync(path.join(svc.home, "outbox")) ? readdirSync(path.join(svc.home, "outbox")).length : 0, "sent files are released").toBe(0);
+
+  // the picker is ready for the next message
+  await files.setInputFiles({ name: "again.png", mimeType: "image/png", buffer: Buffer.alloc(10, 2) });
+  await expect(page.getByRole("list", { name: "Attached files" })).toContainText("again.png");
 });

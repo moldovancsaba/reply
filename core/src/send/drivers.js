@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync } from "node:fs";
 import path from "node:path";
 
 // How a message actually leaves this Mac: AppleScript drives the apps you already use (Messages, Mail, WhatsApp
@@ -10,14 +10,22 @@ const SCRIPTS = {
         "on run argv",
         "set theHandle to item 1 of argv",
         "set theText to item 2 of argv",
+        "set theFiles to {}",
+        "repeat with i from 3 to (count of argv)",
+        "set end of theFiles to item i of argv",
+        "end repeat",
         "tell application \"Messages\"",
         "try",
         "set theService to 1st service whose service type = iMessage",
-        "send theText to buddy theHandle of theService",
+        "set theBuddy to buddy theHandle of theService",
         "on error",
         "set theService to 1st service whose service type = SMS",
-        "send theText to buddy theHandle of theService",
+        "set theBuddy to buddy theHandle of theService",
         "end try",
+        "repeat with f in theFiles",
+        "send (POSIX file (contents of f)) to theBuddy",
+        "end repeat",
+        "if theText is not \"\" then send theText to theBuddy",
         "end tell",
         "end run",
     ],
@@ -26,9 +34,17 @@ const SCRIPTS = {
         "set theAddress to item 1 of argv",
         "set theSubject to item 2 of argv",
         "set theText to item 3 of argv",
+        "set theFiles to {}",
+        "repeat with i from 4 to (count of argv)",
+        "set end of theFiles to item i of argv",
+        "end repeat",
+        "if (count of theFiles) > 0 then set theText to theText & return & return",
         "tell application \"Mail\"",
         "set theMessage to make new outgoing message with properties {subject:theSubject, content:theText, visible:false}",
         "tell theMessage to make new to recipient at end of to recipients with properties {address:theAddress}",
+        "repeat with f in theFiles",
+        "tell content of theMessage to make new attachment with properties {file name:(POSIX file (contents of f)) as alias} at after the last paragraph",
+        "end repeat",
         "send theMessage",
         "end tell",
         "end run",
@@ -70,8 +86,8 @@ const NUDGE = [
 ];
 
 export const scriptArgs = {
-    imessage: ({ handle, text }) => [handle, text],
-    email: ({ handle, subject, text }) => [handle, subject ?? "", text],
+    imessage: ({ handle, text, attachments = [] }) => [handle, text, ...attachments.map((a) => a.path)],
+    email: ({ handle, subject, text, attachments = [] }) => [handle, subject ?? "", text, ...attachments.map((a) => a.path)],
     whatsapp: ({ handle, text }) => [`whatsapp://send?phone=${handle.replace(/\D/g, "")}&text=${encodeURIComponent(text)}`],
 };
 
@@ -113,7 +129,12 @@ export function classify(stderr, channel, timedOut = false) {
 export function createAppleScriptDrivers({ run = defaultRun } = {}) {
     const make = (channel) => async (msg) => {
         const r = await run(SCRIPTS[channel], scriptArgs[channel](msg));
-        if (r.error) throw classify(r.stderr, channel, r.timedOut);
+        if (r.error) {
+            const e = classify(r.stderr, channel, r.timedOut);
+            // with files the script sends several things in a row: a plain failure may come after some of them went out
+            if (msg.attachments?.length && e.code === "send_failed") throw new SendError("send_failed_partial", `${{ imessage: "Messages", email: "Mail", whatsapp: "WhatsApp" }[channel]} stopped part way. Some of the message may have been sent: check the conversation before sending again.`, { unknownOutcome: true });
+            throw e;
+        }
     };
     return { imessage: make("imessage"), email: make("email"), whatsapp: make("whatsapp") };
 }
@@ -128,7 +149,7 @@ export function defaultRun(lines, args, timeoutMs = 45_000) {
 
 // Test-only: records what would have been sent in <home>/sent-fake.jsonl and succeeds. Selected with REPLY_CORE_SEND_DRIVER=fake.
 export function createFakeDrivers(home) {
-    const make = (channel) => async (msg) => { appendFileSync(path.join(home, "sent-fake.jsonl"), `${JSON.stringify({ channel, handle: msg.handle, subject: msg.subject, text: msg.text })}\n`); };
+    const make = (channel) => async (msg) => { appendFileSync(path.join(home, "sent-fake.jsonl"), `${JSON.stringify({ channel, handle: msg.handle, subject: msg.subject, text: msg.text, ...(msg.attachments?.length ? { attachments: msg.attachments.map((a) => ({ name: a.name, size: a.size, exists: existsSync(a.path) })) } : {}) })}\n`); };
     return { imessage: make("imessage"), email: make("email"), whatsapp: make("whatsapp") };
 }
 

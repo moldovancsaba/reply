@@ -7,11 +7,12 @@ const MAX_TEXT = 4000; // an app message, not a URL: far above what a person wri
 const MAX_SUBJECT = 300;
 const RATE_PER_MINUTE = 10;
 
+const ATTACHMENT_CHANNELS = ["imessage", "email"]; // WhatsApp is driven by key presses and cannot take a file
 const NOTE = { imessage: "Sent through Messages.", email: "Sent through Mail.", whatsapp: "Sent through WhatsApp." };
 
 // Sending a message from the app: one explicit request per message (the UI asks the person first), checked against the
 // contact's own handles, idempotent per `clientId`, rate limited, one at a time, audited without content.
-export function createSender({ db, handoffs, drivers, confirmers = {}, nudges = {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), confirmMs = 15_000, enabled = true, now = () => Date.now(), onSent, logger }) {
+export function createSender({ db, handoffs, drivers, uploads, confirmers = {}, nudges = {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), confirmMs = 15_000, enabled = true, now = () => Date.now(), onSent, logger }) {
     const q = {
         byClient: db.prepare("SELECT * FROM sends WHERE client_id = ?"),
         handlesOf: db.prepare("SELECT handle_norm FROM contact_handles WHERE contact_id = ?"),
@@ -29,14 +30,14 @@ export function createSender({ db, handoffs, drivers, confirmers = {}, nudges = 
         if (typeof clientId !== "string" || !/^[A-Za-z0-9_-]{8,80}$/.test(clientId)) throw new AppError(400, "invalid_request", "clientId must be 8 to 80 letters, digits, - or _.");
         if (!CHANNELS.includes(channel)) throw new AppError(400, "invalid_request", `channel must be one of ${CHANNELS.join(", ")}.`);
         if (typeof text !== "string") throw new AppError(400, "invalid_request", "text must be a string.");
-        if (!text.trim()) throw new AppError(400, "text_empty", "Write a message first.");
+        if (!text.trim() && !(Array.isArray(body.attachmentIds) && body.attachmentIds.length)) throw new AppError(400, "text_empty", "Write a message first.");
         if (text.length > MAX_TEXT) throw new AppError(413, "text_too_long", `Messages over ${MAX_TEXT.toLocaleString("en-US")} characters cannot be sent from here.`);
         if (subject !== undefined && (typeof subject !== "string" || subject.length > MAX_SUBJECT)) throw new AppError(400, "invalid_request", `subject must be text of at most ${MAX_SUBJECT} characters.`);
-        return { contactId, channel, handle, text, subject, clientId };
+        return { contactId, channel, handle, text, subject, clientId, attachmentIds: body.attachmentIds };
     }
 
     async function send(body) {
-        const { contactId, channel, handle, text, subject, clientId } = check(body);
+        const { contactId, channel, handle, text, subject, clientId, attachmentIds } = check(body);
         const prior = q.byClient.get(clientId);
         if (prior) {
             // the same request again (a double click, a retry after a lost answer): never a second message
@@ -47,6 +48,8 @@ export function createSender({ db, handoffs, drivers, confirmers = {}, nudges = 
         if (!enabled) throw new AppError(403, "sending_disabled", "Sending is turned off. Set REPLY_CORE_SENDING=on to use it.");
         if (!drivers[channel]) throw new AppError(422, "channel_not_supported", "Sending through that channel is not available.");
         const { chosen, kind } = handoffs.resolve({ contactId, channel, handle });
+        if (attachmentIds?.length && !ATTACHMENT_CHANNELS.includes(channel)) throw new AppError(422, "attachments_not_supported", "WhatsApp cannot be given files from here. Use \"Open in WhatsApp instead\" and attach them there.");
+        const attachments = attachmentIds?.length ? (uploads ? uploads.resolve(attachmentIds) : (() => { throw new AppError(422, "attachments_not_supported", "Sending files is not available."); })()) : [];
         if (inFlight) throw new AppError(429, "send_rate_limited", "Another message is being sent. Wait a moment.", { retryable: true });
         if (q.recent.get(now() - 60_000).n >= RATE_PER_MINUTE) throw new AppError(429, "send_rate_limited", `At most ${RATE_PER_MINUTE} messages a minute can be sent from here. Wait a moment.`, { retryable: true });
 
@@ -56,7 +59,7 @@ export function createSender({ db, handoffs, drivers, confirmers = {}, nudges = 
         try {
             const startedAt = now();
             try {
-                await drivers[channel]({ handle: chosen.value, text, subject });
+                await drivers[channel]({ handle: chosen.value, text, subject, attachments });
             } catch (err) {
                 const e = err instanceof SendError ? err : new SendError("send_failed", "The message was not sent.");
                 q.finish.run(e.unknownOutcome ? "unknown" : "failed", e.code, now(), id);
@@ -92,7 +95,8 @@ export function createSender({ db, handoffs, drivers, confirmers = {}, nudges = 
                 confirmed = seen === "chat"; // "unavailable": the database cannot be read, so it stays unconfirmed
             }
             q.finish.run("sent", null, now(), id);
-            logger?.info({ channel, textLength: text.length, confirmed }, "send.ok"); // never the text, the subject or the address
+            uploads?.release(attachmentIds ?? []);
+            logger?.info({ channel, textLength: text.length, files: attachments.length, confirmed }, "send.ok"); // never the text, the subject or the address
             try { onSent?.(channel); } catch { /* a failed refresh must not turn a sent message into an error */ }
             return { sendId: id, status: "sent", channel, handleLabel: chosen.label, note: confirmed === false ? "Pressed Send in WhatsApp. It could not be confirmed that the message arrived." : NOTE[channel], ...(confirmed === undefined ? {} : { confirmed }) };
         } finally {

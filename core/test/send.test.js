@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createUploads, cleanName } from "../src/send/uploads.js";
 import { classify, createAppleScriptDrivers, createFakeDrivers, scriptArgs, SCRIPTS, SendError } from "../src/send/drivers.js";
 import { createHandoff } from "../src/handoff/service.js";
 import { createSender } from "../src/send/service.js";
@@ -14,7 +15,7 @@ const NOW = Date.UTC(2026, 9, 19, 8, 0, 0);
 const msg = (n, handle, extra = {}) => ({ channel: "imessage", account: "", providerMessageKey: `m${n}`, threadKey: "t", handle_norm: handle, isFromMe: false, tsMs: NOW - n * 1000, text: `t${n}`, attachments: [], ...extra });
 const CID = (n) => `client-id-${String(n).padStart(4, "0")}`;
 
-function setup({ drivers, enabled = true, clock, confirmers, nudges, confirmMs = 3000 } = {}) {
+function setup({ drivers, enabled = true, clock, confirmers, nudges, confirmMs = 3000, withUploads = false } = {}) {
     const home = mkdtempSync(path.join(os.tmpdir(), "rc-send-"));
     const { db } = openDb(home);
     const repo = createRepo(db, { now: () => NOW });
@@ -24,23 +25,24 @@ function setup({ drivers, enabled = true, clock, confirmers, nudges, confirmMs =
     const fake = Object.fromEntries(["imessage", "email", "whatsapp"].map((c) => [c, async (m) => { sent.push({ channel: c, ...m }); }]));
     const { logger, lines } = memoryLogger();
     const sentHooks = [];
-    const sender = createSender({ db, handoffs, drivers: drivers ?? fake, confirmers, nudges, sleep: async () => {}, confirmMs, enabled, now: clock ?? (() => NOW), onSent: (c) => sentHooks.push(c), logger });
+    const uploads = withUploads ? createUploads({ home, now: clock ?? (() => NOW) }) : undefined;
+    const sender = createSender({ db, handoffs, drivers: drivers ?? fake, uploads, confirmers, nudges, sleep: async () => {}, confirmMs, enabled, now: clock ?? (() => NOW), onSent: (c) => sentHooks.push(c), logger });
     const id = (h) => db.prepare("SELECT contact_id c FROM contact_handles WHERE handle_norm = ?").get(h).c;
-    return { home, db, handoffs, sender, sent, sentHooks, lines, id };
+    return { home, db, handoffs, sender, uploads, sent, sentHooks, lines, id };
 }
 
 test("a message goes to the contact's own handle on the chosen channel, and is audited without content", async () => {
     const s = setup();
     const r = await s.sender.send({ contactId: s.id("+36301234567"), channel: "imessage", text: "See you at 6", clientId: CID(1) });
     assert.equal(r.status, "sent");
-    assert.deepEqual(s.sent, [{ channel: "imessage", handle: "+36301234567", text: "See you at 6", subject: undefined }]);
+    assert.deepEqual(s.sent, [{ channel: "imessage", handle: "+36301234567", text: "See you at 6", subject: undefined, attachments: [] }]);
     assert.deepEqual(s.sentHooks, ["imessage"]);
     const row = s.db.prepare("SELECT * FROM sends").get();
     assert.deepEqual([row.status, row.channel, row.handle_kind, row.text_length, row.error_code], ["sent", "imessage", "phone", 12, null]);
     assert.doesNotMatch(JSON.stringify(row), /See you|301234567/);
     assert.doesNotMatch(s.lines.join("\n"), /See you|301234567|example\.com/);
     await s.sender.send({ contactId: s.id("anna@example.com"), channel: "email", subject: "Hello", text: "Body", clientId: CID(2) });
-    assert.deepEqual(s.sent.at(-1), { channel: "email", handle: "anna@example.com", text: "Body", subject: "Hello" });
+    assert.deepEqual(s.sent.at(-1), { channel: "email", handle: "anna@example.com", text: "Body", subject: "Hello", attachments: [] });
 });
 
 test("validation: recipient must be the contact's, text must be real, nothing is sent on a rejected request", async () => {
@@ -245,4 +247,88 @@ test("the fake driver (tests only) records instead of sending", async () => {
     const home = mkdtempSync(path.join(os.tmpdir(), "rc-fake-"));
     await createFakeDrivers(home).email({ handle: "a@b.co", subject: "S", text: "T" });
     assert.deepEqual(JSON.parse(readFileSync(path.join(home, "sent-fake.jsonl"), "utf8")), { channel: "email", handle: "a@b.co", subject: "S", text: "T" });
+});
+
+test("attachments: uploaded by id, sent on iMessage and Mail only, kept until sent, never reachable by path", async () => {
+    const s = setup({ withUploads: true });
+    assert.equal(cleanName("../../etc/passwd"), "passwd");
+    assert.equal(cleanName("..\\x\\a\u0000b.png"), "ab.png");
+    assert.equal(cleanName(".hidden"), "hidden");
+    assert.equal(cleanName(""), "file");
+    const a = s.uploads.add("../photo.jpg", Buffer.from("JPEGDATA"));
+    const b = s.uploads.add("doc.pdf", Buffer.from("PDF"));
+    assert.deepEqual([a.name, a.size], ["photo.jpg", 8]);
+    assert.equal(statSync(path.join(s.home, "outbox")).mode & 0o077, 0, "owner only");
+    const anna = s.id("+36301234567");
+
+    // text may be empty when there is a file
+    const r = await s.sender.send({ contactId: anna, channel: "imessage", text: "", attachmentIds: [a.id, b.id], clientId: CID(1) });
+    assert.equal(r.status, "sent");
+    assert.deepEqual(s.sent[0].attachments.map((x) => [x.name, x.size]), [["photo.jpg", 8], ["doc.pdf", 3]]);
+    assert.ok(path.resolve(s.sent[0].attachments[0].path).startsWith(path.join(s.home, "outbox")));
+    assert.equal(s.uploads.count(), 0, "released after a successful send");
+    assert.equal(s.db.prepare("SELECT text_length n FROM sends").get().n, 0);
+
+    // not on WhatsApp; unknown ids, bad lists and size limits are refused before anything is sent
+    const c = s.uploads.add("c.txt", Buffer.from("x"));
+    const code = async (body) => { try { await s.sender.send({ contactId: anna, text: "hi", ...body }); } catch (e) { return [e.status, e.code]; } return null; };
+    assert.deepEqual(await code({ contactId: s.id("+36301234567@wa"), channel: "whatsapp", attachmentIds: [c.id], clientId: CID(2) }), [422, "attachments_not_supported"]);
+    assert.deepEqual(await code({ channel: "imessage", attachmentIds: ["u_nope"], clientId: CID(3) }), [422, "attachment_not_found"]);
+    assert.deepEqual(await code({ channel: "imessage", attachmentIds: [c.id, c.id], clientId: CID(4) }), [400, "invalid_request"]);
+    assert.deepEqual(await code({ channel: "imessage", attachmentIds: "x", clientId: CID(5) }), [400, "invalid_request"]);
+    assert.deepEqual(await code({ channel: "imessage", attachmentIds: Array.from({ length: 6 }, (_, i) => `u_${i}`), clientId: CID(6) }), [413, "too_many_attachments"]);
+    assert.deepEqual(await code({ channel: "imessage", text: "  ", attachmentIds: [], clientId: CID(7) }), [400, "text_empty"]);
+    assert.equal(s.sent.length, 1);
+    assert.equal(s.uploads.count(), 1, "a refused send keeps the file");
+    assert.throws(() => s.uploads.add("big", Buffer.alloc(20 * 1024 * 1024 + 1)), { code: "file_too_large" });
+    assert.throws(() => s.uploads.add("empty", Buffer.alloc(0)), { code: "invalid_request" });
+    const big = [1, 2].map((i) => s.uploads.add(`b${i}`, Buffer.alloc(13 * 1024 * 1024)));
+    assert.throws(() => s.uploads.resolve(big.map((x) => x.id)), { code: "attachments_too_large" });
+});
+
+test("attachments: a failed send keeps the files for the retry; files expire after an hour and a restart clears them", async () => {
+    let t = NOW;
+    const fail = async () => { throw classify("(-1743)", "email"); };
+    const s = setup({ withUploads: true, clock: () => t, drivers: { imessage: fail, email: fail, whatsapp: fail } });
+    const a = s.uploads.add("a.txt", Buffer.from("x"));
+    await assert.rejects(() => s.sender.send({ contactId: s.id("anna@example.com"), channel: "email", text: "hi", attachmentIds: [a.id], clientId: CID(1) }), { code: "automation_denied" });
+    assert.equal(s.uploads.count(), 1);
+    t += 61 * 60_000;
+    await assert.rejects(() => s.sender.send({ contactId: s.id("anna@example.com"), channel: "email", text: "hi", attachmentIds: [a.id], clientId: CID(2) }), { code: "attachment_not_found" });
+    const left = s.uploads.add("b.txt", Buffer.from("y"));
+    assert.ok(existsSync(path.join(s.home, "outbox", left.id)));
+    createUploads({ home: s.home });
+    assert.equal(existsSync(path.join(s.home, "outbox")), false, "whatever a crash left behind is removed on start");
+});
+
+test("attachments: script arguments carry the file paths; a plain failure with files may be a partial send", async () => {
+    const att = [{ path: "/o/u_1/a b.png", name: "a b.png", size: 1 }];
+    assert.deepEqual(scriptArgs.imessage({ handle: "+3630", text: "hi", attachments: att }), ["+3630", "hi", "/o/u_1/a b.png"]);
+    assert.deepEqual(scriptArgs.email({ handle: "a@b.co", subject: "S", text: "hi", attachments: att }), ["a@b.co", "S", "hi", "/o/u_1/a b.png"]);
+    assert.deepEqual(scriptArgs.imessage({ handle: "+3630", text: "hi" }), ["+3630", "hi"]);
+    for (const ch of ["imessage", "email"]) assert.doesNotMatch(SCRIPTS[ch].join("\n"), /\/o\/|u_1/);
+    const drivers = createAppleScriptDrivers({ run: async () => ({ error: new Error("x"), stderr: "execution error: Messages got an error: something odd (-10000)" }) });
+    await assert.rejects(() => drivers.imessage({ handle: "+3630", text: "hi", attachments: att }), (e) => e.code === "send_failed_partial" && e.unknownOutcome === true);
+    await assert.rejects(() => drivers.imessage({ handle: "+3630", text: "hi" }), (e) => e.code === "send_failed" && !e.unknownOutcome);
+});
+
+test("HTTP uploads: raw bytes in, an id out; strict query; delete; the message names the id", async (t) => {
+    const s = setup({ withUploads: true });
+    const { app, port } = await startServer({ deps: { sender: s.sender, uploads: s.uploads } });
+    t.after(() => app.close());
+    const h = { host: `127.0.0.1:${port}` };
+    const up = (q, body, type = "application/octet-stream") => request(port, { method: "POST", path: `/api/uploads${q}`, headers: { ...h, "content-type": type, "content-length": Buffer.byteLength(body ?? "") }, body });
+    const ok = await up("?name=hello%20world.txt", "hello");
+    assert.deepEqual([ok.status, ok.json.name, ok.json.size, ok.headers["cache-control"]], [201, "hello world.txt", 5, "no-store"]);
+    assert.equal((await up("?name=a&x=1", "hello")).status, 400);
+    assert.equal((await up("?name=a", "{}", "application/json")).status, 415, "JSON is not a file");
+    assert.equal((await up("?name=a", "", "application/octet-stream")).status, 400, "empty");
+    const sent = await request(port, { method: "POST", path: "/api/send", headers: { ...h, "content-type": "application/json" }, body: JSON.stringify({ contactId: s.id("anna@example.com"), channel: "email", subject: "S", text: "see file", attachmentIds: [ok.json.id], clientId: CID(1) }) });
+    assert.equal(sent.status, 200);
+    assert.equal(s.sent[0].attachments[0].name, "hello world.txt");
+    const two = await up("?name=b.txt", "b");
+    assert.equal((await request(port, { method: "DELETE", path: `/api/uploads/${two.json.id}`, headers: h })).json.removed, true);
+    assert.equal(s.uploads.count(), 0);
+    const foreign = await request(port, { method: "POST", path: "/api/uploads?name=a", headers: { ...h, origin: "http://evil.example", "content-type": "application/octet-stream" }, body: "x" });
+    assert.equal(foreign.status, 403);
 });
