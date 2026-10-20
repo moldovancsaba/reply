@@ -177,6 +177,8 @@ test("HTTP: send, strict body, replay, error envelope with recovery steps, no co
     const noApp = await post({}, "/api/send/consent");
     assert.equal(noApp.status, 501);
     assert.equal(noApp.json.error.code, "consent_unavailable");
+    assert.equal((await post({ kind: "contacts" }, "/api/consent")).json.error.code, "consent_unavailable");
+    assert.equal((await post({ kind: "nope" }, "/api/consent")).status, 400);
 });
 
 test("the fake driver (tests only) records instead of sending", async () => {

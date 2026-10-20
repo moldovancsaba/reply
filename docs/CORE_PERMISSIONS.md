@@ -17,7 +17,7 @@ Reply Core reads other apps' data. macOS grants access to the **program that sta
 | Sending through Messages and Mail | Automation: {reply} may control Messages and Mail | System Settings > Privacy & Security > Automation |
 | Sending through WhatsApp | Automation of System Events, and Accessibility for {reply} | Automation, and Privacy & Security > Accessibility |
 
-macOS shows {reply} in those lists only after it has asked: use **Allow {reply} to send** in the Reply box (or run `open -a ~/Applications/{reply}.app --args --consent-send`). Details: [CORE_SENDING.md](CORE_SENDING.md).
+macOS shows {reply} in those lists only after it has asked: use **Allow {reply} to send** on the Sources screen or in the Reply box (or run `open -a ~/Applications/{reply}.app --args --consent-send`). Details: [CORE_SENDING.md](CORE_SENDING.md).
 
 ## Checking
 

@@ -163,3 +163,14 @@ test("a11y gate: states in light and dark, and at 375 px", async ({ page }) => {
   await expectAccessible(page, `${svc.url}/sources`);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test("Sources offers Allow for sending, and for Contacts when it is blocked", async ({ page }) => {
+  const asked: unknown[] = [];
+  await page.route("**/api/consent", (r) => { asked.push(r.request().postDataJSON()); return json(r, { opened: true }, 202); });
+  await status(page, () => report([{ id: "contacts", label: "Contacts", state: "blocked", code: "permission_denied", message: "Reply Core cannot read your Contacts.", messagesTotal: 0 }]));
+  await page.goto(`${svc.url}/sources`);
+  await page.getByRole("button", { name: "Allow {reply} to read Contacts" }).click();
+  await page.getByRole("button", { name: "Allow {reply} to send" }).click();
+  await expect.poll(() => asked).toEqual([{ kind: "contacts" }, { kind: "sending" }]);
+  await expectAccessibleNow(page, "sources allow");
+});
