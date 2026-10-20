@@ -40,6 +40,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>LSUIElement</key><true/>
+  <key>NSAppleEventsUsageDescription</key><string>{reply} sends the messages you write through Messages, Mail and WhatsApp. It only does so when you press Send.</string>
   <key>NSContactsUsageDescription</key><string>{reply} reads your address book so conversations show real names and one person's phone numbers and email addresses are grouped. Nothing leaves this Mac.</string>
 </dict>
 </plist>

@@ -167,7 +167,7 @@ test("HTTP: success, strict body, logs without text or address", async (t) => {
 test("the contact detail exposes replyChannels in the documented shape", () => {
     const s = setup();
     const id = anna(s);
-    const read = createReadService({ db: s.db, replyChannels: (x) => s.handoffs.channelsFor(x) });
+    const read = createReadService({ db: s.db, replyChannels: (x) => s.handoffs.channelsFor(x).map((c) => ({ ...c, send: { available: true } })) });
     const doc = JSON.parse(readFileSync(new URL("../schema/api-read.json", import.meta.url), "utf8"));
     const ajv = new Ajv({ strict: false });
     ajv.addSchema(doc);

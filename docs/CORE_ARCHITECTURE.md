@@ -45,7 +45,7 @@ process start
 
 ## Handoff
 
-`core/src/handoff/service.js` validates the recipient from the contact's own handles, builds the link per channel and writes the audit row; `core/src/routes/handoff.js` serves `POST /api/handoff`. Reply Core never sends. See [CORE_HANDOFF.md](CORE_HANDOFF.md).
+`core/src/handoff/service.js` validates the recipient from the contact's own handles, builds the link per channel and writes the audit row; `core/src/routes/handoff.js` serves `POST /api/handoff`. `core/src/send/` sends on request through the apps you already use (AppleScript), see [CORE_SENDING.md](CORE_SENDING.md); the handoff remains the "open in the app instead" path. See [CORE_HANDOFF.md](CORE_HANDOFF.md).
 
 ## Status
 

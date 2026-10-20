@@ -160,7 +160,7 @@ export function ThreadPane({ contactId, profile }: { contactId: string; profile:
       </GdsStack>
       {blocked.map((b) => <InlineAlert key={b.id} severity="warning" title={`${b.label} is not syncing`} message={`${b.message} Newer messages may be missing.`} action={<Anchor href="/sources">Open Sources</Anchor>} />)}
       {body}
-      {c ? <Composer contact={c} lastChannel={ascending[ascending.length - 1]?.channel ?? null} /> : null}
+      {c ? <Composer contact={c} lastChannel={ascending[ascending.length - 1]?.channel ?? null} lastEmailSubject={[...ascending].reverse().find((m) => m.channel === "email" && m.subject)?.subject} /> : null}
     </GdsStack>
   );
 }

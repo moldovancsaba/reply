@@ -9,7 +9,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 
 const freePort = () => new Promise<number>((resolve) => { const s = net.createServer().listen(0, "127.0.0.1", () => { const { port } = s.address() as net.AddressInfo; s.close(() => resolve(port)); }); });
 
-export type Service = { url: string; port: number; stop: () => Promise<void>; start: () => Promise<void>; running: () => boolean };
+export type Service = { home: string; url: string; port: number; stop: () => Promise<void>; start: () => Promise<void>; running: () => boolean };
 
 // A real Reply Core service (serving the built UI) on its own port and data folder.
 export async function startService({ seed = false, env = {} }: { seed?: boolean; env?: Record<string, string> } = {}): Promise<Service> {
@@ -22,7 +22,7 @@ export async function startService({ seed = false, env = {} }: { seed?: boolean;
   let child: ChildProcess | null = null;
   const start = async () => {
     child = spawn(process.execPath, [path.join(root, "src", "index.js")], {
-      env: { ...process.env, REPLY_CORE_HOME: home, REPLY_CORE_PORT: String(port), REPLY_CORE_CONNECTORS: "none", REPLY_CORE_LOG_LEVEL: "error", ...env },
+      env: { ...process.env, REPLY_CORE_HOME: home, REPLY_CORE_PORT: String(port), REPLY_CORE_CONNECTORS: "none", REPLY_CORE_LOG_LEVEL: "error", REPLY_CORE_SEND_DRIVER: "fake", ...env },
       stdio: ["ignore", "pipe", "inherit"],
     });
     await new Promise<void>((resolve, reject) => {
@@ -40,5 +40,5 @@ export async function startService({ seed = false, env = {} }: { seed?: boolean;
     await new Promise((resolve) => c.on("exit", resolve));
   };
   await start();
-  return { url: `http://127.0.0.1:${port}`, port, start, stop, running: () => child !== null };
+  return { home, url: `http://127.0.0.1:${port}`, port, start, stop, running: () => child !== null };
 }

@@ -35,10 +35,10 @@ test("real handoff: recipient and app are visible first; the exact text is in th
   await openPhoneThread(page);
   await expect(page.getByRole("radiogroup", { name: "Send through" })).toBeVisible();
   await expect(page.getByRole("radio", { name: "iMessage · +36 30 123 4567" })).toBeChecked();
-  await expect(page.getByText(/To \+36301234567 through iMessage \(\+36 30 123 4567\)\. Reply Core opens Messages with your text; you press send there\. Reply Core never sends anything itself\./)).toBeVisible();
+  await expect(page.getByText("To +36301234567 through iMessage (+36 30 123 4567). Send sends it now, through Messages on this Mac.")).toBeVisible();
   const text = "See you at 6 & bring #the 100% \"plan\"\nsecond line 😀";
   await area(page).fill(text);
-  await page.getByRole("button", { name: "Open in Messages" }).click();
+  await page.getByRole("button", { name: /^Open in Messages( instead)?$/ }).click();
   await expect.poll(async () => (await opened(page)).length).toBe(1);
   const url = (await opened(page))[0];
   expect(url.startsWith("sms:")).toBe(true);
@@ -60,9 +60,9 @@ test("merged contact offers both channels, defaults to the newest message's chan
   await expect(page.getByRole("radio", { name: /^iMessage/ })).toBeChecked();
   await area(page).fill("Hello by mail");
   await page.getByRole("radio", { name: /^Email/ }).check();
-  await expect(page.getByRole("button", { name: "Open in Mail" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Open in Mail( instead)?$/ })).toBeVisible();
   await expect(page.getByText(/through Email \(anna@example\.com\)/)).toBeVisible();
-  await page.getByRole("button", { name: "Open in Mail" }).click();
+  await page.getByRole("button", { name: /^Open in Mail( instead)?$/ }).click();
   await expect.poll(async () => (await opened(page)).length).toBe(1);
   expect((await opened(page))[0]).toMatch(/^mailto:anna(@|%40)example\.com\?.*body=Hello%20by%20mail/);
   // arrow keys move between the radios
@@ -78,7 +78,7 @@ test("oversized text: warning hint, copy-and-open with no body in the link, and 
   const big = "x".repeat(1600);
   await area(page).fill(big);
   await expect(page.getByText("Long messages will be copied to the clipboard instead of prefilled.")).toBeVisible();
-  await page.getByRole("button", { name: "Open in Messages" }).click();
+  await page.getByRole("button", { name: /^Open in Messages( instead)?$/ }).click();
   await expect.poll(async () => (await opened(page)).length).toBe(1);
   expect((await opened(page))[0]).not.toContain("body=");
   await expect(page.getByText(/Your text was copied; paste it in the message\./)).toBeVisible();
@@ -90,12 +90,12 @@ test("a double click sends one request; an empty message sends none and moves fo
   page.on("request", (r) => { if (r.method() === "POST" && r.url().endsWith("/api/handoff")) posts.push(r.postData() ?? ""); });
   await captureOpens(page);
   await openPhoneThread(page);
-  await page.getByRole("button", { name: "Open in Messages" }).click();
+  await page.getByRole("button", { name: /^Open in Messages( instead)?$/ }).click();
   await expect(page.getByRole("alert")).toContainText("Write a message first.");
   await expect(page.locator("div[tabindex='-1']:not(#main-content)").filter({ has: page.getByRole("alert") })).toBeFocused();
   expect(posts).toEqual([]);
   await area(page).fill("Once");
-  await page.getByRole("button", { name: "Open in Messages" }).dblclick();
+  await page.getByRole("button", { name: /^Open in Messages( instead)?$/ }).dblclick();
   await expect.poll(async () => (await opened(page)).length).toBeGreaterThan(0);
   expect(posts).toHaveLength(1);
   expect(await opened(page)).toHaveLength(1);
@@ -106,7 +106,7 @@ test("a failed handoff keeps the text, explains in words and focuses the alert",
   await captureOpens(page);
   await openPhoneThread(page);
   await area(page).fill("Keep me");
-  await page.getByRole("button", { name: "Open in Messages" }).click();
+  await page.getByRole("button", { name: /^Open in Messages( instead)?$/ }).click();
   await expect(page.getByRole("alert")).toContainText("This person has no address for that channel any more.");
   await expect(area(page)).toHaveValue("Keep me");
   expect(await opened(page)).toEqual([]);
@@ -128,7 +128,7 @@ test("drafts survive navigation and reload within the session, and a missing ses
   await p2.goto(`${svc.url}/inbox`);
   await phone(p2).click();
   await area(p2).fill("No storage");
-  await expect(p2.getByRole("button", { name: "Open in Messages" })).toBeEnabled();
+  await expect(p2.getByRole("button", { name: /^Open in Messages( instead)?$/ })).toBeEnabled();
   await expect(p2.getByText("Draft saved")).toHaveCount(0);
 });
 
@@ -158,8 +158,9 @@ test("a11y gate: composer idle in light and dark and at 375 px; keyboard-only co
   await page.goto(`${svc.url}${href}`);
   await area(page).focus();
   await page.keyboard.type("Typed by keyboard");
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Open in Messages" })).toBeFocused();
+  const instead = page.getByRole("button", { name: "Open in Messages instead" });
+  for (let i = 0; i < 8 && !(await instead.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
+  await expect(instead).toBeFocused();
   await page.keyboard.press("Enter");
   await expect.poll(async () => (await opened(page)).length).toBe(1);
 });
