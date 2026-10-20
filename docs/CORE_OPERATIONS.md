@@ -91,3 +91,7 @@ Restore and rebuild refuse to run while Reply Core is running (exit 3, with the 
 ## Status
 
 `GET /api/status` includes `backups`: `count`, `totalBytes`, `lastBackupAt`, and `lastBackupError` when the last attempt failed ([CORE_STATUS.md](CORE_STATUS.md)).
+
+## Scale check
+
+`node scripts/bench.js [messages] [people]` fills a throwaway database through the real storage layer and times what the screens ask for. Measured on the development Mac (Apple silicon) with 500,000 messages and 5,000 people (a 151 MB database, ingested at about 12,500 messages per second): contact list page 1.3 ms, name search 1.4 ms, newest thread page 0.1 ms, profile 0.3 ms, two-word search 2.5 ms, rare-word search 15 ms. The daily budgets in the tests (100,000 messages, 3x tolerance) stay the regression guard.
