@@ -120,6 +120,7 @@ export interface ThreadMessage {
   }[];
   counterpartHandle: string;
   sender?: string;
+  senderName?: string;
 }
 /**
  * This interface was referenced by `ReadResponses`'s JSON-Schema

@@ -290,6 +290,9 @@
         },
         "sender": {
           "type": "string"
+        },
+        "senderName": {
+          "type": "string"
         }
       }
     },
