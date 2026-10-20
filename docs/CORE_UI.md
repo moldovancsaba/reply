@@ -96,6 +96,7 @@ On a wide window the profile is a third column (list | conversation | profile); 
 | Section | What it shows |
 |---|---|
 | Header | name, "{job title or profession} at {organization or company}", relationship badge, where the contact came from, "Also known as ..." for merged-in names |
+| Members | (group chats only, instead of Address book and How to reach them) each member with an Admin badge, how much they wrote in the group, and a link to their own conversation when there is one |
 | Address book | read-only: name parts, nickname, organization, job title, department, birthday, web addresses (only `http(s)` become links, opened with `noopener`), postal addresses; or a sentence saying there is nothing (yet) |
 | How to reach them | every phone number, email address and WhatsApp number with its message count and last message, and the LinkedIn link |
 | Activity | messages (received / sent), in touch since, last message, last heard from them, last wrote to them, last 30 days, and a per-channel breakdown |
