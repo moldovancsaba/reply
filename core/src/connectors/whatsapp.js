@@ -71,19 +71,22 @@ export function cleanStaleCopies(dir = os.tmpdir(), now = Date.now()) {
     return removed;
 }
 
+// Some push names are encoded blobs, not text ("+CgAQhe2U0gY="): those are dropped, not shown as names.
+const BLOB = /^[+/A-Za-z0-9]{6,}={1,2}$/;
+const clean = (v) => { const t = String(v ?? "").replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "").trim().slice(0, 200); return BLOB.test(t) ? "" : t; };
+
 // Chat names (the group subject, or what a person calls themselves): only ever used to name automatic contacts that
 // would otherwise be called by their id, never to override the address book or a merge.
 export function namesOf(sessions, region) {
     const out = [];
     for (const { j, n } of sessions ?? []) {
-        const name = String(n ?? "").replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "").trim().slice(0, 200);
+        const name = clean(n);
         const handle = String(j ?? "").endsWith("@broadcast") ? null : normalizeHandle(String(j ?? ""), "whatsapp", region);
         if (name && handle && name !== handle.handle_norm) out.push({ handle_norm: handle.handle_norm, displayName: name });
     }
     return out;
 }
 
-const clean = (v) => String(v ?? "").replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "").trim().slice(0, 200);
 
 // Group member lists: [{ group: <group handle>, members: [{ handle_norm, name, admin }] }]. A member's name is what the
 // phone's address book calls them, else the name of your chat with them, else the name they use themselves.

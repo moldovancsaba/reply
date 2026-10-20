@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { namesOf, toNormalized } from "../src/connectors/whatsapp.js";
@@ -99,4 +99,23 @@ test("group messages: the sender is the member, never the group itself", () => {
     assert.equal(toNormalized({ ...base, ZFROMJID: "120363407760105150@g.us" }, "HU").message.meta.sender, undefined, "old layouts name the group");
     assert.equal(toNormalized({ ...base, ZFROMJID: "36301234567@s.whatsapp.net" }, "HU").message.meta.sender, "+36301234567@wa");
     assert.equal(toNormalized({ ...base, ZISFROMME: 1, ZFROMJID: "36301234567@s.whatsapp.net" }, "HU").message.meta.sender, undefined);
+});
+
+test("encoded push names are not shown as names", async () => {
+    const { groupsOf } = await import("../src/connectors/whatsapp.js");
+    assert.deepEqual(namesOf([{ j: "120363407760105150@g.us", n: "+CgAQuIT51AY=" }], "HU"), []);
+    const g = groupsOf([{ gj: "120363407760105150@g.us", mj: "5562066571432@lid", push: "+CgAQuIT51AY=" }, { gj: "120363407760105150@g.us", mj: "6@lid", push: "Kiss Béla" }], "HU");
+    assert.deepEqual(g[0].members.map((m) => m.name), ["", "Kiss Béla"]);
+});
+
+test("migration 0010 puts the handle back on automatic contacts named after an encoded blob", () => {
+    const home = mkdtempSync(path.join(os.tmpdir(), "rc-mig-"));
+    const { db } = openDb(home);
+    db.prepare("INSERT INTO handles (handle_norm, kind, first_seen_ms, last_seen_ms) VALUES ('other:1@lid', 'other', 1, 1)").run();
+    db.prepare("INSERT INTO contacts (id, display_name, origin, hidden, created_ms) VALUES ('c1', '+CgAQuIT51AY=', 'auto', 0, 1), ('c2', 'Real Name=', 'auto', 0, 1)").run();
+    db.prepare("INSERT INTO contact_handles (handle_norm, contact_id, link_origin, linked_ms) VALUES ('other:1@lid', 'c1', 'auto', 1)").run();
+    const sql = readFileSync(new URL("../src/storage/migrations/0010_clean_blob_names.sql", import.meta.url), "utf8");
+    db.exec(sql);
+    assert.equal(db.prepare("SELECT display_name n FROM contacts WHERE id = 'c1'").get().n, "other:1@lid");
+    assert.equal(db.prepare("SELECT display_name n FROM contacts WHERE id = 'c2'").get().n, "Real Name=", "a name with a space is left alone");
 });
