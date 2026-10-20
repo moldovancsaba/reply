@@ -60,6 +60,10 @@ Query: `before` (cursor), `limit`, `channel`. One merged thread across all of th
 
 `{ "contactId", "channel", "handle"?, "text", "subject"? (email), "clientId" }` (any other key is `400`). `clientId` is 8 to 80 letters, digits, `-` or `_`, one per message. Success: `{ "sendId", "status": "sent", "channel", "handleLabel", "note" }`, or the same with `"replayed": true` for a repeated `clientId`. Errors and what they mean: [CORE_SENDING.md](CORE_SENDING.md#errors). `GET /api/contacts/:id` lists, per reply channel, `send: { available, reason? }`.
 
+### Seen and new
+
+Each list entry has `unread`: messages **received** since the conversation was last marked seen. `POST /api/contacts/:id/read` marks it seen now (`{ "unread": 0 }`). Messages received before the feature was first run (the baseline, `app_settings.unread_baseline_ms`) count as seen, so nothing starts out "new". Sent messages are never new.
+
 ### Profile
 
 `GET /api/contacts/:id/profile` is everything known about one person (`404 contact_not_found`, with `details.mergedInto` for a merged-away contact). It is computed from the stored data on each call:

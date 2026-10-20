@@ -38,6 +38,7 @@ export function ContactRow({ contact, selected }: { contact: ContactListItem; se
                 <BodyText>{contact.displayName}</BodyText>
                 {preview ? <MetadataText>{preview.length > 140 ? `${preview.slice(0, 140)}…` : preview}</MetadataText> : null}
                 <GdsInline gap="xs" wrap="wrap" align="center">
+                  {contact.unread > 0 ? <GdsBadge tone="info" label={`${contact.unread.toLocaleString("en-US")} new`} /> : null}
                   {contact.lastChannel ? <GdsBadge tone="neutral" icon={ICON[contact.lastChannel]} label={CHANNEL_LABEL[contact.lastChannel]} /> : null}
                   {contact.lastTs && parts ? (
                     <MetadataText>
