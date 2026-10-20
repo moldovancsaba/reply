@@ -107,9 +107,11 @@ public struct ContactRecord: Encodable, Equatable {
     public let birthday: String?
     public let urls: [String]?
     public let addresses: [String]?
-    public init(contactId: String, displayName: String, phones: [String], emails: [String], givenName: String? = nil, familyName: String? = nil, nickname: String? = nil, organization: String? = nil, jobTitle: String? = nil, department: String? = nil, birthday: String? = nil, urls: [String]? = nil, addresses: [String]? = nil) {
+    /// Small thumbnail (JPEG or PNG), base64; left out when the person has none or it is over the size cap.
+    public let photo: String?
+    public init(contactId: String, displayName: String, phones: [String], emails: [String], givenName: String? = nil, familyName: String? = nil, nickname: String? = nil, organization: String? = nil, jobTitle: String? = nil, department: String? = nil, birthday: String? = nil, urls: [String]? = nil, addresses: [String]? = nil, photo: String? = nil) {
         self.contactId = contactId; self.displayName = displayName; self.phones = phones; self.emails = emails
         self.givenName = givenName; self.familyName = familyName; self.nickname = nickname; self.organization = organization
-        self.jobTitle = jobTitle; self.department = department; self.birthday = birthday; self.urls = urls; self.addresses = addresses
+        self.jobTitle = jobTitle; self.department = department; self.birthday = birthday; self.urls = urls; self.addresses = addresses; self.photo = photo
     }
 }

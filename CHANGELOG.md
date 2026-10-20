@@ -7,6 +7,7 @@ All notable changes to Reply Core. The format follows [Keep a Changelog](https:/
 The first release you can live in: profiles, sending, new-message counts, a signed app and a launcher, WhatsApp groups, and a documentation and repository clean-up.
 
 ### Added
+- **Contact photos.** The address-book thumbnail shows in the profile (JPEG or PNG up to 48 KB, checked on import; `contact_photos`, migration 0013, `GET /api/contacts/:id/photo`). Address-book notes stay unavailable: Apple restricts them to apps with a special entitlement.
 - **Duplicate suggestions.** A profile proposes people with the same name or the same number on another channel (**Review merge** / **Not the same**); nothing merges by itself. (`GET /api/contacts/:id/duplicates`)
 - **Permissions from the Sources screen.** A **Sending** panel with **Allow {reply} to send**, and **Allow {reply} to read Contacts** when Contacts is blocked. (`POST /api/consent`)
 - **Sending from the app.** A **Send** button in the Reply box sends through Messages, Mail (AppleScript) and WhatsApp Desktop (UI scripting) after a confirmation that shows the recipient and the exact text; "Open in {App} instead" remains. Safeguards: the recipient is always one of the contact's own handles, text is passed to the script as data, one request per message (idempotent by `clientId`), one at a time and 10 a minute, unknown outcomes are reported and never retried blindly, an audit without content (`sends`), `REPLY_CORE_SENDING=off`. ([docs/CORE_SENDING.md](docs/CORE_SENDING.md))

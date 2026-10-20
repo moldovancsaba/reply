@@ -107,3 +107,21 @@ test("suggested duplicates: proposals only; Review merge opens the usual confirm
   await expect(list).toHaveCount(0);
   expect(posts.filter((u) => u.endsWith("/merge"))).toEqual([]);
 });
+
+test("profile shows the address-book photo; a photo that cannot be shown falls back to the letter avatar", async ({ page }) => {
+  const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+  let photoOk = true;
+  await page.route("**/api/contacts/*/profile", async (r) => { const res = await r.fetch(); await r.fulfill({ response: res, json: { ...(await res.json()), hasPhoto: true } }); });
+  await page.route("**/api/contacts/*/photo", (r) => (photoOk ? r.fulfill({ status: 200, contentType: "image/png", body: PNG }) : r.fulfill({ status: 404, contentType: "application/json", body: "{}" })));
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${svc.url}/inbox`);
+  await rows(page).filter({ hasText: "+36301234567" }).click();
+  const img = page.getByRole("region", { name: /^Profile of/ }).locator("img[src$='/photo']");
+  await expect(img).toBeVisible();
+  await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeGreaterThan(0);
+  await expectAccessibleNow(page, "profile with photo");
+  photoOk = false;
+  await page.reload();
+  await expect(page.getByRole("region", { name: /^Profile of/ }).getByRole("heading").first()).toBeVisible();
+  await expect(page.locator("img[src$='/photo']")).toHaveCount(0);
+});

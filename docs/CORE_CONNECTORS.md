@@ -100,7 +100,7 @@ Run it: `REPLY_CORE_CONNECTORS=imessage npm start`, then `curl -X POST http://12
 
 Imports people from the macOS address book through the native helper so conversations show real names and one person's channels share a contact. Interval 15 minutes.
 
-Besides names, phone numbers and email addresses the helper exports given and family name, nickname, organization, job title, department, birthday (`--MM-DD` without a year), web addresses and postal addresses. They are stored as `contact_details` (the Contacts framework's notes field is not available to apps without a special Apple entitlement, so notes are not imported) and shown read-only on the profile. A change in any of them is picked up, because they are part of the fingerprint.
+Besides names, phone numbers and email addresses the helper exports given and family name, nickname, organization, job title, department, birthday (`--MM-DD` without a year), web addresses and postal addresses. The helper also exports the address-book thumbnail as base64 (`photo`, left out above 48 KB); the service accepts it only if its first bytes say JPEG or PNG, stores it in `contact_photos` and serves it at `GET /api/contacts/:id/photo` (`404 photo_not_found` without one); the profile says `hasPhoto`. A changed or removed photo is picked up because it is part of the fingerprint. The other fields are stored as `contact_details` (the Contacts framework's notes field is not available to apps without a special Apple entitlement, so notes are not imported) and shown read-only on the profile. A change in any of them is picked up, because they are part of the fingerprint.
 
 | | |
 |---|---|

@@ -42,11 +42,18 @@ function Facts({ rows, label }: { rows: [string, React.ReactNode][]; label: stri
   );
 }
 
+// The address-book photo when there is one; the generated avatar when there is none or it cannot be shown.
+function Portrait({ p }: { p: Profile }) {
+  const [broken, setBroken] = useState(false);
+  if (p.hasPhoto && !broken) return <img src={`/api/contacts/${encodeURIComponent(p.id)}/photo`} alt="" width={64} height={64} style={{ borderRadius: "50%", objectFit: "cover" }} onError={() => setBroken(true)} />;
+  return <GdsGeneratedAvatar name={p.displayName} size={64} />;
+}
+
 function Header({ p }: { p: Profile }) {
   const role = [p.profile.profession || p.card.jobTitle, p.profile.company || p.card.organization].filter(Boolean).join(" at ");
   return (
     <GdsInline gap="md" align="center" wrap="nowrap">
-      <GdsBox aria-hidden="true"><GdsGeneratedAvatar name={p.displayName} size={64} /></GdsBox>
+      <GdsBox aria-hidden="true"><Portrait p={p} /></GdsBox>
       <GdsStack gap="xs" minWidth="zero">
         <SectionTitle>{p.displayName}</SectionTitle>
         {role ? <BodyText>{role}</BodyText> : null}

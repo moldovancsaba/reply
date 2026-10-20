@@ -13,6 +13,8 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
         deleteProfile: db.prepare("DELETE FROM contact_profile WHERE contact_id = ?"),
         upsertDetails: db.prepare("INSERT INTO contact_details (contact_id, json, updated_ms) VALUES (?, ?, ?) ON CONFLICT(contact_id) DO UPDATE SET json = excluded.json, updated_ms = excluded.updated_ms"),
         deleteDetails: db.prepare("DELETE FROM contact_details WHERE contact_id = ?"),
+        upsertPhoto: db.prepare("INSERT INTO contact_photos (contact_id, mime, data, updated_ms) VALUES (?, ?, ?, ?) ON CONFLICT(contact_id) DO UPDATE SET mime = excluded.mime, data = excluded.data, updated_ms = excluded.updated_ms"),
+        deletePhoto: db.prepare("DELETE FROM contact_photos WHERE contact_id = ?"),
         contact: db.prepare("SELECT * FROM contacts WHERE id = ?"),
         handlesOf: db.prepare("SELECT handle_norm, link_origin FROM contact_handles WHERE contact_id = ?"),
         countMsgs: (n) => db.prepare(`SELECT COUNT(*) n FROM messages WHERE handle_norm IN (${new Array(n).fill("?").join(",")})`),
@@ -145,6 +147,7 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
     // that took its handles) instead of being lost; the imported address-book details belong to the import and just go.
     function dropContact(id, heirId) {
         q.deleteDetails.run(id);
+        q.deletePhoto.run(id);
         if (heirId && heirId !== id && q.contact.get(heirId)) {
             q.moveNotes.run(heirId, id);
             if (q.profileOf.get(id) && !q.profileOf.get(heirId)) q.moveProfile.run(heirId, id);
@@ -208,6 +211,8 @@ export function createIdentity({ db, repo, now = () => Date.now() }) {
                 touched.add(c.id);
                 if (p.details && Object.keys(p.details).length) q.upsertDetails.run(c.id, JSON.stringify(p.details), now());
                 else q.deleteDetails.run(c.id);
+                if (p.photo) q.upsertPhoto.run(c.id, p.photo.mime, p.photo.data, now());
+                else q.deletePhoto.run(c.id);
                 for (const h of p.handles) {
                     if (!q.handleRow.get(h.handle_norm)) q.insertHandle.run(h.handle_norm, h.kind ?? kindOf(h.handle_norm), now(), now());
                     const link = q.owner.get(h.handle_norm);

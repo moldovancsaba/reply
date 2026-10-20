@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Ajv from "ajv";
-import { detailsOf, toImport } from "../src/connectors/contacts.js";
+import { detailsOf, photoOf, toImport } from "../src/connectors/contacts.js";
 import { createIdentity } from "../src/identity/service.js";
 import { exportUserState, importUserState } from "../src/ops/userstate.js";
 import { createProfile } from "../src/profile/service.js";
@@ -63,6 +63,36 @@ test("an address-book import stores the details, and a change in them (same name
     assert.deepEqual(profile.get(id).card, { organization: "Acme", jobTitle: "CEO", birthday: "--03-09" });
     identity.importContacts([toImport({ ...rec, organization: undefined, jobTitle: undefined }, "HU").person]);
     assert.deepEqual(profile.get(id).card, {}, "details removed in the address book disappear here too");
+});
+
+test("address-book photos: only real JPEG or PNG within the cap, stored, changed, removed, and served by the API", async (t) => {
+    const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(100, 7)]);
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.alloc(100, 9)]);
+    assert.equal(photoOf({ photo: jpeg.toString("base64") }).mime, "image/jpeg");
+    assert.equal(photoOf({ photo: png.toString("base64") }).mime, "image/png");
+    assert.equal(photoOf({ photo: Buffer.from("<svg onload=alert(1)>").toString("base64") }), undefined, "not an image we accept");
+    assert.equal(photoOf({ photo: Buffer.concat([jpeg, Buffer.alloc(48 * 1024)]).toString("base64") }), undefined, "over the cap");
+    assert.equal(photoOf({}), undefined);
+
+    const { db, repo, identity, profile } = setup();
+    repo.upsertMessages([msg(1, "+36301234567")]);
+    const rec = { contactId: "ab1", displayName: "Anna Kovacs", phones: ["+36 30 123 4567"], emails: [] };
+    identity.importContacts([toImport({ ...rec, photo: jpeg.toString("base64") }, "HU").person]);
+    const id = owner(db, "+36301234567");
+    assert.equal(profile.get(id).hasPhoto, true);
+    isProfile(profile.get(id));
+    const { app, port } = await startServer({ deps: { profile } });
+    t.after(() => app.close());
+    const get = (p) => request(port, { path: p, headers: { host: `127.0.0.1:${port}` } });
+    const r = await get(`/api/contacts/${id}/photo`);
+    assert.deepEqual([r.status, r.headers["content-type"], r.headers["x-content-type-options"]], [200, "image/jpeg", "nosniff"]);
+    const before = toImport({ ...rec, photo: jpeg.toString("base64") }, "HU").person.fingerprint;
+    assert.notEqual(toImport({ ...rec, photo: png.toString("base64") }, "HU").person.fingerprint, before, "a new photo changes the fingerprint");
+    identity.importContacts([toImport({ ...rec, photo: png.toString("base64") }, "HU").person]);
+    assert.equal((await get(`/api/contacts/${id}/photo`)).headers["content-type"], "image/png");
+    identity.importContacts([toImport(rec, "HU").person]);
+    assert.equal(profile.get(id).hasPhoto, false, "a photo removed in the address book disappears here too");
+    assert.equal((await get(`/api/contacts/${id}/photo`)).status, 404);
 });
 
 test("profile: facts come from the messages, per channel, with handles and when", () => {

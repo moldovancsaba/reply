@@ -15,7 +15,7 @@ What is not done, what is less reliable than the rest, and which checks need a p
 
 - **WhatsApp Desktop's data format is unofficial** and may change with an update; Reply Core stops reading rather than guess (the Sources screen says so).
 - **Some WhatsApp group members have no name.** WhatsApp stores no name for people who are neither in your address book nor in a chat with you; they show as numbers.
-- **Address-book notes and contact photos are not imported.** Notes need a special Apple entitlement; photos are not read.
+- **Address-book notes are not imported.** Apple only lets apps read the notes field with a restricted entitlement (`com.apple.developer.contacts.notes`) that Apple has to grant to the developer; Reply Core has none. Notes you write in Reply Core are kept. (Contact photos are imported since 0.2.0.)
 - **The first import of a large history takes time** (about 12,000 messages per second on an Apple-silicon Mac, plus the time macOS needs to answer permission prompts).
 - **Messages edited or unsent after they were imported are not updated;** reactions are not shown.
 - **IMAP** has no OAuth (app passwords only), reads the inbox and sent folders only, and a message deleted at the server stays in Reply Core.

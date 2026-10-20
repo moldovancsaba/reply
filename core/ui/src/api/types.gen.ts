@@ -210,6 +210,7 @@ export interface Profile {
       };
     };
   };
+  hasPhoto: boolean;
   mergedFrom: string[];
   members: {
     handle: string;

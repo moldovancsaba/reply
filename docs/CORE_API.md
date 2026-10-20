@@ -67,7 +67,7 @@ Each list entry has `unread`: messages **received** since the conversation was l
 
 ### Profile
 
-`GET /api/contacts/:id/profile` is everything known about one person (`404 contact_not_found`, with `details.mergedInto` for a merged-away contact). It is computed from the stored data on each call:
+`GET /api/contacts/:id/photo` serves the address-book thumbnail (`image/jpeg` or `image/png`, `404 photo_not_found`). `GET /api/contacts/:id/profile` is everything known about one person (`hasPhoto` says whether there is one; `404 contact_not_found`, with `details.mergedInto` for a merged-away contact). It is computed from the stored data on each call:
 
 ```json
 { "id": "c_1", "displayName": "Anna Kovacs", "origin": "apple_contacts",

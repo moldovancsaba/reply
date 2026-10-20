@@ -17,6 +17,15 @@ export function detailsOf(rec) {
     return d;
 }
 
+// The thumbnail as bytes, only when it really is a JPEG or PNG within the cap (anything else is ignored, never stored).
+export function photoOf(rec) {
+    if (typeof rec.photo !== "string" || !rec.photo) return undefined;
+    const data = Buffer.from(rec.photo, "base64");
+    if (data.length === 0 || data.length > 48 * 1024) return undefined;
+    const mime = data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff ? "image/jpeg" : data.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47])) ? "image/png" : null;
+    return mime ? { mime, data } : undefined;
+}
+
 // One person from the helper -> an import entry (handles linked by the user's own address book), or why it is skipped.
 // Every phone also gets its WhatsApp twin `<e164>@wa`, so one person's iMessage and WhatsApp share a contact.
 export function toImport(rec, region) {
@@ -37,8 +46,10 @@ export function toImport(rec, region) {
     if (!handles.size) return { skip: "no_handles", skippedHandles };
     const list = [...handles.values()].sort((a, b) => a.handle_norm.localeCompare(b.handle_norm));
     const details = detailsOf(rec);
-    const fingerprint = createHash("sha256").update(JSON.stringify([rec.displayName, list.map((h) => h.handle_norm), details])).digest("hex").slice(0, 32);
-    return { person: { externalId: rec.contactId, displayName: rec.displayName || list[0].handle_norm, handles: list, details, fingerprint }, skippedHandles };
+    const photo = photoOf(rec);
+    const photoHash = photo ? createHash("sha256").update(photo.data).digest("hex") : null;
+    const fingerprint = createHash("sha256").update(JSON.stringify([rec.displayName, list.map((h) => h.handle_norm), details, photoHash])).digest("hex").slice(0, 32);
+    return { person: { externalId: rec.contactId, displayName: rec.displayName || list[0].handle_norm, handles: list, details, photo, fingerprint }, skippedHandles };
 }
 
 export function createContactsConnector({ config = {}, logger, helper = defaultHelperPath() } = {}) {
