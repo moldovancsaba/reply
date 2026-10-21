@@ -1,11 +1,16 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
 
-// Uses the Google Chrome already installed on the machine (no browser download). Each spec starts its own Reply Core service.
+// Chrome is the Google Chrome already installed on the machine (no download); WebKit is Playwright's own build of Safari's
+// engine (`npx playwright install webkit`, once), because the launcher opens Safari. Each spec starts its own Reply Core service.
 export default defineConfig({
   testDir: "e2e",
   timeout: 60_000,
   fullyParallel: false,
   workers: 1,
   reporter: "list",
-  use: { channel: "chrome", headless: true, bypassCSP: true /* axe is injected as an inline script; the CSP itself is asserted separately */ },
+  use: { headless: true, bypassCSP: true /* axe is injected as an inline script; the CSP itself is asserted separately */ },
+  projects: [
+    { name: "chrome", use: { channel: "chrome" } },
+    { name: "webkit", use: { ...devices["Desktop Safari"] } },
+  ],
 });

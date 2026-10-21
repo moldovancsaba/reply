@@ -42,6 +42,7 @@ export function Composer({ contact, lastChannel, lastEmailSubject }: { contact: 
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<ApiError | null>(null);
   const [files, setFiles] = useState<Attached[]>([]);
+  const busyRef = useRef(false); // a second click can arrive before the re-render that disables the button (Safari does this)
   const attempt = useRef<string | null>(null); // one id per message, so a double click or a retry after a lost answer never sends twice
   const channels = contact.replyChannels ?? [];
   const draft = useRef(loadDraft(contact.id)).current;
@@ -84,11 +85,13 @@ export function Composer({ contact, lastChannel, lastEmailSubject }: { contact: 
   const long = text.length > PREFILL_LIMIT;
 
   const open = async () => {
-    if (status === "submitting") return;
+    if (status === "submitting" || busyRef.current) return;
     if (!text.trim()) { setStatus("error"); setError({ code: "text_empty", message: ERROR_TEXT.text_empty }); return; }
+    busyRef.current = true;
     setStatus("submitting");
     setError(null);
     const r = await fetchJson<Handoff>("/api/handoff", { method: "POST", body: { contactId: contact.id, channel, text, ...(current.handles.length > 1 ? { handle: target.value } : {}) }, timeoutMs: 10_000 });
+    busyRef.current = false;
     if (!r.ok) { setStatus("error"); setError(r.error); return; } // the text stays
     let copied = true;
     if (r.data.action === "copy_and_open") copied = await navigator.clipboard.writeText(text).then(() => true, () => false);
@@ -122,7 +125,8 @@ export function Composer({ contact, lastChannel, lastEmailSubject }: { contact: 
   };
 
   const doSend = async () => {
-    if (sending) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     attempt.current ??= newAttemptId();
     setSending(true);
     setSendError(null);
@@ -130,6 +134,7 @@ export function Composer({ contact, lastChannel, lastEmailSubject }: { contact: 
       method: "POST", timeoutMs: 75_000, // the app's own 45 s plus up to 15 s of looking for the WhatsApp message
       body: { contactId: contact.id, channel, text, clientId: attempt.current, ...(files.length > 0 ? { attachmentIds: files.map((f) => f.id) } : {}), ...(current.handles.length > 1 ? { handle: target.value } : {}), ...(channel === "email" ? { subject } : {}) },
     });
+    busyRef.current = false;
     setSending(false);
     setConfirming(false);
     if (!r.ok) {

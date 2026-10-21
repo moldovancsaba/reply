@@ -130,7 +130,7 @@ test("polling: every 3 s while syncing, every 30 s otherwise", async ({ page }) 
   await page.goto(`${svc.url}/sources`);
   await expect(page.getByText("Imported 1 messages so far")).toBeVisible();
   const base = calls;
-  await page.clock.runFor(10_000);
+  for (let i = 0; i < 4; i++) { await page.clock.runFor(3000); await page.waitForTimeout(150); } // let each answer arrive before the next tick (WebKit needs it)
   await expect.poll(() => calls - base).toBeGreaterThanOrEqual(3);
   syncing = false;
   await page.clock.runFor(4000);
@@ -140,13 +140,13 @@ test("polling: every 3 s while syncing, every 30 s otherwise", async ({ page }) 
   expect(calls - settled, "no fast polling once nothing syncs").toBeLessThanOrEqual(1);
 });
 
-test("keyboard only: Tab reaches Recheck and Enter activates it", async ({ page }) => {
+test("keyboard only: Tab reaches Recheck and Enter activates it", async ({ page, browserName }) => {
   let rechecked = false;
   await status(page, () => report([BLOCKED]));
   await page.route("**/api/status/recheck", (r) => { rechecked = true; return json(r, report([BLOCKED])); });
   await page.goto(`${svc.url}/sources`);
   const btn = page.getByRole("button", { name: "Recheck", exact: true });
-  for (let i = 0; i < 30 && !(await btn.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
+  for (let i = 0; i < 30 && !(await btn.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab"); // Safari tabs to every control only with Option held
   await expect(btn).toBeFocused();
   await page.keyboard.press("Enter");
   await expect.poll(() => rechecked).toBe(true);

@@ -66,7 +66,9 @@ export function ThreadPane({ contactId, profile }: { contactId: string; profile:
     const newest = ascending[ascending.length - 1].id;
     if (opened.current !== key) {
       opened.current = key; firstId.current = first; newestId.current = newest; toBottom();
-      return;
+      // Safari has not laid the pane out yet at this point and the first scroll lands short: once more after the first paint
+      const again = requestAnimationFrame(() => { if (opened.current === key) toBottom(); });
+      return () => cancelAnimationFrame(again);
     }
     if (first !== firstId.current && newest === newestId.current) {
       document.getElementById(`msg-${firstId.current}`)?.scrollIntoView({ block: "start" }); // older messages were added above

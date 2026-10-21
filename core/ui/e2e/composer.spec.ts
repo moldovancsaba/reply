@@ -71,7 +71,8 @@ test("merged contact offers both channels, defaults to the newest message's chan
   await expect(page.getByRole("radio", { name: /^iMessage/ })).toBeChecked();
 });
 
-test("oversized text: warning hint, copy-and-open with no body in the link, and the notice says it was copied", async ({ page, context }) => {
+test("oversized text: warning hint, copy-and-open with no body in the link, and the notice says it was copied", async ({ page, context, browserName }) => {
+  test.skip(browserName === "webkit", "WebKit has no clipboard permission to grant, so the copy cannot be observed");
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await captureOpens(page);
   await openPhoneThread(page);
@@ -141,7 +142,7 @@ test("a contact with no usable channel gets guidance instead of a composer", asy
   await expectAccessibleNow(page, "composer no channels");
 });
 
-test("a11y gate: composer idle in light and dark and at 375 px; keyboard-only completion", async ({ page }) => {
+test("a11y gate: composer idle in light and dark and at 375 px; keyboard-only completion", async ({ page, browserName }) => {
   await captureOpens(page);
   await page.goto(`${svc.url}/inbox`);
   const href = await phone(page).getAttribute("href");
@@ -159,7 +160,7 @@ test("a11y gate: composer idle in light and dark and at 375 px; keyboard-only co
   await area(page).focus();
   await page.keyboard.type("Typed by keyboard");
   const instead = page.getByRole("button", { name: "Open in Messages instead" });
-  for (let i = 0; i < 8 && !(await instead.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
+  for (let i = 0; i < 8 && !(await instead.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
   await expect(instead).toBeFocused();
   await page.keyboard.press("Enter");
   await expect.poll(async () => (await opened(page)).length).toBe(1);
