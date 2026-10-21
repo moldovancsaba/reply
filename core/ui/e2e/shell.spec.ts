@@ -51,9 +51,9 @@ test("an unknown page says so and offers a way back", async ({ page }) => {
   await expect(page).toHaveURL(/\/inbox$/);
 });
 
-test("the skip link is the first tab stop and moves focus to the content", async ({ page }) => {
+test("the skip link is the first tab stop and moves focus to the content", async ({ page, browserName }) => {
   await page.goto(`${svc.url}/inbox`);
-  await page.keyboard.press("Tab");
+  await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab"); // Safari only tabs to every control with Option held (its own default)
   const skip = page.getByRole("link", { name: "Skip to content" });
   await expect(skip).toBeFocused();
   await expect(skip).toBeVisible();

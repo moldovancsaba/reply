@@ -26,7 +26,7 @@ cd core/ui && npm install
 | `npm run gen:api` | regenerates `src/api/types.gen.ts` from `../schema/*.json` (verify fails if it is stale) |
 | `npm run verify` | all of the above plus the bundle budget (`check:bundle`, 250 KB gzipped) |
 
-Playwright drives the Google Chrome installed on your machine (`channel: "chrome"`), so no browser is downloaded.
+Playwright runs every spec twice: in the Google Chrome installed on your machine (project `chrome`, no download) and in Playwright's WebKit, Safari's engine (project `webkit`; once: `npx playwright install webkit`, about 300 MB). `npx playwright test --project=webkit` runs one of them. Where Safari behaves differently by design the spec says so: it tabs to every control only with Option held (`Alt+Tab`), does not focus a button when it is clicked, has no clipboard permission to grant, and stands still under Playwright's fake clock.
 
 ## Structure
 

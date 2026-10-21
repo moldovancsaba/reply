@@ -26,6 +26,7 @@ export function MergeSection({ contactId, name }: { contactId: string; name: str
   const [source, setSource] = useState<MergeSource | null>(null);
   const known = useRef(new Map<string, ContactListItem>()); // rows the picker has shown, for the confirmation text
   const [submitting, setSubmitting] = useState(false);
+  const sending = useRef(false); // a second click can arrive before the re-render that disables the button (Safari does this)
   const [error, setError] = useState<ApiError | null>(null);
   const [undoError, setUndoError] = useState<ApiError | null>(null);
   const [undoTarget, setUndoTarget] = useState<MergeHistoryItem | null>(null);
@@ -48,10 +49,12 @@ export function MergeSection({ contactId, name }: { contactId: string; name: str
   };
 
   const confirmMerge = async () => {
-    if (!source || submitting) return;
+    if (!source || sending.current) return;
+    sending.current = true;
     setSubmitting(true);
     setError(null);
     const r = await mergeContacts(contactId, source.id);
+    sending.current = false;
     setSubmitting(false);
     if (!r.ok) { setError(r.error); return; }
     
@@ -70,10 +73,12 @@ export function MergeSection({ contactId, name }: { contactId: string; name: str
   const fromHistory = undoTarget ?? (undoId ? (merges.data?.items.find((i) => i.id === undoId && i.action === "merge") ?? null) : null);
   const closeUndo = () => { setUndoTarget(null); setUndoError(null); if (undoId) setParams((p) => { const n = new URLSearchParams(p); n.delete("undo"); return n; }, { replace: true }); };
   const confirmUndo = async () => {
-    if (!fromHistory || submitting) return;
+    if (!fromHistory || sending.current) return;
+    sending.current = true;
     setSubmitting(true);
     setUndoError(null);
     const r = await unmergeContacts(contactId, fromHistory.id);
+    sending.current = false;
     setSubmitting(false);
     if (!r.ok) { setUndoError(r.error); return; }
     await refresh();

@@ -41,5 +41,8 @@ jobs:
         run: npm --prefix ui ci
         working-directory: core
       - if: env.GITHUB_TOKEN != ''
+        run: npx playwright install webkit # Safari's engine for the browser tests
+        working-directory: core/ui
+      - if: env.GITHUB_TOKEN != ''
         run: npm --prefix ui run verify
         working-directory: core

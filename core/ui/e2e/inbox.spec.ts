@@ -90,7 +90,7 @@ test("a blocked source is called out above the list", async ({ page }) => {
   await page.route("**/api/status", async (route) => {
     const res = await route.fetch();
     const body = await res.json();
-    body.connectors = [{ id: "imessage", label: "iMessage", state: "blocked", message: "Reply Core cannot read Messages.", messagesTotal: 0 }];
+    body.connectors = [{ id: "imessage", label: "iMessage", state: "blocked", message: "Reply Core cannot read Messages.", messagesTotal: 12 }]; // some messages: not the first-run state, which leads to Sources
     await route.fulfill({ response: res, json: body });
   });
   await page.goto(`${svc.url}/inbox`);

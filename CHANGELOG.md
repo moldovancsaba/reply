@@ -31,6 +31,8 @@ The first release you can live in: profiles, sending, new-message counts, a sign
 - The previous generation of the project moved to [`legacy/`](legacy/README.md); the plan moved to [docs/CORE_PLAN.md](docs/CORE_PLAN.md); legacy Markdown links no longer contain absolute paths of one machine.
 
 ### Fixed
+- Safari: a double click on Merge, Undo, Send or Open could send the request twice (the button was disabled only after the re-render); the guard is now immediate.
+- Safari: a conversation could open at its oldest messages instead of the newest (the first scroll landed short before the pane was laid out); it scrolls once more after the first paint. Found by running the browser tests in WebKit (`playwright` project `webkit`).
 - WhatsApp: a message to a person whose chat WhatsApp files under an `@lid` id was reported as "went to a different chat" although it was sent correctly; the look-up now accepts all the person's phone numbers and `@lid` ids.
 - WhatsApp: in a real test the text was typed but not sent, while Reply Core said "sent". It now waits 2.5 s for the chat, presses Return as a key code, presses it once more after 5 s if the message is not in WhatsApp's database, and without access to that database never claims "sent": it says it could not be confirmed.
 - The inbox at tablet widths (about 1024 px) squeezed three columns into 160 to 290 px each; the third (profile) column now needs 80 em, and between 62 and 80 em the profile page replaces the conversation.
