@@ -44,6 +44,16 @@ export function ThreadPane({ contactId, profile }: { contactId: string; profile:
   // ---- scroll: open at the newest message, keep the anchor when older ones are added, follow only when already at the bottom
   const bottom = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
+  // Measured when it matters (a new message arrived), not remembered from the last observer callback, which lags a frame or two.
+  const readerIsAtBottom = () => {
+    const end = bottom.current;
+    if (!end) return atBottom.current;
+    let pane: HTMLElement | null = end.parentElement;
+    while (pane && !(pane.scrollHeight > pane.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(pane).overflowY))) pane = pane.parentElement;
+    const scroller = pane ?? document.scrollingElement;
+    if (!scroller) return atBottom.current;
+    return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 48;
+  };
   const [pendingNew, setPendingNew] = useState(0);
   const firstId = useRef<string | null>(null);
   const newestId = useRef<string | null>(null);
@@ -75,7 +85,7 @@ export function ThreadPane({ contactId, profile }: { contactId: string; profile:
     } else if (newest !== newestId.current) {
       const at = ascending.findIndex((m) => m.id === newestId.current);
       const added = at === -1 ? 0 : ascending.length - 1 - at;
-      if (atBottom.current) toBottom(); else if (added > 0) setPendingNew((n) => n + added);
+      if (readerIsAtBottom()) toBottom(); else if (added > 0) setPendingNew((n) => n + added);
     }
     firstId.current = first; newestId.current = newest;
   }, [ascending, key, toBottom]);

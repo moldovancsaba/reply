@@ -43,6 +43,15 @@ export function createRepo(db, { now = () => Date.now(), afterBatch = null } = {
         message: db.prepare("SELECT text, subject, attachments_json, ts_ms, meta_json FROM messages WHERE id = ?"),
         insertMessage: db.prepare(`INSERT INTO messages (id, channel, account, provider_message_key, thread_key, handle_norm, is_from_me, ts_ms, subject, text, attachments_json, meta_json, ingested_at)
             VALUES (@id, @channel, @account, @provider_message_key, @thread_key, @handle_norm, @is_from_me, @ts_ms, @subject, @text, @attachments_json, @meta_json, @ingested_at)`),
+        // Mail to yourself is two messages in two Mail accounts (the sent copy and the received copy), both "from me" at the same
+        // second with the same subject; the received copy often has no body yet. They are one message.
+        twin: db.prepare("SELECT id, text FROM messages WHERE channel = 'email' AND is_from_me = 1 AND handle_norm = ? AND ts_ms = ? AND subject IS ? AND account != ? LIMIT 1"),
+        setText: db.prepare("UPDATE messages SET text = ?, attachments_json = ? WHERE id = ?"),
+        twinPairs: db.prepare(`SELECT a.id AS keep_id, b.id AS drop_id, a.handle_norm AS handle FROM messages a JOIN messages b
+            ON b.handle_norm = a.handle_norm AND b.ts_ms = a.ts_ms AND b.subject IS a.subject AND b.account != a.account
+            WHERE a.channel = 'email' AND b.channel = 'email' AND a.is_from_me = 1 AND b.is_from_me = 1
+            AND (length(a.text) > length(b.text) OR (length(a.text) = length(b.text) AND a.id < b.id))`),
+        dropMessage: db.prepare("DELETE FROM messages WHERE id = ?"),
         updateMessage: db.prepare("UPDATE messages SET text=@text, subject=@subject, attachments_json=@attachments_json, ts_ms=@ts_ms, meta_json=@meta_json WHERE id=@id"),
         handle: db.prepare("SELECT first_seen_ms, last_seen_ms FROM handles WHERE handle_norm = ?"),
         insertHandle: db.prepare("INSERT INTO handles (handle_norm, kind, first_seen_ms, last_seen_ms) VALUES (?,?,?,?)"),
@@ -130,7 +139,11 @@ export function createRepo(db, { now = () => Date.now(), afterBatch = null } = {
                 const existing = q.message.get(id);
                 ensureHandle(m.handle_norm, row.ts_ms);
                 const contactId = ensureContactForHandle(m.handle_norm);
-                if (!existing) {
+                const twin = !existing && row.channel === "email" && row.is_from_me === 1 ? q.twin.get(row.handle_norm, row.ts_ms, row.subject, row.account) : null;
+                if (twin) {
+                    // the same mail seen from the other account: keep one message, with the longer text
+                    if (row.text.length > twin.text.length) { q.setText.run(row.text, row.attachments_json, twin.id); result.updated++; } else { result.skipped++; continue; }
+                } else if (!existing) {
                     q.insertMessage.run(row);
                     result.inserted++;
                 } else if (existing.text !== row.text || existing.subject !== row.subject || existing.attachments_json !== row.attachments_json || existing.ts_ms !== row.ts_ms || existing.meta_json !== row.meta_json) {
@@ -144,6 +157,24 @@ export function createRepo(db, { now = () => Date.now(), afterBatch = null } = {
             }
             for (const c of touched) rebuildSummary(c);
             return result;
+        })();
+    }
+
+    // One-off clean-up of self-mail twins stored before they were collapsed on import. Returns how many were removed.
+    function dedupeSelfMail() {
+        return db.transaction(() => {
+            const pairs = q.twinPairs.all();
+            const contacts = new Set();
+            const gone = new Set();
+            for (const p of pairs) {
+                if (gone.has(p.drop_id) || gone.has(p.keep_id)) continue;
+                q.dropMessage.run(p.drop_id);
+                gone.add(p.drop_id);
+                const c = q.link.get(p.handle)?.contact_id;
+                if (c) contacts.add(c);
+            }
+            for (const c of contacts) rebuildSummary(c);
+            return gone.size;
         })();
     }
 
@@ -202,5 +233,5 @@ export function createRepo(db, { now = () => Date.now(), afterBatch = null } = {
         return getSyncState(connector, account);
     }
 
-    return { setAfterBatch: (fn) => { afterHook = fn; }, upsertMessages, getThread, listContacts, search, getSyncState, setSyncState, rebuildSummary, ensureContactForHandle, handlesOf: (id) => q.handlesOf.all(id).map((r) => r.handle_norm) };
+    return { setAfterBatch: (fn) => { afterHook = fn; }, upsertMessages, dedupeSelfMail, getThread, listContacts, search, getSyncState, setSyncState, rebuildSummary, ensureContactForHandle, handlesOf: (id) => q.handlesOf.all(id).map((r) => r.handle_norm) };
 }

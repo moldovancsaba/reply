@@ -130,6 +130,8 @@ Reads the local Mail index through the native helper, so every account already s
 | `meta_json` | `{ isSummary: true, recipients: [...], accountLabel }`. `isSummary` lets the UI say that email text is a summary. The mailbox is not stored, so a copy of the same message arriving later from another mailbox (Gmail's All Mail) is a no-op. |
 | Preflight | `source_missing` (no account in Mail) with the hint "Add an account in the Mail app", `permission_denied`, `schema_unsupported`, `helper_unavailable` |
 
+**Mail to yourself** is two Mail messages in two accounts (the sent copy and the received copy), both from you at the same second with the same subject. The store collapses them into one message and keeps the longer text (the received copy often has no body yet); copies stored earlier are cleaned up once when the service starts.
+
 Limitations: summaries only; no attachments; no HTML rendering; edits and deletions at the source are not propagated.
 
 To discard imported email and re-ingest: stop the service, `node core/scripts/reset-cursor.js apple-mail --purge` (this removes **all** email rows, since the `email` channel is shared with the IMAP connector).
