@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { NUDGE } from "../src/send/drivers.js";
 import { createUploads, cleanName } from "../src/send/uploads.js";
 import { classify, createAppleScriptDrivers, createFakeDrivers, scriptArgs, SCRIPTS, SendError } from "../src/send/drivers.js";
 import { createHandoff } from "../src/handoff/service.js";
@@ -331,4 +332,19 @@ test("HTTP uploads: raw bytes in, an id out; strict query; delete; the message n
     assert.equal(s.uploads.count(), 0);
     const foreign = await request(port, { method: "POST", path: "/api/uploads?name=a", headers: { ...h, origin: "http://evil.example", "content-type": "application/octet-stream" }, body: "x" });
     assert.equal(foreign.status, 403);
+});
+
+test("Mail and WhatsApp give the focus back to the app you were in, and a refusal to do so never fails the send", () => {
+    for (const [name, lines] of [["email", SCRIPTS.email], ["whatsapp", SCRIPTS.whatsapp], ["nudge", NUDGE]]) {
+        const src = lines.join("\n");
+        assert.match(src, /bundle identifier of first application process whose frontmost/, `${name} remembers the front app`);
+        assert.match(src, /tell application id frontId to activate/, `${name} restores it`);
+        assert.ok(src.indexOf("bundle identifier") < src.indexOf("activate"), name);
+        // both lines sit inside try ... end try
+        for (const needle of ["bundle identifier", "activate"]) {
+            const i = src.indexOf(needle);
+            assert.ok(src.lastIndexOf("try", i) > src.lastIndexOf("end try", i), `${name}: ${needle} is inside try`);
+        }
+    }
+    assert.doesNotMatch(SCRIPTS.imessage.join("\n"), /frontId/, "Messages sends in the background, nothing to restore");
 });

@@ -31,6 +31,7 @@ The first release you can live in: profiles, sending, new-message counts, a sign
 - The previous generation of the project moved to [`legacy/`](legacy/README.md); the plan moved to [docs/CORE_PLAN.md](docs/CORE_PLAN.md); legacy Markdown links no longer contain absolute paths of one machine.
 
 ### Fixed
+- Sending through Mail or WhatsApp left that app in front; the scripts now give the focus back to the app you were in (best effort).
 - Safari: a double click on Merge, Undo, Send or Open could send the request twice (the button was disabled only after the re-render); the guard is now immediate.
 - Safari: a conversation could open at its oldest messages instead of the newest (the first scroll landed short before the pane was laid out); it scrolls once more after the first paint. Found by running the browser tests in WebKit (`playwright` project `webkit`).
 - WhatsApp: a message to a person whose chat WhatsApp files under an `@lid` id was reported as "went to a different chat" although it was sent correctly; the look-up now accepts all the person's phone numbers and `@lid` ids.

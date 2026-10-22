@@ -40,6 +40,10 @@ How they leave: Messages sends each file first and then the text as separate mes
 
 macOS lists an app under Automation or Accessibility only after the app asks. The Sources screen has a **Sending** panel with an **Allow {reply} to send** button, and in the Reply box a permission error shows the steps and the same button. It opens {reply} in its permission mode (`{reply}.app --consent-send`, or `POST /api/consent` with `{"kind":"sending"}`, or the older `POST /api/send/consent`, which works only when the service was started from {reply}.app and otherwise answers `501 consent_unavailable`): it launches Messages, Mail and System Events and asks macOS for Automation of each, and for Accessibility. Choose Allow in each macOS window, then press Send again. Afterwards System Settings > Privacy & Security > Automation shows {reply} with Messages, Mail and System Events, and Accessibility shows {reply}. The permission belongs to the signed {reply} app, so it survives rebuilds and Node upgrades.
 
+## Getting back to your app
+
+Mail and WhatsApp come to the front when they send (Messages does not). The scripts remember the app you were in (its bundle id, through System Events) and activate it again about half a second (Mail) or one second (WhatsApp) after sending, so you land back on the Reply box. This is best effort inside `try`: if System Events is not allowed the send is unaffected and you simply stay in the other app. If Mail was not running it is started to send and stays open.
+
 ## Confirming WhatsApp
 
 A key press cannot tell whether WhatsApp sent anything, so after it Reply Core looks in WhatsApp's own database (the WhatsApp connector, read-only) once a second for up to 15 seconds for a message of yours with exactly this text, newer than the send, in the chat of that person (WhatsApp files a chat under the phone number or under its own `@lid` id: the person's phone numbers and `@lid` handles all count):
