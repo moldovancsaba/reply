@@ -154,6 +154,6 @@ test("[on] a11y gate: loading, ready and error states in light and dark, ready a
   await expectAccessible(page, `${svc.url}${href}`);
   await expect(suggest(page)).toBeEnabled();
   await suggest(page).click();
-  await expect(page.getByRole("region", { name: /Suggested reply/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: /Suggested reply \(AI-generated\)/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

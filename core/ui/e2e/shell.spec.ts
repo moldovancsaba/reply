@@ -104,7 +104,8 @@ test("the not-running banner appears within a minute of the service stopping and
   await expect(page.getByText("Not running", { exact: true })).toBeVisible();
   await expectAccessibleNow(page, "/inbox (service down)");
   await svc.start();
-  await page.getByRole("button", { name: /Retry now/ }).click();
+  // clicked without Playwright's "stable" wait: under the fake clock a slow runner never lets the banner settle
+  await page.getByRole("button", { name: /Retry now/ }).evaluate((el) => (el as HTMLElement).click());
   await expect(page.getByText(/Running v/)).toBeVisible();
   await expect(banner).toBeHidden();
 });

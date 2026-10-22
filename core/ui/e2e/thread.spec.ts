@@ -138,8 +138,11 @@ test("new messages: followed at the bottom, announced behind a button when readi
   await expect.poll(() => onScreen(p.getByText("Message number 70", { exact: true }))).toBe(true);
   await p.evaluate(() => document.getElementById("msg-m21")!.scrollIntoView({ block: "start" }));
   await p.getByText("Message number 21", { exact: true }).hover(); // scrolled away from the bottom
+  await expect.poll(() => onScreen(p.getByText("Message number 70", { exact: true }))).toBe(false);
+  await p.waitForTimeout(500); // real time: let the browser tell the app it is no longer at the bottom before new messages arrive (the fake clock does not move it)
   extra = true;
-  await p.clock.runFor(31_000);
+  // one poll interval of the fake clock per try: on a slow runner the answer to the poll may arrive after the first tick
+  await expect.poll(async () => { await p.clock.runFor(31_000); return p.getByRole("button", { name: "1 new message" }).count(); }, { timeout: 30_000 }).toBe(1);
   await expect(p.getByRole("button", { name: "1 new message" })).toBeVisible();
   await expect(p.getByRole("status").filter({ hasText: "1 new message" })).toHaveCount(1);
   await p.getByRole("button", { name: "1 new message" }).evaluate((el) => (el as HTMLElement).click()); // under the fake clock a slow runner re-renders it while Playwright waits for it to be 'stable'
