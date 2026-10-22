@@ -280,6 +280,9 @@ test("mail to yourself is one message: the other account's copy is collapsed, th
     c.repo.upsertMessages([mail("sent", "1", "x")]);
     c.repo.upsertMessages([mail("inbox", "2", "x", { tsMs: NOW - 4000 }), mail("inbox", "3", "x", { subject: "Other" }), mail("inbox", "4", "x", { isFromMe: false }), mail("sent", "5", "x")]);
     assert.equal(count(c.db), 5);
+    // alike but a different message (another provider key): never collapsed, whatever the account
+    c.repo.upsertMessages([mail("inbox", "other-key", "x")]);
+    assert.equal(count(c.db), 6, "same second, subject and handle but another message key is another mail");
 
     // twins stored before this rule are removed once, with the summary rebuilt
     const d = setup();

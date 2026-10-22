@@ -149,6 +149,22 @@ test("new messages: followed at the bottom, announced behind a button when readi
   await expect.poll(() => onScreen(p.getByText("Message number 71", { exact: true }))).toBe(true);
 });
 
+test("new messages: a reader at the bottom is taken to a tall new message, with no button", async ({ page: p, browserName }) => {
+  test.skip(browserName === "webkit", "WebKit stands still under the fake clock (see the test above)");
+  let extra = false;
+  await p.clock.install();
+  const tall = msg(71, { attachments: [1, 2, 3, 4].map((n) => ({ name: `file-${n}.pdf`, mimeType: "application/pdf", bytes: 2048 * n })) });
+  await mock(p, { messages: () => ({ body: { items: [...(extra ? [tall] : []), ...page(21, 70, null).items], nextCursor: null, hasMore: false } }) });
+  await p.setViewportSize({ width: 1280, height: 700 });
+  await p.goto(`${svc.url}/inbox/c_1`);
+  await expect.poll(() => onScreen(p.getByText("Message number 70", { exact: true }))).toBe(true);
+  await p.waitForTimeout(500); // real time: the page settles at the bottom
+  extra = true;
+  // the new message is taller than a line and the Reply box sits below the messages: still "at the bottom"
+  await expect.poll(async () => { await p.clock.runFor(31_000); return onScreen(p.getByText("Message number 71", { exact: true })); }, { timeout: 30_000 }).toBe(true);
+  await expect(p.getByRole("button", { name: /new message/ })).toHaveCount(0);
+});
+
 test("a11y gate: populated and empty in light and dark, populated at 375 px", async ({ page: p }) => {
   await mock(p, { messages: NEWEST_FIRST });
   for (const scheme of ["light", "dark"] as const) {

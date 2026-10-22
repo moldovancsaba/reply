@@ -31,8 +31,8 @@ The first release you can live in: profiles, sending, new-message counts, a sign
 - The previous generation of the project moved to [`legacy/`](legacy/README.md); the plan moved to [docs/CORE_PLAN.md](docs/CORE_PLAN.md); legacy Markdown links no longer contain absolute paths of one machine.
 
 ### Fixed
-- The conversation decides whether to follow a new message by measuring the scroll position when it arrives, not from the last observer callback (which could lag a frame and show "1 new message" late or never).
-- Mail sent to yourself showed twice in the conversation (the sent copy and the received copy in two Mail accounts); they are now one message, and copies stored earlier are cleaned up when the service starts.
+- The conversation tracks whether you are at the bottom as you scroll, measured against the end of the messages (not the Reply box below them), and uses that state when a new message arrives; before, it relied on an observer callback that could lag a frame and show "1 new message" late or never.
+- Mail sent to yourself showed twice in the conversation (the sent copy and the received copy in two Mail accounts); they are now one message (same provider message key, time, subject and sender), and copies stored earlier are cleaned up when the service starts.
 - Asking for a reply suggestion again for the same person now takes over the one still being written (it used to answer "A draft is already being written" when Safari had not closed the cancelled request).
 - A late second click on the open Merge or Undo dialog could repeat the merge; it is ignored once done.
 - The UI no longer needs a GitHub token: the GDS packages are installed from the public npm registry (`.npmrc` removed, lockfile pointing at registry.npmjs.org with the same integrity hashes), and the CI UI job always runs.
