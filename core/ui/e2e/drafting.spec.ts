@@ -148,7 +148,7 @@ test("[on] a11y gate: loading, ready and error states in light and dark, ready a
     await page.getByRole("button", { name: "Cancel" }).click();
     fake.behave.hang = false;
     await suggest(page).click();
-    await expect(page.getByRole("region", { name: /Suggested reply/ })).toBeVisible();
+    await expect(page.getByRole("region", { name: /Suggested reply \(AI-generated\)/ })).toBeVisible();
     await expectAccessibleNow(page, `draft ready ${scheme}`);
   }
   await page.setViewportSize({ width: 375, height: 800 });
