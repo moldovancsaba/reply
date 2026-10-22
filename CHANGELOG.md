@@ -2,9 +2,9 @@
 
 All notable changes to Reply Core. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). Each release's version is in `core/package.json` and `core/ui/package.json`; `node core/scripts/audit.js` checks that this file's newest release matches.
 
-## [0.2.0] - 2026-10-20
+## [0.3.0] - 2026-10-22
 
-The first release you can live in: profiles, sending, new-message counts, a signed app and a launcher, WhatsApp groups, and a documentation and repository clean-up.
+Sending grows up (files through Messages and Mail, WhatsApp sends confirmed in WhatsApp's own data, the focus handed back to your app), people get photos and duplicate suggestions, the browser tests also run in Safari's engine and on GitHub for every pull request, and what that and a first real-send test found is fixed.
 
 ### Added
 - **Send files** through iMessage and Mail from the Reply box (`POST /api/uploads`, `attachmentIds`; 5 files, 20 MB each, 25 MB together); WhatsApp stays text only.
@@ -12,6 +12,35 @@ The first release you can live in: profiles, sending, new-message counts, a sign
 - **Contact photos.** The address-book thumbnail shows in the profile (shrunk by the helper to at most 256 px, JPEG or PNG up to 48 KB, checked on import; `contact_photos`, migration 0013, `GET /api/contacts/:id/photo`). Address-book notes stay unavailable: Apple restricts them to apps with a special entitlement.
 - **Duplicate suggestions.** A profile proposes people with the same name or the same number on another channel (**Review merge** / **Not the same**); nothing merges by itself. (`GET /api/contacts/:id/duplicates`)
 - **Permissions from the Sources screen.** A **Sending** panel with **Allow {reply} to send**, and **Allow {reply} to read Contacts** when Contacts is blocked. (`POST /api/consent`)
+- **Browser tests in WebKit** (Safari's engine) next to Chrome, and **CI on GitHub** for every pull request (core and UI jobs; the UI needs no token because the GDS packages come from the public npm registry).
+- **A checklist for the manual accessibility pass** ([docs/ACCESSIBILITY_CHECKLIST.md](docs/ACCESSIBILITY_CHECKLIST.md)); forced-colors, increased-contrast and 200%-zoom renderings were reviewed on 2026-10-22.
+
+### Changed
+- The three-column inbox needs a wide window (80 em); between 62 and 80 em the list and the conversation share the row and the profile replaces the conversation.
+- Version numbers: `core/package.json` and `core/ui/package.json` are 0.3.0.
+
+### Fixed
+- The avatar overlapped the name in the conversation list when the list column was narrow (three-column layout); the row is now a flex row with a fixed-size avatar. Found by reviewing forced-colors and 200% zoom screenshots.
+- The conversation tracks whether you are at the bottom as you scroll, measured against the end of the messages (not the Reply box below them), and uses that state when a new message arrives; before, it relied on an observer callback that could lag a frame and show "1 new message" late or never.
+- Mail sent to yourself showed twice in the conversation (the sent copy and the received copy in two Mail accounts); they are now one message (same provider message key, time, subject and sender), and copies stored earlier are cleaned up when the service starts.
+- Asking for a reply suggestion again for the same person now takes over the one still being written (it used to answer "A draft is already being written" when Safari had not closed the cancelled request).
+- A late second click on the open Merge or Undo dialog could repeat the merge; it is ignored once done.
+- The UI no longer needs a GitHub token: the GDS packages are installed from the public npm registry (`.npmrc` removed, lockfile pointing at registry.npmjs.org with the same integrity hashes), and the CI UI job always runs.
+- Sending through Mail or WhatsApp left that app in front; the scripts now give the focus back to the app you were in (best effort).
+- Safari: a double click on Merge, Undo, Send or Open could send the request twice (the button was disabled only after the re-render); the guard is now immediate.
+- Safari: a conversation could open at its oldest messages instead of the newest (the first scroll landed short before the pane was laid out); it scrolls once more after the first paint. Found by running the browser tests in WebKit (`playwright` project `webkit`).
+- WhatsApp: a message to a person whose chat WhatsApp files under an `@lid` id was reported as "went to a different chat" although it was sent correctly; the look-up now accepts all the person's phone numbers and `@lid` ids.
+- WhatsApp: in a real test the text was typed but not sent, while Reply Core said "sent". It now waits 2.5 s for the chat, presses Return as a key code, presses it once more after 5 s if the message is not in WhatsApp's database, and without access to that database never claims "sent": it says it could not be confirmed.
+- The inbox at tablet widths (about 1024 px) squeezed three columns into 160 to 290 px each; the third (profile) column now needs 80 em, and between 62 and 80 em the profile page replaces the conversation.
+
+### Security
+- Uploaded files (for a message) are limited, kept in an owner-only folder, named by id in the send request and removed after the send; address-book photos are accepted only as JPEG or PNG within 48 KB and served with `nosniff`.
+
+## [0.2.0] - 2026-10-20
+
+The first release you can live in: profiles, sending, new-message counts, a signed app and a launcher, WhatsApp groups, and a documentation and repository clean-up.
+
+### Added
 - **Sending from the app.** A **Send** button in the Reply box sends through Messages, Mail (AppleScript) and WhatsApp Desktop (UI scripting) after a confirmation that shows the recipient and the exact text; "Open in {App} instead" remains. Safeguards: the recipient is always one of the contact's own handles, text is passed to the script as data, one request per message (idempotent by `clientId`), one at a time and 10 a minute, unknown outcomes are reported and never retried blindly, an audit without content (`sends`), `REPLY_CORE_SENDING=off`. ([docs/CORE_SENDING.md](docs/CORE_SENDING.md))
 - **Contact profile.** A third column (or a page on a narrow window) with address-book details (name parts, nickname, organization, job title, department, birthday, web and postal addresses), every handle with counts and last message, activity facts (counts, sent/received, since, last heard/wrote, last 30 days, per channel), details you add (profession, company, relationship, LinkedIn, intro) and notes. `GET`/`PUT /api/contacts/:id/profile`, `POST`/`DELETE` notes. Profile fields and notes survive `rebuild` and follow the person when an automatic contact is replaced by an address-book contact.
 - **WhatsApp:** group and chat names, group member lists (admins first, messages per member, link to their own conversation), sender names in groups. (`group_members`, migration 0009)
@@ -31,18 +60,6 @@ The first release you can live in: profiles, sending, new-message counts, a sign
 - The previous generation of the project moved to [`legacy/`](legacy/README.md); the plan moved to [docs/CORE_PLAN.md](docs/CORE_PLAN.md); legacy Markdown links no longer contain absolute paths of one machine.
 
 ### Fixed
-- The avatar overlapped the name in the conversation list when the list column was narrow (three-column layout); the row is now a flex row with a fixed-size avatar. Found by reviewing forced-colors and 200% zoom screenshots.
-- The conversation tracks whether you are at the bottom as you scroll, measured against the end of the messages (not the Reply box below them), and uses that state when a new message arrives; before, it relied on an observer callback that could lag a frame and show "1 new message" late or never.
-- Mail sent to yourself showed twice in the conversation (the sent copy and the received copy in two Mail accounts); they are now one message (same provider message key, time, subject and sender), and copies stored earlier are cleaned up when the service starts.
-- Asking for a reply suggestion again for the same person now takes over the one still being written (it used to answer "A draft is already being written" when Safari had not closed the cancelled request).
-- A late second click on the open Merge or Undo dialog could repeat the merge; it is ignored once done.
-- The UI no longer needs a GitHub token: the GDS packages are installed from the public npm registry (`.npmrc` removed, lockfile pointing at registry.npmjs.org with the same integrity hashes), and the CI UI job always runs.
-- Sending through Mail or WhatsApp left that app in front; the scripts now give the focus back to the app you were in (best effort).
-- Safari: a double click on Merge, Undo, Send or Open could send the request twice (the button was disabled only after the re-render); the guard is now immediate.
-- Safari: a conversation could open at its oldest messages instead of the newest (the first scroll landed short before the pane was laid out); it scrolls once more after the first paint. Found by running the browser tests in WebKit (`playwright` project `webkit`).
-- WhatsApp: a message to a person whose chat WhatsApp files under an `@lid` id was reported as "went to a different chat" although it was sent correctly; the look-up now accepts all the person's phone numbers and `@lid` ids.
-- WhatsApp: in a real test the text was typed but not sent, while Reply Core said "sent". It now waits 2.5 s for the chat, presses Return as a key code, presses it once more after 5 s if the message is not in WhatsApp's database, and without access to that database never claims "sent": it says it could not be confirmed.
-- The inbox at tablet widths (about 1024 px) squeezed three columns into 160 to 290 px each; the third (profile) column now needs 80 em, and between 62 and 80 em the profile page replaces the conversation.
 - WhatsApp group messages named the group as sender; the real member is now used (re-import once after upgrading: `node scripts/reset-cursor.js whatsapp --purge`, service stopped).
 - Encoded WhatsApp push names (`+CgAQ…=`) were shown as names (migration 0010 restores the handle on affected automatic contacts).
 - A merged-away or unknown contact no longer shows a second, empty profile column.

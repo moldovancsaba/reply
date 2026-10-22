@@ -3,9 +3,9 @@
 **One inbox for your messages, on your Mac.** Reply Core shows iMessage, Apple Mail, Contacts and, optionally, WhatsApp and IMAP in one place: one conversation per person across every channel, a profile with everything you know about them, search, and replies sent through the apps you already use. Everything stays on your machine: the service listens on `127.0.0.1` only and nothing goes to a cloud.
 
 - **One timeline per person** across iMessage, email and WhatsApp, with new-message counts and WhatsApp groups with their members.
-- **A contact profile**: address-book details, every number and address, activity facts, your own details and notes.
+- **A contact profile**: the address-book photo and details, every number and address, activity facts, your own details and notes; it suggests people who may be the same (you decide the merge).
 - **Search** across every message and email, with highlights.
-- **Send** from the app (Messages, Mail, WhatsApp) after a confirmation, or open the reply in the app instead; an optional local model can suggest a draft.
+- **Send** from the app (Messages, Mail, WhatsApp; files through Messages and Mail) after a confirmation, with WhatsApp sends checked against WhatsApp's own data, or open the reply in the app instead; an optional local model can suggest a draft.
 - **Private by construction**: other apps' data is only read; merging people and sending are always your decision; nothing personal reaches a log; one signed app holds the macOS permissions.
 
 ## Run it
@@ -30,6 +30,8 @@ cd core
 npm run verify            # lint (no warnings), Swift and Node tests, UI checks and the GDS accessibility gate
 npm run verify:release    # everything above, the launcher smoke test, the repository and documentation audit, the dependency audit
 ```
+
+The browser tests run in Chrome and in Playwright's WebKit (Safari's engine; once: `npx playwright install webkit` in `core/ui`), and GitHub Actions runs the same gate on every pull request.
 
 ## Repository layout
 
