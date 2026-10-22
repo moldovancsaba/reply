@@ -50,12 +50,22 @@ export function ThreadPane({ contactId, profile }: { contactId: string; profile:
   const opened = useRef("");
   const key = `${contactId}|${filter}`;
 
+  // Whether the reader is at the bottom is tracked as they scroll, measured against the marker at the end of the messages (the Reply
+  // box sits below it), so the answer is already known when a new message arrives and makes the pane taller.
   useEffect(() => {
-    const el = bottom.current;
-    if (!el) return;
-    const io = new IntersectionObserver(([e]) => { atBottom.current = e.isIntersecting; if (e.isIntersecting) setPendingNew(0); });
-    io.observe(el);
-    return () => io.disconnect();
+    const end = bottom.current;
+    if (!end) return;
+    let pane: HTMLElement | null = end.parentElement;
+    while (pane && !(pane.scrollHeight > pane.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(pane).overflowY))) pane = pane.parentElement;
+    const target: HTMLElement | Window = pane ?? window;
+    const measure = () => {
+      const edge = pane ? pane.getBoundingClientRect().bottom : window.innerHeight;
+      atBottom.current = end.getBoundingClientRect().bottom <= edge + 48;
+      if (atBottom.current) setPendingNew(0);
+    };
+    target.addEventListener("scroll", measure, { passive: true });
+    measure();
+    return () => target.removeEventListener("scroll", measure);
   }, [ascending.length > 0]);
 
   const toBottom = useCallback(() => { bottom.current?.scrollIntoView({ block: "end" }); setPendingNew(0); }, []);

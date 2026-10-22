@@ -48,6 +48,8 @@ try {
     process.exit(EXIT_STORAGE);
 }
 const repo = createRepo(storage.db);
+const twins = repo.dedupeSelfMail(); // mail to yourself used to be stored twice (sent copy + received copy)
+if (twins > 0) logger.info({ removed: twins }, "storage.dedupe self-mail twins collapsed");
 const registry = createRegistry({ enabled: config.connectors, deps: { config, logger } });
 for (const id of registry.unknown) logger.warn({ connector: id }, "ignoring unknown connector in REPLY_CORE_CONNECTORS");
 const identity = createIdentity({ db: storage.db, repo });

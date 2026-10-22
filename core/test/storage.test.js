@@ -254,3 +254,45 @@ test("performance budgets hold on a 100k-message corpus (3x tolerance)", { timeo
     assert.match(plan, /messages_handle_ts/);
     assert.ok(readFileSync(path.join(path.resolve("."), "src/storage/migrations/0001_init.sql"), "utf8").length > 0);
 });
+
+test("mail to yourself is one message: the other account's copy is collapsed, the longer text wins, old twins are cleaned up", () => {
+    const mail = (account, key, text, over = {}) => msg({ channel: "email", account, providerMessageKey: key, handle_norm: "me@example.com", isFromMe: true, subject: "Test", tsMs: NOW - 5000, text, ...over });
+    const count = (db) => db.prepare("SELECT COUNT(*) n FROM messages WHERE channel = 'email'").get().n;
+
+    // the received copy (no body yet) first, then the sent copy with the body
+    const a = setup();
+    assert.equal(a.repo.upsertMessages([mail("inbox", "15", "Test")]).inserted, 1);
+    const r = a.repo.upsertMessages([mail("sent", "15", "Test\n\nthe body")]);
+    assert.deepEqual([r.inserted, r.updated], [0, 1]);
+    assert.equal(count(a.db), 1);
+    assert.equal(a.db.prepare("SELECT text FROM messages WHERE channel = 'email'").get().text, "Test\n\nthe body");
+
+    // the sent copy first, then the shorter received copy: skipped
+    const b = setup();
+    b.repo.upsertMessages([mail("sent", "15", "Test\n\nthe body")]);
+    const r2 = b.repo.upsertMessages([mail("inbox", "15", "Test")]);
+    assert.deepEqual([r2.inserted, r2.skipped], [0, 1]);
+    assert.equal(count(b.db), 1);
+    assert.equal(b.db.prepare("SELECT count_total n FROM contact_summary").get().n, 1);
+
+    // not the same mail: another second, another subject, someone else's mail, or the same account
+    const c = setup();
+    c.repo.upsertMessages([mail("sent", "1", "x")]);
+    c.repo.upsertMessages([mail("inbox", "2", "x", { tsMs: NOW - 4000 }), mail("inbox", "3", "x", { subject: "Other" }), mail("inbox", "4", "x", { isFromMe: false }), mail("sent", "5", "x")]);
+    assert.equal(count(c.db), 5);
+    // alike but a different message (another provider key): never collapsed, whatever the account
+    c.repo.upsertMessages([mail("inbox", "other-key", "x")]);
+    assert.equal(count(c.db), 6, "same second, subject and handle but another message key is another mail");
+
+    // twins stored before this rule are removed once, with the summary rebuilt
+    const d = setup();
+    d.db.pragma("foreign_keys = OFF");
+    d.repo.upsertMessages([mail("sent", "15", "Test\n\nthe body")]);
+    d.db.prepare("INSERT INTO messages (id, channel, account, provider_message_key, thread_key, handle_norm, is_from_me, ts_ms, subject, text, attachments_json, meta_json, ingested_at) SELECT 'email:inbox:15', channel, 'inbox', '15', thread_key, handle_norm, is_from_me, ts_ms, subject, 'Test', attachments_json, meta_json, ingested_at FROM messages").run();
+    assert.equal(count(d.db), 2);
+    assert.equal(d.repo.dedupeSelfMail(), 1);
+    assert.equal(count(d.db), 1);
+    assert.equal(d.db.prepare("SELECT text FROM messages WHERE channel = 'email'").get().text, "Test\n\nthe body");
+    assert.equal(d.db.prepare("SELECT count_total n FROM contact_summary").get().n, 1);
+    assert.equal(d.repo.dedupeSelfMail(), 0, "nothing more to do");
+});
