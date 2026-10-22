@@ -31,6 +31,7 @@ The first release you can live in: profiles, sending, new-message counts, a sign
 - The previous generation of the project moved to [`legacy/`](legacy/README.md); the plan moved to [docs/CORE_PLAN.md](docs/CORE_PLAN.md); legacy Markdown links no longer contain absolute paths of one machine.
 
 ### Fixed
+- The avatar overlapped the name in the conversation list when the list column was narrow (three-column layout); the row is now a flex row with a fixed-size avatar. Found by reviewing forced-colors and 200% zoom screenshots.
 - The conversation tracks whether you are at the bottom as you scroll, measured against the end of the messages (not the Reply box below them), and uses that state when a new message arrives; before, it relied on an observer callback that could lag a frame and show "1 new message" late or never.
 - Mail sent to yourself showed twice in the conversation (the sent copy and the received copy in two Mail accounts); they are now one message (same provider message key, time, subject and sender), and copies stored earlier are cleaned up when the service starts.
 - Asking for a reply suggestion again for the same person now takes over the one still being written (it used to answer "A draft is already being written" when Safari had not closed the cancelled request).
