@@ -10,6 +10,7 @@ Reply Core is a local-first unified inbox for macOS. These are its documents, by
 | [CORE_FIRST_RUN.md](CORE_FIRST_RUN.md) | Setting it up the first time, with screenshots |
 | [CORE_PERMISSIONS.md](CORE_PERMISSIONS.md) | Every macOS permission it needs and why |
 | [KNOWN_ISSUES.md](KNOWN_ISSUES.md) | What does not work yet, limits, and checks that need a person |
+| [ACCESSIBILITY_CHECKLIST.md](ACCESSIBILITY_CHECKLIST.md) | The 30-minute screen reader, forced-colors and zoom check by a person |
 | [../CHANGELOG.md](../CHANGELOG.md) | Release notes |
 
 ## Run it
