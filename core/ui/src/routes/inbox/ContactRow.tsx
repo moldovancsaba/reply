@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { AccentPanel, Anchor, BodyText, GdsBadge, GdsBox, GdsColumnGrid, GdsColumnGridItem, GdsGeneratedAvatar, GdsInline, GdsRelativeTime, GdsStack, MetadataText } from "@sovereignsquad/gds";
+import { AccentPanel, Anchor, BodyText, GdsBadge, GdsBox, GdsGeneratedAvatar, GdsInline, GdsRelativeTime, GdsStack, MetadataText } from "@sovereignsquad/gds";
 import type { Channel, ContactListItem } from "../../api/types.gen";
 import { CHANNEL_LABEL, exactLabel, readablePreview, relativeParts } from "../../lib/time";
 
@@ -29,31 +29,28 @@ export function ContactRow({ contact, selected }: { contact: ContactListItem; se
             navigate(href);
           }}
         >
-          <GdsColumnGrid columns={12} gap="sm">
-            <GdsColumnGridItem span={2}>
-              <GdsBox aria-hidden="true"><GdsGeneratedAvatar name={contact.displayName} size={40} /></GdsBox>
-            </GdsColumnGridItem>
-            <GdsColumnGridItem span={10} minWidth="zero">
-              <GdsStack gap="xs" minWidth="zero">
-                <BodyText>{contact.displayName}</BodyText>
-                {preview ? <MetadataText>{preview.length > 140 ? `${preview.slice(0, 140)}…` : preview}</MetadataText> : null}
-                <GdsInline gap="xs" wrap="wrap" align="center">
-                  {contact.unread > 0 ? <GdsBadge tone="info" label={`${contact.unread.toLocaleString("en-US")} new`} /> : null}
-                  {contact.lastChannel ? <GdsBadge tone="neutral" icon={ICON[contact.lastChannel]} label={CHANNEL_LABEL[contact.lastChannel]} /> : null}
-                  {contact.lastTs && parts ? (
-                    <MetadataText>
-                      <time dateTime={contact.lastTs} title={exactLabel(contact.lastTs)}>
-                        <GdsRelativeTime value={parts.value} unit={parts.unit} numeric="auto" />
-                      </time>
-                    </MetadataText>
-                  ) : null}
-                </GdsInline>
-                <GdsInline gap="xs" wrap="wrap">
-                  <MetadataText>{countsSentence(contact.counts)}</MetadataText>
-                </GdsInline>
-              </GdsStack>
-            </GdsColumnGridItem>
-          </GdsColumnGrid>
+          {/* a row, not a 12-column grid: in a narrow list column 2 of 12 was thinner than the 40 px avatar and it overlapped the name */}
+          <GdsInline gap="sm" align="start" wrap="nowrap">
+            <GdsBox aria-hidden="true" style={{ flexShrink: 0 }}><GdsGeneratedAvatar name={contact.displayName} size={40} /></GdsBox>
+            <GdsStack gap="xs" minWidth="zero">
+              <BodyText>{contact.displayName}</BodyText>
+              {preview ? <MetadataText>{preview.length > 140 ? `${preview.slice(0, 140)}…` : preview}</MetadataText> : null}
+              <GdsInline gap="xs" wrap="wrap" align="center">
+                {contact.unread > 0 ? <GdsBadge tone="info" label={`${contact.unread.toLocaleString("en-US")} new`} /> : null}
+                {contact.lastChannel ? <GdsBadge tone="neutral" icon={ICON[contact.lastChannel]} label={CHANNEL_LABEL[contact.lastChannel]} /> : null}
+                {contact.lastTs && parts ? (
+                  <MetadataText>
+                    <time dateTime={contact.lastTs} title={exactLabel(contact.lastTs)}>
+                      <GdsRelativeTime value={parts.value} unit={parts.unit} numeric="auto" />
+                    </time>
+                  </MetadataText>
+                ) : null}
+              </GdsInline>
+              <GdsInline gap="xs" wrap="wrap">
+                <MetadataText>{countsSentence(contact.counts)}</MetadataText>
+              </GdsInline>
+            </GdsStack>
+          </GdsInline>
         </Anchor>
       </AccentPanel>
     </GdsBox>

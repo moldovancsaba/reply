@@ -145,3 +145,21 @@ test("tablet width (1024 px): list and conversation get room; the profile opens 
   await page.getByRole("link", { name: "Back to conversation" }).click();
   await expect(page.getByRole("log")).toBeVisible();
 });
+
+test("conversation rows: the avatar never overlaps the name, also in the narrow list column next to the profile", async ({ page }) => {
+  for (const width of [1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${svc.url}/inbox`);
+    await rows(page).filter({ hasText: "+36301234567" }).click();
+    await expect(page.getByRole("list", { name: "Phone numbers and addresses" })).toBeVisible(); // three columns: the list is at its narrowest
+    for (const row of await rows(page).all()) {
+      const { avatarRight, nameLeft } = await row.evaluate((el) => {
+        const avatar = el.querySelector("[aria-hidden='true']") as HTMLElement;
+        const name = [...el.querySelectorAll("p, span")].find((n) => n.textContent && !n.closest("[aria-hidden='true']")) as HTMLElement;
+        const right = Math.max(avatar.getBoundingClientRect().right, ...[...avatar.querySelectorAll("*")].map((n) => n.getBoundingClientRect().right)); // the drawn circle, not just its wrapper
+        return { avatarRight: right, nameLeft: name.getBoundingClientRect().left };
+      });
+      expect(nameLeft, `at ${width} px the name starts after the avatar`).toBeGreaterThanOrEqual(avatarRight);
+    }
+  }
+});

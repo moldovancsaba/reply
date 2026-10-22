@@ -4,6 +4,10 @@ Status: living document. About 30 minutes. The automated gate (axe, keyboard ord
 
 Setup: open Reply Core in Safari. VoiceOver on and off with Command+F5. VoiceOver keys: Control+Option is the "VO" key; VO+Right moves to the next item, VO+Space presses, VO+U opens the rotor (headings, landmarks, links, buttons).
 
+## What was already looked at
+
+On 2026-10-22 the screens (Inbox, a conversation, profile, Sources) were rendered in Chrome with forced colors, with increased contrast (`prefers-contrast: more`) and at the width of a 200% zoom (640 px), and the screenshots were reviewed by hand. Findings: text, borders, buttons, icons and focus rings stay clear in forced colors; the sent and received bubbles stay apart by a border and label, not only by colour; at 200% the layout is one pane with no horizontal scrolling. One defect was found and fixed: the avatar overlapped the name in a narrow conversation list. This does not replace parts B and C below on a real Mac with Safari, and says nothing about VoiceOver (part A).
+
 ## A. VoiceOver
 
 | # | Where | Do | Expect to hear |
