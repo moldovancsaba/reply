@@ -5,6 +5,11 @@ import path from "node:path";
 // How a message actually leaves this Mac: AppleScript drives the apps you already use (Messages, Mail, WhatsApp
 // Desktop). The recipient and the text are passed to the script as arguments (`on run argv`), never spliced into its
 // source, so nothing in a message can change what the script does.
+// Sending through Mail or WhatsApp brings that app to the front. These lines remember the app you were in and give it the
+// focus back afterwards; they are inside `try`, so a refusal (System Events not allowed) can never fail a send.
+const REMEMBER = ["set frontId to \"\"", "try", "tell application \"System Events\" to set frontId to bundle identifier of first application process whose frontmost is true", "end try"];
+const RESTORE = ["try", "if frontId is not \"\" then tell application id frontId to activate", "end try"];
+
 const SCRIPTS = {
     imessage: [
         "on run argv",
@@ -34,6 +39,7 @@ const SCRIPTS = {
         "set theAddress to item 1 of argv",
         "set theSubject to item 2 of argv",
         "set theText to item 3 of argv",
+        ...REMEMBER,
         "set theFiles to {}",
         "repeat with i from 4 to (count of argv)",
         "set end of theFiles to item i of argv",
@@ -47,6 +53,8 @@ const SCRIPTS = {
         "end repeat",
         "send theMessage",
         "end tell",
+        "delay 0.5",
+        ...RESTORE,
         "end run",
     ],
     // WhatsApp Desktop has no sending interface: open the chat with the text typed in, wait until the app is in front,
@@ -54,6 +62,7 @@ const SCRIPTS = {
     whatsapp: [
         "on run argv",
         "set theUrl to item 1 of argv",
+        ...REMEMBER,
         "open location theUrl",
         "tell application \"System Events\"",
         "set ready to false",
@@ -71,6 +80,8 @@ const SCRIPTS = {
         "if not (frontmost of process \"WhatsApp\") then error \"WhatsApp lost the focus\" number 9002",
         "key code 36",
         "end tell",
+        "delay 1",
+        ...RESTORE,
         "end run",
     ],
 };
@@ -78,11 +89,14 @@ const SCRIPTS = {
 // The same key press again, without opening the chat: used once when the message has not shown up after the first one.
 // On an empty message box it does nothing, so it cannot send anything twice.
 const NUDGE = [
+    ...REMEMBER,
     "tell application \"System Events\"",
     "if not (exists process \"WhatsApp\") then error \"WhatsApp is not running\" number 9001",
     "if not (frontmost of process \"WhatsApp\") then error \"WhatsApp lost the focus\" number 9002",
     "key code 36",
     "end tell",
+    "delay 1",
+    ...RESTORE,
 ];
 
 export const scriptArgs = {
@@ -158,4 +172,4 @@ export function createNudges({ run = defaultRun } = {}) {
     return { whatsapp: async () => { await run(NUDGE, []); } };
 }
 
-export { SCRIPTS };
+export { SCRIPTS, NUDGE };
