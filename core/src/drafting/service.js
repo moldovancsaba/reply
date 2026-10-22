@@ -45,7 +45,7 @@ const refused = (err) => err?.cause?.code === "ECONNREFUSED" || err?.code === "E
 
 export function createDrafting({ config, read, logger, fetch: doFetch = globalThis.fetch, now = () => Date.now(), timeoutMs = LIMITS.timeoutMs, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
     const { provider, model, url } = config.llm;
-    const busy = new Set();
+    const busy = new Map(); // contactId -> the controller of the model call in flight
     let cached = null;
 
     async function callOllama(path, init, signal) {
@@ -80,12 +80,15 @@ export function createDrafting({ config, read, logger, fetch: doFetch = globalTh
         if (provider === "off") throw new AppError(409, "drafting_disabled", "Drafting is turned off. Enable a local model to use it.");
         if (!CHANNELS.includes(channel)) throw new AppError(400, "invalid_request", `channel must be one of ${CHANNELS.join(", ")}.`);
         if (instruction !== undefined && (typeof instruction !== "string" || instruction.length > LIMITS.instruction)) throw new AppError(400, "invalid_request", `instruction must be text of at most ${LIMITS.instruction} characters.`);
-        if (busy.size >= 1) throw new AppError(429, "draft_busy", "A draft is already being written.", { retryable: true });
-        busy.add(contactId);
+        // one model call at a time; asking again for the same person takes over (the earlier call is stopped), because a
+        // browser may not close the connection of a cancelled request at once (Safari), which would otherwise block the retry
+        if (busy.size >= 1 && !busy.has(contactId)) throw new AppError(429, "draft_busy", "A draft is already being written.", { retryable: true });
         const t0 = performance.now();
         let outcome = "error";
         let ctxCount = 0;
         const controller = new AbortController();
+        busy.get(contactId)?.abort(new Error("superseded"));
+        busy.set(contactId, controller);
         const timer = setTimeout(() => controller.abort(new Error("timeout")), timeoutMs);
         signal?.addEventListener("abort", () => controller.abort(new Error("client_gone")), { once: true });
         try {
@@ -119,7 +122,7 @@ export function createDrafting({ config, read, logger, fetch: doFetch = globalTh
             return { draft, provider, model, contextMessages: ctx.count, truncated: ctx.truncated };
         } finally {
             clearTimeout(timer);
-            busy.delete(contactId);
+            if (busy.get(contactId) === controller) busy.delete(contactId);
             logger?.info({ contactId, contextMessages: ctxCount, ms: Math.round(performance.now() - t0), outcome }, "draft.suggest");
         }
     }

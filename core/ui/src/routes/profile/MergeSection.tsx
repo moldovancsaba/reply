@@ -27,6 +27,7 @@ export function MergeSection({ contactId, name }: { contactId: string; name: str
   const known = useRef(new Map<string, ContactListItem>()); // rows the picker has shown, for the confirmation text
   const [submitting, setSubmitting] = useState(false);
   const sending = useRef(false); // a second click can arrive before the re-render that disables the button (Safari does this)
+  const done = useRef(new Set<string>()); // merges and undos already made: a late second click on the still-open dialog must not repeat them
   const [error, setError] = useState<ApiError | null>(null);
   const [undoError, setUndoError] = useState<ApiError | null>(null);
   const [undoTarget, setUndoTarget] = useState<MergeHistoryItem | null>(null);
@@ -49,7 +50,7 @@ export function MergeSection({ contactId, name }: { contactId: string; name: str
   };
 
   const confirmMerge = async () => {
-    if (!source || sending.current) return;
+    if (!source || sending.current || done.current.has(`merge:${source.id}`)) return;
     sending.current = true;
     setSubmitting(true);
     setError(null);
@@ -57,6 +58,7 @@ export function MergeSection({ contactId, name }: { contactId: string; name: str
     sending.current = false;
     setSubmitting(false);
     if (!r.ok) { setError(r.error); return; }
+    done.current.add(`merge:${source.id}`);
     
     await refresh();
     setSource(null);
@@ -73,7 +75,7 @@ export function MergeSection({ contactId, name }: { contactId: string; name: str
   const fromHistory = undoTarget ?? (undoId ? (merges.data?.items.find((i) => i.id === undoId && i.action === "merge") ?? null) : null);
   const closeUndo = () => { setUndoTarget(null); setUndoError(null); if (undoId) setParams((p) => { const n = new URLSearchParams(p); n.delete("undo"); return n; }, { replace: true }); };
   const confirmUndo = async () => {
-    if (!fromHistory || sending.current) return;
+    if (!fromHistory || sending.current || done.current.has(`undo:${fromHistory.id}`)) return;
     sending.current = true;
     setSubmitting(true);
     setUndoError(null);
@@ -81,6 +83,7 @@ export function MergeSection({ contactId, name }: { contactId: string; name: str
     sending.current = false;
     setSubmitting(false);
     if (!r.ok) { setUndoError(r.error); return; }
+    done.current.add(`undo:${fromHistory.id}`);
     await refresh();
     closeUndo();
     toasts.notifySuccess({ title: `Undone: ${fromHistory.fromName} is a separate contact again.`, autoCloseMs: 8000 });

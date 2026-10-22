@@ -2,17 +2,13 @@
 
 The Reply Core web app: React + TypeScript + Vite, built **only** from the Sovereign Squad General Design System (`@sovereignsquad/gds`). The service serves the build at `/`; see [`../../docs/CORE_UI.md`](../../docs/CORE_UI.md) for the screens, states, theme and accessibility gate and [`../../docs/DESIGN_SYSTEM.md`](../../docs/DESIGN_SYSTEM.md) for the design-system rules.
 
-## Install (needs a GitHub token)
+## Install
 
-The GDS packages are private to the `sovereignsquad` GitHub organisation, so `npm install` needs a token with `read:packages` that belongs to an account with access to the org. `.npmrc` already points at the registry and reads the token from the environment; never put the token in a file.
+The GDS packages (`@sovereignsquad/gds`, `gds-a11y`, `gds-eslint-config` and their dependencies) are public on the npm registry, so `npm install` needs no token and no `.npmrc`. The lockfile pins version 6.8.0 with its integrity hashes.
 
 ```bash
-gh auth refresh -s read:packages          # once, if your gh token lacks the scope
-export GITHUB_TOKEN=$(gh auth token)
-cd core/ui && npm install
+cd core/ui && npm ci
 ```
-
-`401` on install means the token is missing, lacks `read:packages`, or its account has no access to the org (see GDS `INSTALLATION_GUIDE.md`, "Troubleshooting 401/403").
 
 ## Scripts
 

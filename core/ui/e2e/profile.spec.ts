@@ -25,7 +25,7 @@ test("profile column lists handles; merge needs a confirmation, sends one reques
   await page.getByRole("option", { name: /anna@example.com/ }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toContainText("Move 1 handle and 2 messages from anna@example.com into +36301234567?");
-  expect(posts).toEqual([]);
+  expect(posts.filter((u) => u.endsWith("/merge")), "nothing is merged before the dialog is confirmed").toEqual([]); // (opening a conversation also marks it read, after 0.8 s)
   await page.waitForTimeout(600); // let the dialog finish fading in, or contrast is measured mid-transition
   await expectAccessibleNow(page, "merge dialog");
   await expectFocusTrapped(page, "[role=dialog]", "merge dialog");
@@ -102,7 +102,7 @@ test("suggested duplicates: proposals only; Review merge opens the usual confirm
   await expectAccessibleNow(page, "suggested duplicates");
   await list.getByRole("button", { name: "Review merge" }).click();
   await expect(page.getByRole("dialog")).toContainText("Move 1 handle and 4 messages from Anna K into +36301234567?");
-  expect(posts).toEqual([]);
+  expect(posts.filter((u) => u.endsWith("/merge")), "nothing is merged before the dialog is confirmed").toEqual([]); // (opening a conversation also marks it read, after 0.8 s)
   await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
   await list.getByRole("button", { name: "Not the same" }).click();
   await expect(list).toHaveCount(0);

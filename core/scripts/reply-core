@@ -46,7 +46,7 @@ function ensureUi() {
     const opts = { cwd: coreDir, stdio: "inherit" };
     const install = spawnSync("npm", ["--prefix", "ui", "ci"], opts);
     const build = install.status === 0 ? spawnSync("npm", ["--prefix", "ui", "run", "build"], opts) : install;
-    if (build.status !== 0) die(EXIT.buildFailed, `Could not build the web app. It needs a network connection and a GITHUB_TOKEN with read:packages for the design system (see core/ui/README.md). [exit ${EXIT.buildFailed}]`);
+    if (build.status !== 0) die(EXIT.buildFailed, `Could not build the web app. It needs a network connection the first time, to install the web app's dependencies (run: npm --prefix ui ci, in the core folder; see core/ui/README.md). [exit ${EXIT.buildFailed}]`);
 }
 
 const REASONS = { 75: `port ${port} is used by another program (is Reply Core already running under another user?)`, 78: "the configuration is not valid (see the line above or the startup log)", 74: "the database could not be opened (see docs/CORE_OPERATIONS.md, restore a backup)" };

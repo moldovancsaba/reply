@@ -84,7 +84,6 @@ test("[on] Regenerate asks again; Discard and Cancel abort the model call; leavi
   await page.getByRole("button", { name: "Cancel" }).click();
   await aborted(1);
   await expect(page.getByRole("button", { name: "Cancel" })).toHaveCount(0);
-  if (browserName === "webkit") return; // a new suggestion would be refused ("a draft is already being written") while the aborted one is still held
 
   await suggest(page).click();
   await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();
@@ -148,13 +147,13 @@ test("[on] a11y gate: loading, ready and error states in light and dark, ready a
     await page.getByRole("button", { name: "Cancel" }).click();
     fake.behave.hang = false;
     await suggest(page).click();
-    await expect(page.getByRole("region", { name: /Suggested reply/ })).toBeVisible();
+    await expect(page.getByRole("region", { name: /Suggested reply \(AI-generated\)/ })).toBeVisible();
     await expectAccessibleNow(page, `draft ready ${scheme}`);
   }
   await page.setViewportSize({ width: 375, height: 800 });
   await expectAccessible(page, `${svc.url}${href}`);
   await expect(suggest(page)).toBeEnabled();
   await suggest(page).click();
-  await expect(page.getByRole("region", { name: /Suggested reply/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: /Suggested reply \(AI-generated\)/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

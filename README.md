@@ -13,7 +13,7 @@
 ```bash
 cd core
 npm install
-GITHUB_TOKEN=<token with read:packages> npm --prefix ui ci    # the UI uses the GDS design system from GitHub Packages
+npm --prefix ui ci                                              # the UI uses the GDS design system from the public npm registry
 node scripts/reply-core start                                  # opens Safari at http://127.0.0.1:45511
 ```
 

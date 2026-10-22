@@ -7,7 +7,7 @@ Reply Core is the code in [`core/`](core/). The previous generation of the proje
 ```bash
 cd core
 npm install
-GITHUB_TOKEN=<a token with read:packages> npm --prefix ui ci     # the UI uses the GDS design system from GitHub Packages
+npm --prefix ui ci                                              # the UI uses the GDS design system from the public npm registry
 bash helper/build.sh                                             # the native helper (Xcode command line tools)
 node scripts/reply-core start                                    # run it: docs/CORE_FIRST_RUN.md
 ```

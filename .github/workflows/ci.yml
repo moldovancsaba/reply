@@ -25,24 +25,18 @@ jobs:
       - run: node scripts/audit.js
         working-directory: core
   ui:
-    # needs a token with read:packages for the GDS design system; skipped when the secret is not set
+    # the GDS design system comes from the public npm registry: no token needed
     runs-on: macos-latest
-    env:
-      GITHUB_TOKEN: ${{ secrets.GDS_PACKAGES_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - if: env.GITHUB_TOKEN != ''
-        run: npm ci
+      - run: npm ci
         working-directory: core
-      - if: env.GITHUB_TOKEN != ''
-        run: npm --prefix ui ci
+      - run: npm --prefix ui ci
         working-directory: core
-      - if: env.GITHUB_TOKEN != ''
-        run: npx playwright install webkit # Safari's engine for the browser tests
+      - run: npx playwright install webkit # Safari's engine for the browser tests
         working-directory: core/ui
-      - if: env.GITHUB_TOKEN != ''
-        run: npm --prefix ui run verify
+      - run: npm --prefix ui run verify
         working-directory: core

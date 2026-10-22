@@ -53,6 +53,7 @@ test("an unknown page says so and offers a way back", async ({ page }) => {
 
 test("the skip link is the first tab stop and moves focus to the content", async ({ page, browserName }) => {
   await page.goto(`${svc.url}/inbox`);
+  await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible(); // the first Tab only counts once the app has rendered (a slow runner got there late)
   await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab"); // Safari only tabs to every control with Option held (its own default)
   const skip = page.getByRole("link", { name: "Skip to content" });
   await expect(skip).toBeFocused();
@@ -103,7 +104,8 @@ test("the not-running banner appears within a minute of the service stopping and
   await expect(page.getByText("Not running", { exact: true })).toBeVisible();
   await expectAccessibleNow(page, "/inbox (service down)");
   await svc.start();
-  await page.getByRole("button", { name: /Retry now/ }).click();
+  // clicked without Playwright's "stable" wait: under the fake clock a slow runner never lets the banner settle
+  await page.getByRole("button", { name: /Retry now/ }).evaluate((el) => (el as HTMLElement).click());
   await expect(page.getByText(/Running v/)).toBeVisible();
   await expect(banner).toBeHidden();
 });

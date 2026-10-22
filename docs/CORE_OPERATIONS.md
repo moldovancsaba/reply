@@ -20,7 +20,7 @@ The launcher is `core/scripts/reply-core` (run it as `node scripts/reply-core ..
 | `build-app` | builds and signs `~/Applications/{reply}.app` (needs the Swift toolchain); `install-agent` does it when the app is missing. |
 | `install-agent`, `uninstall-agent` | see below. |
 
-Exit codes: `0` ok, `10` Node too old, `11` the web app could not be built (needs network and a `GITHUB_TOKEN`, see `core/ui/README.md`), `12` the service did not become healthy in 30 s, `13` not running (`stop`, `status`, `open`); when the service itself refuses to start the launcher passes its code on and explains it (`75` port in use, `78` invalid configuration, `74` storage). A pidfile whose process is gone is ignored. Single user, single instance: two accounts on one Mac need different `REPLY_CORE_PORT` values.
+Exit codes: `0` ok, `10` Node too old, `11` the web app could not be built (needs the network the first time, to install the design system from the npm registry; see `core/ui/README.md`), `12` the service did not become healthy in 30 s, `13` not running (`stop`, `status`, `open`); when the service itself refuses to start the launcher passes its code on and explains it (`75` port in use, `78` invalid configuration, `74` storage). A pidfile whose process is gone is ignored. Single user, single instance: two accounts on one Mac need different `REPLY_CORE_PORT` values.
 
 ## Start at login (optional)
 
