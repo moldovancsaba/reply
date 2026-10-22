@@ -21,11 +21,13 @@ test("every route renders in the shell with the right heading and active destina
   page.on("console", (m) => { if (m.type() === "error" && !/status of 404/.test(m.text())) errors.push(m.text()); });
   await page.goto(`${svc.url}/`);
   await expect(page).toHaveURL(/\/inbox$/);
+  await page.waitForLoadState("networkidle");
   for (const [path, heading, nav] of [["/inbox", "Inbox", "Inbox"], ["/inbox/c_123", "Inbox", "Inbox"], ["/search", "Search", "Search"], ["/sources", "Sources", "Sources"]] as const) {
     await page.goto(`${svc.url}${path}`);
     await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
     await expect(page.locator("nav a[aria-current='page']")).toHaveText(nav);
     await expect(page.getByText(/Running v/)).toBeVisible();
+    await page.waitForLoadState("networkidle"); // let the page's lazy chunks finish: WebKit logs one still loading when we leave as a failed import
   }
   expect(errors, errors.join("\n")).toEqual([]);
 });
