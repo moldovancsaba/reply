@@ -49,7 +49,7 @@ REPLY_CORE_LLM=ollama REPLY_CORE_OLLAMA_MODEL=llama3.1:8b npm start
 | 503 | `model_unavailable` | yes | The local model is not reachable. Start Ollama and try again. (A missing model says: `ollama pull <model>`, not retryable.) |
 | 504 | `draft_timeout` | yes | The model took too long. Try again or write the reply yourself. |
 | 422 | `empty_draft` | no | The model returned nothing. Try again. |
-| 429 | `draft_busy` | yes | A draft is already being written. |
+| 429 | `draft_busy` | yes | A draft is already being written (for another person). |
 | 404 | `contact_not_found` | no | unknown or merged-away contact (`details.mergedInto`) |
 | 400 | `invalid_request` | no | bad channel, bad instruction, unknown key |
 
@@ -61,7 +61,7 @@ The conversation is wrapped in `<messages>` and introduced as data, not instruct
 
 ## Limits and failure behaviour
 
-- One draft at a time, for the whole service (`429 draft_busy` otherwise).
+- One draft at a time, for the whole service (`429 draft_busy` for another person). Asking again for the same person takes over: the earlier model call is stopped and the new one runs, because a browser may not close the connection of a cancelled request at once (Safari), which would otherwise block the retry.
 - 30 s deadline per request; a timeout is **not** retried (that would only double the wait). A refused connection is retried once after 500 ms.
 - A client that disconnects cancels the model call.
 - Nothing is persisted: no prompt, no draft, no history.

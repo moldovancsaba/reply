@@ -29,7 +29,7 @@ What is not done, what is less reliable than the rest, and which checks need a p
 
 ## Interface
 
-- **Safari is tested through Playwright's WebKit, not Safari itself.** The browser tests run in Google Chrome and in WebKit (Safari's engine, same version as Playwright's build); they have not been run in the Safari app. Known differences: after **Cancel** on a suggested reply Safari may keep the connection open for a while, so suggesting again straight away can answer "A draft is already being written" until the model call ends; and the new-message scroll test cannot run under WebKit's fake clock.
+- **Safari is tested through Playwright's WebKit, not Safari itself.** The browser tests run in Google Chrome and in WebKit (Safari's engine, same version as Playwright's build); they have not been run in the Safari app. Known differences: after **Cancel** on a suggested reply Safari may keep the connection open for a while, so the model call can run on until its own timeout (suggesting again for the same person takes over, so nothing is blocked); and the new-message scroll test cannot run under WebKit's fake clock.
 - **Not verified by hand:** screen-reader announcements, forced-colors mode, 200% zoom (the 375 px layout and the colour modes are tested). The 30-minute check is in [ACCESSIBILITY_CHECKLIST.md](ACCESSIBILITY_CHECKLIST.md).
 - **Design-system workarounds** (`GdsSplit` never splits, `ConfirmDialog` has an unnamed close button, no toast renderer, ...) are listed in [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) and reported upstream in general-design-system#944 and #945; they can be removed when GDS fixes them.
 - The page header of Search and Sources is the standard GDS header and takes more room than the Inbox one.

@@ -84,7 +84,6 @@ test("[on] Regenerate asks again; Discard and Cancel abort the model call; leavi
   await page.getByRole("button", { name: "Cancel" }).click();
   await aborted(1);
   await expect(page.getByRole("button", { name: "Cancel" })).toHaveCount(0);
-  if (browserName === "webkit") return; // a new suggestion would be refused ("a draft is already being written") while the aborted one is still held
 
   await suggest(page).click();
   await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();

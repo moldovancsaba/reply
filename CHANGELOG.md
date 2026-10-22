@@ -31,6 +31,8 @@ The first release you can live in: profiles, sending, new-message counts, a sign
 - The previous generation of the project moved to [`legacy/`](legacy/README.md); the plan moved to [docs/CORE_PLAN.md](docs/CORE_PLAN.md); legacy Markdown links no longer contain absolute paths of one machine.
 
 ### Fixed
+- Asking for a reply suggestion again for the same person now takes over the one still being written (it used to answer "A draft is already being written" when Safari had not closed the cancelled request).
+- A late second click on the open Merge or Undo dialog could repeat the merge; it is ignored once done.
 - The UI no longer needs a GitHub token: the GDS packages are installed from the public npm registry (`.npmrc` removed, lockfile pointing at registry.npmjs.org with the same integrity hashes), and the CI UI job always runs.
 - Sending through Mail or WhatsApp left that app in front; the scripts now give the focus back to the app you were in (best effort).
 - Safari: a double click on Merge, Undo, Send or Open could send the request twice (the button was disabled only after the re-render); the guard is now immediate.

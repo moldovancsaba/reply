@@ -142,7 +142,7 @@ test("new messages: followed at the bottom, announced behind a button when readi
   await p.clock.runFor(31_000);
   await expect(p.getByRole("button", { name: "1 new message" })).toBeVisible();
   await expect(p.getByRole("status").filter({ hasText: "1 new message" })).toHaveCount(1);
-  await p.getByRole("button", { name: "1 new message" }).click();
+  await p.getByRole("button", { name: "1 new message" }).evaluate((el) => (el as HTMLElement).click()); // under the fake clock a slow runner re-renders it while Playwright waits for it to be 'stable'
   await expect.poll(() => onScreen(p.getByText("Message number 71", { exact: true }))).toBe(true);
 });
 

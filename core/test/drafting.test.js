@@ -206,9 +206,11 @@ test("one draft at a time: a second request is busy, and the slot frees afterwar
     const a = owner(s.db, "+36301234567");
     const b = owner(s.db, "+36309999999");
     const first = s.drafting.suggest({ contactId: a, channel: "imessage" });
-    await assert.rejects(s.drafting.suggest({ contactId: a, channel: "imessage" }), (e) => e.status === 429 && e.code === "draft_busy" && e.retryable === true);
-    await assert.rejects(s.drafting.suggest({ contactId: b, channel: "imessage" }), (e) => e.status === 429, "global concurrency is one");
-    await first;
+    await assert.rejects(s.drafting.suggest({ contactId: b, channel: "imessage" }), (e) => e.status === 429 && e.code === "draft_busy" && e.retryable === true, "global concurrency is one");
+    // asking again for the same person takes over: the earlier call is stopped, the new one answers
+    const again = s.drafting.suggest({ contactId: a, channel: "imessage" });
+    await assert.rejects(first, (e) => e.code === "client_gone");
+    assert.ok((await again).draft);
     assert.ok((await s.drafting.suggest({ contactId: b, channel: "imessage" })).draft);
     await f.close();
 });
