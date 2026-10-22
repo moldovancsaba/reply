@@ -7,7 +7,7 @@ This is the path from a fresh checkout to a working inbox. It takes about ten mi
 ```bash
 cd core
 npm install
-GITHUB_TOKEN=<a token with read:packages> npm --prefix ui ci   # the design system comes from GitHub Packages (core/ui/README.md)
+npm --prefix ui ci   # the design system comes from the public npm registry
 node scripts/reply-core start
 ```
 
@@ -50,7 +50,7 @@ This keeps Reply Core running after you log in and restarts it if it stops. It n
 | You see | Do |
 |---|---|
 | `Reply Core needs Node 20.17 or newer` (exit 10) | install a current Node and run it again |
-| `Could not build the web app` (exit 11) | check the network and `GITHUB_TOKEN`, see `core/ui/README.md` |
+| `Could not build the web app` (exit 11) | check the network connection and run `npm --prefix ui ci` again (`core/ui/README.md`) |
 | `port 45511 is used by another program` (exit 75) | stop that program, or set `REPLY_CORE_PORT` |
 | a source says **Needs your attention** | follow its steps, then **Recheck** |
 | the inbox is empty | open **Sources**: an empty inbox with a blocked source is a permission problem, not missing mail |

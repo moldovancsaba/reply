@@ -6,7 +6,7 @@ const testFiles = readdirSync("test").filter((f) => f.endsWith(".test.js")).map(
 
 const hasSwift = spawnSync("swift", ["--version"]).status === 0;
 const hasUi = existsSync("ui/node_modules");
-if (!hasUi) console.log("verify: ui skipped (core/ui dependencies not installed; see core/ui/README.md for the GITHUB_TOKEN setup)");
+if (!hasUi) console.log("verify: ui skipped (core/ui dependencies not installed; run `npm --prefix ui ci`, see core/ui/README.md)");
 const steps = [
     ["lint", ["npx", "eslint", ".", "--max-warnings", "0"]],
     ...(hasSwift

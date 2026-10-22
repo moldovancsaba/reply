@@ -1,6 +1,6 @@
 # Design system: how Reply Core uses GDS
 
-All user interface in Reply Core comes from the Sovereign Squad **General Design System** (`@sovereignsquad/gds`, https://github.com/sovereignsquad/general-design-system), consumed from GitHub Packages (needs a token with `read:packages`, see [core/ui/README.md](../core/ui/README.md)). This document is the contract between the app and GDS: the rules, what is composed from what, the local parts, the theme corrections and the workarounds, so each can be removed when GDS changes.
+All user interface in Reply Core comes from the Sovereign Squad **General Design System** (`@sovereignsquad/gds`, https://github.com/sovereignsquad/general-design-system), consumed from the public npm registry (no token needed, see [core/ui/README.md](../core/ui/README.md)). This document is the contract between the app and GDS: the rules, what is composed from what, the local parts, the theme corrections and the workarounds, so each can be removed when GDS changes.
 
 ## Rules
 
