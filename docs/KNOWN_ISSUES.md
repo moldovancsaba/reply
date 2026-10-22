@@ -38,7 +38,7 @@ What is not done, what is less reliable than the rest, and which checks need a p
 
 - `rebuild` does not carry which conversations you had marked as seen (everything counts as seen afterwards) or the send and handoff audits; it keeps manual merges, profile fields and notes.
 - A multi-account source (IMAP) that was running when the service crashed is not reset to idle on the next start (the single-account sources are).
-- **Continuous integration** (`.github/workflows/ci.yml`) has not run on GitHub yet; the same commands pass locally (`npm run verify:release`).
+- **Continuous integration** (`.github/workflows/ci.yml`, macOS runner) runs the core job (lint, tests, audit) and the ui job (design system from the public npm registry, Chrome and WebKit browser tests, accessibility gate, about 10 minutes) on every push and pull request. Its first runs (2026-10-22) found timing-sensitive tests that pass on a fast Mac but not on the slower runner; they were fixed, but a test that waits on the fake clock can still be the first to flake there. A red ui job is worth reading before assuming a real bug.
 
 ## Repository
 
