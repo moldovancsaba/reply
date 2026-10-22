@@ -55,6 +55,8 @@ service: validate -> idempotency lookup by clientId -> recipient = one of the co
          -> schedule two re-reads of the source (3 s, 12 s) so the sent message arrives through the normal import
 ```
 
+Files (iMessage and Mail): the page uploads each file first (`POST /api/uploads`, raw bytes) and names them by id in `attachmentIds`; they wait in `<home>/outbox` (owner only, one hour, emptied at start) and the service never reads a path from a request. WhatsApp sends are confirmed afterwards by looking for the message in WhatsApp's own database (read-only, up to 15 s, the person's phone numbers and `@lid` ids), with one repeated Return after 5 s; Mail and WhatsApp give the focus back to the app you were in.
+
 States of a `sends` row: `sending` (in flight), `sent`, `failed` (nothing was sent), `unknown` (no answer in time; may have been sent). A repeated `clientId` returns the stored outcome. Drivers: iMessage (iMessage service, then SMS), Mail (a new outgoing message, sent), WhatsApp (`whatsapp://send` then Return once WhatsApp is frontmost). Reference: [CORE_SENDING.md](CORE_SENDING.md).
 
 ## 6. Concurrency and process model
@@ -72,6 +74,9 @@ One Node process; `better-sqlite3` is synchronous, so every database call is a s
 | the port is taken | exit 75 (the launcher explains) |
 | a migration changed after it was applied | exit with `migration_checksum_mismatch`; fix forward with a new file |
 | AppleScript is refused (Automation / Accessibility) | `automation_denied` / `accessibility_denied` with steps and an Allow button; nothing is sent |
+| a WhatsApp message does not show up in its database | `send_unconfirmed`, recorded `unknown`: it may have been sent, no blind retry; in another chat: `whatsapp_wrong_chat`; database unreadable: sent but `confirmed: false` |
+| a script with files fails part way | `send_failed_partial`, recorded `unknown` |
+| mail to yourself (a sent copy and a received copy in two Mail accounts) | collapsed into one message at import (same provider key, time, subject), older twins removed once at start |
 
 ## 8. Interfaces and contracts
 

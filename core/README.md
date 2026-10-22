@@ -87,7 +87,7 @@ Enabled connectors run on their own intervals. Trigger one now with `curl -X POS
 
 ## Sending
 
-Press **Send** in the Reply box and the message is sent through Messages, Mail or WhatsApp Desktop (AppleScript), once, after a confirmation. It needs Automation permission for {reply} (and Accessibility for WhatsApp). Rules, errors and permissions: [`../docs/CORE_SENDING.md`](../docs/CORE_SENDING.md). `REPLY_CORE_SENDING=off` turns it off.
+Press **Send** in the Reply box and the message is sent through Messages, Mail or WhatsApp Desktop (AppleScript), once, after a confirmation. Files can go with iMessage and Mail (picked files wait in `<home>/outbox`); a WhatsApp send is checked against WhatsApp's own data; Mail and WhatsApp hand the focus back to your app. It needs Automation permission for {reply} (and Accessibility for WhatsApp); the Sources screen has the buttons that ask for it. Rules, errors and permissions: [`../docs/CORE_SENDING.md`](../docs/CORE_SENDING.md). `REPLY_CORE_SENDING=off` turns it off.
 
 ## IMAP accounts
 
@@ -112,7 +112,7 @@ The web app is in `ui/` (React + TypeScript, GDS only; installing it needs a Git
 ## Verify
 
 ```bash
-npm run verify           # lint (no warnings), helper build and tests (macOS), server tests, UI checks (when ui/node_modules exists)
+npm run verify           # lint (no warnings), helper build and tests (macOS), server tests, UI checks in Chrome and WebKit (when ui/node_modules exists; once: npx playwright install webkit in ui)
 npm run verify:release   # the release gate: all of it, the launcher smoke test, the repository audit and the dependency audit, as one table
 node scripts/audit.js    # the repository and documentation audit on its own
 ```
@@ -123,7 +123,7 @@ node scripts/audit.js    # the repository and documentation audit on its own
 
 - Binds `127.0.0.1` only.
 - Requests with a `Host` other than `127.0.0.1:<port>` or `localhost:<port>` get `403 forbidden_host` (DNS-rebinding guard). A foreign `Origin` gets `403 forbidden_origin`.
-- Request bodies are limited to 1 MiB.
+- Request bodies are limited to 1 MiB (JSON); an uploaded file for a message is limited to 20 MB and only accepted as raw `application/octet-stream` on `POST /api/uploads`.
 - Logs are structured JSON (pino) and redact `text`, `body`, `handle`, `email`, `phone`, `displayName` (up to two levels deep), and authorization/cookie headers. Log ids, counts and error classes instead of content.
 
 ## Error envelope

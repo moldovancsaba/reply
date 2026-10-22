@@ -13,6 +13,9 @@ Status: living document; add a rule here when a feature adds one.
 | A message is sent only when you press Send, to one of the contact's own handles, once | `core/src/send/service.js`: explicit request per message, handle ownership check, `clientId` idempotency, one at a time, 10 a minute, audit without content, `REPLY_CORE_SENDING=off`; see [CORE_SENDING.md](CORE_SENDING.md) |
 | The web page is served with a strict Content Security Policy (`script-src 'self'`, `connect-src 'self'`, `frame-ancestors 'none'`, `form-action 'self'`), `nosniff` and `Referrer-Policy: no-referrer`; API answers are `no-store` | `core/src/server.js`, `core/test/static.test.js` |
 | Profile fields, notes, message texts and subjects are never logged; the audit tables (`sends`, `handoffs`) hold lengths only | log redaction, tests that capture logs |
+| Files for a message are uploaded as raw bytes (`application/octet-stream`, 20 MB each), kept in an owner-only folder, named by id in the send request (never by path) and removed after the send, on request, after an hour and at start | `core/src/send/uploads.js`, `core/src/routes/send.js` |
+| An address-book photo is stored only if its first bytes say JPEG or PNG and it is at most 48 KB, and is served with its own type and `nosniff` | `core/src/connectors/contacts.js`, `core/src/routes/profile.js` |
+| The service finds a sent WhatsApp message by reading WhatsApp's database read-only; it never writes to it | `core/src/connectors/whatsapp.js` (`confirmSent`) |
 | macOS permissions belong to a signed, named app, not to a bare `node` | `{reply}.app` (`core/app`), see [CORE_PERMISSIONS.md](CORE_PERMISSIONS.md) |
 | The native helper only runs if its SHA-256 matches the recorded one | `core/src/helper` (see `core/helper/README.md`) |
 
