@@ -36,6 +36,10 @@ The launcher and the agent set `REPLY_CORE_LOG_FILE=~/Library/Logs/reply-core/se
 
 `npm run verify:release` (from `core/`) runs everything that must hold before a build is handed to someone, and prints a table: lint with no warnings, the Swift helper build and tests (skipped with a note if there is no Swift toolchain), the unit and integration tests, an end-to-end smoke of the launcher (start, health, status, app shell, second start, stop, in a temporary HOME), and the UI package's own `verify` (lint, types, unit tests, build, bundle budget, Playwright in Chrome and in WebKit with the accessibility gate; once: `npx playwright install webkit` in `core/ui`). The same steps run on GitHub for every pull request (`.github/workflows/ci.yml`, about 10 minutes for the UI job); read a red UI job before assuming a bug, because browser tests with a fake clock can flake on a slower runner. Always read the gate's real exit status before a merge: a pipe such as `| tail` hides it. It runs every step even after a failure and exits non-zero on any failure **or any warning** in any step's output. Unlike `npm run verify`, missing UI dependencies are a failure.
 
+## Upgrading the database
+
+Migrations run when the service starts, after a copy `core.db.bak-<version>` of the old database (the last three copies are kept). Migration 0014 (channel ids) rebuilds the message tables and needs free disk of about twice the size of `core.db` plus 50 MB; with less, the service refuses to start with one line saying how much is needed and how to go back (`node bin/reply-core.js restore <home>/core.db.bak-13`, then start the previous release). The upgrade of a 500,000-message database takes a few seconds (`node scripts/bench.js --migrate-check` measures it).
+
 ## What is in the data folder
 
 `core.db` (with `-wal` and `-shm`), `backups/`, the service logs (the launcher's `logs`), `ops.lock` while a restore or rebuild runs, and `outbox/` (files picked in the Reply box, owner only, emptied at start and after an hour). Nothing else is written there.

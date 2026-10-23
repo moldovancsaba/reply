@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
+import { copyFileSync, existsSync, readdirSync, readFileSync, statfsSync, statSync, unlinkSync } from "node:fs";
 import path from "node:path";
 
 const DEFAULT_DIR = new URL("./migrations/", import.meta.url).pathname;
@@ -13,6 +13,46 @@ export class MigrationError extends Error {
 }
 
 export const sha256 = (s) => createHash("sha256").update(s).digest("hex");
+
+// Checks that belong to one migration, keyed by its version. `before` runs ahead of the backup and the transaction (it may refuse),
+// `snapshot` runs inside the transaction before the SQL, `after` inside it after the SQL: throwing rolls the migration back.
+const MB = 1024 * 1024;
+const one = (db, sql) => db.prepare(sql).get();
+
+// The rebuild writes a copy of messages next to the original, and the runner keeps a backup copy of the whole file: refuse early
+// (before anything is touched) when there is not room for both.
+export function checkFreeSpace(dbFile, { statfs = statfsSync } = {}) {
+    if (!dbFile) return;
+    const need = 2 * statSync(dbFile).size + 50 * MB;
+    const fs = statfs(path.dirname(dbFile));
+    const free = fs.bavail * fs.bsize;
+    if (free < need) throw new MigrationError("not_enough_disk", `Reply Core needs about ${Math.ceil(need / MB)} MB free to upgrade its database but only ${Math.floor(free / MB)} MB are free. Free some space, or run "reply-core restore" to go back to the previous version.`);
+}
+export const HOOKS = {
+    14: {
+        // the rebuild writes a copy of messages next to the original, and the runner keeps a backup copy of the whole file
+        before(db, { dbFile }) {
+            checkFreeSpace(dbFile);
+        },
+        snapshot(db) {
+            return {
+                messages: one(db, "SELECT COUNT(*) n, COALESCE(SUM(length(text)), 0) t, COALESCE(SUM(ts_ms), 0) s, COALESCE(MAX(rowid), 0) r, COALESCE(SUM(rowid), 0) rs FROM messages"),
+                byChannel: db.prepare("SELECT channel, COUNT(*) n FROM messages GROUP BY channel ORDER BY channel").all(),
+                handoffs: one(db, "SELECT COUNT(*) n, COALESCE(SUM(text_length), 0) t FROM handoffs"),
+                sends: one(db, "SELECT COUNT(*) n, COALESCE(SUM(text_length), 0) t FROM sends"),
+            };
+        },
+        after(db, before) {
+            const after = HOOKS[14].snapshot(db);
+            if (JSON.stringify(after) !== JSON.stringify(before)) throw new MigrationError("migration_verify_failed", "rows changed while rebuilding the channel tables: " + JSON.stringify({ before, after }));
+            db.prepare("INSERT INTO messages_fts(messages_fts, rank) VALUES ('integrity-check', 1)").run(); // throws when the index and the table disagree
+            const fk = db.pragma("foreign_key_check");
+            if (fk.length) throw new MigrationError("migration_verify_failed", `foreign key problems after rebuilding: ${fk.length}`);
+            const q = db.pragma("quick_check", { simple: true });
+            if (q !== "ok") throw new MigrationError("migration_verify_failed", `quick_check failed after rebuilding: ${q}`);
+        },
+    },
+};
 
 export function loadMigrations(dir = DEFAULT_DIR) {
     return readdirSync(dir)
@@ -35,7 +75,7 @@ export function currentVersion(db) {
 
 // Forward-only runner. Applied migrations are verified by checksum; a changed one aborts the start.
 // `dbFile` (optional) enables the pre-migration copy `<db>.bak-<version>` (last 3 kept).
-export function migrate(db, { dir = DEFAULT_DIR, dbFile } = {}) {
+export function migrate(db, { dir = DEFAULT_DIR, dbFile, hooks = HOOKS } = {}) {
     db.exec(
         "CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, checksum TEXT NOT NULL, applied_ms INTEGER NOT NULL)",
     );
@@ -50,12 +90,15 @@ export function migrate(db, { dir = DEFAULT_DIR, dbFile } = {}) {
     if (!pending.length) return { applied: [], version: currentVersion(db) };
 
     const before = currentVersion(db);
+    if (before > 0) for (const m of pending) hooks[m.version]?.before?.(db, { dbFile }); // may refuse (for example not enough disk) before anything is touched
     if (dbFile && before > 0) backupBeforeMigration(db, dbFile, before);
 
     const done = [];
     for (const m of pending) {
         db.transaction(() => {
+            const snap = before > 0 ? hooks[m.version]?.snapshot?.(db) : undefined;
             db.exec(m.sql);
+            if (before > 0) hooks[m.version]?.after?.(db, snap);
             db.prepare("INSERT INTO schema_migrations(version, name, checksum, applied_ms) VALUES (?,?,?,?)").run(m.version, m.name, m.checksum, Date.now());
         })();
         done.push(m.version);

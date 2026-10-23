@@ -22,7 +22,7 @@ The list of routes is in [CORE_API.md](CORE_API.md).
 
 ## Components
 
-**Storage.** `core/src/storage/` owns the single SQLite database: `db.js` (open, pragmas, quick_check), `migrate.js` (forward-only checksummed migrations `0001`..`0013`), `repo.js` (message reads and writes). See [CORE_DATA_MODEL.md](CORE_DATA_MODEL.md).
+**Storage.** `core/src/storage/` owns the single SQLite database: `db.js` (open, pragmas, quick_check), `migrate.js` (forward-only checksummed migrations `0001`..`0014`), `repo.js` (message reads and writes). See [CORE_DATA_MODEL.md](CORE_DATA_MODEL.md).
 
 **Connectors.** `core/src/connectors/` runs every source on one runtime (runner, scheduler, registry, error classes); `core/src/routes/sync.js` exposes `POST /api/sync/:connector`. Connectors only read: iMessage, Contacts, Apple Mail, WhatsApp (opt-in) and IMAP (TLS-only). A page may also carry chat names and group member lists, which the runner passes to the identity service in the same transaction as the messages and the cursor. See [CORE_CONNECTORS.md](CORE_CONNECTORS.md).
 

@@ -73,6 +73,8 @@ One Node process; `better-sqlite3` is synchronous, so every database call is a s
 | the database is corrupt or a migration fails | exit 74 with one line; restore a backup or rebuild |
 | the port is taken | exit 75 (the launcher explains) |
 | a migration changed after it was applied | exit with `migration_checksum_mismatch`; fix forward with a new file |
+| not enough free disk for migration 0014 | exit 74 before anything is touched, with one line naming the space needed and `reply-core restore` |
+| a migration's own verification fails (0014: counts, FTS, foreign keys) | the migration's transaction rolls back; the database stays at the previous version; exit 74 with the failing check |
 | AppleScript is refused (Automation / Accessibility) | `automation_denied` / `accessibility_denied` with steps and an Allow button; nothing is sent |
 | a WhatsApp message does not show up in its database | `send_unconfirmed`, recorded `unknown`: it may have been sent, no blind retry; in another chat: `whatsapp_wrong_chat`; database unreadable: sent but `confirmed: false` |
 | a script with files fails part way | `send_failed_partial`, recorded `unknown` |
