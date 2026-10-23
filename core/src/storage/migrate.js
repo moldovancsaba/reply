@@ -36,7 +36,8 @@ export const HOOKS = {
         },
         snapshot(db) {
             return {
-                messages: one(db, "SELECT COUNT(*) n, COALESCE(SUM(length(text)), 0) t, COALESCE(SUM(ts_ms), 0) s, COALESCE(MAX(rowid), 0) r, COALESCE(SUM(rowid), 0) rs FROM messages"),
+                // ts_ms is summed modulo a prime: a plain SUM overflows int64 at ~5M present-day rows
+                messages: one(db, "SELECT COUNT(*) n, COALESCE(SUM(length(text)), 0) t, COALESCE(SUM(ts_ms % 1000000007), 0) s, COALESCE(MAX(rowid), 0) r, COALESCE(SUM(rowid), 0) rs FROM messages"),
                 byChannel: db.prepare("SELECT channel, COUNT(*) n FROM messages GROUP BY channel ORDER BY channel").all(),
                 handoffs: one(db, "SELECT COUNT(*) n, COALESCE(SUM(text_length), 0) t FROM handoffs"),
                 sends: one(db, "SELECT COUNT(*) n, COALESCE(SUM(text_length), 0) t FROM sends"),

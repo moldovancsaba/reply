@@ -123,3 +123,13 @@ test("0014: 100,000 messages migrate in well under a minute", () => {
     assert.ok(ms < 60_000, `took ${Math.round(ms)} ms`);
     after.close();
 });
+
+test("0014 snapshot does not overflow on very large timestamp totals", () => {
+    const { home, db } = v13();
+    const ins = db.prepare("INSERT INTO messages (id, channel, account, provider_message_key, thread_key, handle_norm, is_from_me, ts_ms, text, attachments_json, ingested_at) VALUES (?, 'email', '', ?, 't', 'h', 0, 4000000000000000000, 'x', '[]', 1)");
+    for (let i = 0; i < 4; i++) ins.run(`big${i}`, `k${i}`); // 4 x 4e18 > int64 max: a plain SUM(ts_ms) throws
+    db.close();
+    const { db: after } = upgrade(home);
+    assert.equal(after.prepare("SELECT MAX(version) v FROM schema_migrations").get().v, 14);
+    assert.equal(after.prepare("SELECT COUNT(*) n FROM messages").get().n, 4);
+});
