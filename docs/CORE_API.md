@@ -11,6 +11,7 @@ Response schemas for the read endpoints are in [`core/schema/api-read.json`](../
 | Endpoint | Purpose |
 |---|---|
 | `GET /api/health` | liveness: `{ status, version, uptimeSeconds, home, time }` |
+| `GET /api/channels` | the channel registry: label, app name, order, icon, capabilities, whether its connector is enabled and whether sending works right now; read-only, ETag; see [CORE_DATA_MODEL.md](CORE_DATA_MODEL.md#channels) |
 | `GET /api/status`, `POST /api/status/recheck` | health of storage, helper and every source, with recovery steps; see [CORE_STATUS.md](CORE_STATUS.md) |
 | `GET /api/drafts/capabilities`, `POST /api/drafts/suggest` | optional local-model reply suggestion; see [CORE_DRAFTING.md](CORE_DRAFTING.md) |
 | `POST /api/contacts/:id/read`, `GET`/`PUT /api/contacts/:id/profile`, `POST /api/contacts/:id/notes`, `DELETE /api/contacts/:id/notes/:noteId` | mark seen, the contact profile, notes; see "Seen and new" and "Profile" below |
@@ -127,3 +128,16 @@ First pages of the contact list and of a thread carry a weak `ETag` and `Cache-C
 ## Performance
 
 Measured on a 100,000-message corpus (2,000 contacts), including HTTP: list page about 2 ms, thread page under 1 ms, search about 3 ms. The tests assert budgets (list < 30 ms, thread < 20 ms, search < 80 ms) with 3x tolerance, and that the list and thread queries use `contact_summary_last` and `messages_handle_ts`.
+
+## Channels
+
+`GET /api/channels` returns `{ items: ChannelInfo[] }` in display order:
+
+```json
+{ "items": [ { "id": "imessage", "label": "iMessage", "appLabel": "Messages", "order": 10, "icon": "message",
+               "capabilities": { "read": true, "send": true, "handoff": true, "files": true },
+               "enabled": true, "sendAvailable": true, "sendReason": null } ] }
+```
+
+`enabled`: the channel's connector is enabled in this service (`REPLY_CORE_CONNECTORS`). `sendAvailable` and `sendReason` come from the same capability check as the `send` field of a contact's `replyChannels` (`sendReason` is null when sending is available). The answer carries an `ETag` and `Cache-Control: no-cache` (304 on `If-None-Match`); any query parameter gives `400 invalid_request`. The shape is `ChannelList` in `core/schema/api-read.json`.
+

@@ -838,6 +838,90 @@
           }
         }
       }
+    },
+    "ChannelInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "appLabel",
+        "order",
+        "icon",
+        "capabilities",
+        "enabled",
+        "sendAvailable",
+        "sendReason"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,31}$"
+        },
+        "label": {
+          "type": "string"
+        },
+        "appLabel": {
+          "type": "string"
+        },
+        "order": {
+          "type": "integer"
+        },
+        "icon": {
+          "type": "string"
+        },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "read",
+            "send",
+            "handoff",
+            "files"
+          ],
+          "properties": {
+            "read": {
+              "type": "boolean"
+            },
+            "send": {
+              "type": "boolean"
+            },
+            "handoff": {
+              "type": "boolean"
+            },
+            "files": {
+              "type": "boolean"
+            }
+          }
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "sendAvailable": {
+          "type": "boolean"
+        },
+        "sendReason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "ChannelList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "items"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ChannelInfo"
+          }
+        }
+      }
     }
   }
 }

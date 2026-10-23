@@ -34,6 +34,8 @@ The list of routes is in [CORE_API.md](CORE_API.md).
 
 **Profile.** `core/src/profile/service.js` and `core/src/routes/profile.js`: everything known about one person (address-book details, handles with counts, activity facts computed from the messages, group members, the profile fields and notes the user wrote). User-written data is part of what `rebuild` keeps.
 
+**Channels.** `core/src/channels/registry.js` is the one definition of a channel (id, labels, capabilities, recipient rule, connector, handoff and send wording); storage, handoff, send and the HTTP route `GET /api/channels` read it, and a scan test keeps channel ids out of every other module.
+
 **Sending and handoff.** `core/src/send/` (`service.js`, `drivers.js`, `uploads.js`) and `core/src/routes/send.js` send a message you write through Messages, Mail or WhatsApp Desktop with AppleScript, once per request, audited in `sends`; `REPLY_CORE_SENDING=off` disables it. `uploads.js` holds the files picked for a message (`<home>/outbox`); the WhatsApp connector's `confirmSent` checks that a WhatsApp message really arrived; `POST /api/consent` opens {reply}.app to ask macOS for permissions. `core/src/handoff/` and `routes/handoff.js` validate the recipient from the contact's own handles and build "open this app with my text" links (the alternative to sending). See [CORE_SENDING.md](CORE_SENDING.md) and [CORE_HANDOFF.md](CORE_HANDOFF.md).
 
 **Drafting.** `core/src/drafting/service.js` builds one bounded prompt from a contact's thread and makes a single call to a local Ollama; `core/src/routes/drafts.js` serves the two endpoints. Off by default. See [CORE_DRAFTING.md](CORE_DRAFTING.md).

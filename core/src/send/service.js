@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { AppError } from "../errors.js";
+import { descriptorOf } from "../channels/registry.js";
 import { CHANNELS } from "../storage/repo.js";
 import { SendError } from "./drivers.js";
 
@@ -7,8 +8,6 @@ const MAX_TEXT = 4000; // an app message, not a URL: far above what a person wri
 const MAX_SUBJECT = 300;
 const RATE_PER_MINUTE = 10;
 
-const ATTACHMENT_CHANNELS = ["imessage", "email"]; // WhatsApp is driven by key presses and cannot take a file
-const NOTE = { imessage: "Sent through Messages.", email: "Sent through Mail.", whatsapp: "Sent through WhatsApp." };
 
 // Sending a message from the app: one explicit request per message (the UI asks the person first), checked against the
 // contact's own handles, idempotent per `clientId`, rate limited, one at a time, audited without content.
@@ -42,13 +41,13 @@ export function createSender({ db, handoffs, drivers, uploads, confirmers = {}, 
         if (prior) {
             // the same request again (a double click, a retry after a lost answer): never a second message
             if (prior.status === "sending") throw new AppError(409, "send_in_progress", "This message is still being sent.");
-            if (prior.status === "sent") return { sendId: prior.id, status: "sent", channel: prior.channel, note: NOTE[prior.channel], replayed: true };
+            if (prior.status === "sent") return { sendId: prior.id, status: "sent", channel: prior.channel, note: descriptorOf(prior.channel)?.sentNote ?? "Sent.", replayed: true };
             throw Object.assign(new AppError(409, "already_attempted", prior.status === "unknown" ? "This message may already have been sent. Check the conversation before sending again." : "This attempt failed. Write it again to send a new one."), { details: { status: prior.status, errorCode: prior.error_code } });
         }
         if (!enabled) throw new AppError(403, "sending_disabled", "Sending is turned off. Set REPLY_CORE_SENDING=on to use it.");
         if (!drivers[channel]) throw new AppError(422, "channel_not_supported", "Sending through that channel is not available.");
         const { chosen, kind } = handoffs.resolve({ contactId, channel, handle });
-        if (attachmentIds?.length && !ATTACHMENT_CHANNELS.includes(channel)) throw new AppError(422, "attachments_not_supported", "WhatsApp cannot be given files from here. Use \"Open in WhatsApp instead\" and attach them there.");
+        if (attachmentIds?.length && !descriptorOf(channel).capabilities.files) throw new AppError(422, "attachments_not_supported", `${descriptorOf(channel).label} cannot be given files from here. Use "Open in ${descriptorOf(channel).appLabel} instead" and attach them there.`);
         const attachments = attachmentIds?.length ? (uploads ? uploads.resolve(attachmentIds) : (() => { throw new AppError(422, "attachments_not_supported", "Sending files is not available."); })()) : [];
         if (inFlight) throw new AppError(429, "send_rate_limited", "Another message is being sent. Wait a moment.", { retryable: true });
         if (q.recent.get(now() - 60_000).n >= RATE_PER_MINUTE) throw new AppError(429, "send_rate_limited", `At most ${RATE_PER_MINUTE} messages a minute can be sent from here. Wait a moment.`, { retryable: true });
@@ -71,7 +70,7 @@ export function createSender({ db, handoffs, drivers, uploads, confirmers = {}, 
             // WhatsApp may file one person's chat under a phone number or under its own `@lid` id: all of the contact's count
             const chatIds = q.handlesOf.all(contactId).map((h) => h.handle_norm).filter((h) => h.endsWith("@lid") || /^\+\d+(@wa)?$/.test(h)).map((h) => h.replace(/^other:/, "").replace(/@(lid|wa)$/, "").replace(/\D/g, ""));
             let confirmed;
-            if (channel === "whatsapp" && !confirmers[channel]) confirmed = false; // a key press cannot say whether anything was sent
+            if (descriptorOf(channel).deliveryCheck === "external" && !confirmers[channel]) confirmed = false; // a key press cannot say whether anything was sent
             if (confirmers[channel]) {
                 const since = startedAt - 2000;
                 let seen = "none";
@@ -98,7 +97,7 @@ export function createSender({ db, handoffs, drivers, uploads, confirmers = {}, 
             uploads?.release(attachmentIds ?? []);
             logger?.info({ channel, textLength: text.length, files: attachments.length, confirmed }, "send.ok"); // never the text, the subject or the address
             try { onSent?.(channel); } catch { /* a failed refresh must not turn a sent message into an error */ }
-            return { sendId: id, status: "sent", channel, handleLabel: chosen.label, note: confirmed === false ? "Pressed Send in WhatsApp. It could not be confirmed that the message arrived." : NOTE[channel], ...(confirmed === undefined ? {} : { confirmed }) };
+            return { sendId: id, status: "sent", channel, handleLabel: chosen.label, note: confirmed === false ? `Pressed Send in ${descriptorOf(channel).appLabel}. It could not be confirmed that the message arrived.` : descriptorOf(channel).sentNote, ...(confirmed === undefined ? {} : { confirmed }) };
         } finally {
             inFlight = false;
         }

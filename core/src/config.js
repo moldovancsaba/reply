@@ -4,7 +4,7 @@ import { isRegion } from "./identity/normalize.js";
 import { hasAccounts } from "./imap/accounts.js";
 
 // Connectors enabled when REPLY_CORE_CONNECTORS is unset. Connector issues add their ids here.
-export const DEFAULT_ENABLED_IDS = ["imessage", "contacts", "apple-mail"];
+export const DEFAULT_ENABLED_IDS = ["imessage", "contacts", "apple-mail"]; // channel-literal-ok: connector ids, not channel ids
 const LEVELS = ["debug", "info", "warn", "error"];
 
 export class ConfigError extends Error {}

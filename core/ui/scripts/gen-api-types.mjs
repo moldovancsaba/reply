@@ -8,7 +8,7 @@ const status = read("api-status.json");
 const strip = (s) => Object.fromEntries(Object.entries(s).filter(([k]) => !["$schema", "$id", "title"].includes(k)));
 
 const out = [];
-for (const [name, doc, roots] of [["Read", read_, ["ContactList", "Contact", "Thread", "SearchResult", "Profile", "Error"]], ["Status", status, ["StatusReport"]]]) {
+for (const [name, doc, roots] of [["Read", read_, ["ContactList", "Contact", "Thread", "SearchResult", "Profile", "ChannelList", "Error"]], ["Status", status, ["StatusReport"]]]) {
   const root = { type: "object", additionalProperties: false, properties: Object.fromEntries(roots.map((r) => [r, { $ref: `#/definitions/${r}` }])), required: roots, definitions: strip(doc).definitions };
   out.push(await compile(root, `${name}Responses`, { bannerComment: "", additionalProperties: false, declareExternallyReferenced: true, unreachableDefinitions: true, style: { singleQuote: false } }));
 }
