@@ -1,7 +1,7 @@
 import pino from "pino";
 
 // Message text and personal identifiers must never reach logs.
-const SENSITIVE = ["text", "body", "handle", "email", "phone", "displayName"];
+const SENSITIVE = ["text", "body", "handle", "email", "phone", "displayName"]; // channel-literal-ok: log field names, not channel ids
 const redactPaths = [
     ...SENSITIVE,
     ...SENSITIVE.map((k) => `*.${k}`),

@@ -83,3 +83,27 @@ Prints schema version, `quick_check` and row counts of the core tables (read-onl
 | `contact_photos` (migration 0013) | the address-book thumbnail (JPEG or PNG, at most 48 KB, type checked by its first bytes on import). Import data: replaced or removed on every contacts sync, comes back after a rebuild | no |
 | `app_settings` (migration 0012) | small key/value settings: the unread baseline and the dismissed duplicate suggestions (`dismissed_duplicates`) | no |
 | `sends` (migration 0011) | one row per attempt to send from the app: id, client id (unique), time, contact id, channel, kind of address, text length, status (`sending`, `sent`, `failed`, `unknown`), error code, finish time. Never the text, the subject or the address | no (audit) |
+
+## Channels
+
+A channel is defined once, in `core/src/channels/registry.js`; no other module lists channels. A descriptor:
+
+```ts
+type ChannelDescriptor = {
+  id: string;            // /^[a-z][a-z0-9_-]{0,31}$/, the same shape the database enforces
+  label: string;         // "iMessage"
+  appLabel: string;      // "Messages": the app a handoff or a send goes through
+  order: number;         // display order, unique
+  icon: string;          // name of a GDS icon
+  connector: string;     // id of the connector that reads the channel (decides `enabled`, and which source is re-read after a send)
+  readers?: string[];    // every connector id that can read the channel (default: [connector]); `enabled` is true if any of them runs
+  recipient: { kinds: ("phone" | "email" | "whatsapp" | "other")[]; prefix?: string };  // which stored handles can receive here
+  capabilities: { read: boolean; send: boolean; handoff: boolean; files: boolean };
+  handoffNote: string; sentNote: string;
+  handoffUrl: "imessage" | "email" | "whatsapp" | "none";   // named link builder in handoff/service.js
+  deliveryCheck: "driver" | "external";   // "external": the driver cannot tell whether the message went out, so a connector must find it afterwards
+};
+```
+
+The registry validates itself when the service starts (valid and unique `id`, unique `order`, required fields, known builder); a malformed descriptor stops the service with one `channels.invalid: <id>: <rule>` line. Code that is about one specific channel (a driver, a connector, a handle parser) refers to it as `CH.<id>`; a scan test (`test/channels.test.js`) fails when a channel id literal appears in any other module, unless the line carries `// channel-literal-ok: <reason>`.
+

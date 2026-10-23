@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 
-export const CHANNELS = ["imessage", "email", "whatsapp"];
+import { channelIds, CH } from "../channels/registry.js";
+
+export const CHANNELS = channelIds(); // the registry is the definition; kept here for the modules that already import it from storage
 const MAX_TEXT = 256 * 1024;
 const FUTURE_SLACK_MS = 24 * 60 * 60 * 1000;
 const PREVIEW_CHARS = 140;
@@ -14,9 +16,9 @@ export class ValidationError extends Error {
 
 export function kindOf(handleNorm) {
     if (handleNorm.startsWith("group:") || handleNorm.startsWith("other:")) return "other";
-    if (handleNorm.endsWith("@wa")) return "whatsapp";
+    if (handleNorm.endsWith("@wa")) return "whatsapp"; // channel-literal-ok: a handle kind, not a channel id
     if (handleNorm.startsWith("+")) return "phone";
-    if (handleNorm.includes("@")) return "email";
+    if (handleNorm.includes("@")) return "email"; // channel-literal-ok: a handle kind, not a channel id
     return "other";
 }
 
@@ -46,11 +48,11 @@ export function createRepo(db, { now = () => Date.now(), afterBatch = null } = {
         // Mail to yourself is two messages in two Mail accounts (the sent copy and the received copy): the same mail, so the same
         // provider message key, "from me" at the same time with the same subject; the received copy often has no body yet.
         // The key is the identity: two different mails never share it, however alike they look.
-        twin: db.prepare("SELECT id, text FROM messages WHERE channel = 'email' AND is_from_me = 1 AND handle_norm = ? AND ts_ms = ? AND subject IS ? AND provider_message_key = ? AND account != ? LIMIT 1"),
+        twin: db.prepare(`SELECT id, text FROM messages WHERE channel = '${CH.email}' AND is_from_me = 1 AND handle_norm = ? AND ts_ms = ? AND subject IS ? AND provider_message_key = ? AND account != ? LIMIT 1`),
         setText: db.prepare("UPDATE messages SET text = ?, attachments_json = ? WHERE id = ?"),
         twinPairs: db.prepare(`SELECT a.id AS keep_id, b.id AS drop_id, a.handle_norm AS handle FROM messages a JOIN messages b
             ON b.handle_norm = a.handle_norm AND b.ts_ms = a.ts_ms AND b.subject IS a.subject AND b.provider_message_key = a.provider_message_key AND b.account != a.account
-            WHERE a.channel = 'email' AND b.channel = 'email' AND a.is_from_me = 1 AND b.is_from_me = 1
+            WHERE a.channel = '${CH.email}' AND b.channel = '${CH.email}' AND a.is_from_me = 1 AND b.is_from_me = 1
             AND (length(a.text) > length(b.text) OR (length(a.text) = length(b.text) AND a.id < b.id))`),
         dropMessage: db.prepare("DELETE FROM messages WHERE id = ?"),
         updateMessage: db.prepare("UPDATE messages SET text=@text, subject=@subject, attachments_json=@attachments_json, ts_ms=@ts_ms, meta_json=@meta_json WHERE id=@id"),
@@ -140,7 +142,7 @@ export function createRepo(db, { now = () => Date.now(), afterBatch = null } = {
                 const existing = q.message.get(id);
                 ensureHandle(m.handle_norm, row.ts_ms);
                 const contactId = ensureContactForHandle(m.handle_norm);
-                const twin = !existing && row.channel === "email" && row.is_from_me === 1 ? q.twin.get(row.handle_norm, row.ts_ms, row.subject, row.provider_message_key, row.account) : null;
+                const twin = !existing && row.channel === CH.email && row.is_from_me === 1 ? q.twin.get(row.handle_norm, row.ts_ms, row.subject, row.provider_message_key, row.account) : null;
                 if (twin) {
                     // the same mail seen from the other account: keep one message, with the longer text
                     if (row.text.length > twin.text.length) { q.setText.run(row.text, row.attachments_json, twin.id); result.updated++; } else { result.skipped++; continue; }

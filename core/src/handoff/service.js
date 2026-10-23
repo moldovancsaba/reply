@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { AppError } from "../errors.js";
 import { formatHandle } from "../identity/normalize.js";
+import { canReceive, CH, descriptorOf, DESCRIPTORS } from "../channels/registry.js";
 import { CHANNELS } from "../storage/repo.js";
 
 // A handoff (the "open in the app instead" path; the app can also send itself, see src/send) validates the recipient, builds a link that opens the right macOS app with the
@@ -10,32 +11,27 @@ const MAX_INPUT = 10_000;
 const MAX_URL = 2000;
 const MAX_SUBJECT = 300;
 
-const NOTE = {
-    imessage: "Opens Messages with your text. Reply Core does not send it.",
-    email: "Opens Mail with your text. Reply Core does not send it.",
-    whatsapp: "Opens WhatsApp with your text. Reply Core does not send it.",
+// Which stored handles can receive a message on a channel is decided by the channel's descriptor (recipient kinds, optional namespace
+// prefix). Group chats and opaque ids can never be a recipient. Kept as a map for callers that want the kinds.
+export const handleKindsFor = Object.fromEntries(DESCRIPTORS.map((d) => [d.id, d.recipient.kinds]));
+
+// Link builders by name (the descriptor's `handoffUrl`).
+const enc = encodeURIComponent;
+const BUILDERS = {
+    [CH.imessage]: (handle, text) => `sms:${enc(handle)}${text ? `&body=${enc(text)}` : ""}`,
+    [CH.email]: (handle, text, subject) => {
+        const parts = [];
+        if (subject) parts.push(`subject=${enc(subject)}`);
+        if (text) parts.push(`body=${enc(text)}`);
+        return `mailto:${enc(handle)}${parts.length ? `?${parts.join("&")}` : ""}`;
+    },
+    [CH.whatsapp]: (handle, text) => `https://wa.me/${handle.replace(/\D/g, "")}${text ? `?text=${enc(text)}` : ""}`,
 };
 
-// Which stored handles can receive a message on a channel. iMessage reaches phone numbers and email addresses;
-// email only addresses; WhatsApp only WhatsApp handles. Group chats and opaque ids can never be a recipient.
-export const handleKindsFor = { imessage: ["phone", "email"], email: ["email"], whatsapp: ["whatsapp"] };
-
 export function buildUrl(channel, handle, text, subject) {
-    const enc = encodeURIComponent;
-    switch (channel) {
-        case "imessage":
-            return `sms:${enc(handle)}${text ? `&body=${enc(text)}` : ""}`;
-        case "email": {
-            const parts = [];
-            if (subject) parts.push(`subject=${enc(subject)}`);
-            if (text) parts.push(`body=${enc(text)}`);
-            return `mailto:${enc(handle)}${parts.length ? `?${parts.join("&")}` : ""}`;
-        }
-        case "whatsapp":
-            return `https://wa.me/${handle.replace(/\D/g, "")}${text ? `?text=${enc(text)}` : ""}`;
-        default:
-            throw new Error(`unknown channel ${channel}`);
-    }
+    const build = BUILDERS[descriptorOf(channel)?.handoffUrl];
+    if (!build) throw new Error(`no handoff link for channel ${channel}`);
+    return build(handle, text, subject);
 }
 
 export function createHandoff({ db, now = () => Date.now() }) {
@@ -63,7 +59,8 @@ export function createHandoff({ db, now = () => Date.now() }) {
         const handles = q.handles.all(contactId);
         const out = [];
         for (const channel of CHANNELS) {
-            const usable = handles.filter((h) => handleKindsFor[channel].includes(h.kind));
+            const d = descriptorOf(channel);
+            const usable = d.capabilities.handoff || d.capabilities.send ? handles.filter((h) => canReceive(d, h.kind, h.handle_norm)) : [];
             if (!usable.length) continue;
             const names = usable.map((h) => h.handle_norm);
             const last = q.lastUsed(names.length).get(channel, ...names)?.handle_norm ?? names[0];
@@ -105,7 +102,7 @@ export function createHandoff({ db, now = () => Date.now() }) {
         db.transaction(() => q.insert.run(id, now(), contactId, channel, kind, text.length))();
         return {
             handoffId: id, action: copy ? "copy_and_open" : "open_url", url: copy ? buildUrl(channel, chosen.value, "", subject) : full,
-            channel, handleLabel: chosen.label, note: NOTE[channel],
+            channel, handleLabel: chosen.label, note: descriptorOf(channel).handoffNote,
         };
     }
 

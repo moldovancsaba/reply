@@ -198,3 +198,13 @@ Limitations: no OAuth, no sending through IMAP (the app sends email through Appl
 - Force a re-ingest of one connector: stop the service, `node core/scripts/reset-cursor.js <connector>` (add `--purge` to delete the messages it imported first; `apple-mail` and `imap` share the `email` channel, so purging either removes all email rows), start the service.
 - Logs: `sync.run` (outcome, pages, counts, ms), `sync.retry` (code, attempt, delay) at warn, `sync.failed` (code, kind) at error. No message content.
 - Process metrics (runs, failures by code, last duration) are available from `runner.metrics()` and are surfaced by the status API (see [CORE_STATUS.md](CORE_STATUS.md)).
+
+## Adding a channel (checklist)
+
+1. A descriptor in `core/src/channels/registry.js` (all fields; the registry refuses an incomplete one). Pick `deliveryCheck: "external"` when the driver cannot confirm the send.
+2. A connector in `core/src/connectors/` registered in `registry.js` and, if it should run by default, in `DEFAULT_ENABLED_IDS` (`config.js`); its `id` goes in the descriptor's `connector`.
+3. Handle forms: how the channel's people are identified (`docs/CORE_IDENTITY.md`); recipient rule in the descriptor (`kinds`, optionally a `prefix`).
+4. If it can send: a driver in `send/drivers.js` keyed by the channel id; if `handoff` is true, a link builder named by `handoffUrl` in `handoff/service.js`.
+5. Wording for its error codes in `status/recovery.js`; tests with synthetic fixtures (no test may contact the real service); documentation.
+6. The UI needs no change for filters, labels or counts once the registry endpoint is used by the screens (tracked separately).
+

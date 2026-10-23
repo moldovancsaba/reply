@@ -2,6 +2,11 @@
 
 All notable changes to Reply Core. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). Each release's version is in `core/package.json` and `core/ui/package.json`; `node core/scripts/audit.js` checks that this file's newest release matches.
 
+## [Unreleased]
+
+### Added
+- **Channel registry.** One descriptor per channel (labels, capabilities, recipient rule, connector, wording) in `core/src/channels/registry.js`, read by storage, handoff and send, and published read-only at `GET /api/channels`. Behaviour for iMessage, Email and WhatsApp is unchanged. ([#288](https://github.com/moldovancsaba/reply/issues/288))
+
 ## [0.3.0] - 2026-10-22
 
 Sending grows up (files through Messages and Mail, WhatsApp sends confirmed in WhatsApp's own data, the focus handed back to your app), people get photos and duplicate suggestions, the browser tests also run in Safari's engine and on GitHub for every pull request, and what that and a first real-send test found is fixed.

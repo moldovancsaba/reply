@@ -17,6 +17,7 @@ export interface ReadResponses {
   Thread: Thread;
   SearchResult: SearchResult;
   Profile: Profile;
+  ChannelList: ChannelList;
   Error: Error;
 }
 /**
@@ -240,6 +241,33 @@ export interface Note {
   id: string;
   text: string;
   createdAt: string;
+}
+/**
+ * This interface was referenced by `ReadResponses`'s JSON-Schema
+ * via the `definition` "ChannelList".
+ */
+export interface ChannelList {
+  items: ChannelInfo[];
+}
+/**
+ * This interface was referenced by `ReadResponses`'s JSON-Schema
+ * via the `definition` "ChannelInfo".
+ */
+export interface ChannelInfo {
+  id: string;
+  label: string;
+  appLabel: string;
+  order: number;
+  icon: string;
+  capabilities: {
+    read: boolean;
+    send: boolean;
+    handoff: boolean;
+    files: boolean;
+  };
+  enabled: boolean;
+  sendAvailable: boolean;
+  sendReason: string | null;
 }
 /**
  * This interface was referenced by `ReadResponses`'s JSON-Schema
