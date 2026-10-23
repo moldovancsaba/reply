@@ -84,6 +84,8 @@ test("HTTP: GET /api/channels lists the channels with enabled and send flags, va
     assert.deepEqual([q.status, q.json.error.code], [400, "invalid_request"]);
     connectors.add("whatsapp");
     assert.equal((await get("/api/channels")).json.items[2].enabled, true, "enabled follows the connector registry");
+    connectors.delete("apple-mail"); connectors.add("imap");
+    assert.equal((await get("/api/channels")).json.items[1].enabled, true, "Email is enabled when only the IMAP connector runs");
     assert.equal((await request(port, { path: "/api/channels", headers: { host: "evil.example" } })).status, 403, "the Host guard applies");
 });
 

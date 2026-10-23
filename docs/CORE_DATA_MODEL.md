@@ -96,6 +96,7 @@ type ChannelDescriptor = {
   order: number;         // display order, unique
   icon: string;          // name of a GDS icon
   connector: string;     // id of the connector that reads the channel (decides `enabled`, and which source is re-read after a send)
+  readers?: string[];    // every connector id that can read the channel (default: [connector]); `enabled` is true if any of them runs
   recipient: { kinds: ("phone" | "email" | "whatsapp" | "other")[]; prefix?: string };  // which stored handles can receive here
   capabilities: { read: boolean; send: boolean; handoff: boolean; files: boolean };
   handoffNote: string; sentNote: string;

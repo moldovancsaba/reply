@@ -13,7 +13,7 @@ export const DESCRIPTORS = Object.freeze([
         handoffUrl: "imessage", deliveryCheck: "driver",
     },
     {
-        id: "email", label: "Email", appLabel: "Mail", order: 20, icon: "mail", connector: "apple-mail",
+        id: "email", label: "Email", appLabel: "Mail", order: 20, icon: "mail", connector: "apple-mail", readers: ["apple-mail", "imap"],
         recipient: { kinds: ["email"] },
         capabilities: { read: true, send: true, handoff: true, files: true },
         handoffNote: "Opens Mail with your text. Reply Core does not send it.", sentNote: "Sent through Mail.",

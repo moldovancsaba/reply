@@ -11,7 +11,7 @@ export function registerChannels(app, { registry, sender }) {
             const send = sender.capability(d.id);
             return {
                 id: d.id, label: d.label, appLabel: d.appLabel, order: d.order, icon: d.icon, capabilities: { ...d.capabilities },
-                enabled: registry.get(d.connector) != null, sendAvailable: send.available, sendReason: send.available ? null : (send.reason ?? null),
+                enabled: (d.readers ?? [d.connector]).some((id) => registry.get(id) != null), sendAvailable: send.available, sendReason: send.available ? null : (send.reason ?? null),
             };
         });
         const json = JSON.stringify({ items });
