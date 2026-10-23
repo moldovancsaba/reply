@@ -1,6 +1,7 @@
 // Scale check: node scripts/bench.js [messages] [people]   (default 500000 messages, 5000 people; temp data folder, nothing real is touched)
+// Upgrade check: node scripts/bench.js --migrate-check [messages]   builds a version-13 database and times migration 0014 (channel shape)
 // Fills a fresh database through the real storage layer and times what the UI asks for: list, thread, profile, search, contact search.
-import { mkdtempSync, rmSync, statSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createProfile } from "../src/profile/service.js";
@@ -8,6 +9,30 @@ import { createReadService } from "../src/read/service.js";
 import { openDb } from "../src/storage/db.js";
 import { createRepo } from "../src/storage/repo.js";
 
+if (process.argv[2] === "--migrate-check") {
+    const n = Number(process.argv[3] ?? 500_000);
+    const src = new URL("../src/storage/migrations/", import.meta.url).pathname;
+    const dir = path.join(mkdtempSync(path.join(os.tmpdir(), "rc-mig-")), "migrations");
+    mkdirSync(dir);
+    for (const f of readdirSync(src).filter((x) => /^\d{4}_/.test(x) && Number(x.slice(0, 4)) <= 13)) copyFileSync(path.join(src, f), path.join(dir, f));
+    const h = mkdtempSync(path.join(os.tmpdir(), "rc-mig-home-"));
+    const { db: old, file } = openDb(h, { migrationsDir: dir });
+    old.exec(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ${n})
+      INSERT INTO messages (id, channel, account, provider_message_key, thread_key, handle_norm, is_from_me, ts_ms, subject, text, attachments_json, ingested_at)
+      SELECT 'm' || i, CASE i % 3 WHEN 0 THEN 'email' WHEN 1 THEN 'imessage' ELSE 'whatsapp' END, '', 'p' || i, 't', '+3630' || (i % 5000), i % 2, 1000000 + i, NULL, 'word' || (i % 97) || ' hello world', '[]', 1 FROM n`);
+    const before = old.prepare("SELECT COUNT(*) n, SUM(rowid) r FROM messages").get();
+    old.pragma("wal_checkpoint(TRUNCATE)");
+    const mb = Math.round(statSync(file).size / 1048576);
+    old.close();
+    const t0 = performance.now();
+    const { db } = openDb(h);
+    const s = (performance.now() - t0) / 1000;
+    const after = db.prepare("SELECT COUNT(*) n, SUM(rowid) r FROM messages").get();
+    console.log(`${n.toLocaleString("en-US")} messages (${mb} MB): migration 0014 took ${s.toFixed(1)} s; rows ${before.n === after.n && before.r === after.r ? "identical" : "DIFFER"}; version ${db.prepare("SELECT MAX(version) v FROM schema_migrations").get().v}`);
+    db.close();
+    rmSync(h, { recursive: true, force: true });
+    process.exit(before.n === after.n && before.r === after.r ? 0 : 1);
+}
 const N = Number(process.argv[2] ?? 500_000);
 const PEOPLE = Number(process.argv[3] ?? 5000);
 const home = mkdtempSync(path.join(os.tmpdir(), "rc-bench-"));

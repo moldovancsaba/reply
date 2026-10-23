@@ -2,6 +2,11 @@
 
 All notable changes to Reply Core. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). Each release's version is in `core/package.json` and `core/ui/package.json`; `node core/scripts/audit.js` checks that this file's newest release matches.
 
+## [Unreleased]
+
+### Changed
+- The database no longer lists the channels: `messages`, `handoffs` and `sends` check the channel id by shape (migration 0014), verified inside the migration and refused early when the disk is too full. A new channel needs no further table rebuild. Measured: 500,000 messages in about 2 seconds. An older release started on a migrated database still handles the three old channels. ([#287](https://github.com/moldovancsaba/reply/issues/287))
+
 ## [0.3.0] - 2026-10-22
 
 Sending grows up (files through Messages and Mail, WhatsApp sends confirmed in WhatsApp's own data, the focus handed back to your app), people get photos and duplicate suggestions, the browser tests also run in Safari's engine and on GitHub for every pull request, and what that and a first real-send test found is fixed.

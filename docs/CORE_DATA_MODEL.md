@@ -1,6 +1,6 @@
 # Reply Core Data Model
 
-Status: living document. Migrations are `core/src/storage/migrations/0001`..`0013`, listed below.
+Status: living document. Migrations are `core/src/storage/migrations/0001`..`0014`, listed below.
 
 One SQLite file, `core.db`, in `REPLY_CORE_HOME` (default `~/Library/Application Support/reply-core`). Mode `0600` inside a `0700` directory. WAL mode, `foreign_keys=ON`, `busy_timeout=5000`, `synchronous=NORMAL`. The database is a rebuildable cache of the source apps, except for user data that cannot be re-imported: manual merges (`merge_log`, manual links), `contact_profile`, `contact_notes`, `read_state`, and the audits `sends` and `handoffs`.
 
@@ -47,6 +47,7 @@ Files `core/src/storage/migrations/NNNN_name.sql`, forward-only, each applied in
 | `0011_sends` | `sends` audit |
 | `0012_read_state` | `read_state`, `app_settings` (unread baseline) |
 | `0013_contact_photos` | `contact_photos` (address-book thumbnail per person) |
+| `0014_channel_shape` | rebuilds `messages`, `handoffs` and `sends` so `channel` is checked by shape (a short lowercase id) instead of the list imessage/email/whatsapp |
 
 ## Startup failures
 
@@ -83,3 +84,8 @@ Prints schema version, `quick_check` and row counts of the core tables (read-onl
 | `contact_photos` (migration 0013) | the address-book thumbnail (JPEG or PNG, at most 48 KB, type checked by its first bytes on import). Import data: replaced or removed on every contacts sync, comes back after a rebuild | no |
 | `app_settings` (migration 0012) | small key/value settings: the unread baseline and the dismissed duplicate suggestions (`dismissed_duplicates`) | no |
 | `sends` (migration 0011) | one row per attempt to send from the app: id, client id (unique), time, contact id, channel, kind of address, text length, status (`sending`, `sent`, `failed`, `unknown`), error code, finish time. Never the text, the subject or the address | no (audit) |
+
+## Channel ids (migration 0014)
+
+The `channel` column of `messages`, `handoffs` and `sends` accepts any id of the form `[a-z][a-z0-9_-]{0,31}`; the database no longer lists the channels, so adding one needs no table rebuild. Which ids are valid for new data is decided by the application (today `CHANNELS` in `core/src/storage/repo.js`, later the channel registry). The rebuild keeps `messages.rowid` (the full-text index is keyed by it) and is verified inside its transaction: row counts, sums and rowids equal, the FTS index consistent with the table, no foreign key problems, `quick_check` ok; any mismatch rolls the migration back. An older binary started on a migrated database still reads and writes the three old channels.
+
